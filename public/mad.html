@@ -1393,13 +1393,17 @@
       if (!albumsGrid || !items || items.length === 0) return;
 
       // Items from random-songs already have artworkSrc and fields
-      // Group by album
+      // Group by album using catalogue number (unique identifier)
       const albumMap = new Map();
       items.forEach(item => {
         const fields = item.fields || {};
+        const catalogueNumber = fields['Album Catalogue Number'] || fields['Reference Catalogue Number'] || fields['Catalogue'];
         const title = fields['Album Title'] || 'Unknown Album';
         const artist = fields['Album Artist'] || 'Unknown Artist';
-        const key = `${title}|||${artist}`;
+
+        // Use catalogue number as primary key, fallback to title+artist if no catalogue number
+        const key = catalogueNumber || `${title}|||${artist}`;
+
         if (!albumMap.has(key)) {
           albumMap.set(key, {
             title,
