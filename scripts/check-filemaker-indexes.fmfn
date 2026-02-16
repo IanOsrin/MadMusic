@@ -1,0 +1,95 @@
+/**
+ * FileMaker Index Checker Script
+ * Copy this into FileMaker's Script Workspace
+ *
+ * This script checks if critical fields are indexed for optimal MASS performance
+ */
+
+# Script: Check MASS Critical Indexes
+#
+# Instructions:
+# 1. Open your FileMaker database
+# 2. Go to Scripts → Script Workspace
+# 3. Create a new script called "Check MASS Indexes"
+# 4. Copy the steps below into the script
+# 5. Run the script
+# 6. Review the Custom Dialog results
+
+# Initialize result variable
+Set Variable [ $result ; Value: "MASS Index Status Check¶¶" ]
+Set Variable [ $missingIndexes ; Value: "" ]
+Set Variable [ $hasIndexes ; Value: "" ]
+
+# List of critical fields to check (from your code analysis)
+# Format: FieldName|Description
+
+Set Variable [ $fields ; Value: List (
+  "Album Artist|Primary search field" ;
+  "Album Title|Primary search field" ;
+  "Track Name|Primary search field" ;
+  "Track Artist|Secondary artist field" ;
+  "Local Genre|Genre discovery field" ;
+  "Genre|Genre discovery field" ;
+  "Visibility|Visibility filter field" ;
+  "Featured|Featured albums field" ;
+  "mp3|Audio validation field" ;
+  "Audio File|Audio validation field" ;
+  "Artwork::Picture|Artwork validation field" ;
+  "Picture|Artwork validation field" ;
+  "Album Catalogue Number|Catalogue lookup" ;
+  "Reference Catalogue Number|Catalogue lookup" ;
+  "TimestampUTC|Trending/sorting field"
+) ]
+
+# Loop through each field and check index status
+Set Variable [ $i ; Value: 1 ]
+Loop
+  Exit Loop If [ $i > ValueCount ( $fields ) ]
+
+  Set Variable [ $fieldInfo ; Value: GetValue ( $fields ; $i ) ]
+  Set Variable [ $fieldName ; Value: GetValue ( Substitute ( $fieldInfo ; "|" ; ¶ ) ; 1 ) ]
+  Set Variable [ $fieldDesc ; Value: GetValue ( Substitute ( $fieldInfo ; "|" ; ¶ ) ; 2 ) ]
+
+  # Get field repetition info (0 = field doesn't exist, 1+ = field exists)
+  Set Variable [ $fieldExists ; Value: FieldRepetitions ( Get ( FileName ) ; $fieldName ) ]
+
+  If [ $fieldExists = 0 ]
+    # Field doesn't exist
+    Set Variable [ $result ; Value: $result & "❌ " & $fieldName & " - FIELD NOT FOUND¶" ]
+  Else
+    # Check if field is indexed by attempting to get field type
+    # Note: FileMaker doesn't have a direct "is indexed" function
+    # We'll note which fields exist and need manual verification
+    Set Variable [ $hasIndexes ; Value: $hasIndexes & "✓ " & $fieldName & " - EXISTS (" & $fieldDesc & ")¶" ]
+  End If
+
+  Set Variable [ $i ; Value: $i + 1 ]
+End Loop
+
+# Build final report
+Set Variable [ $result ; Value: $result & "FIELDS FOUND (verify indexing):¶" & $hasIndexes & "¶" ]
+
+# Show results in dialog
+Show Custom Dialog [ "MASS Index Check" ; $result ]
+
+# Export results to file for reference
+Set Variable [ $exportPath ; Value: Get ( DesktopPath ) & "MASS_Index_Report.txt" ]
+Set Variable [ $timestamp ; Value: Get ( CurrentTimestamp ) ]
+Set Variable [ $fullReport ; Value: "MASS FileMaker Index Check Report¶" &
+  "Generated: " & $timestamp & "¶¶" &
+  $result & "¶¶" &
+  "NEXT STEPS:¶" &
+  "1. Open File → Manage → Database¶" &
+  "2. Go to Fields tab¶" &
+  "3. For each field listed above:¶" &
+  "   - Select the field¶" &
+  "   - Click Options button¶" &
+  "   - Go to Storage tab¶" &
+  "   - Check if 'Index' is set to 'Automatically create'¶" &
+  "   - If not, check the box and click OK¶" &
+  "4. Test MASS performance after indexing¶"
+]
+
+# Export to desktop (optional - requires Full Access privileges)
+# Set Field [ YourTable::TempField ; $fullReport ]
+# Export Records [ No dialog ; "$exportPath" ; Create folders: Off ; Windows (ANSI) ]
