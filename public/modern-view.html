@@ -16,13 +16,17 @@
       --bg-secondary: #f8f9fb;
       --bg-card: #ffffff;
       --text-primary: #2c3e50;
-      --text-secondary: #5a6c7d;
+      --text-secondary: #666666;
       --text-muted: #8b98a5;
-      --accent: #4a90e2;
+      --accent: #62f5a9;
       --accent-hover: #357abd;
       --border: #d4dce4;
       --shadow: rgba(0, 0, 0, 0.08);
       --overlay: rgba(0, 0, 0, 0.4);
+      --sidebar-bg: #f8f8fa;
+      --sidebar-width: 230px;
+      --hover-bg: #f0f0f2;
+      --fg: #1a1a1a;
     }
 
     /* Dark Mode */
@@ -1365,6 +1369,64 @@
     .toggle-link:hover {
       color: #5558e3;
     }
+
+    /* Sidebar */
+    .sidebar {
+      width: var(--sidebar-width);
+      background: var(--sidebar-bg);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      overflow-y: auto;
+      z-index: 150;
+      border-right: 1px solid var(--border);
+      padding-bottom: 100px;
+    }
+    .sidebar-logo {
+      padding: 30px 20px 20px;
+    }
+    .sidebar-logo img {
+      max-width: 120px;
+      height: auto;
+    }
+    .sidebar-nav {
+      padding: 8px 0;
+      flex: 1;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+    .nav-item:hover {
+      background: var(--hover-bg);
+      color: var(--fg);
+    }
+    .nav-item.active {
+      color: var(--accent);
+    }
+    .nav-item svg {
+      width: 20px;
+      height: 20px;
+    }
+    .container {
+      margin-left: var(--sidebar-width);
+    }
   </style>
 </head>
 <body>
@@ -1381,6 +1443,27 @@
       }
     })();
   </script>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <img src="/img/Madmusiclogonew.png" alt="MAD - Music Africa Direct">
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/classic" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+        </svg>
+        Home
+      </a>
+      <a href="/classic" class="nav-item active">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5zm0-5.5c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/>
+        </svg>
+        Albums
+      </a>
+    </nav>
+  </aside>
 
   <!-- Payment Modal -->
   <div class="payment-overlay hidden" id="paymentOverlay">
@@ -1473,7 +1556,6 @@
         <div id="genreTags" class="genre-tags" aria-live="polite"></div>
         <div id="genreFeedback" class="genre-feedback" role="status" aria-live="polite"></div>
       </div>
-      <a href="/classic" class="view-switcher">🎵 Home</a>
     </div>
   </nav>
 
