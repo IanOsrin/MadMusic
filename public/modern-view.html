@@ -422,6 +422,29 @@
       color: var(--text-primary);
     }
 
+    .clickable-title {
+      cursor: pointer;
+      transition: color 0.2s ease;
+      user-select: none;
+    }
+
+    .clickable-title:hover {
+      color: var(--accent);
+    }
+
+    .refresh-icon {
+      display: inline-block;
+      font-size: 1.5rem;
+      margin-left: 0.5rem;
+      opacity: 0.6;
+      transition: transform 0.3s ease, opacity 0.2s ease;
+    }
+
+    .clickable-title:hover .refresh-icon {
+      opacity: 1;
+      transform: rotate(180deg);
+    }
+
     .section-subtitle {
       font-size: 0.875rem;
       color: var(--text-muted);
@@ -1580,7 +1603,7 @@
     <section class="section">
       <div class="section-header">
         <div>
-          <h2 class="section-title" id="randomTitle">Discover More</h2>
+          <h2 class="section-title clickable-title" id="randomTitle" title="Click to refresh">Discover More <span class="refresh-icon">↻</span></h2>
           <p class="section-subtitle" id="randomSubtitle">Fresh picks from your collection</p>
         </div>
         <div class="genre-controls">
@@ -1838,6 +1861,12 @@
             type: data.type,
             expirationDate: data.expirationDate
           });
+
+          // Save email to localStorage for currentUser
+          if (data.email) {
+            localStorage.setItem('mass_token_email', data.email);
+          }
+
           hideTokenOverlay();
           console.log('[Access Token] Token validated successfully');
 
@@ -1847,7 +1876,7 @@
 
           // Notify app that access is ready so it can do its initial load
           window.dispatchEvent(new CustomEvent('mass:access-ready', {
-            detail: { token: normalized }
+            detail: { token: normalized, email: data.email || null }
           }));
 
           return true;
@@ -4081,6 +4110,16 @@
             return;
           }
           loadGenreResults();
+        });
+      }
+
+      // Make "Discover More" title clickable to refresh content
+      const randomTitle = document.getElementById('randomTitle');
+      if (randomTitle) {
+        randomTitle.addEventListener('click', () => {
+          if (!selectedGenres.length) {
+            loadRandom(true);
+          }
         });
       }
 

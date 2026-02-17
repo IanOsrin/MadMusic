@@ -816,10 +816,42 @@
         "audioField": "S3_URL",
         "artworkField": "Tape Files::Artwork_S3_URL",
         "addedAt": "2025-12-07T14:26:36.220Z"
+      },
+      {
+        "id": "818e64c8-7a34-4009-9e89-3e847a0fc3d6",
+        "trackRecordId": "100428",
+        "name": "Kukuwe",
+        "albumTitle": "Kukuwe",
+        "albumArtist": "Lucky Dube",
+        "catalogue": "CDGMP 40594",
+        "trackArtist": "Lucky Dube",
+        "mp3": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GCAT32552.mp3",
+        "resolvedSrc": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GCAT32552.mp3",
+        "seq": 1,
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi9120.jpg",
+        "audioField": "S3_URL",
+        "artworkField": "Tape Files::Artwork_S3_URL",
+        "addedAt": "2026-02-17T22:36:17.091Z"
+      },
+      {
+        "id": "1d933a6d-7fd2-4ee8-b296-7dff0b419107",
+        "trackRecordId": "100429",
+        "name": "Lobolani",
+        "albumTitle": "Kukuwe",
+        "albumArtist": "Lucky Dube",
+        "catalogue": "CDGMP 40594",
+        "trackArtist": "Lucky Dube",
+        "mp3": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GCAT32553.mp3",
+        "resolvedSrc": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GCAT32553.mp3",
+        "seq": 2,
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi9120.jpg",
+        "audioField": "S3_URL",
+        "artworkField": "Tape Files::Artwork_S3_URL",
+        "addedAt": "2026-02-17T22:36:44.610Z"
       }
     ],
     "createdAt": "2025-12-07T14:19:04.720Z",
-    "updatedAt": "2025-12-07T14:26:36.220Z"
+    "updatedAt": "2026-02-17T22:36:44.610Z"
   },
   {
     "id": "3cad4b6b-be6a-473c-93ed-0d5608a4ac2c",
@@ -941,5 +973,30 @@
     ],
     "createdAt": "2025-12-20T19:22:11.414Z",
     "updatedAt": "2026-02-12T10:57:25.424Z"
+  },
+  {
+    "id": "4f5b6ec4-3f32-4441-b626-1950b7959fd3",
+    "userId": "ian@digitalcupboard.net",
+    "name": "Reggae",
+    "tracks": [
+      {
+        "id": "bb91a087-3ab3-447a-b14c-68d62204ecd0",
+        "trackRecordId": "100429",
+        "name": "Lobolani",
+        "albumTitle": "Kukuwe",
+        "albumArtist": "Lucky Dube",
+        "catalogue": "CDGMP 40594",
+        "trackArtist": "Lucky Dube",
+        "mp3": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GCAT32553.mp3",
+        "resolvedSrc": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GCAT32553.mp3",
+        "seq": 2,
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi9120.jpg",
+        "audioField": "S3_URL",
+        "artworkField": "Tape Files::Artwork_S3_URL",
+        "addedAt": "2026-02-17T22:37:12.674Z"
+      }
+    ],
+    "createdAt": "2026-02-17T22:37:12.483Z",
+    "updatedAt": "2026-02-17T22:37:12.674Z"
   }
 ]

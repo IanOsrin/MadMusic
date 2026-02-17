@@ -1932,6 +1932,12 @@
             type: data.type,
             expirationDate: data.expirationDate
           });
+
+          // Save email to localStorage for currentUser
+          if (data.email) {
+            localStorage.setItem('mass_token_email', data.email);
+          }
+
           hideTokenOverlay();
           console.log('[Access Token] Token validated successfully');
 
@@ -1939,7 +1945,7 @@
           window.massAccessReady = true;
           window.massAccessToken = normalized;
           window.dispatchEvent(new CustomEvent('mass:access-ready', {
-            detail: { token: normalized }
+            detail: { token: normalized, email: data.email || null }
           }));
 
           return true;
