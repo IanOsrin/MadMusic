@@ -1196,113 +1196,174 @@
     }
 
     /* Access Token Entry Screen */
-    .access-token-overlay {
+    /* Payment Modal Styles */
+    .payment-overlay {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: var(--bg-primary);
-      z-index: 10000;
+      background: rgba(0, 0, 0, 0.6);
       display: flex;
       align-items: center;
       justify-content: center;
-      flex-direction: column;
-      gap: 24px;
+      z-index: 2000;
+      backdrop-filter: blur(4px);
     }
-    .access-token-overlay.hidden {
+    .payment-overlay.hidden {
       display: none;
     }
-    .access-token-box {
-      background: var(--bg-card);
-      border: 2px solid var(--border);
-      border-radius: 16px;
-      padding: 32px;
-      max-width: 480px;
+    .payment-modal {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 40px;
+      max-width: 500px;
       width: 90%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+    .payment-modal h2 {
+      font-size: 24px;
+      font-weight: 600;
+      color: #1a1a1a;
+      margin-bottom: 8px;
       text-align: center;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
     }
-    .access-token-title {
-      font-size: 28px;
-      font-weight: 700;
-      margin-bottom: 12px;
-      color: var(--accent);
+    .payment-modal p {
+      font-size: 14px;
+      color: #666666;
+      margin-bottom: 30px;
+      text-align: center;
     }
-    .access-token-subtitle {
-      font-size: 16px;
-      color: var(--text-secondary);
+    .payment-plans {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
       margin-bottom: 24px;
-      line-height: 1.5;
     }
-    .access-token-input {
-      width: 100%;
-      padding: 14px 18px;
-      font-size: 16px;
-      background: var(--bg-secondary);
-      border: 2px solid var(--border);
-      border-radius: 10px;
-      color: var(--text-primary);
-      text-align: center;
-      font-family: monospace;
-      text-transform: uppercase;
-      margin-bottom: 16px;
-      transition: border-color 0.2s ease;
+    .plan-option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border: 2px solid #ebebeb;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
     }
-    .access-token-input:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.15);
+    .plan-option:hover {
+      border-color: #6366f1;
+      background: #f8f8fa;
     }
-    .access-token-submit {
-      width: 100%;
-      padding: 14px 24px;
+    .plan-option.selected {
+      border-color: #6366f1;
+      background: #f0f0ff;
+    }
+    .plan-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .plan-name {
       font-size: 16px;
       font-weight: 600;
-      background: var(--accent);
-      color: white;
+      color: #1a1a1a;
+    }
+    .plan-duration {
+      font-size: 13px;
+      color: #666666;
+    }
+    .plan-price {
+      font-size: 20px;
+      font-weight: 600;
+      color: #6366f1;
+    }
+    .payment-email {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid #ebebeb;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 20px;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+    .payment-email:focus {
+      border-color: #6366f1;
+    }
+    .payment-btn {
+      width: 100%;
+      padding: 14px;
+      background: #6366f1;
+      color: #ffffff;
       border: none;
-      border-radius: 10px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
       cursor: pointer;
-      transition: filter 0.2s ease;
+      transition: background 0.2s ease;
     }
-    .access-token-submit:hover {
-      filter: brightness(1.1);
+    .payment-btn:hover {
+      background: #5558e3;
     }
-    .access-token-submit:disabled {
-      opacity: 0.5;
+    .payment-btn:disabled {
+      background: #cccccc;
       cursor: not-allowed;
     }
-    .access-token-error {
-      color: #e74c3c;
-      font-size: 14px;
-      margin-top: 12px;
-      display: none;
-    }
-    .access-token-error.show {
-      display: block;
-    }
-    .access-token-info {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px 16px;
+    .payment-error {
+      color: #dc2626;
       font-size: 13px;
-      color: var(--text-secondary);
-      z-index: 100;
-      max-width: 280px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-top: 12px;
+      text-align: center;
     }
-    .access-token-info.hidden {
+    .payment-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 24px 0;
+      color: #999999;
+      font-size: 13px;
+    }
+    .payment-divider::before,
+    .payment-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #ebebeb;
+    }
+    .token-input-section {
       display: none;
     }
-    .access-token-info strong {
-      color: var(--text-primary);
+    .token-input-section.active {
       display: block;
-      margin-bottom: 4px;
+    }
+    .payment-plans-section.hidden {
+      display: none;
+    }
+    .token-input {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid #ebebeb;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 20px;
+      outline: none;
+      text-align: center;
+      font-family: monospace;
+      transition: border-color 0.2s ease;
+    }
+    .token-input:focus {
+      border-color: #6366f1;
+    }
+    .toggle-link {
+      text-align: center;
+      color: #6366f1;
+      font-size: 14px;
+      cursor: pointer;
+      text-decoration: underline;
+      margin-top: 16px;
+    }
+    .toggle-link:hover {
+      color: #5558e3;
     }
   </style>
 </head>
@@ -1321,43 +1382,65 @@
     })();
   </script>
 
-  <!-- Access Token Entry Overlay -->
-  <div class="access-token-overlay hidden" id="accessTokenOverlay">
-    <div class="access-token-box">
-      <div class="access-token-title">Welcome to MADMusic</div>
-      <div class="access-token-subtitle">
-        Please enter your access token to continue
+  <!-- Payment Modal -->
+  <div class="payment-overlay hidden" id="paymentOverlay">
+    <div class="payment-modal">
+      <h2>Get Access to MAD Music</h2>
+      <p>Choose a plan to start streaming</p>
+
+      <!-- Purchase New Token Section -->
+      <div class="payment-plans-section" id="purchaseSection">
+        <div class="payment-plans" id="paymentPlans">
+          <!-- Plans will be loaded here -->
+        </div>
+
+        <input
+          type="email"
+          class="payment-email"
+          id="paymentEmail"
+          placeholder="Enter your email address"
+          required
+        >
+
+        <button class="payment-btn" id="paymentSubmit">
+          Continue to Payment
+        </button>
+
+        <div class="payment-divider">OR</div>
+
+        <div class="toggle-link" id="showTokenInput">
+          Already have a token? Enter it here
+        </div>
       </div>
-      <form id="accessTokenForm" onsubmit="return false;">
+
+      <!-- Enter Existing Token Section -->
+      <div class="token-input-section" id="tokenSection">
         <input
           type="text"
-          id="accessTokenInput"
-          class="access-token-input"
-          placeholder="MASS-XXXX-XXXXXX"
-          autocomplete="off"
-          spellcheck="false"
-        />
-        <button type="submit" class="access-token-submit" id="accessTokenSubmit">
-          Activate Access
-        </button>
-        <div class="access-token-error" id="accessTokenError"></div>
-      </form>
-    </div>
-  </div>
+          class="token-input"
+          id="tokenInput"
+          placeholder="Enter your access token"
+          required
+        >
 
-  <!-- Access Token Info Display (shown when logged in) -->
-  <div class="access-token-info hidden" id="accessTokenInfo">
-    <strong>Access Token</strong>
-    <div id="accessTokenStatus"></div>
-    <button id="resetAppBtn" style="margin-top:8px;font-size:11px;padding:4px 8px;background:var(--border);border:1px solid var(--text-muted);border-radius:6px;color:var(--text-muted);cursor:pointer;">Reset App</button>
+        <button class="payment-btn" id="tokenSubmit">
+          Activate Token
+        </button>
+
+        <div class="toggle-link" id="showPurchase">
+          Don't have a token? Purchase one
+        </div>
+      </div>
+
+      <div class="payment-error" id="paymentError"></div>
+    </div>
   </div>
 
   <!-- Navigation Header -->
   <nav class="nav-header">
-    <div class="logo">
-      <img src="/img/MAD_Logo.png" alt="MAD Music Logo" />
-      <span class="logo-text">MADMusic</span>
-    </div>
+    <a href="/mad.html" class="logo" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 12px;">
+      <img src="/img/Madmusiclogonew.png" alt="MAD Music Logo" />
+    </a>
     <div class="nav-actions">
       <div class="search-box">
         <input
@@ -1471,23 +1554,39 @@
 
     console.log('[Access Token] Pre-loaded token:', currentAccessToken ? 'YES' : 'NO');
 
-    const overlay = document.getElementById('accessTokenOverlay');
-    const form = document.getElementById('accessTokenForm');
-    const input = document.getElementById('accessTokenInput');
-    const submitBtn = document.getElementById('accessTokenSubmit');
-    const errorDiv = document.getElementById('accessTokenError');
-    const infoDiv = document.getElementById('accessTokenInfo');
-    const statusDiv = document.getElementById('accessTokenStatus');
+    // Use payment modal elements (modern-view.html structure)
+    const overlay = document.getElementById('paymentOverlay');
+    const input = document.getElementById('tokenInput');
+    const submitBtn = document.getElementById('tokenSubmit');
+    const errorDiv = document.getElementById('paymentError');
+    // These elements don't exist in modern-view but we'll handle that
+    const infoDiv = null; // Not used in modern-view
+    const statusDiv = null; // Not used in modern-view
 
     // Intercept all fetch requests to add access token header
     const originalFetch = window.fetch;
     window.fetch = function(url, options = {}) {
       const isApiCall = url.includes('/api/') || url.startsWith('/api/');
       const isAccessValidateCall = url.includes('/api/access/validate');
+      const isPaymentCall = url.includes('/api/payments/');
 
-      // Block API calls without token (except the validate endpoint itself)
-      if (isApiCall && !currentAccessToken && !isAccessValidateCall) {
-        console.warn('[Access Token] Blocking API call without token:', url);
+      // Check if a token is being passed in the headers (for token validation)
+      const hasTokenHeader = options.headers && (
+        (options.headers instanceof Headers && options.headers.has('X-Access-Token')) ||
+        (typeof options.headers === 'object' && options.headers['X-Access-Token'])
+      );
+
+      console.log('[Fetch Wrapper] Intercepted:', url, {
+        isApiCall,
+        hasToken: !!currentAccessToken,
+        isValidate: isAccessValidateCall,
+        isPayment: isPaymentCall,
+        hasTokenHeader
+      });
+
+      // Block API calls without token (except validate, payment endpoints, or calls with token in header)
+      if (isApiCall && !currentAccessToken && !isAccessValidateCall && !isPaymentCall && !hasTokenHeader) {
+        console.warn('[Access Token] BLOCKING API call without token:', url);
         return Promise.reject(new Error('API call attempted before access token was ready'));
       }
 
@@ -1525,24 +1624,37 @@
     };
 
     function showError(message) {
-      errorDiv.textContent = message;
-      errorDiv.classList.add('show');
-      setTimeout(() => {
-        errorDiv.classList.remove('show');
-      }, 5000);
+      if (errorDiv) {
+        errorDiv.textContent = message;
+        errorDiv.classList.add('show');
+        setTimeout(() => {
+          errorDiv.classList.remove('show');
+        }, 5000);
+      }
     }
 
     function showTokenOverlay() {
-      overlay.classList.remove('hidden');
-      input.value = '';
-      input.focus();
+      if (overlay) {
+        overlay.classList.remove('hidden');
+      }
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
     }
 
     function hideTokenOverlay() {
-      overlay.classList.add('hidden');
+      if (overlay) {
+        overlay.classList.add('hidden');
+      }
     }
 
     function updateTokenInfo() {
+      // Skip if elements don't exist (modern-view doesn't have info display)
+      if (!infoDiv || !statusDiv) {
+        return;
+      }
+
       if (!tokenInfo) {
         infoDiv.classList.add('hidden');
         return;
@@ -1610,7 +1722,9 @@
       tokenInfo = null;
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(STORAGE_INFO_KEY);
-      infoDiv.classList.add('hidden');
+      if (infoDiv) {
+        infoDiv.classList.add('hidden');
+      }
       // Update global variable for other scripts
       window.currentAccessToken = null;
       window.massAccessReady = false;
@@ -1619,9 +1733,14 @@
 
     async function validateToken(token) {
       try {
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Validating...';
-        errorDiv.classList.remove('show');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Validating...';
+        }
+        if (errorDiv) {
+          errorDiv.classList.remove('show');
+          errorDiv.textContent = '';
+        }
 
         const response = await originalFetch('/api/access/validate', {
           method: 'POST',
@@ -1659,26 +1778,18 @@
         showError('Failed to validate token. Please try again.');
         return false;
       } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Activate Access';
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Activate Token';
+        }
       }
     }
 
-    // Form submission handler
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const token = input.value.trim();
-
-      if (!token) {
-        showError('Please enter an access token');
-        return;
-      }
-
-      await validateToken(token);
-    });
+    // Note: Form submission handler removed - payment modal script handles button clicks
 
     // Check for existing token on page load
     const existingToken = loadAccessToken();
+    console.log('[Access Token] Existing token check:', existingToken ? `YES (${existingToken})` : 'NO');
     if (existingToken) {
       console.log('[Access Token] Found existing token, validating...');
       // Validate the existing token (validateToken will dispatch 'mass:access-ready' if valid)
@@ -1688,8 +1799,13 @@
           showTokenOverlay();
         } else {
           console.log('[Access Token] Existing token valid (event already dispatched)');
+          console.log('[Access Token] window.massAccessReady =', window.massAccessReady);
+          console.log('[Access Token] window.massAccessToken =', window.massAccessToken);
           // Note: hideTokenOverlay and event dispatch already handled in validateToken
         }
+      }).catch(err => {
+        console.error('[Access Token] Token validation promise rejected:', err);
+        showTokenOverlay();
       });
     } else {
       console.log('[Access Token] No existing token, showing overlay');
@@ -1730,8 +1846,210 @@
   </script>
 
   <script>
+    // Access Token and Payment Handling
+    const STORAGE_KEY = 'mass_access_token';
+    let accessToken = localStorage.getItem(STORAGE_KEY);
+    let selectedPlan = 'plan_7day'; // Default plan
+
     // Legacy access token variable for compatibility
     let currentAccessToken = window.currentAccessToken || localStorage.getItem('mass_access_token');
+
+    // Load payment plans and render them
+    async function loadPaymentPlans() {
+      try {
+        console.log('[Payment] Loading payment plans...');
+        const res = await fetch('/api/payments/plans');
+        console.log('[Payment] Response status:', res.status);
+        const data = await res.json();
+        console.log('[Payment] Response data:', data);
+        if (data.ok && data.plans) {
+          console.log('[Payment] Rendering', data.plans.length, 'plans');
+          renderPaymentPlans(data.plans);
+        } else {
+          console.error('[Payment] Invalid response format:', data);
+        }
+      } catch (err) {
+        console.error('[Payment] Failed to load payment plans:', err);
+      }
+    }
+
+    function renderPaymentPlans(plans) {
+      const plansContainer = document.getElementById('paymentPlans');
+      console.log('[Payment] Plans container:', plansContainer);
+      console.log('[Payment] Plans to render:', plans);
+      plansContainer.innerHTML = plans.map(plan => `
+        <div class="plan-option ${plan.id === selectedPlan ? 'selected' : ''}" data-plan="${plan.id}">
+          <div class="plan-info">
+            <div class="plan-name">${plan.label}</div>
+            <div class="plan-duration">${plan.days} ${plan.days === 1 ? 'day' : 'days'} of unlimited streaming</div>
+          </div>
+          <div class="plan-price">${plan.display}</div>
+        </div>
+      `).join('');
+
+      // Add click handlers
+      document.querySelectorAll('.plan-option').forEach(option => {
+        option.addEventListener('click', () => {
+          document.querySelectorAll('.plan-option').forEach(o => o.classList.remove('selected'));
+          option.classList.add('selected');
+          selectedPlan = option.dataset.plan;
+        });
+      });
+    }
+
+    // Show payment modal if no token
+    function checkAccessToken() {
+      if (!accessToken) {
+        document.getElementById('paymentOverlay').classList.remove('hidden');
+      }
+    }
+
+    // Check for token in URL (from payment callback)
+    function checkUrlForToken() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tokenFromUrl = urlParams.get('token');
+      const paymentStatus = urlParams.get('payment');
+
+      if (tokenFromUrl && paymentStatus === 'success') {
+        console.log('[Payment] Token received from callback:', tokenFromUrl);
+        // Store the token
+        localStorage.setItem(STORAGE_KEY, tokenFromUrl);
+        accessToken = tokenFromUrl;
+        currentAccessToken = tokenFromUrl;
+
+        // Clean up URL (remove token for security)
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+
+        // Reload to apply the token
+        window.location.reload();
+        return true;
+      }
+      return false;
+    }
+
+    // Toggle between purchase and token input
+    document.addEventListener('DOMContentLoaded', () => {
+      // Check for token in URL first
+      if (checkUrlForToken()) {
+        return; // Will reload with token
+      }
+
+      // Only attach payment modal listeners if elements exist
+      const showTokenInputBtn = document.getElementById('showTokenInput');
+      const showPurchaseBtn = document.getElementById('showPurchase');
+      const tokenSubmitBtn = document.getElementById('tokenSubmit');
+
+      if (showTokenInputBtn) {
+        showTokenInputBtn.addEventListener('click', () => {
+          document.getElementById('purchaseSection').classList.add('hidden');
+          document.getElementById('tokenSection').classList.add('active');
+          document.getElementById('paymentError').textContent = '';
+        });
+      }
+
+      if (showPurchaseBtn) {
+        showPurchaseBtn.addEventListener('click', () => {
+          document.getElementById('tokenSection').classList.remove('active');
+          document.getElementById('purchaseSection').classList.remove('hidden');
+          document.getElementById('paymentError').textContent = '';
+        });
+      }
+
+      // Handle existing token submission
+      if (tokenSubmitBtn) {
+        tokenSubmitBtn.addEventListener('click', async () => {
+        const token = document.getElementById('tokenInput').value.trim();
+        const errorEl = document.getElementById('paymentError');
+        const submitBtn = document.getElementById('tokenSubmit');
+
+        errorEl.textContent = '';
+
+        if (!token) {
+          errorEl.textContent = 'Please enter your access token';
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Validating...';
+
+        try {
+          // Validate token by making a test API call with it
+          const res = await fetch('/api/random-songs?count=1', {
+            headers: { 'X-Access-Token': token }
+          });
+
+          if (res.ok) {
+            // Token is valid, store it
+            localStorage.setItem(STORAGE_KEY, token);
+            accessToken = token;
+            currentAccessToken = token;
+            document.getElementById('paymentOverlay').classList.add('hidden');
+            // Reload page content
+            location.reload();
+          } else {
+            errorEl.textContent = 'Invalid or expired token';
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Activate Token';
+          }
+        } catch (err) {
+          console.error('Token validation error:', err);
+          errorEl.textContent = 'Error validating token. Please try again.';
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Activate Token';
+        }
+        });
+      }
+
+      // Handle payment submission
+      const paymentSubmitBtn = document.getElementById('paymentSubmit');
+      if (paymentSubmitBtn) {
+        paymentSubmitBtn.addEventListener('click', async () => {
+        const email = document.getElementById('paymentEmail').value.trim();
+        const errorEl = document.getElementById('paymentError');
+        const submitBtn = document.getElementById('paymentSubmit');
+
+        errorEl.textContent = '';
+
+        if (!email || !email.includes('@')) {
+          errorEl.textContent = 'Please enter a valid email address';
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Processing...';
+
+        try {
+          const res = await fetch('/api/payments/initialize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, plan: selectedPlan })
+          });
+
+          const data = await res.json();
+
+          if (data.ok && data.authorization_url) {
+            // Redirect to Paystack
+            window.location.href = data.authorization_url;
+          } else {
+            errorEl.textContent = data.error || 'Failed to initialize payment';
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Continue to Payment';
+          }
+        } catch (err) {
+          console.error('Payment initialization error:', err);
+          errorEl.textContent = 'Network error. Please try again.';
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Continue to Payment';
+        }
+        });
+      }
+
+      // Load payment plans first, then check access token
+      loadPaymentPlans().then(() => {
+        checkAccessToken();
+      });
+    });
 
     // API endpoints
     const API = {
@@ -3365,22 +3683,33 @@
 
     async function loadTrending() {
       const container = document.getElementById('trendingContainer');
-      if (!container) return;
+      console.log('[Trending] Starting, container:', container);
+      if (!container) {
+        console.error('[Trending] Container not found!');
+        return;
+      }
       try {
-        console.log('[Trending] Fetching...');
-        const response = await apiFetch(`${API.trending}?limit=${TRENDING_FETCH_LIMIT}&_t=${Date.now()}`);
+        const url = `${API.trending}?limit=${TRENDING_FETCH_LIMIT}&_t=${Date.now()}`;
+        console.log('[Trending] About to fetch:', url);
+        const response = await apiFetch(url);
+        console.log('[Trending] Response received:', response.status, response.ok);
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
         const data = await response.json();
+        console.log('[Trending] Data received:', data);
         const items = Array.isArray(data?.items) ? data.items : [];
+        console.log('[Trending] Items to render:', items.length);
         renderTrending(items);
+        console.log('[Trending] Render complete');
       } catch (error) {
         console.error('[Trending] Failed to load:', error);
+        console.error('[Trending] Error stack:', error.stack);
         container.innerHTML = `
           <div class="empty-state">
             <div class="empty-state-icon">⚠️</div>
             <p>Failed to load trending songs</p>
+            <p style="font-size: 12px; color: #999;">${error.message}</p>
           </div>
         `;
       }
@@ -3541,14 +3870,21 @@
     // Function to load all initial content
     function loadInitialContent() {
       console.log('[MADMusic] Loading initial content...');
+      console.log('[MADMusic] window.massAccessToken:', window.massAccessToken);
+      console.log('[MADMusic] window.currentAccessToken:', window.currentAccessToken);
+      console.log('[MADMusic] localStorage token:', localStorage.getItem('mass_access_token'));
+
       // Update local currentAccessToken variable
       currentAccessToken = window.massAccessToken || window.currentAccessToken || localStorage.getItem('mass_access_token');
-      console.log('[MADMusic] Updated currentAccessToken:', currentAccessToken ? 'YES' : 'NO');
+      console.log('[MADMusic] Updated currentAccessToken:', currentAccessToken ? `YES (${currentAccessToken})` : 'NO');
 
       // loadFeatured(); // Removed - Featured section disabled
       // loadHighlights(); // Removed - Highlights section disabled
+      console.log('[MADMusic] About to call loadTrending()');
       loadTrending();
+      console.log('[MADMusic] About to call syncGenreFilters()');
       syncGenreFilters({ forceReloadRandom: true });
+      console.log('[MADMusic] Initial content load calls completed');
     }
 
     // Dark Mode Management
@@ -3678,15 +4014,19 @@
       // Check if access token was already validated before DOMContentLoaded
       // This prevents a race condition where the token validation completes
       // before the event listener is set up
+      console.log('[MADMusic] DOMContentLoaded - checking window.massAccessReady:', window.massAccessReady);
       if (window.massAccessReady) {
         console.log('[MADMusic] Access already ready (race condition avoided), loading content now...');
         loadInitialContent();
+      } else {
+        console.log('[MADMusic] Access not ready yet, waiting for mass:access-ready event...');
       }
     });
 
     // Load content when access token is ready
+    console.log('[MADMusic] Registering mass:access-ready event listener');
     window.addEventListener('mass:access-ready', (e) => {
-      console.log('[MADMusic] Access token ready event received');
+      console.log('[MADMusic] Access token ready event received, detail:', e.detail);
       loadInitialContent();
     });
   </script>

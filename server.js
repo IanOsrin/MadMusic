@@ -2012,12 +2012,13 @@ async function paystackRequest(method, endpoint, body) {
     headers: {
       'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
       'Content-Type': 'application/json'
-    }
+    },
+    timeout: 30000 // 30 second timeout instead of default 10
   };
   if (body) {
     options.body = JSON.stringify(body);
   }
-  const response = await fetch(url, options);
+  const response = await safeFetch(url, options);
   const data = await response.json();
   if (!response.ok) {
     throw new Error(`Paystack API error: ${data.message || response.statusText}`);
@@ -3766,8 +3767,8 @@ app.get('/api/cache/stats', (req, res) => {
 /* ========= Static site ========= */
 // Note: express.static() moved to top of file (line ~206) for better performance
 // Static files now bypass rate limiting and API middleware
-// Default to Modern view (MADMusic)
-app.get('/', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mad.html')));
+// Default to Modern view
+app.get('/', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'modern-view.html')));
 // Classic jukebox view available at /jukebox and /classic
 app.get('/jukebox', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 app.get('/classic', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
@@ -5492,8 +5493,16 @@ app.get('/api/album', async (req, res) => {
       queries = [
         { 'Reference Catalogue Number': cat }
       ];
+    } else if (title && artist) {
+      // Search by both album title AND artist to avoid mixing different albums with same name
+      queries = [
+        {
+          'Album Title': title,
+          'Album Artist': artist
+        }
+      ];
     } else if (title) {
-      // Just search by album title - don't use exact match as it may not be supported
+      // Search by album title only if no artist provided
       queries = [
         { 'Album Title': title }
       ];

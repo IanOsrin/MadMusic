@@ -596,258 +596,9 @@
       background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
     }
 
-    /* Payment Modal */
-    .payment-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 2000;
-      backdrop-filter: blur(4px);
-    }
-
-    .payment-overlay.hidden {
-      display: none;
-    }
-
-    .payment-modal {
-      background: #ffffff;
-      border-radius: 12px;
-      padding: 40px;
-      max-width: 500px;
-      width: 90%;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    }
-
-    .payment-modal h2 {
-      font-size: 24px;
-      font-weight: 600;
-      color: #1a1a1a;
-      margin-bottom: 8px;
-      text-align: center;
-    }
-
-    .payment-modal p {
-      font-size: 14px;
-      color: #666666;
-      margin-bottom: 30px;
-      text-align: center;
-    }
-
-    .payment-plans {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 24px;
-    }
-
-    .plan-option {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 20px;
-      border: 2px solid #ebebeb;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .plan-option:hover {
-      border-color: #6366f1;
-      background: #f8f8fa;
-    }
-
-    .plan-option.selected {
-      border-color: #6366f1;
-      background: #f0f0ff;
-    }
-
-    .plan-info {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .plan-name {
-      font-size: 16px;
-      font-weight: 600;
-      color: #1a1a1a;
-    }
-
-    .plan-duration {
-      font-size: 13px;
-      color: #666666;
-    }
-
-    .plan-price {
-      font-size: 20px;
-      font-weight: 600;
-      color: #6366f1;
-    }
-
-    .payment-email {
-      width: 100%;
-      padding: 14px 16px;
-      border: 2px solid #ebebeb;
-      border-radius: 8px;
-      font-size: 14px;
-      margin-bottom: 20px;
-      outline: none;
-      transition: border-color 0.2s ease;
-    }
-
-    .payment-email:focus {
-      border-color: #6366f1;
-    }
-
-    .payment-btn {
-      width: 100%;
-      padding: 14px;
-      background: #6366f1;
-      color: #ffffff;
-      border: none;
-      border-radius: 8px;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s ease;
-    }
-
-    .payment-btn:hover {
-      background: #5558e3;
-    }
-
-    .payment-btn:disabled {
-      background: #cccccc;
-      cursor: not-allowed;
-    }
-
-    .payment-error {
-      color: #dc2626;
-      font-size: 13px;
-      margin-top: 12px;
-      text-align: center;
-    }
-
-    .payment-divider {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin: 24px 0;
-      color: #999999;
-      font-size: 13px;
-    }
-
-    .payment-divider::before,
-    .payment-divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: #ebebeb;
-    }
-
-    .token-input-section {
-      display: none;
-    }
-
-    .token-input-section.active {
-      display: block;
-    }
-
-    .payment-plans-section.hidden {
-      display: none;
-    }
-
-    .token-input {
-      width: 100%;
-      padding: 14px 16px;
-      border: 2px solid #ebebeb;
-      border-radius: 8px;
-      font-size: 14px;
-      font-family: monospace;
-      margin-bottom: 16px;
-      outline: none;
-      transition: border-color 0.2s ease;
-    }
-
-    .token-input:focus {
-      border-color: #6366f1;
-    }
-
-    .toggle-link {
-      text-align: center;
-      margin-top: 16px;
-      font-size: 13px;
-      color: #6366f1;
-      cursor: pointer;
-      text-decoration: underline;
-    }
-
-    .toggle-link:hover {
-      color: #5558e3;
-    }
   </style>
 </head>
 <body>
-  <!-- Payment Modal -->
-  <div class="payment-overlay hidden" id="paymentOverlay">
-    <div class="payment-modal">
-      <h2>Get Access to MAD Music</h2>
-      <p>Choose a plan to start streaming</p>
-
-      <!-- Purchase New Token Section -->
-      <div class="payment-plans-section" id="purchaseSection">
-        <div class="payment-plans" id="paymentPlans">
-          <!-- Plans will be loaded here -->
-        </div>
-
-        <input
-          type="email"
-          class="payment-email"
-          id="paymentEmail"
-          placeholder="Enter your email address"
-          required
-        >
-
-        <button class="payment-btn" id="paymentSubmit">
-          Continue to Payment
-        </button>
-
-        <div class="payment-divider">OR</div>
-
-        <div class="toggle-link" id="showTokenInput">
-          Already have a token? Enter it here
-        </div>
-      </div>
-
-      <!-- Enter Existing Token Section -->
-      <div class="token-input-section" id="tokenSection">
-        <input
-          type="text"
-          class="token-input"
-          id="tokenInput"
-          placeholder="Enter your access token"
-          required
-        >
-
-        <button class="payment-btn" id="tokenSubmit">
-          Activate Token
-        </button>
-
-        <div class="toggle-link" id="showPurchase">
-          Don't have a token? Purchase one
-        </div>
-      </div>
-
-      <div class="payment-error" id="paymentError"></div>
-    </div>
-  </div>
-
   <!-- Top Bar -->
   <div class="top-bar"></div>
 
@@ -1005,7 +756,6 @@
     // ========= PAYMENT & ACCESS TOKEN SYSTEM =========
     const STORAGE_KEY = 'mass_access_token';
     let accessToken = localStorage.getItem(STORAGE_KEY);
-    let selectedPlan = '7-day'; // Default plan
 
     // Check URL for payment callback
     const urlParams = new URLSearchParams(window.location.search);
@@ -1021,143 +771,6 @@
     }
 
     // Load payment plans and render them
-    async function loadPaymentPlans() {
-      try {
-        const res = await fetch('/api/payments/plans');
-        const data = await res.json();
-        if (data.ok && data.plans) {
-          renderPaymentPlans(data.plans);
-        }
-      } catch (err) {
-        console.error('Failed to load payment plans:', err);
-      }
-    }
-
-    function renderPaymentPlans(plans) {
-      const plansContainer = document.getElementById('paymentPlans');
-      plansContainer.innerHTML = plans.map(plan => `
-        <div class="plan-option ${plan.id === selectedPlan ? 'selected' : ''}" data-plan="${plan.id}">
-          <div class="plan-info">
-            <div class="plan-name">${plan.label}</div>
-            <div class="plan-duration">${plan.days} ${plan.days === 1 ? 'day' : 'days'} of unlimited streaming</div>
-          </div>
-          <div class="plan-price">${plan.display}</div>
-        </div>
-      `).join('');
-
-      // Add click handlers
-      document.querySelectorAll('.plan-option').forEach(option => {
-        option.addEventListener('click', () => {
-          document.querySelectorAll('.plan-option').forEach(o => o.classList.remove('selected'));
-          option.classList.add('selected');
-          selectedPlan = option.dataset.plan;
-        });
-      });
-    }
-
-    // Show payment modal if no token
-    function checkAccessToken() {
-      if (!accessToken) {
-        document.getElementById('paymentOverlay').classList.remove('hidden');
-      }
-    }
-
-    // Toggle between purchase and token input
-    document.getElementById('showTokenInput').addEventListener('click', () => {
-      document.getElementById('purchaseSection').classList.add('hidden');
-      document.getElementById('tokenSection').classList.add('active');
-      document.getElementById('paymentError').textContent = '';
-    });
-
-    document.getElementById('showPurchase').addEventListener('click', () => {
-      document.getElementById('tokenSection').classList.remove('active');
-      document.getElementById('purchaseSection').classList.remove('hidden');
-      document.getElementById('paymentError').textContent = '';
-    });
-
-    // Handle existing token submission
-    document.getElementById('tokenSubmit').addEventListener('click', async () => {
-      const token = document.getElementById('tokenInput').value.trim();
-      const errorEl = document.getElementById('paymentError');
-      const submitBtn = document.getElementById('tokenSubmit');
-
-      errorEl.textContent = '';
-
-      if (!token) {
-        errorEl.textContent = 'Please enter your access token';
-        return;
-      }
-
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Validating...';
-
-      try {
-        // Validate token by making a test API call with it
-        const res = await fetch('/api/random-songs?count=1', {
-          headers: { 'X-Access-Token': token }
-        });
-
-        if (res.ok) {
-          // Token is valid, store it
-          localStorage.setItem(STORAGE_KEY, token);
-          accessToken = token;
-          document.getElementById('paymentOverlay').classList.add('hidden');
-          // Reload page content
-          location.reload();
-        } else {
-          errorEl.textContent = 'Invalid or expired token';
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Activate Token';
-        }
-      } catch (err) {
-        console.error('Token validation error:', err);
-        errorEl.textContent = 'Error validating token. Please try again.';
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Activate Token';
-      }
-    });
-
-    // Handle payment submission
-    document.getElementById('paymentSubmit').addEventListener('click', async () => {
-      const email = document.getElementById('paymentEmail').value.trim();
-      const errorEl = document.getElementById('paymentError');
-      const submitBtn = document.getElementById('paymentSubmit');
-
-      errorEl.textContent = '';
-
-      if (!email || !email.includes('@')) {
-        errorEl.textContent = 'Please enter a valid email address';
-        return;
-      }
-
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Processing...';
-
-      try {
-        const res = await fetch('/api/payments/initialize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, plan: selectedPlan })
-        });
-
-        const data = await res.json();
-
-        if (data.ok && data.authorization_url) {
-          // Redirect to Paystack
-          window.location.href = data.authorization_url;
-        } else {
-          errorEl.textContent = data.error || 'Failed to initialize payment';
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Continue to Payment';
-        }
-      } catch (err) {
-        console.error('Payment initialization error:', err);
-        errorEl.textContent = 'Network error. Please try again.';
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Continue to Payment';
-      }
-    });
-
     // ========= AUDIO PLAYER =========
     let currentAudio = null;
     let currentTrack = null;
@@ -1395,28 +1008,56 @@
       // Items from random-songs already have artworkSrc and fields
       // Group by album using catalogue number (unique identifier)
       const albumMap = new Map();
-      items.forEach(item => {
-        const fields = item.fields || {};
-        const catalogueNumber = fields['Album Catalogue Number'] || fields['Reference Catalogue Number'] || fields['Catalogue'];
-        const title = fields['Album Title'] || 'Unknown Album';
-        const artist = fields['Album Artist'] || 'Unknown Artist';
 
-        // Use catalogue number as primary key, fallback to title+artist if no catalogue number
-        const key = catalogueNumber || `${title}|||${artist}`;
+      console.log('=== ALBUM GROUPING DEBUG ===');
+      console.log('Total tracks to process:', items.length);
+
+      items.forEach((item, index) => {
+        const fields = item.fields || {};
+        const title = fields['Album Title'] || fields['Album'] || fields['Album Name'] || 'Unknown Album';
+        const albumArtist = fields['Album Artist'] || fields['Artist'] || fields['Artist Name'] || 'Unknown Artist';
+        const trackArtist = fields['Track Artist'] || fields['Artist'] || fields['Artist Name'] || 'Unknown Artist';
+        const trackName = fields['Track Name'];
+
+        // For singles/compilations, use track artist instead of album artist to prevent grouping different artists together
+        const isSingleOrCompilation = (title || '').toLowerCase() === 'single' || (title || '').toLowerCase() === 'singles';
+        const artist = isSingleOrCompilation ? trackArtist : albumArtist;
+
+        // Use simple delimiter-based key
+        const key = `${title}|||${artist}`.toLowerCase();
+
+        // Detailed logging for each track
+        console.log(`[${index}] Track: "${trackName}" by Track Artist: "${trackArtist}"`);
+        console.log(`  Album Title: "${title}"`);
+        console.log(`  Album Artist: "${albumArtist}"`);
+        console.log(`  Track Artist: "${trackArtist}"`);
+        console.log(`  Is Single/Compilation: ${isSingleOrCompilation ? 'YES' : 'NO'}`);
+        console.log(`  Using Artist: "${artist}" (${isSingleOrCompilation ? 'Track Artist' : 'Album Artist'})`);
+        console.log(`  Generated Key: "${key}"`);
 
         if (!albumMap.has(key)) {
+          console.log(`  -> CREATING NEW ALBUM: "${title}" by "${artist}"`);
           albumMap.set(key, {
-            title,
-            artist,
+            title: title,
+            artist: artist,
             artwork: item.artworkSrc || null,
             tracks: []
           });
+        } else {
+          console.log(`  -> ADDING TO EXISTING ALBUM`);
         }
+
         albumMap.get(key).tracks.push({
           ...item,
           trackName: fields['Track Name'] || 'Unknown Track'
         });
       });
+
+      console.log('=== FINAL ALBUM MAP ===');
+      albumMap.forEach((album, key) => {
+        console.log(`Key: "${key}" -> Album: "${album.title}" by "${album.artist}" (${album.tracks.length} tracks)`);
+      });
+      console.log('========================');
 
       // Show all albums
       const albums = Array.from(albumMap.values());
@@ -1569,10 +1210,6 @@
 
     // Load albums on page load
     async function init() {
-      // Initialize payment system
-      await loadPaymentPlans();
-      checkAccessToken();
-
       // Initialize search functionality
       initSearch();
 
