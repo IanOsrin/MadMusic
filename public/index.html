@@ -255,8 +255,7 @@
     .playlist-column[hidden]{display:none !important;}
     .playlist-column:not(:has(section:not([hidden]))){display:none !important;}
     .content-column{flex:1 1 auto;min-width:400px;display:flex;flex-direction:column;gap:16px;width:100%;order:2;}
-    .now-playing-column{flex:0 0 260px;max-width:260px;width:100%;display:flex;flex-direction:column;gap:14px;position:fixed;top:50%;transform:translateY(-50%);right:20px;order:3;z-index:101;}
-    .now-playing-column[hidden]{display:none !important;}
+    /* Mini player ribbon removed - now using bottom ribbon */
     .public-playlists{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px;transition:gap 0.3s ease;}
     .public-playlists.collapsed{gap:0;}
     .public-playlists .playlists-header{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;user-select:none;padding:4px 8px;margin:-4px -8px;border-radius:8px;transition:background 0.2s ease;pointer-events:auto;}
@@ -299,15 +298,13 @@
     .playlist-footer-actions .btn:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(98,245,169,0.35);}
     @media (max-width:1200px){
       .layout-grid{flex-wrap:wrap;}
-      .now-playing-column{order:1;max-width:100%;flex:1 1 100%;}
-      .playlist-column{order:2;max-width:100%;flex:1 1 100%;}
-      .content-column{order:3;max-width:100%;flex:1 1 100%;}
+      .playlist-column{order:1;max-width:100%;flex:1 1 100%;}
+      .content-column{order:2;max-width:100%;flex:1 1 100%;}
     }
     @media (max-width:900px){
       .layout-grid{flex-direction:column;gap:16px;}
-      .playlist-column{max-width:100%;order:2;}
-      .content-column{order:3;min-width:260px;}
-      .now-playing-column{max-width:100%;order:1;}
+      .playlist-column{max-width:100%;order:1;}
+      .content-column{order:2;min-width:260px;}
       .public-playlist-view{width:100%;max-width:none;}
       .public-featured-row{flex-direction:column;}
       .public-featured-row > .public-playlists{width:100%;max-width:none;}
@@ -432,32 +429,34 @@
     .playlist-tracks.only-current .playlist-empty{display:none;}
     .playlist-tracks.only-current .now-playing-placeholder{display:none;}
 
-    .now-playing{padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--card);display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden;}
-    .now-playing[hidden]{display:none !important;}
-    .now-playing-video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0.15;pointer-events:none;z-index:0;}
-    .now-playing-header{display:flex;align-items:center;justify-content:space-between;gap:8px;position:relative;z-index:1;}
-    .now-playing-header .label{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
-    .now-playing-body{display:flex;align-items:center;gap:10px;position:relative;z-index:1;}
-    .now-playing-thumb{width:44px;height:44px;border-radius:8px;overflow:hidden;flex-shrink:0;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);}
-    .now-playing-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
-    .now-playing-meta{display:flex;flex-direction:column;gap:2px;min-width:0;}
-    .now-playing-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .now-playing-sub{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .now-playing-source{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .now-playing-controls{display:flex;align-items:flex-start;gap:8px;position:relative;z-index:1;flex-wrap:wrap;}
-    .now-playing-meta-buttons{display:flex;flex-direction:column;align-items:flex-start;gap:4px;}
-    .now-playing-meta-buttons .btn.small{padding:5px 8px;font-size:11px;}
-    .now-playing-meta-list{display:flex;flex-direction:column;gap:3px;font-size:12px;margin-top:2px;}
-    .now-playing-meta-line{color:var(--muted);line-height:1.3;}
-    .now-playing-meta-line strong{color:var(--fg);font-weight:600;margin-right:4px;}
-    .now-playing-status{font-size:11px;color:var(--muted);flex-basis:100%;margin-bottom:4px;}
-    .now-playing-progress{width:100%;height:6px;background:var(--border);border-radius:4px;overflow:hidden;position:relative;margin-top:6px;z-index:1;}
-    .now-playing-progress .fill{position:absolute;inset:0;background:linear-gradient(90deg,var(--accent),#6bd3ff);width:0%;border-radius:4px;transition:width .1s linear;}
-    .now-playing-controls .btn.small{padding:6px 10px;font-size:12px;width:100%;max-width:120px;}
-    #nowPlayingToggle{order:1;}
-    #nowPlayingAdd{order:2;}
-    .now-playing.collapsed .now-playing-body,
-    .now-playing.collapsed .now-playing-controls{display:none;}
+    /* Mini Player Ribbon */
+    .mini-player{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);padding:12px 18px;display:none;align-items:center;gap:16px;box-shadow:0 -4px 20px rgba(0,0,0,0.1);z-index:200;}
+    .mini-player.active{display:flex;}
+    .mini-player-artwork{width:56px;height:56px;border-radius:8px;overflow:hidden;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);transition:transform 0.3s ease;}
+    .mini-player-artwork.playing{box-shadow:0 0 0 2px var(--accent);animation:pulse 2s ease-in-out infinite;}
+    .mini-player-artwork img{width:100%;height:100%;object-fit:cover;}
+    @keyframes pulse{0%,100%{box-shadow:0 0 0 2px var(--accent);}50%{box-shadow:0 0 0 2px var(--accent),0 0 20px rgba(98,245,169,0.4);}}
+    .mini-player-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+    .mini-player-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--fg);}
+    .mini-player-artist{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .mini-player-metadata{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:8px;}
+    .mini-player-controls{display:flex;gap:8px;align-items:center;}
+    .mini-player-btn{width:40px;height:40px;border-radius:50%;border:none;background:var(--accent);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all 0.2s ease;}
+    .mini-player-btn:hover{background:var(--accent-hover);transform:scale(1.05);}
+    .mini-player-btn.secondary{background:var(--bg);color:var(--fg);border:1px solid var(--border);}
+    .mini-player-btn.secondary:hover{background:var(--border);border-color:var(--accent);}
+    .mini-player-progress{position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--border);}
+    .mini-player-progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),#6bd3ff);width:0%;transition:width .1s linear;}
+
+    /* Add bottom padding when mini player is active */
+    body:has(.mini-player.active) main{padding-bottom:90px;}
+
+    @media (max-width:768px){
+      .mini-player{padding:10px 12px;gap:12px;}
+      .mini-player-artwork{width:48px;height:48px;}
+      .mini-player-btn{width:36px;height:36px;font-size:14px;}
+      .mini-player-metadata{display:none;}
+    }
 
     /* Landing placeholder */
     .landing{display:flex;align-items:center;justify-content:center;min-height:40vh;}
@@ -1216,41 +1215,30 @@
         </div>
         <div id="error" class="error" hidden></div>
       </section>
-      <aside id="nowPlayingColumn" class="now-playing-column">
-        <section id="nowPlayingCard" class="now-playing" hidden>
-          <video id="nowPlayingVideo" class="now-playing-video" loop muted>
-            <source src="/Video/JB.mp4" type="video/mp4">
-          </video>
-          <div class="now-playing-header">
-            <span class="label">Now Playing</span>
-            <div style="display: flex; gap: 6px;">
-              <button id="nowPlayingCollapse" type="button" class="btn small">Hide</button>
-            </div>
-          </div>
-          <div class="now-playing-body">
-            <div id="nowPlayingThumb" class="now-playing-thumb">
-              <div class="now-playing-thumb-content">--</div>
-            </div>
-            <div class="now-playing-meta">
-              <div id="nowPlayingTitle" class="now-playing-title">Track</div>
-              <div id="nowPlayingSubtitle" class="now-playing-sub">Artist</div>
-              <div id="nowPlayingYear" class="now-playing-year" style="font-size: 11px; color: var(--muted); margin-top: 2px;"></div>
-              <div id="nowPlayingSource" class="now-playing-source"></div>
-            </div>
-          </div>
-          <div class="now-playing-controls">
-            <span id="nowPlayingStatus" class="now-playing-status">Paused</span>
-            <div id="nowPlayingMetaButtons" class="now-playing-meta-buttons"></div>
-            <button id="nowPlayingAdd" type="button" class="btn small" hidden>+ Playlist</button>
-            <button id="nowPlayingToggle" type="button" class="btn small">Play</button>
-          </div>
-          <div class="now-playing-progress">
-            <div id="nowPlayingProgressFill" class="fill"></div>
-          </div>
-        </section>
-      </aside>
     </div>
   </main>
+
+  <!-- Mini Player Ribbon -->
+  <div class="mini-player" id="miniPlayer">
+    <div class="mini-player-artwork" id="nowPlayingThumb">
+      <div class="now-playing-thumb-content">--</div>
+    </div>
+    <div class="mini-player-info">
+      <div class="mini-player-title" id="nowPlayingTitle">Nothing playing</div>
+      <div class="mini-player-artist" id="nowPlayingSubtitle">Select a track to play</div>
+      <div class="mini-player-metadata">
+        <span id="nowPlayingYear"></span>
+        <span id="nowPlayingSource"></span>
+      </div>
+    </div>
+    <div class="mini-player-controls">
+      <button class="mini-player-btn" id="nowPlayingToggle" title="Play/Pause">▶</button>
+      <button class="mini-player-btn secondary" id="nowPlayingAdd" title="Add to playlist" hidden>+</button>
+    </div>
+    <div class="mini-player-progress">
+      <div class="mini-player-progress-fill" id="nowPlayingProgressFill"></div>
+    </div>
+  </div>
 
   <!-- Single centered modal (reused for all albums) -->
   <div id="overlay" class="overlay" aria-hidden="true">
@@ -2616,10 +2604,10 @@
 
     // Listen for audio playback events
     document.addEventListener('DOMContentLoaded', () => {
-      const nowPlayingThumb = document.querySelector('.now-playing-thumb');
+      const nowPlayingThumb = document.querySelector('.mini-player-artwork');
 
       if (!nowPlayingThumb) {
-        console.warn('⚠️ Now playing thumb not found');
+        console.warn('⚠️ Mini player artwork not found');
         return;
       }
 
@@ -2638,17 +2626,23 @@
             // When audio starts playing
             audio.addEventListener('play', () => {
               currentAudio = audio;
-              const thumb = document.querySelector('.now-playing-thumb');
-              const video = document.getElementById('nowPlayingVideo');
-              const nowPlayingCard = document.getElementById('nowPlayingCard');
+              const thumb = document.querySelector('.mini-player-artwork');
+              const miniPlayer = document.getElementById('miniPlayer');
               const modalAlbumSleeve = document.getElementById('modalAlbumSleeve');
+              const toggleBtn = document.getElementById('nowPlayingToggle');
 
-              console.log('[VIDEO] Audio playing, thumb:', thumb, 'video:', video);
+              console.log('[PLAYER] Audio playing, showing mini player');
 
-              // Show now playing card
-              if (nowPlayingCard) {
-                nowPlayingCard.hidden = false;
-                console.log('[NOW PLAYING] Card shown');
+              // Show mini player ribbon
+              if (miniPlayer) {
+                miniPlayer.classList.add('active');
+                console.log('[MINI PLAYER] Ribbon shown');
+              }
+
+              // Update toggle button to show pause icon
+              if (toggleBtn) {
+                toggleBtn.textContent = '⏸';
+                toggleBtn.title = 'Pause';
               }
 
               // Show and populate album sleeve in modal if overlay is open
@@ -2670,13 +2664,7 @@
 
               if (thumb) {
                 thumb.classList.add('playing');
-                console.log('[VIDEO] Added playing class to thumb');
-              }
-              if (video) {
-                console.log('[VIDEO] Starting video playback');
-                video.play().catch(err => console.log('[VIDEO] Video autoplay prevented:', err));
-              } else {
-                console.warn('[VIDEO] Video element not found!');
+                console.log('[PLAYER] Added playing class to artwork');
               }
               toggleJukeboxGlow(true);
             });
@@ -2697,30 +2685,31 @@
 
             // When audio pauses
             audio.addEventListener('pause', () => {
-              const thumb = document.querySelector('.now-playing-thumb');
-              const video = document.getElementById('nowPlayingVideo');
+              const thumb = document.querySelector('.mini-player-artwork');
+              const toggleBtn = document.getElementById('nowPlayingToggle');
 
               if (thumb) {
                 thumb.classList.remove('playing');
               }
-              if (video) {
-                video.pause();
+              if (toggleBtn) {
+                toggleBtn.textContent = '▶';
+                toggleBtn.title = 'Play';
               }
               toggleJukeboxGlow(false);
             });
 
             // When audio ends
             audio.addEventListener('ended', () => {
-              const thumb = document.querySelector('.now-playing-thumb');
-              const video = document.getElementById('nowPlayingVideo');
+              const thumb = document.querySelector('.mini-player-artwork');
               const progressFill = document.getElementById('nowPlayingProgressFill');
+              const toggleBtn = document.getElementById('nowPlayingToggle');
 
               if (thumb) {
                 thumb.classList.remove('playing');
               }
-              if (video) {
-                video.pause();
-                video.currentTime = 0;
+              if (toggleBtn) {
+                toggleBtn.textContent = '▶';
+                toggleBtn.title = 'Play';
               }
 
               // Reset progress bar
