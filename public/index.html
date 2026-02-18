@@ -2093,6 +2093,55 @@
   </script>
   <script defer src="/app.min.js?v=94&t=1735077300"></script>
   <script>
+  // Fix logout button to call clearAccessToken endpoint
+  window.addEventListener('DOMContentLoaded', () => {
+    // Wait a bit for app.min.js to initialize
+    setTimeout(() => {
+      const logoutBtn = document.getElementById('logoutButton');
+      if (logoutBtn) {
+        // Remove existing listeners by cloning
+        const newLogoutBtn = logoutBtn.cloneNode(true);
+        logoutBtn.parentNode.replaceChild(newLogoutBtn, logoutBtn);
+
+        // Add our logout handler
+        newLogoutBtn.addEventListener('click', async () => {
+          console.log('[LOGOUT] Logout button clicked');
+
+          // Call clearAccessToken from the access token script
+          const token = localStorage.getItem('mass_access_token');
+          const sessionId = localStorage.getItem('mass_session_id');
+
+          if (token && sessionId) {
+            console.log('[LOGOUT] Calling logout endpoint');
+            try {
+              const response = await fetch('/api/access/logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, sessionId })
+              });
+              const data = await response.json();
+              console.log('[LOGOUT] Response:', data);
+            } catch (err) {
+              console.error('[LOGOUT] Failed:', err);
+            }
+          }
+
+          // Clear localStorage
+          localStorage.removeItem('mass_access_token');
+          localStorage.removeItem('mass_token_info');
+          localStorage.removeItem('mass_token_email');
+          window.massAccessReady = false;
+          window.massAccessToken = null;
+
+          // Reload page
+          window.location.reload();
+        });
+        console.log('[LOGOUT] Logout button handler installed');
+      }
+    }, 1000);
+  });
+  </script>
+  <script>
   // Override search to use separate fields
   window.addEventListener('load', () => {
     const searchArtistEl = document.getElementById('searchArtist');
