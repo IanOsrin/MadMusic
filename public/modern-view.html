@@ -1838,8 +1838,9 @@
     async function clearAccessToken() {
       // Call backend to clear session from FileMaker
       if (currentAccessToken && sessionId) {
+        console.log('[Access Token] Calling logout endpoint with token:', currentAccessToken, 'sessionId:', sessionId);
         try {
-          await originalFetch('/api/access/logout', {
+          const response = await originalFetch('/api/access/logout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1847,10 +1848,18 @@
               sessionId: sessionId
             })
           });
-          console.log('[Access Token] Session cleared from server');
+          const data = await response.json();
+          console.log('[Access Token] Logout response:', response.status, data);
+          if (response.ok) {
+            console.log('[Access Token] ✅ Session cleared from server successfully');
+          } else {
+            console.error('[Access Token] ❌ Logout failed:', data);
+          }
         } catch (err) {
-          console.warn('[Access Token] Failed to clear session from server:', err);
+          console.error('[Access Token] ❌ Logout request failed:', err);
         }
+      } else {
+        console.log('[Access Token] Skipping logout - no token or sessionId');
       }
 
       // Clear local storage

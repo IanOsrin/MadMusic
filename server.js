@@ -2909,8 +2909,10 @@ app.post('/api/access/logout', async (req, res) => {
   console.log('[MASS] /api/access/logout route hit');
   try {
     const { token, sessionId } = req.body;
+    console.log(`[MASS LOGOUT] Token: ${token}, SessionID: ${sessionId}`);
 
     if (!token || !sessionId) {
+      console.log('[MASS LOGOUT] ❌ Missing token or sessionId');
       return res.status(400).json({
         ok: false,
         error: 'Token and session ID are required'
@@ -2928,6 +2930,7 @@ app.post('/api/access/logout', async (req, res) => {
     if (result && result.data && result.data.length > 0) {
       const tokenData = result.data[0].fieldData;
       const recordId = result.data[0].recordId;
+      console.log(`[MASS LOGOUT] Found token. Current session in FM: "${tokenData.Current_Session_ID}", Incoming: "${sessionId}"`);
 
       // Only clear session if it matches the current session ID
       if (tokenData.Current_Session_ID === sessionId) {
@@ -2941,15 +2944,15 @@ app.post('/api/access/logout', async (req, res) => {
           'Session_IP': ''
         });
 
-        console.log(`[MASS] Session cleared for token ${trimmedCode}`);
+        console.log(`[MASS LOGOUT] ✅ Session cleared for token ${trimmedCode}`);
         return res.json({ ok: true, message: 'Session cleared successfully' });
       } else {
-        console.log(`[MASS] Session ID mismatch for token ${trimmedCode} - not clearing`);
-        return res.json({ ok: true, message: 'Session ID mismatch - not current session' });
+        console.log(`[MASS LOGOUT] ⚠️ Session ID mismatch for token ${trimmedCode} - not clearing (FM has different session)`);
+        return res.json({ ok: true, message: 'Session ID mismatch - not current session', warning: true });
       }
     } else {
-      console.log(`[MASS] Token ${trimmedCode} not found in FileMaker`);
-      return res.json({ ok: true, message: 'Token not found' });
+      console.log(`[MASS LOGOUT] ⚠️ Token ${trimmedCode} not found in FileMaker`);
+      return res.json({ ok: true, message: 'Token not found', warning: true });
     }
   } catch (err) {
     console.error('[MASS] Logout failed:', err);
