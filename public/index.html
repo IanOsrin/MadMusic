@@ -2045,9 +2045,14 @@
     // Reset App button handler
     const resetAppBtn = document.getElementById('resetAppBtn');
     if (resetAppBtn) {
-      resetAppBtn.addEventListener('click', () => {
+      resetAppBtn.addEventListener('click', async () => {
         if (confirm('Reset app? This will clear all stored data (access token, cookies, settings) and reload the page.')) {
           console.log('[Access Token] Resetting app - clearing all localStorage');
+
+          // First, clear session from server
+          await clearAccessToken();
+
+          // Then clear all local storage and cookies
           localStorage.clear();
           sessionStorage.clear();
           // Also clear cookies
