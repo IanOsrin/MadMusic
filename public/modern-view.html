@@ -1638,6 +1638,25 @@
   (function() {
     const STORAGE_KEY = 'mass_access_token';
     const STORAGE_INFO_KEY = 'mass_access_token_info';
+    const SESSION_ID_KEY = 'mass_session_id';
+
+    // Generate or retrieve unique session ID for this device/browser
+    function getSessionId() {
+      let sessionId = localStorage.getItem(SESSION_ID_KEY);
+      if (!sessionId) {
+        // Generate UUID v4
+        sessionId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          const r = Math.random() * 16 | 0;
+          const v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+        localStorage.setItem(SESSION_ID_KEY, sessionId);
+        console.log('[Session] Generated new session ID:', sessionId);
+      }
+      return sessionId;
+    }
+
+    const sessionId = getSessionId();
 
     // Load token from localStorage IMMEDIATELY before anything else
     let currentAccessToken = localStorage.getItem(STORAGE_KEY);
@@ -1844,7 +1863,10 @@
         const response = await originalFetch('/api/access/validate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: token.trim().toUpperCase() })
+          body: JSON.stringify({
+            token: token.trim().toUpperCase(),
+            sessionId: sessionId
+          })
         });
 
         const data = await response.json();
@@ -1875,7 +1897,12 @@
 
           return true;
         } else {
-          showError(data.reason || data.error || 'Invalid token');
+          // Check for "token in use" error
+          if (data.reason === 'Token is currently in use on another device') {
+            showError('⚠️ This token is already active on another device. Please wait or use a different token.');
+          } else {
+            showError(data.reason || data.error || 'Invalid token');
+          }
           return false;
         }
       } catch (err) {

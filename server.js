@@ -2089,7 +2089,7 @@ function validateAccessTokenFromJSON(tokenCode) {
 }
 
 // Main function: validates token from FileMaker database
-async function validateAccessToken(tokenCode) {
+async function validateAccessToken(tokenCode, sessionId = null, req = null) {
   if (!tokenCode || typeof tokenCode !== 'string') {
     return { valid: false, reason: 'No token provided' };
   }
@@ -2170,6 +2170,37 @@ async function validateAccessToken(tokenCode) {
       }
     }
 
+    // Check session - enforce single device access
+    if (sessionId) {
+      const currentSessionId = token.Current_Session_ID;
+      const lastActivity = token.Session_Last_Activity;
+
+      if (currentSessionId && currentSessionId !== sessionId) {
+        // Different session trying to use the token
+        // Check if the existing session is still active (within 15 minutes)
+        if (lastActivity) {
+          try {
+            const lastActivityTime = new Date(lastActivity).getTime();
+            const now = Date.now();
+            const sessionTimeoutMs = 15 * 60 * 1000; // 15 minutes
+
+            if (!isNaN(lastActivityTime) && (now - lastActivityTime) < sessionTimeoutMs) {
+              console.log(`[MASS] Token ${trimmedCode} is in use by another session (last active ${Math.floor((now - lastActivityTime) / 1000 / 60)} min ago)`);
+              return {
+                valid: false,
+                reason: 'Token is currently in use on another device'
+              };
+            } else {
+              console.log(`[MASS] Previous session timed out, allowing new session`);
+            }
+          } catch (err) {
+            console.warn('[MASS] Error parsing session last activity:', err);
+          }
+        }
+      }
+      console.log(`[MASS] Session ${sessionId} validated for token ${trimmedCode}`);
+    }
+
     // Update usage statistics (async - don't wait for it)
     const recordId = result.data[0].recordId;
     const now = new Date();
@@ -2179,6 +2210,17 @@ async function validateAccessToken(tokenCode) {
       'Last_Used': fmTimestamp,
       'Use_Count': (parseInt(token.Use_Count) || 0) + 1
     };
+
+    // Update session information if sessionId is provided
+    if (sessionId) {
+      updateFields['Current_Session_ID'] = sessionId;
+      updateFields['Session_Last_Activity'] = fmTimestamp;
+      // Store user agent and IP for tracking
+      if (req) {
+        updateFields['Session_Device_Info'] = req.headers['user-agent'] || 'Unknown';
+        updateFields['Session_IP'] = req.ip || req.connection?.remoteAddress || 'Unknown';
+      }
+    }
 
     // Track if we're calculating a new expiration for first-time use
     let calculatedExpirationUTC = null;
@@ -2819,7 +2861,7 @@ console.log('[MASS] Registering access token validation endpoint');
 app.post('/api/access/validate', async (req, res) => {
   console.log('[MASS] /api/access/validate route hit');
   try {
-    const { token } = req.body;
+    const { token, sessionId } = req.body;
 
     if (!token) {
       return res.status(400).json({
@@ -2829,7 +2871,15 @@ app.post('/api/access/validate', async (req, res) => {
       });
     }
 
-    const result = await validateAccessToken(token);
+    if (!sessionId) {
+      return res.status(400).json({
+        ok: false,
+        valid: false,
+        error: 'Session ID is required'
+      });
+    }
+
+    const result = await validateAccessToken(token, sessionId, req);
 
     if (result.valid) {
       res.json({
