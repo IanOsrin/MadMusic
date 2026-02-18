@@ -93,7 +93,7 @@
       align-items: center;
       gap: 12px;
       padding: 10px 16px;
-      color: var(--text-secondary);
+      color: #000000;
       text-decoration: none;
       font-size: 14px;
       font-weight: 500;
@@ -106,7 +106,7 @@
     }
     .nav-item:hover {
       background: var(--hover-bg);
-      color: var(--fg);
+      color: var(--accent);
     }
     .nav-item.active {
       color: var(--accent);
@@ -964,7 +964,7 @@
       </div>
 
       <nav class="sidebar-nav">
-        <button class="nav-item active" data-view="home">
+        <button class="nav-item" data-view="home">
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
           </svg>
@@ -976,13 +976,6 @@
             <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
           </svg>
           Tracks
-        </button>
-
-        <button class="nav-item" data-view="albums">
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5zm0-5.5c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/>
-          </svg>
-          Albums
         </button>
 
         <div class="nav-section">
