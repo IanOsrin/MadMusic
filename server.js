@@ -2904,6 +2904,59 @@ app.post('/api/access/validate', async (req, res) => {
   }
 });
 
+// Logout endpoint - clears session from FileMaker
+app.post('/api/access/logout', async (req, res) => {
+  console.log('[MASS] /api/access/logout route hit');
+  try {
+    const { token, sessionId } = req.body;
+
+    if (!token || !sessionId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Token and session ID are required'
+      });
+    }
+
+    const trimmedCode = token.trim().toUpperCase();
+
+    // Look up token in FileMaker
+    const layout = process.env.FM_TOKENS_LAYOUT || 'API_Access_Tokens';
+    const result = await fmFindRecords(layout, [
+      { 'Token_Code': `==${trimmedCode}` }
+    ], { limit: 1 });
+
+    if (result && result.data && result.data.length > 0) {
+      const tokenData = result.data[0].fieldData;
+      const recordId = result.data[0].recordId;
+
+      // Only clear session if it matches the current session ID
+      if (tokenData.Current_Session_ID === sessionId) {
+        const now = new Date();
+        const fmTimestamp = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+        await fmUpdateRecord(layout, recordId, {
+          'Current_Session_ID': '',
+          'Session_Last_Activity': fmTimestamp,
+          'Session_Device_Info': '',
+          'Session_IP': ''
+        });
+
+        console.log(`[MASS] Session cleared for token ${trimmedCode}`);
+        return res.json({ ok: true, message: 'Session cleared successfully' });
+      } else {
+        console.log(`[MASS] Session ID mismatch for token ${trimmedCode} - not clearing`);
+        return res.json({ ok: true, message: 'Session ID mismatch - not current session' });
+      }
+    } else {
+      console.log(`[MASS] Token ${trimmedCode} not found in FileMaker`);
+      return res.json({ ok: true, message: 'Token not found' });
+    }
+  } catch (err) {
+    console.error('[MASS] Logout failed:', err);
+    res.status(500).json({ ok: false, error: 'Logout failed' });
+  }
+});
+
 // ========= PAYSTACK PAYMENT ENDPOINTS =========
 
 // GET /api/payments/plans — return available plans with pricing

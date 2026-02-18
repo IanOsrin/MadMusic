@@ -1835,7 +1835,25 @@
       return currentAccessToken;
     }
 
-    function clearAccessToken() {
+    async function clearAccessToken() {
+      // Call backend to clear session from FileMaker
+      if (currentAccessToken && sessionId) {
+        try {
+          await originalFetch('/api/access/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              token: currentAccessToken,
+              sessionId: sessionId
+            })
+          });
+          console.log('[Access Token] Session cleared from server');
+        } catch (err) {
+          console.warn('[Access Token] Failed to clear session from server:', err);
+        }
+      }
+
+      // Clear local storage
       currentAccessToken = null;
       tokenInfo = null;
       localStorage.removeItem(STORAGE_KEY);
