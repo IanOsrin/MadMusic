@@ -1422,6 +1422,36 @@
       transition: transform 0.2s ease;
       color: var(--muted);
     }
+    .sidebar-playlist-item { padding: 0; }
+    .sidebar-playlist-btn {
+      width: 100%;
+      padding: 8px 6px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--fg);
+      text-align: left;
+    }
+    .sidebar-playlist-btn:hover { background: var(--hover-bg); color: var(--fg); }
+    .sidebar-playlist-btn.active { background: rgba(139,92,246,0.15); color: var(--accent); }
+    .sidebar-playlist-thumb {
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      background: var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .sidebar-playlist-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-playlist-count { font-size: 11px; color: var(--muted); }
+
     .container {
       margin-left: var(--sidebar-width);
       padding-bottom: 100px;
@@ -1659,24 +1689,18 @@
           <span class="chevron">&#9650;</span>
         </div>
         <div class="nav-section-content">
-          <button class="nav-item" data-playlist="Afro-House">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-            </svg>
-            Afro-House
-          </button>
-          <button class="nav-item" data-playlist="Hip-Hop">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-            </svg>
-            Hip-Hop
-          </button>
-          <button class="nav-item">
+          <!-- Dynamic user playlists -->
+          <div id="sidebarMyPlaylists">
+            <ul id="sidebarMyPlaylistsList" style="list-style:none;padding:0;margin:0;"></ul>
+            <div id="sidebarMyPlaylistsEmpty" hidden style="padding:6px 20px;font-size:12px;color:var(--muted);">No playlists yet</div>
+          </div>
+          <!-- Create New Playlist -->
+          <a href="/albums" class="nav-item" id="createPlaylistBtn" style="color: var(--accent);">
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
             </svg>
             Create New Playlist
-          </button>
+          </a>
         </div>
       </div>
     </nav>
@@ -1687,6 +1711,67 @@
       const section = document.getElementById(sectionId);
       section.classList.toggle('collapsed');
     }
+
+    // Dynamic sidebar playlists
+    (function() {
+      const myPlaylistsList = document.getElementById('sidebarMyPlaylistsList');
+      const myPlaylistsEmpty = document.getElementById('sidebarMyPlaylistsEmpty');
+
+      async function loadMyPlaylists() {
+        try {
+          const res = await fetch('/api/playlists');
+          const data = await res.json();
+          if (data.ok && Array.isArray(data.playlists)) {
+            if (data.playlists.length > 0) {
+              renderMyPlaylists(data.playlists);
+              myPlaylistsEmpty.hidden = true;
+            } else {
+              myPlaylistsEmpty.hidden = false;
+            }
+          }
+        } catch (err) {
+          console.error('[Sidebar] Failed to load playlists:', err);
+        }
+      }
+
+      function renderMyPlaylists(playlists) {
+        myPlaylistsList.innerHTML = '';
+        playlists.forEach(playlist => {
+          const li = document.createElement('li');
+          li.className = 'sidebar-playlist-item';
+
+          const btn = document.createElement('button');
+          btn.className = 'sidebar-playlist-btn';
+          btn.dataset.playlistId = playlist.id;
+
+          const thumb = document.createElement('div');
+          thumb.className = 'sidebar-playlist-thumb';
+          thumb.textContent = '🎵';
+
+          const name = document.createElement('span');
+          name.className = 'sidebar-playlist-name';
+          name.textContent = playlist.name;
+
+          const count = document.createElement('span');
+          count.className = 'sidebar-playlist-count';
+          count.textContent = playlist.tracks?.length || 0;
+
+          btn.appendChild(thumb);
+          btn.appendChild(name);
+          btn.appendChild(count);
+
+          // Navigate to albums page where the playlist view lives
+          btn.addEventListener('click', () => {
+            window.location.href = '/albums';
+          });
+
+          li.appendChild(btn);
+          myPlaylistsList.appendChild(li);
+        });
+      }
+
+      loadMyPlaylists();
+    })();
   </script>
 
   <!-- Payment Modal -->
