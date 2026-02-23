@@ -1770,7 +1770,9 @@
         });
       }
 
-      loadMyPlaylists();
+      // Wait for access token before loading playlists
+      window.addEventListener('mass:access-ready', loadMyPlaylists);
+      if (window.massAccessReady) loadMyPlaylists();
     })();
   </script>
 
