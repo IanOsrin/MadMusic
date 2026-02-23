@@ -2405,12 +2405,16 @@
           item.addEventListener('click', () => {
             const trackIndex = parseInt(item.dataset.trackIndex);
             const track = album.tracks[trackIndex];
-            // Play the track (integrate with existing player)
+            // Play the track
             if (track && track.audioUrl) {
+              let src = track.audioUrl;
+              if (src && /^https?:\/\//i.test(src) && !/\.s3[.-]/.test(src) && !src.includes('/api/container?')) {
+                src = `/api/container?u=${encodeURIComponent(src)}`;
+              }
               const player = document.getElementById('player');
-              if (player) {
-                player.src = track.audioUrl;
-                player.play();
+              if (player && src) {
+                player.src = src;
+                player.play().catch(err => console.warn('[Playlist] play error', err));
               }
             }
             // Mark as playing
@@ -3201,6 +3205,25 @@
     // Expose for Next/Prev button handlers added after app.min.js loads
     window.__advanceDetailTrack = advanceDetailTrack;
     window.__isDetailViewActive = isDetailViewActive;
+
+    // Update duration display with real audio duration when metadata loads
+    function formatDuration(secs) {
+      if (!secs || !isFinite(secs)) return '';
+      const m = Math.floor(secs / 60);
+      const s = Math.floor(secs % 60).toString().padStart(2, '0');
+      return m + ':' + s;
+    }
+    player.addEventListener('loadedmetadata', function() {
+      if (!isDetailViewActive()) return;
+      const trackList = document.getElementById('playlistTrackList');
+      if (!trackList) return;
+      const playing = trackList.querySelector('.playlist-track-item.playing');
+      if (!playing) return;
+      const durEl = playing.querySelector('.playlist-track-duration');
+      if (durEl && player.duration) {
+        durEl.textContent = formatDuration(player.duration);
+      }
+    });
 
     // Auto-advance when track ends — fires before app.min.js handler
     player.addEventListener('ended', function(e) {
@@ -4474,7 +4497,7 @@
           genre: t.genre || '',
           year: t.year || '',
           duration: t.duration || '',
-          audioUrl: t.audioUrl || t.S3_URL || t.mp3 || ''
+          audioUrl: t.audioUrl || t.resolvedSrc || t.S3_URL || t.mp3 || ''
         }));
 
         if (typeof showPlaylistView === 'function') {
