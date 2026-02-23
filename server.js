@@ -3909,6 +3909,8 @@ app.get('/jukebox', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'albums.ht
 // Mobile-optimized view
 app.get('/mobile', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mobile.html')));
 app.get('/m', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mobile.html')));
+// Library page
+app.get('/library', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'library.html')));
 
 /* ========= Search ========= */
 const SEARCH_FIELDS_BASE = ['Album Artist', 'Album Title', 'Track Name'];
