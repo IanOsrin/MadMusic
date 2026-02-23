@@ -1736,27 +1736,11 @@
             <span class="chevron">&#9650;</span>
           </div>
           <div class="nav-section-content">
-            <!-- Alternative Playlist -->
-            <button class="nav-item" id="alternativePlaylistBtn" data-playlist="Alternative">
-              <svg viewBox="0 0 24 24" fill="currentColor" style="color: var(--accent);">
-                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-              </svg>
-              Alternative
-            </button>
-            <!-- Afro-House Playlist -->
-            <button class="nav-item" id="afroHousePlaylistBtn" data-playlist="Afro-House">
-              <svg viewBox="0 0 24 24" fill="currentColor" style="color: var(--accent);">
-                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-              </svg>
-              Afro-House
-            </button>
-            <!-- Hip-Hop Playlist -->
-            <button class="nav-item" id="hipHopPlaylistBtn" data-playlist="Hip-Hop">
-              <svg viewBox="0 0 24 24" fill="currentColor" style="color: var(--accent);">
-                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-              </svg>
-              Hip-Hop
-            </button>
+            <!-- Dynamic user playlists -->
+            <div id="sidebarMyPlaylists">
+              <ul id="sidebarMyPlaylistsList" style="list-style:none;padding:0;margin:0;"></ul>
+              <div id="sidebarMyPlaylistsEmpty" hidden style="padding:6px 20px;font-size:12px;color:var(--muted);">No playlists yet</div>
+            </div>
             <!-- Create New Playlist -->
             <button class="nav-item" id="createPlaylistBtn" style="color: var(--accent);">
               <svg viewBox="0 0 24 24" fill="currentColor">
@@ -2445,78 +2429,6 @@
       if (layoutGrid) layoutGrid.style.display = 'flex';
     }
 
-    // Handle sidebar playlist nav buttons
-    document.addEventListener('DOMContentLoaded', () => {
-      const playlistButtons = document.querySelectorAll('[data-playlist]');
-
-      playlistButtons.forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const playlistName = btn.dataset.playlist;
-
-          // Remove active from all nav items and playlists
-          document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-          document.querySelectorAll('.sidebar-playlist-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-
-          // For "Alternative" playlist, use featured albums as sample data
-          if (playlistName === 'Alternative') {
-            try {
-              const res = await fetch('/api/featured-albums?limit=20');
-              const data = await res.json();
-
-              if (data.ok && data.items && data.items.length > 0) {
-                const tracks = data.items.map(item => {
-                  const f = item.fields || {};
-                  return {
-                    name: f['Track Name'] || 'Unknown Track',
-                    artist: f['Track Artist'] || f['Album Artist'] || f['Tape Files::Album Artist'] || 'Unknown Artist',
-                    album: f['Album Title'] || f['Tape Files::Album Title'] || 'Unknown Album',
-                    albumArtist: f['Album Artist'] || f['Tape Files::Album Artist'] || '',
-                    artworkUrl: f['Tape Files::Artwork_S3_URL'] || f['Artwork::Picture'] || '/img/placeholder.jpg',
-                    genre: f['Genre'] || f['Local Genre'] || '',
-                    year: f['Year of Release'] || '',
-                    duration: f['Duration'] || '3:15',
-                    audioUrl: f['S3_URL'] || f['mp3'] || ''
-                  };
-                });
-
-                showPlaylistView(playlistName, tracks);
-              }
-            } catch (err) {
-              console.error('[Playlist] Failed to load Alternative playlist:', err);
-            }
-          } else {
-            // For other playlists, try to fetch from public-playlists API
-            try {
-              const res = await fetch(`/api/public-playlists?name=${encodeURIComponent(playlistName)}`);
-              const data = await res.json();
-
-              if (data.ok && data.tracks && data.tracks.length > 0) {
-                const tracks = data.tracks.map(t => ({
-                  name: t.name || 'Unknown Track',
-                  artist: t.trackArtist || t.albumArtist || 'Unknown Artist',
-                  album: t.albumTitle || 'Unknown Album',
-                  albumArtist: t.albumArtist || '',
-                  artworkUrl: t.picture || t.albumPicture || '/img/placeholder.jpg',
-                  genre: t.genre || '',
-                  year: t.year || '',
-                  duration: t.duration || '3:15',
-                  audioUrl: t.resolvedSrc || t.mp3 || ''
-                }));
-
-                showPlaylistView(playlistName, tracks);
-              } else {
-                // If no tracks found, show empty playlist
-                showPlaylistView(playlistName, []);
-              }
-            } catch (err) {
-              console.error('[Playlist] Failed to load playlist:', err);
-              showPlaylistView(playlistName, []);
-            }
-          }
-        });
-      });
-    });
 
     // Close featured playlist button handler
     document.addEventListener('DOMContentLoaded', () => {
@@ -4508,13 +4420,24 @@
       }
 
       function handleMyPlaylistClick(playlist, btn) {
-        // Remove active class from all buttons
         document.querySelectorAll('.sidebar-playlist-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
 
-        console.log('[Sidebar] My playlist clicked:', playlist.name);
+        const tracks = (playlist.tracks || []).map(t => ({
+          name: t.name || t.trackName || 'Unknown Track',
+          artist: t.artist || t.trackArtist || t.albumArtist || 'Unknown Artist',
+          album: t.album || t.albumTitle || 'Unknown Album',
+          albumArtist: t.albumArtist || t.artist || '',
+          artworkUrl: t.artworkUrl || t.artwork || '/img/placeholder.jpg',
+          genre: t.genre || '',
+          year: t.year || '',
+          duration: t.duration || '',
+          audioUrl: t.audioUrl || t.S3_URL || t.mp3 || ''
+        }));
 
-        // TODO: Load and display playlist tracks in main content area
+        if (typeof showPlaylistView === 'function') {
+          showPlaylistView(playlist.name, tracks);
+        }
       }
 
       // Handle playlist creation
@@ -4546,6 +4469,9 @@
           }
         });
       }
+
+      // Expose for external reload (e.g. after creating a playlist via modal)
+      window.reloadSidebarPlaylists = loadMyPlaylists;
 
       // Initialize on access ready
       window.addEventListener('mass:access-ready', () => {
