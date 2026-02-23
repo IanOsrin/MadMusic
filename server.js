@@ -450,7 +450,7 @@ const ACCESS_TOKENS_PATH = path.join(DATA_DIR, 'access-tokens.json');
 // This bypasses rate limiting, JSON parsing, and other API-specific middleware
 const REGEX_STATIC_FILES = /\.(jpe?g|png|gif|svg|webp|ico|woff2?|ttf|eot|mp3|mp4|webm)$/i;
 app.use(express.static(PUBLIC_DIR, {
-  index: false, // Don't auto-serve index.html - we handle routes manually
+  index: false, // Don't auto-serve directory index - we handle routes manually
   setHeaders: (res, filePath) => {
     // Versioned files (contain ?v= or .min.) get immutable caching for 1 year
     if (filePath.includes('.min.') || /\.[a-f0-9]{8,}\./i.test(filePath)) {
@@ -3873,18 +3873,16 @@ app.get('/api/cache/stats', (req, res) => {
 /* ========= Static site ========= */
 // Note: express.static() moved to top of file (line ~206) for better performance
 // Static files now bypass rate limiting and API middleware
-// Default to Modern view
-app.get('/', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'modern-view.html')));
-// Classic jukebox view available at /jukebox and /classic
-app.get('/jukebox', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
-app.get('/classic', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
-// Modern view (MADMusic) available at /modern
-app.get('/modern', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'modern-view.html')));
+// Home (modern view)
+app.get('/', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'home.html')));
+app.get('/modern', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'home.html')));
+// Albums (classic view)
+app.get('/albums', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'albums.html')));
+app.get('/classic', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'albums.html')));
+app.get('/jukebox', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'albums.html')));
 // Mobile-optimized view
 app.get('/mobile', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mobile.html')));
 app.get('/m', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mobile.html')));
-// MAD (Music Africa Direct) new design
-app.get('/mad', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mad.html')));
 
 /* ========= Search ========= */
 const SEARCH_FIELDS_BASE = ['Album Artist', 'Album Title', 'Track Name'];
