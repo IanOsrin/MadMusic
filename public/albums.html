@@ -3171,6 +3171,48 @@
     }
   })();
   </script>
+  <!-- Album/Playlist detail autoplay — MUST register before app.min.js so ended fires first -->
+  <script>
+  (function() {
+    const player = document.getElementById('player');
+    if (!player) return;
+
+    function isDetailViewActive() {
+      const pv = document.getElementById('playlistView');
+      return pv && pv.classList.contains('active');
+    }
+
+    function advanceDetailTrack(direction) {
+      const trackList = document.getElementById('playlistTrackList');
+      if (!trackList) return false;
+      const playing = trackList.querySelector('.playlist-track-item.playing');
+      if (!playing) return false;
+      const items = Array.from(trackList.querySelectorAll('.playlist-track-item'));
+      const idx = items.indexOf(playing);
+      if (idx === -1) return false;
+      const nextIdx = direction === 'next' ? idx + 1 : idx - 1;
+      if (nextIdx < 0 || nextIdx >= items.length) return false;
+      items[nextIdx].click();
+      // Scroll into view smoothly
+      items[nextIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return true;
+    }
+
+    // Expose for Next/Prev button handlers added after app.min.js loads
+    window.__advanceDetailTrack = advanceDetailTrack;
+    window.__isDetailViewActive = isDetailViewActive;
+
+    // Auto-advance when track ends — fires before app.min.js handler
+    player.addEventListener('ended', function(e) {
+      if (!isDetailViewActive()) return;
+      const advanced = advanceDetailTrack('next');
+      if (advanced) {
+        // Prevent app.min.js from also trying to advance (avoids wrong-track jumps)
+        e.stopImmediatePropagation();
+      }
+    });
+  })();
+  </script>
   <script defer src="/app.min.js?v=94&t=1735077300"></script>
   <script>
   // Fix logout button to call clearAccessToken endpoint
@@ -4549,12 +4591,25 @@
         });
       }
 
-      // Prev/Next buttons (placeholder - actual implementation depends on playlist logic)
+      // Prev/Next buttons
       if (prevBtn) {
         prevBtn.addEventListener('click', () => {
-          // Restart current track or go to previous
-          if (player.currentTime > 3) {
-            player.currentTime = 0;
+          if (window.__isDetailViewActive && window.__isDetailViewActive()) {
+            // <= 3s: go to previous track; > 3s: restart current
+            if (player.currentTime <= 3) {
+              window.__advanceDetailTrack('prev');
+            } else {
+              player.currentTime = 0;
+            }
+          } else {
+            if (player.currentTime > 3) player.currentTime = 0;
+          }
+        });
+      }
+      if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+          if (window.__isDetailViewActive && window.__isDetailViewActive()) {
+            window.__advanceDetailTrack('next');
           }
         });
       }
