@@ -532,22 +532,23 @@
     }
     .playlist-album-item {
       display: flex;
-      gap: 16px;
-      padding: 8px;
-      border-radius: 8px;
+      gap: 10px;
+      padding: 6px 8px;
+      border-radius: 6px;
       cursor: pointer;
+      align-items: center;
       transition: background 0.15s ease;
     }
     .playlist-album-item:hover {
       background: var(--hover-bg);
     }
     .playlist-album-item.selected {
-      background: var(--hover-bg);
+      background: rgba(139,92,246,0.1);
     }
     .playlist-album-thumb {
-      width: 110px;
-      height: 110px;
-      border-radius: 6px;
+      width: 36px;
+      height: 36px;
+      border-radius: 4px;
       overflow: hidden;
       flex-shrink: 0;
       background: var(--border);
@@ -562,39 +563,30 @@
       display: flex;
       flex-direction: column;
       justify-content: center;
-      gap: 6px;
+      gap: 2px;
       min-width: 0;
     }
     .playlist-album-name {
-      font-size: 16px;
+      font-size: 13px;
       font-weight: 600;
-      color: #888888;
+      color: var(--fg);
       margin: 0;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .playlist-album-item.selected .playlist-album-name {
+      color: var(--accent);
+    }
     .playlist-album-artist {
-      font-size: 14px;
-      color: #888888;
+      font-size: 11px;
+      color: var(--muted);
       margin: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .playlist-album-stats {
-      display: flex;
-      gap: 20px;
-      margin-top: 10px;
-    }
-    .playlist-album-stat {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 13px;
-      color: #8a8a8a;
-    }
-    .playlist-album-stat svg {
-      width: 14px;
-      height: 14px;
-    }
+    .playlist-album-stats { display: none; }
 
     /* Right Column - Selected Album Details */
     .playlist-album-detail {
@@ -2311,6 +2303,7 @@
       // Hide regular grid, show playlist view
       layoutGrid.style.display = 'none';
       playlistView.classList.add('active');
+      playlistView.dataset.playlistMode = 'user';
 
       // Group tracks by album
       const albumsMap = new Map();
@@ -3227,12 +3220,37 @@
 
     // Auto-advance when track ends — fires before app.min.js handler
     player.addEventListener('ended', function(e) {
-      if (!isDetailViewActive()) return;
+      const pv = document.getElementById('playlistView');
+      if (!pv || !pv.classList.contains('active')) return;
+
+      // Try within-album advance first
       const advanced = advanceDetailTrack('next');
       if (advanced) {
-        // Prevent app.min.js from also trying to advance (avoids wrong-track jumps)
         e.stopImmediatePropagation();
+        return;
       }
+
+      // Cross-album advance — only in user-playlist mode (not album detail view)
+      if (pv.dataset.playlistMode !== 'user') return;
+      e.stopImmediatePropagation();
+
+      const albumsList = document.getElementById('playlistAlbumsList');
+      if (!albumsList) return;
+      const allAlbums = Array.from(albumsList.querySelectorAll('.playlist-album-item'));
+      const selectedAlbum = albumsList.querySelector('.playlist-album-item.selected');
+      const albumIdx = allAlbums.indexOf(selectedAlbum);
+      const nextAlbum = allAlbums[albumIdx + 1];
+      if (!nextAlbum) return; // End of playlist
+
+      nextAlbum.click(); // Load next album's tracks into #playlistTrackList
+      // After DOM renders the new track list, click the first track
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const trackList = document.getElementById('playlistTrackList');
+          const firstTrack = trackList && trackList.querySelector('.playlist-track-item');
+          if (firstTrack) firstTrack.click();
+        });
+      });
     });
   })();
   </script>
@@ -4673,6 +4691,7 @@
         // Hide regular grid, show playlist view
         layoutGrid.style.display = 'none';
         playlistView.classList.add('active');
+        playlistView.dataset.playlistMode = 'album';
 
         // Fetch more albums by the same artist for the left column
         let artistAlbums = relatedAlbums;
