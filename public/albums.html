@@ -733,6 +733,62 @@
       min-width: 45px;
       text-align: right;
     }
+    .playlist-track-actions {
+      display: flex;
+      gap: 6px;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      flex-shrink: 0;
+    }
+    .playlist-track-item:hover .playlist-track-actions {
+      opacity: 1;
+    }
+    .track-action-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .track-action-btn:hover {
+      background: var(--hover-bg);
+      color: var(--fg);
+    }
+    .track-action-btn.saved {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .album-action-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    .album-action-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--fg);
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .album-action-btn:hover {
+      background: var(--hover-bg);
+    }
+    .album-action-btn.saved {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
 
     /* Responsive */
     @media (max-width: 1000px) {
@@ -1909,6 +1965,16 @@
                   <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
                   <span id="playlistDetailRepeats">0</span>
                 </span>
+              </div>
+              <div class="album-action-buttons" id="albumActionButtons">
+                <button class="album-action-btn" id="addAlbumToPlaylistBtn" title="Add all tracks to a playlist">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>
+                  + Playlist
+                </button>
+                <button class="album-action-btn" id="addAlbumToLibraryBtn" title="Save album to your library">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                  ♡ Albums
+                </button>
               </div>
             </div>
           </div>
@@ -4754,6 +4820,57 @@
           };
         }
 
+        // Wire up album-level action buttons
+        const addAlbumToPlaylistBtn = document.getElementById('addAlbumToPlaylistBtn');
+        const addAlbumToLibraryBtn = document.getElementById('addAlbumToLibraryBtn');
+
+        if (addAlbumToPlaylistBtn) {
+          addAlbumToPlaylistBtn.onclick = () => {
+            if (typeof window.handleAddAlbumToPlaylist === 'function') {
+              window.handleAddAlbumToPlaylist(album);
+            }
+          };
+        }
+
+        if (addAlbumToLibraryBtn) {
+          // Check saved state
+          fetch('/api/library').then(r => r.json()).then(data => {
+            const saved = (data.albums || []).find(a => a.title === album.title && a.artist === album.artist);
+            if (saved) {
+              addAlbumToLibraryBtn.classList.add('saved');
+              addAlbumToLibraryBtn.dataset.libraryId = saved.id;
+              addAlbumToLibraryBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> ♥ Saved`;
+            }
+          }).catch(() => {});
+
+          addAlbumToLibraryBtn.onclick = async () => {
+            if (addAlbumToLibraryBtn.dataset.libraryId) {
+              // Remove from library
+              const res = await fetch(`/api/library/albums/${addAlbumToLibraryBtn.dataset.libraryId}`, { method: 'DELETE' });
+              if ((await res.json()).ok) {
+                addAlbumToLibraryBtn.classList.remove('saved');
+                delete addAlbumToLibraryBtn.dataset.libraryId;
+                addAlbumToLibraryBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> ♡ Albums`;
+              }
+            } else {
+              // Add to library
+              const artworkUrl = album.picture || album.artwork || '';
+              const res = await fetch('/api/library/albums', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: album.title, artist: album.artist, artwork: artworkUrl, genre: album.genre || '', year: album.year || '' })
+              });
+              const data = await res.json();
+              if (data.ok) {
+                const saved = data.album;
+                addAlbumToLibraryBtn.classList.add('saved');
+                addAlbumToLibraryBtn.dataset.libraryId = saved.id;
+                addAlbumToLibraryBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> ♥ Saved`;
+              }
+            }
+          };
+        }
+
         // Populate track list
         if (trackList && album.tracks && album.tracks.length > 0) {
           trackList.innerHTML = album.tracks.map((track, index) => `
@@ -4761,6 +4878,10 @@
               <span class="playlist-track-number">${index + 1}.</span>
               <span class="playlist-track-name">${track.name || 'Unknown Track'}</span>
               <span class="playlist-track-duration">${track.duration || '3:15'}</span>
+              <div class="playlist-track-actions">
+                <button class="track-action-btn track-add-playlist" data-track-index="${index}">+ Playlist</button>
+                <button class="track-action-btn track-add-library" data-track-index="${index}">♡ Songs</button>
+              </div>
             </div>
           `).join('');
 
@@ -4816,6 +4937,69 @@
               trackList.querySelectorAll('.playlist-track-item').forEach(t => t.classList.remove('playing'));
               item.classList.add('playing');
             });
+
+            // + Playlist button
+            const addPlaylistBtn = item.querySelector('.track-add-playlist');
+            if (addPlaylistBtn) {
+              addPlaylistBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const trackIndex = parseInt(addPlaylistBtn.dataset.trackIndex);
+                const track = album.tracks[trackIndex];
+                if (typeof window.handleAddToPlaylist === 'function') {
+                  const audioUrl = track.S3_URL || track.resolvedSrc || track.audioUrl || track.mp3 || '';
+                  window.handleAddToPlaylist(album, track, audioUrl);
+                }
+              });
+            }
+
+            // ♡ Songs (library) button
+            const addLibraryBtn = item.querySelector('.track-add-library');
+            if (addLibraryBtn) {
+              const trackIndex = parseInt(addLibraryBtn.dataset.trackIndex);
+              const track = album.tracks[trackIndex];
+              // Check saved state on render
+              fetch('/api/library').then(r => r.json()).then(data => {
+                const saved = (data.songs || []).find(s => s.trackRecordId && s.trackRecordId === (track.recordId || ''));
+                if (saved) {
+                  addLibraryBtn.classList.add('saved');
+                  addLibraryBtn.dataset.libraryId = saved.id;
+                  addLibraryBtn.textContent = '♥ Saved';
+                }
+              }).catch(() => {});
+
+              addLibraryBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (addLibraryBtn.dataset.libraryId) {
+                  const res = await fetch(`/api/library/songs/${addLibraryBtn.dataset.libraryId}`, { method: 'DELETE' });
+                  if ((await res.json()).ok) {
+                    addLibraryBtn.classList.remove('saved');
+                    delete addLibraryBtn.dataset.libraryId;
+                    addLibraryBtn.textContent = '♡ Songs';
+                  }
+                } else {
+                  const res = await fetch('/api/library/songs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      trackRecordId: track.recordId || '',
+                      name: track.name || 'Unknown Track',
+                      albumTitle: album.title || '',
+                      albumArtist: album.artist || '',
+                      trackArtist: track.trackArtist || track.artist || '',
+                      artwork: album.picture || album.artwork || '',
+                      S3_URL: track.S3_URL || '',
+                      mp3: track.mp3 || ''
+                    })
+                  });
+                  const data = await res.json();
+                  if (data.ok) {
+                    addLibraryBtn.classList.add('saved');
+                    addLibraryBtn.dataset.libraryId = data.song.id;
+                    addLibraryBtn.textContent = '♥ Saved';
+                  }
+                }
+              });
+            }
           });
         } else {
           trackList.innerHTML = '<div style="padding:20px;color:var(--muted);text-align:center;">No tracks available</div>';

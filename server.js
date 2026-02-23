@@ -445,6 +445,7 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = path.join(__dirname, 'data');
 const PLAYLISTS_PATH = path.join(DATA_DIR, 'playlists.json');
 const ACCESS_TOKENS_PATH = path.join(DATA_DIR, 'access-tokens.json');
+const LIBRARY_PATH = path.join(DATA_DIR, 'library.json');
 
 // Serve static files EARLY (after constants defined, before API middleware)
 // This bypasses rate limiting, JSON parsing, and other API-specific middleware
@@ -1815,6 +1816,31 @@ async function savePlaylists(playlists) {
     console.error('[MASS] Failed to write playlists file:', err);
     throw err;
   }
+}
+
+// ========= LIBRARY MANAGEMENT =========
+
+async function loadLibrary() {
+  try {
+    const raw = await fs.readFile(LIBRARY_PATH, 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+async function saveLibrary(data) {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  const tempPath = `${LIBRARY_PATH}.tmp`;
+  await fs.writeFile(tempPath, JSON.stringify(data, null, 2), 'utf8');
+  await fs.rename(tempPath, LIBRARY_PATH);
+}
+
+function getUserLibrary(library, email) {
+  if (!library[email]) library[email] = { songs: [], albums: [] };
+  if (!Array.isArray(library[email].songs)) library[email].songs = [];
+  if (!Array.isArray(library[email].albums)) library[email].albums = [];
+  return library[email];
 }
 
 // ========= ACCESS TOKEN MANAGEMENT =========
@@ -5710,6 +5736,100 @@ async function warmConnections() {
     console.warn('[MASS] Connection warm-up failed:', err.message);
   }
 }
+
+// ========= LIBRARY ENDPOINTS =========
+
+// GET /api/library — return user's songs + albums library
+app.get('/api/library', async (req, res) => {
+  const user = requireTokenEmail(req, res);
+  if (!user) return;
+  try {
+    const library = await loadLibrary();
+    const userLib = getUserLibrary(library, user.email);
+    res.json({ ok: true, songs: userLib.songs, albums: userLib.albums });
+  } catch (err) {
+    console.error('[MASS] Load library failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to load library' });
+  }
+});
+
+// POST /api/library/songs — add a song
+app.post('/api/library/songs', async (req, res) => {
+  const user = requireTokenEmail(req, res);
+  if (!user) return;
+  try {
+    const { trackRecordId, name, albumTitle, albumArtist, trackArtist, artwork, S3_URL, mp3 } = req.body || {};
+    if (!name) return res.status(400).json({ ok: false, error: 'Song name required' });
+    const library = await loadLibrary();
+    const userLib = getUserLibrary(library, user.email);
+    const duplicate = userLib.songs.find(s => s.trackRecordId && s.trackRecordId === trackRecordId);
+    if (duplicate) return res.json({ ok: true, duplicate: true, song: duplicate });
+    const song = { id: crypto.randomUUID(), trackRecordId: trackRecordId || '', name, albumTitle: albumTitle || '', albumArtist: albumArtist || '', trackArtist: trackArtist || '', artwork: artwork || '', S3_URL: S3_URL || '', mp3: mp3 || '', addedAt: new Date().toISOString() };
+    userLib.songs.push(song);
+    await saveLibrary(library);
+    res.status(201).json({ ok: true, song });
+  } catch (err) {
+    console.error('[MASS] Add song to library failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to add song' });
+  }
+});
+
+// DELETE /api/library/songs/:songId — remove a song
+app.delete('/api/library/songs/:songId', async (req, res) => {
+  const user = requireTokenEmail(req, res);
+  if (!user) return;
+  try {
+    const library = await loadLibrary();
+    const userLib = getUserLibrary(library, user.email);
+    const before = userLib.songs.length;
+    userLib.songs = userLib.songs.filter(s => s.id !== req.params.songId);
+    if (userLib.songs.length === before) return res.status(404).json({ ok: false, error: 'Song not found' });
+    await saveLibrary(library);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[MASS] Remove song from library failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to remove song' });
+  }
+});
+
+// POST /api/library/albums — add an album
+app.post('/api/library/albums', async (req, res) => {
+  const user = requireTokenEmail(req, res);
+  if (!user) return;
+  try {
+    const { title, artist, artwork, genre, year } = req.body || {};
+    if (!title) return res.status(400).json({ ok: false, error: 'Album title required' });
+    const library = await loadLibrary();
+    const userLib = getUserLibrary(library, user.email);
+    const duplicate = userLib.albums.find(a => a.title === title && a.artist === artist);
+    if (duplicate) return res.json({ ok: true, duplicate: true, album: duplicate });
+    const album = { id: crypto.randomUUID(), title, artist: artist || '', artwork: artwork || '', genre: genre || '', year: year || '', addedAt: new Date().toISOString() };
+    userLib.albums.push(album);
+    await saveLibrary(library);
+    res.status(201).json({ ok: true, album });
+  } catch (err) {
+    console.error('[MASS] Add album to library failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to add album' });
+  }
+});
+
+// DELETE /api/library/albums/:albumId — remove an album
+app.delete('/api/library/albums/:albumId', async (req, res) => {
+  const user = requireTokenEmail(req, res);
+  if (!user) return;
+  try {
+    const library = await loadLibrary();
+    const userLib = getUserLibrary(library, user.email);
+    const before = userLib.albums.length;
+    userLib.albums = userLib.albums.filter(a => a.id !== req.params.albumId);
+    if (userLib.albums.length === before) return res.status(404).json({ ok: false, error: 'Album not found' });
+    await saveLibrary(library);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[MASS] Remove album from library failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to remove album' });
+  }
+});
 
 function logServerReady(protocolLabel = 'HTTP/1.1') {
   const scheme = protocolLabel.includes('HTTP/2') ? 'https' : 'http';
