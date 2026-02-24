@@ -1536,6 +1536,24 @@
       gap: 8px;
       margin-left: 50px;
     }
+    .player-close-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: #6b6b6b;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-left: 4px;
+      transition: color 0.15s ease;
+    }
+    .player-close-btn:hover {
+      color: #ef4444;
+    }
     .player-btn {
       width: 28px;
       height: 28px;
@@ -3509,6 +3527,25 @@
         }
       });
 
+      // Update progress bar and time display
+      currentAudio.addEventListener('timeupdate', () => {
+        if (!currentAudio || !currentAudio.duration) return;
+        const pct = (currentAudio.currentTime / currentAudio.duration) * 100;
+        const fill = document.getElementById('nowPlayingProgressFill');
+        const timeEl = document.getElementById('playerCurrentTime');
+        if (fill) fill.style.width = pct + '%';
+        if (timeEl) {
+          const s = Math.floor(currentAudio.currentTime);
+          timeEl.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+        }
+      });
+
+      // Reset progress bar when a new track starts
+      const fillEl = document.getElementById('nowPlayingProgressFill');
+      const timeEl = document.getElementById('playerCurrentTime');
+      if (fillEl) fillEl.style.width = '0%';
+      if (timeEl) timeEl.textContent = '0:00';
+
       // Start playback and send PLAY event after metadata loads
       let metadataLoaded = false;
       currentAudio.addEventListener('loadedmetadata', () => {
@@ -4399,6 +4436,22 @@
       // Setup mini player controls
       document.getElementById('nowPlayingToggle').addEventListener('click', togglePause);
 
+      document.getElementById('playerClose').addEventListener('click', () => {
+        if (currentAudio) {
+          isSwitchingTracks = true;
+          sendStreamEvent('END');
+          stopProgressTracking();
+          currentAudio.pause();
+          currentAudio = null;
+          isPlaying = false;
+        }
+        hideMiniPlayer();
+        const fill = document.getElementById('nowPlayingProgressFill');
+        const timeEl = document.getElementById('playerCurrentTime');
+        if (fill) fill.style.width = '0%';
+        if (timeEl) timeEl.textContent = '0:00';
+      });
+
       populateGenreDropdown();
       const titleEl = document.getElementById('randomTitle');
       if (titleEl) {
@@ -4517,7 +4570,7 @@
       <span class="player-time" id="playerCurrentTime">0:00</span>
     </div>
 
-    <!-- Right: Volume -->
+    <!-- Right: Volume + Close -->
     <div class="mini-player-right">
       <button class="player-volume-btn" id="volumeBtn" title="Volume">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -4527,6 +4580,11 @@
       <div class="player-volume-slider" id="volumeSlider">
         <div class="player-volume-fill" id="volumeFill"></div>
       </div>
+      <button class="player-close-btn" id="playerClose" title="Close player">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
+      </button>
     </div>
   </div>
 
