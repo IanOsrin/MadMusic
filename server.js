@@ -2873,9 +2873,11 @@ async function fetchTrendingTracks(limit = 5) {
 }
 
 function requireTokenEmail(req, res) {
-  const email = req.accessToken?.email;
+  // Use email if available, otherwise fall back to token code as user identifier.
+  // This handles deployments where the FM token record has no Email field.
+  const email = req.accessToken?.email || req.accessToken?.code;
   if (!email) {
-    res.status(401).json({ ok: false, error: 'Access token with associated email required' });
+    res.status(401).json({ ok: false, error: 'Access token required' });
     return null;
   }
   return { email };
