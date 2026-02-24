@@ -565,7 +565,7 @@
       if (isApi && !isPublic) {
         const token = localStorage.getItem('mass_access_token');
         if (token) {
-          opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + token });
+          opts.headers = Object.assign({}, opts.headers, { 'X-Access-Token': token });
         }
       }
       return _origFetch.call(this, url, opts);
