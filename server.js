@@ -3209,6 +3209,7 @@ app.post('/api/payments/webhook', async (req, res) => {
 });
 
 app.get('/api/playlists', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const user = requireTokenEmail(req, res);
   if (!user) return;
 
@@ -3224,6 +3225,7 @@ app.get('/api/playlists', async (req, res) => {
 });
 
 app.post('/api/playlists', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const user = requireTokenEmail(req, res);
   if (!user) return;
 
@@ -3273,6 +3275,7 @@ app.post('/api/playlists', async (req, res) => {
 });
 
 app.post('/api/playlists/:playlistId/tracks', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const user = requireTokenEmail(req, res);
   if (!user) return;
 
@@ -3330,6 +3333,7 @@ app.post('/api/playlists/:playlistId/tracks', async (req, res) => {
 });
 
 app.post('/api/playlists/:playlistId/tracks/bulk', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const user = requireTokenEmail(req, res);
   if (!user) return;
 
@@ -3787,6 +3791,7 @@ app.get('/api/shared-playlists/:shareId', async (req, res) => {
 });
 
 app.delete('/api/playlists/:playlistId/tracks/:addedAt', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const user = requireTokenEmail(req, res);
   if (!user) return;
 
@@ -3834,6 +3839,7 @@ app.delete('/api/playlists/:playlistId/tracks/:addedAt', async (req, res) => {
 });
 
 app.delete('/api/playlists/:playlistId', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const user = requireTokenEmail(req, res);
   if (!user) return;
 
@@ -5792,6 +5798,7 @@ async function warmConnections() {
 
 // GET /api/library — return user's songs + albums library
 app.get('/api/library', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const user = requireTokenEmail(req, res);
   if (!user) return;
   try {
@@ -5806,6 +5813,7 @@ app.get('/api/library', async (req, res) => {
 
 // POST /api/library/songs — add a song
 app.post('/api/library/songs', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const user = requireTokenEmail(req, res);
   if (!user) return;
   try {
@@ -5827,6 +5835,7 @@ app.post('/api/library/songs', async (req, res) => {
 
 // DELETE /api/library/songs/:songId — remove a song
 app.delete('/api/library/songs/:songId', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const user = requireTokenEmail(req, res);
   if (!user) return;
   try {
@@ -5845,6 +5854,7 @@ app.delete('/api/library/songs/:songId', async (req, res) => {
 
 // POST /api/library/albums — add an album
 app.post('/api/library/albums', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const user = requireTokenEmail(req, res);
   if (!user) return;
   try {
@@ -5866,6 +5876,7 @@ app.post('/api/library/albums', async (req, res) => {
 
 // DELETE /api/library/albums/:albumId — remove an album
 app.delete('/api/library/albums/:albumId', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const user = requireTokenEmail(req, res);
   if (!user) return;
   try {
