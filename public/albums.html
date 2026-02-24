@@ -4446,148 +4446,154 @@
       console.log('[Sidebar] Recommended playlists initialized');
     })();
 
-    // Sidebar My Playlists
-    (function() {
-      const myPlaylistsSection = document.getElementById('sidebarMyPlaylists');
-      const myPlaylistsList = document.getElementById('sidebarMyPlaylistsList');
-      const myPlaylistsEmpty = document.getElementById('sidebarMyPlaylistsEmpty');
-      const myPlaylistsHeader = document.getElementById('sidebarMyPlaylistsHeader');
+    // Sidebar My Playlists — window.MP state manager
+    // Single source of truth: MP._list holds all playlists.
+    // MP.update(playlist) merges a server POST response directly — no re-fetch.
+    // MP.open(id) opens a playlist from current state — no stale closures.
+    window.MP = (function () {
+      let _list = [];
+      let _currentId = null;
+
+      const section    = document.getElementById('sidebarMyPlaylists');
+      const listEl     = document.getElementById('sidebarMyPlaylistsList');
+      const emptyEl    = document.getElementById('sidebarMyPlaylistsEmpty');
+      const header     = document.getElementById('sidebarMyPlaylistsHeader');
       const createForm = document.getElementById('sidebarPlaylistCreateForm');
-      const nameInput = document.getElementById('sidebarPlaylistNameInput');
-      let currentUserEmail = null;
+      const nameInput  = document.getElementById('sidebarPlaylistNameInput');
 
-      // Toggle collapse/expand
-      if (myPlaylistsHeader && myPlaylistsSection) {
-        myPlaylistsHeader.addEventListener('click', () => {
-          myPlaylistsSection.classList.toggle('collapsed');
-        });
-      }
+      // Collapse toggle
+      header?.addEventListener('click', () => section?.classList.toggle('collapsed'));
 
-      // Load user's playlists
-      async function loadMyPlaylists() {
-        try {
-          const res = await fetch('/api/playlists');
-          const data = await res.json();
+      function renderSidebar() {
+        if (!listEl) return;
+        listEl.innerHTML = '';
 
-          if (data.ok && Array.isArray(data.playlists)) {
-            if (data.playlists.length > 0) {
-              renderMyPlaylists(data.playlists);
-              myPlaylistsEmpty.hidden = true;
-              myPlaylistsSection.hidden = false;
-            } else {
-              myPlaylistsEmpty.hidden = false;
-              myPlaylistsSection.hidden = false;
-            }
-          }
-        } catch (err) {
-          console.error('[Sidebar] Failed to load my playlists:', err);
-          // User might not be authenticated, keep section hidden
+        if (!_list.length) {
+          if (emptyEl) emptyEl.hidden = false;
+          if (section) section.hidden = false;
+          return;
         }
-      }
 
-      function renderMyPlaylists(playlists) {
-        myPlaylistsList.innerHTML = '';
+        if (emptyEl) emptyEl.hidden = true;
+        if (section) section.hidden = false;
 
-        playlists.forEach(playlist => {
-          const li = document.createElement('li');
+        _list.forEach(pl => {
+          const li  = document.createElement('li');
           li.className = 'sidebar-playlist-item';
 
           const btn = document.createElement('button');
-          btn.className = 'sidebar-playlist-btn';
-          btn.dataset.playlistId = playlist.id;
+          btn.className = 'sidebar-playlist-btn' + (pl.id === _currentId ? ' active' : '');
+          btn.dataset.playlistId = pl.id;
 
-          // Thumbnail (use default music icon)
           const thumb = document.createElement('div');
           thumb.className = 'sidebar-playlist-thumb';
           thumb.textContent = '🎵';
 
-          // Name and count
           const name = document.createElement('span');
           name.className = 'sidebar-playlist-name';
-          name.textContent = playlist.name;
+          name.textContent = pl.name;
 
           const count = document.createElement('span');
           count.className = 'sidebar-playlist-count';
-          count.textContent = playlist.tracks?.length || 0;
+          count.textContent = (pl.tracks || []).length;
 
-          btn.appendChild(thumb);
-          btn.appendChild(name);
-          btn.appendChild(count);
-
-          btn.addEventListener('click', () => handleMyPlaylistClick(playlist, btn));
-
+          btn.append(thumb, name, count);
+          btn.addEventListener('click', () => _openFromList(pl.id, btn));
           li.appendChild(btn);
-          myPlaylistsList.appendChild(li);
+          listEl.appendChild(li);
         });
       }
 
-      function handleMyPlaylistClick(playlist, btn) {
-        document.querySelectorAll('.sidebar-playlist-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+      // Open a playlist using current in-memory state — no stale closure risk
+      function _openFromList(id, btn) {
+        const pl = _list.find(p => p.id === id);
+        if (!pl) return;
+        _currentId = id;
 
-        const tracks = (playlist.tracks || []).map(t => ({
-          name: t.name || t.trackName || 'Unknown Track',
-          artist: t.artist || t.trackArtist || t.albumArtist || 'Unknown Artist',
-          album: t.album || t.albumTitle || 'Unknown Album',
-          albumArtist: t.albumArtist || t.artist || '',
-          artworkUrl: t.artworkUrl || t.artwork || '/img/placeholder.jpg',
-          genre: t.genre || '',
-          year: t.year || '',
-          duration: t.duration || '',
-          audioUrl: t.audioUrl || t.resolvedSrc || t.S3_URL || t.mp3 || '',
-          addedAt: t.addedAt || '',
-          playlistId: playlist.id || ''
+        document.querySelectorAll('.sidebar-playlist-btn').forEach(b => b.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+
+        const tracks = (pl.tracks || []).map(t => ({
+          name:        t.name        || 'Unknown Track',
+          artist:      t.trackArtist || t.albumArtist || 'Unknown Artist',
+          album:       t.albumTitle  || 'Unknown Album',
+          albumArtist: t.albumArtist || '',
+          artworkUrl:  t.artwork     || '/img/placeholder.jpg',
+          genre:       t.genre       || '',
+          year:        t.year        || '',
+          duration:    t.duration    || '',
+          audioUrl:    t.resolvedSrc || t.mp3 || '',
+          addedAt:     t.addedAt     || '',
+          playlistId:  pl.id
         }));
 
         if (typeof showPlaylistView === 'function') {
-          showPlaylistView(playlist.name, tracks);
+          showPlaylistView(pl.name, tracks);
         }
       }
 
-      // Handle playlist creation
-      if (createForm) {
-        createForm.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          const name = nameInput.value.trim();
-
-          if (!name) return;
-
-          try {
-            const res = await fetch('/api/playlists', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name })
-            });
-
-            const data = await res.json();
-
-            if (data.ok) {
-              nameInput.value = '';
-              loadMyPlaylists(); // Reload playlists
-              console.log('[Sidebar] Playlist created:', name);
-            } else {
-              console.error('[Sidebar] Failed to create playlist:', data.error);
-            }
-          } catch (err) {
-            console.error('[Sidebar] Playlist creation error:', err);
+      // Fetch playlists from server and re-render
+      async function load() {
+        try {
+          const res  = await fetch('/api/playlists');
+          const data = await res.json();
+          if (data.ok && Array.isArray(data.playlists)) {
+            _list = data.playlists;
+            renderSidebar();
           }
-        });
+        } catch (err) {
+          console.error('[MP] Failed to load playlists:', err);
+        }
       }
 
-      // Expose for external reload (e.g. after creating a playlist via modal)
-      window.reloadSidebarPlaylists = loadMyPlaylists;
+      // Merge one playlist from a server POST response — avoids a full re-fetch
+      function update(playlist) {
+        const idx = _list.findIndex(p => p.id === playlist.id);
+        if (idx >= 0) {
+          _list[idx] = playlist;
+        } else {
+          _list.push(playlist);
+        }
+        renderSidebar();
+      }
 
-      // Initialize on access ready
-      window.addEventListener('mass:access-ready', () => {
-        loadMyPlaylists();
+      // Open a playlist by id using current in-memory state
+      function open(id) {
+        const btn = listEl?.querySelector(`[data-playlist-id="${CSS.escape(id)}"]`);
+        _openFromList(id, btn);
+      }
+
+      // Handle playlist creation form
+      createForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = nameInput?.value.trim();
+        if (!name) return;
+        try {
+          const res  = await fetch('/api/playlists', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+          });
+          const data = await res.json();
+          if (data.ok) {
+            if (nameInput) nameInput.value = '';
+            await load();
+          } else {
+            console.error('[MP] Failed to create playlist:', data.error);
+          }
+        } catch (err) {
+          console.error('[MP] Playlist creation error:', err);
+        }
       });
 
-      // Check if already ready
-      if (window.massAccessReady) {
-        loadMyPlaylists();
-      }
+      // Backward compat for any code that still references this
+      window.reloadSidebarPlaylists = load;
 
-      console.log('[Sidebar] My playlists initialized');
+      window.addEventListener('mass:access-ready', () => load());
+      if (window.massAccessReady) load();
+
+      console.log('[MP] My playlists initialized');
+      return { load, update, open, get list() { return _list; } };
     })();
   </script>
 
@@ -5068,8 +5074,10 @@
 
   <script>
   /* ===== Add-to-Playlist handlers ===================================
-     Defines window.handleAddToPlaylist and window.handleAddAlbumToPlaylist
-     which are called from the album detail view.
+     Defines window.handleAddToPlaylist and window.handleAddAlbumToPlaylist.
+     After a successful add, uses window.MP.update(data.playlist) to
+     patch the in-memory state directly, then window.MP.open(id) to show
+     the result — no re-fetch, no stale closures.
   ================================================================== */
   (function () {
 
@@ -5099,9 +5107,9 @@
     }
 
     /* Build and show the playlist-picker modal.
-       onSelect(playlistId) is called once the user picks or creates a playlist. */
+       onSelect(playlistId) is called once the user picks or creates a playlist.
+       Uses window.MP._list if available to avoid an extra fetch. */
     async function showPlaylistPicker(onSelect) {
-      // Overlay
       const overlay = document.createElement('div');
       overlay.style.cssText = [
         'position:fixed;inset:0;background:rgba(0,0,0,.6)',
@@ -5109,7 +5117,6 @@
         'z-index:1000;',
       ].join(';');
 
-      // Modal card
       const modal = document.createElement('div');
       modal.style.cssText = [
         'background:var(--card);border:1px solid var(--border)',
@@ -5119,7 +5126,6 @@
         'box-shadow:0 18px 48px rgba(0,0,0,.45)',
       ].join(';');
 
-      // Header row
       const headerRow = document.createElement('div');
       headerRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;';
       const heading = document.createElement('h3');
@@ -5132,7 +5138,6 @@
       closeBtn.onclick = () => overlay.remove();
       headerRow.append(heading, closeBtn);
 
-      // Scrollable list area
       const listWrap = document.createElement('div');
       listWrap.style.cssText = 'overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:5px;';
 
@@ -5141,7 +5146,6 @@
       loadingMsg.style.cssText = 'margin:0;font-size:13px;color:var(--muted);';
       listWrap.appendChild(loadingMsg);
 
-      // New-playlist row (always visible at bottom)
       const divider = document.createElement('hr');
       divider.style.cssText = 'border:none;border-top:1px solid var(--border);margin:2px 0;flex-shrink:0;';
 
@@ -5167,13 +5171,15 @@
         createBtn.disabled = true;
         createBtn.textContent = '…';
         try {
-          const res = await fetch('/api/playlists', {
+          const res  = await fetch('/api/playlists', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name }),
           });
           const data = await res.json();
           if (data.ok) {
+            // Add new playlist to MP state so it's available immediately
+            if (window.MP && data.playlist) window.MP.update(data.playlist);
             overlay.remove();
             onSelect(data.playlist.id);
           } else {
@@ -5197,15 +5203,17 @@
       document.body.appendChild(overlay);
       overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
-      // Fetch and render playlists
-      let playlists = [];
-      try {
-        const res = await fetch('/api/playlists');
-        const data = await res.json();
-        playlists = Array.isArray(data.playlists) ? data.playlists : [];
-      } catch {
-        loadingMsg.textContent = 'Failed to load playlists.';
-        return;
+      // Use MP in-memory list if available, otherwise fetch
+      let playlists = window.MP?.list || [];
+      if (!playlists.length) {
+        try {
+          const res  = await fetch('/api/playlists');
+          const data = await res.json();
+          playlists = Array.isArray(data.playlists) ? data.playlists : [];
+        } catch {
+          loadingMsg.textContent = 'Failed to load playlists.';
+          return;
+        }
       }
 
       listWrap.innerHTML = '';
@@ -5235,16 +5243,6 @@
       nameInput.focus();
     }
 
-    // After a successful add, refresh the sidebar and open the updated playlist.
-    async function refreshAndShowPlaylist(playlistId) {
-      if (typeof window.reloadSidebarPlaylists === 'function') {
-        await window.reloadSidebarPlaylists();
-      }
-      // After re-render, find the fresh button and open it so the new track is visible.
-      const btn = document.querySelector(`.sidebar-playlist-btn[data-playlist-id="${CSS.escape(playlistId)}"]`);
-      if (btn) btn.click();
-    }
-
     // ----------------------------------------------------------------
     // handleAddToPlaylist — single track
     // ----------------------------------------------------------------
@@ -5270,7 +5268,10 @@
           const data = await res.json();
           if (data.ok) {
             showAddToast(data.duplicate ? 'Already in playlist' : '✓ Track added');
-            if (!data.duplicate) await refreshAndShowPlaylist(playlistId);
+            if (!data.duplicate && data.playlist && window.MP) {
+              window.MP.update(data.playlist);
+              window.MP.open(playlistId);
+            }
           } else {
             showAddToast(data.error || 'Failed to add track', true);
           }
@@ -5310,7 +5311,10 @@
               ? `✓ ${added} track${added !== 1 ? 's' : ''} added${dupes > 0 ? ` (${dupes} already in playlist)` : ''}`
               : 'All tracks already in playlist';
             showAddToast(msg);
-            if (added > 0) await refreshAndShowPlaylist(playlistId);
+            if (added > 0 && data.playlist && window.MP) {
+              window.MP.update(data.playlist);
+              window.MP.open(playlistId);
+            }
           } else {
             showAddToast(data.error || 'Failed to add album', true);
           }

@@ -297,6 +297,10 @@ app.use((req, res, next) => {
   next();
 });
 
+// Token validation cache — avoids a FileMaker round-trip on every API request
+const _tokenValidationCache = new Map(); // UPPER_TOKEN → { data, expiresAt }
+const TOKEN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 // Access token validation middleware - checks all API requests
 app.use('/api/', async (req, res, next) => {
   // Skip access token check for certain endpoints
@@ -334,6 +338,14 @@ app.use('/api/', async (req, res, next) => {
     });
   }
 
+  // Check cache before hitting FileMaker
+  const cacheKey = accessToken.trim().toUpperCase();
+  const cached = _tokenValidationCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    req.accessToken = cached.data;
+    return next();
+  }
+
   const validation = await validateAccessToken(accessToken);
 
   if (!validation.valid) {
@@ -346,13 +358,17 @@ app.use('/api/', async (req, res, next) => {
   }
 
   // Token is valid, attach info to request and continue
-  req.accessToken = {
+  const tokenData = {
     code: accessToken,
     type: validation.type,
     expirationDate: validation.expirationDate,
     email: validation.email || null
   };
 
+  // Cache for 5 minutes so repeated requests don't spam FileMaker
+  _tokenValidationCache.set(cacheKey, { data: tokenData, expiresAt: Date.now() + TOKEN_CACHE_TTL_MS });
+
+  req.accessToken = tokenData;
   next();
 });
 
