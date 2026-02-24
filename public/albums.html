@@ -199,9 +199,38 @@
     }
     .sidebar-playlist-item {
       padding: 0;
+      display: flex;
+      align-items: center;
+    }
+    .sidebar-playlist-delete {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      margin-right: 2px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 18px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s, background 0.15s;
+    }
+    .sidebar-playlist-item:hover .sidebar-playlist-delete {
+      opacity: 1;
+    }
+    .sidebar-playlist-delete:hover {
+      color: #ff4f4f;
+      background: rgba(255, 79, 79, 0.12);
     }
     .sidebar-playlist-btn {
-      width: 100%;
+      flex: 1;
+      min-width: 0;
       padding: 8px 6px;
       background: none;
       border: none;
@@ -4521,6 +4550,29 @@
           btn.append(thumb, name, count);
           btn.addEventListener('click', () => _openFromList(pl.id, btn));
           li.appendChild(btn);
+
+          const deleteBtn = document.createElement('button');
+          deleteBtn.className = 'sidebar-playlist-delete';
+          deleteBtn.title = 'Delete playlist';
+          deleteBtn.textContent = '×';
+          deleteBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm(`Delete "${pl.name}"?`)) return;
+            try {
+              const res  = await fetch(`/api/playlists/${encodeURIComponent(pl.id)}`, { method: 'DELETE' });
+              const data = await res.json();
+              if (data.ok) {
+                if (_currentId === pl.id) _currentId = null;
+                await load();
+              } else {
+                alert(data.error || 'Failed to delete playlist');
+              }
+            } catch (err) {
+              console.error('[MP] Delete error:', err);
+            }
+          });
+          li.appendChild(deleteBtn);
+
           listEl.appendChild(li);
         });
       }
