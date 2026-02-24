@@ -2873,9 +2873,10 @@ async function fetchTrendingTracks(limit = 5) {
 }
 
 function requireTokenEmail(req, res) {
-  // Use email if available, otherwise fall back to token code as user identifier.
-  // This handles deployments where the FM token record has no Email field.
-  const email = req.accessToken?.email || req.accessToken?.code;
+  // Email from FM token record, with fallback to the cached email cookie set
+  // at validation time — survives server restarts / Render deploys where
+  // data/access_tokens.json resets and FM token may have no Email field.
+  const email = req.accessToken?.email || parseCookies(req)['mass.email'];
   if (!email) {
     res.status(401).json({ ok: false, error: 'Access token required' });
     return null;
@@ -2910,6 +2911,18 @@ app.post('/api/access/validate', async (req, res) => {
     const result = await validateAccessToken(token, sessionId, req);
 
     if (result.valid) {
+      // Cache the email in a long-lived cookie so requireTokenEmail() can use it
+      // as a fallback even after server restarts (Render deploys reset JSON files,
+      // and some FM token records may have an empty Email field).
+      if (result.email) {
+        const emailCookieParts = [
+          `mass.email=${encodeURIComponent(result.email)}`,
+          'Path=/',
+          'Max-Age=31536000', // 1 year
+          'SameSite=Lax'
+        ];
+        res.setHeader('Set-Cookie', emailCookieParts.join('; '));
+      }
       res.json({
         ok: true,
         valid: true,
