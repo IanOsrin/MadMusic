@@ -4891,7 +4891,7 @@
       };
 
       // Function to show album details in the right panel
-      window.showAlbumDetailPanel = function(album) {
+      window.showAlbumDetailPanel = async function(album) {
         const artwork = document.getElementById('playlistDetailArtwork');
         const title = document.getElementById('playlistDetailTitle');
         const artist = document.getElementById('playlistDetailArtist');
@@ -4939,16 +4939,24 @@
           };
         }
 
+        // Fetch library state once for this album panel
+        let libraryData = { songs: [], albums: [] };
+        try {
+          const libRes = await fetch('/api/library');
+          if (libRes.ok) { const d = await libRes.json(); if (d.ok) libraryData = d; }
+        } catch {}
+
         if (addAlbumToLibraryBtn) {
-          // Check saved state
-          fetch('/api/library').then(r => r.json()).then(data => {
-            const saved = (data.albums || []).find(a => a.title === album.title && a.artist === album.artist);
-            if (saved) {
-              addAlbumToLibraryBtn.classList.add('saved');
-              addAlbumToLibraryBtn.dataset.libraryId = saved.id;
-              addAlbumToLibraryBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> ♥ Saved`;
-            }
-          }).catch(() => {});
+          // Reset to unsaved state first (prevents stale state when switching albums)
+          addAlbumToLibraryBtn.classList.remove('saved');
+          delete addAlbumToLibraryBtn.dataset.libraryId;
+          addAlbumToLibraryBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> ♡ Albums`;
+          const savedAlbum = (libraryData.albums || []).find(a => a.title === album.title && a.artist === album.artist);
+          if (savedAlbum) {
+            addAlbumToLibraryBtn.classList.add('saved');
+            addAlbumToLibraryBtn.dataset.libraryId = savedAlbum.id;
+            addAlbumToLibraryBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> ♥ Saved`;
+          }
 
           addAlbumToLibraryBtn.onclick = async () => {
             if (addAlbumToLibraryBtn.dataset.libraryId) {
@@ -5064,15 +5072,15 @@
             if (addLibraryBtn) {
               const trackIndex = parseInt(addLibraryBtn.dataset.trackIndex);
               const track = album.tracks[trackIndex];
-              // Check saved state on render
-              fetch('/api/library').then(r => r.json()).then(data => {
-                const saved = (data.songs || []).find(s => s.trackRecordId && s.trackRecordId === (track.recordId || ''));
-                if (saved) {
-                  addLibraryBtn.classList.add('saved');
-                  addLibraryBtn.dataset.libraryId = saved.id;
-                  addLibraryBtn.textContent = '♥ Saved';
-                }
-              }).catch(() => {});
+              // Check saved state using pre-fetched library data
+              const savedSong = track.recordId
+                ? (libraryData.songs || []).find(s => s.trackRecordId === track.recordId)
+                : null;
+              if (savedSong) {
+                addLibraryBtn.classList.add('saved');
+                addLibraryBtn.dataset.libraryId = savedSong.id;
+                addLibraryBtn.textContent = '♥ Saved';
+              }
 
               addLibraryBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();

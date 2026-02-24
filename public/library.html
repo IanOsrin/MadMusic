@@ -589,10 +589,10 @@
       const navAlbums = document.getElementById('navAlbums');
 
       // ── Auth check ──
-      try {
-        const me = await fetch('/api/auth/me');
-        if (!me.ok) { window.location.href = '/albums'; return; }
-      } catch { window.location.href = '/albums'; return; }
+      if (!localStorage.getItem('mass_access_token')) {
+        window.location.href = '/albums';
+        return;
+      }
 
       // ── Tab switching ──
       let currentTab = new URLSearchParams(location.search).get('tab') || 'songs';
