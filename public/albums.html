@@ -3324,6 +3324,27 @@
   });
   </script>
   <script>
+  // app.min.js is deferred and runs after all inline scripts, overwriting
+  // window.handleAddToPlaylist with its own version that doesn't notify
+  // window.MP. Wrap it in DOMContentLoaded (which fires after deferred
+  // scripts) so MP.load() is called after every track or album add.
+  document.addEventListener('DOMContentLoaded', () => {
+    function wrapWithMPSync(fn) {
+      return async function(...args) {
+        const result = await fn.apply(this, args);
+        if (window.MP) window.MP.load();
+        return result;
+      };
+    }
+    if (typeof window.handleAddToPlaylist === 'function') {
+      window.handleAddToPlaylist = wrapWithMPSync(window.handleAddToPlaylist);
+    }
+    if (typeof window.handleAddAlbumToPlaylist === 'function') {
+      window.handleAddAlbumToPlaylist = wrapWithMPSync(window.handleAddAlbumToPlaylist);
+    }
+  });
+  </script>
+  <script>
   // Override search to use separate fields
   window.addEventListener('load', () => {
     const searchArtistEl = document.getElementById('searchArtist');
