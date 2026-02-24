@@ -2903,7 +2903,8 @@ function requireTokenEmail(req, res) {
   // data/access_tokens.json resets and FM token may have no Email field.
   const tokenEmail = req.accessToken?.email || null;
   const cookieEmail = parseCookies(req)['mass.email'] || null;
-  const email = tokenEmail || cookieEmail;
+  const tokenCode = req.accessToken?.code || null;
+  const email = tokenEmail || cookieEmail || tokenCode;
   if (!email) {
     console.warn(`[MASS] requireTokenEmail: no email — tokenEmail=${tokenEmail}, cookieEmail=${cookieEmail}, token=${req.accessToken?.code?.slice(0,8)}…`);
     res.status(401).json({ ok: false, error: 'Access token required' });
