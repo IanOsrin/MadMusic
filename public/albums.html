@@ -2329,10 +2329,10 @@
         albumsMap.get(albumKey).tracks.push(track);
       });
 
-      // Populate album list
+      // Populate album list — no album pre-selected; default view shows all tracks
       const albums = Array.from(albumsMap.values());
       albumsList.innerHTML = albums.map((album, index) => `
-        <div class="playlist-album-item ${index === 0 ? 'selected' : ''}" data-album-index="${index}">
+        <div class="playlist-album-item" data-album-index="${index}">
           <div class="playlist-album-thumb">
             <img src="${album.artwork}" alt="${album.title}" onerror="this.src='/img/placeholder.jpg'">
           </div>
@@ -2347,19 +2347,16 @@
       // Add click handlers to album items
       albumsList.querySelectorAll('.playlist-album-item').forEach(item => {
         item.addEventListener('click', () => {
-          // Remove selected from all
           albumsList.querySelectorAll('.playlist-album-item').forEach(i => i.classList.remove('selected'));
           item.classList.add('selected');
-
           const albumIndex = parseInt(item.dataset.albumIndex);
           showAlbumDetail(albums[albumIndex]);
         });
       });
 
-      // Show first album details
-      if (albums.length > 0) {
-        showAlbumDetail(albums[0]);
-      }
+      // Default: show all tracks as a flat list so nothing is hidden
+      const coverArt = albums[0]?.artwork || '/img/placeholder.jpg';
+      showAlbumDetail({ title: playlistName, artist: '', artwork: coverArt, genre: '', year: '', tracks });
     }
 
     function showAlbumDetail(album) {
