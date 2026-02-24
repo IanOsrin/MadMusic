@@ -5238,6 +5238,16 @@
       nameInput.focus();
     }
 
+    // After a successful add, refresh the sidebar and open the updated playlist.
+    async function refreshAndShowPlaylist(playlistId) {
+      if (typeof window.reloadSidebarPlaylists === 'function') {
+        await window.reloadSidebarPlaylists();
+      }
+      // After re-render, find the fresh button and open it so the new track is visible.
+      const btn = document.querySelector(`.sidebar-playlist-btn[data-playlist-id="${CSS.escape(playlistId)}"]`);
+      if (btn) btn.click();
+    }
+
     // ----------------------------------------------------------------
     // handleAddToPlaylist — single track
     // ----------------------------------------------------------------
@@ -5263,6 +5273,7 @@
           const data = await res.json();
           if (data.ok) {
             showAddToast(data.duplicate ? 'Already in playlist' : '✓ Track added');
+            if (!data.duplicate) await refreshAndShowPlaylist(playlistId);
           } else {
             showAddToast(data.error || 'Failed to add track', true);
           }
@@ -5302,6 +5313,7 @@
               ? `✓ ${added} track${added !== 1 ? 's' : ''} added${dupes > 0 ? ` (${dupes} already in playlist)` : ''}`
               : 'All tracks already in playlist';
             showAddToast(msg);
+            if (added > 0) await refreshAndShowPlaylist(playlistId);
           } else {
             showAddToast(data.error || 'Failed to add album', true);
           }
