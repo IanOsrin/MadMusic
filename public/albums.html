@@ -5069,5 +5069,250 @@
   })();
   </script>
 
+  <script>
+  /* ===== Add-to-Playlist handlers ===================================
+     Defines window.handleAddToPlaylist and window.handleAddAlbumToPlaylist
+     which are called from the album detail view.
+  ================================================================== */
+  (function () {
+
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function showAddToast(msg, isError) {
+      const t = document.createElement('div');
+      t.textContent = msg;
+      Object.assign(t.style, {
+        position: 'fixed', bottom: '88px', left: '50%',
+        transform: 'translateX(-50%)',
+        background: isError ? '#b9383a' : 'var(--accent)',
+        color: isError ? '#fff' : '#000',
+        padding: '9px 18px', borderRadius: '8px',
+        fontSize: '13px', fontWeight: '600',
+        zIndex: '9999', boxShadow: '0 4px 16px rgba(0,0,0,.35)',
+        pointerEvents: 'none', opacity: '1', transition: 'opacity 0.3s',
+        whiteSpace: 'nowrap',
+      });
+      document.body.appendChild(t);
+      setTimeout(() => { t.style.opacity = '0'; }, 2400);
+      setTimeout(() => { t.remove(); }, 2800);
+    }
+
+    /* Build and show the playlist-picker modal.
+       onSelect(playlistId) is called once the user picks or creates a playlist. */
+    async function showPlaylistPicker(onSelect) {
+      // Overlay
+      const overlay = document.createElement('div');
+      overlay.style.cssText = [
+        'position:fixed;inset:0;background:rgba(0,0,0,.6)',
+        'display:flex;align-items:center;justify-content:center',
+        'z-index:1000;',
+      ].join(';');
+
+      // Modal card
+      const modal = document.createElement('div');
+      modal.style.cssText = [
+        'background:var(--card);border:1px solid var(--border)',
+        'border-radius:16px;padding:20px',
+        'width:min(360px,92vw);max-height:75vh',
+        'overflow:hidden;display:flex;flex-direction:column;gap:10px',
+        'box-shadow:0 18px 48px rgba(0,0,0,.45)',
+      ].join(';');
+
+      // Header row
+      const headerRow = document.createElement('div');
+      headerRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;';
+      const heading = document.createElement('h3');
+      heading.textContent = 'Add to playlist';
+      heading.style.cssText = 'margin:0;font-size:15px;';
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'album-action-btn';
+      closeBtn.style.cssText = 'padding:4px 10px;font-size:14px;';
+      closeBtn.textContent = '✕';
+      closeBtn.onclick = () => overlay.remove();
+      headerRow.append(heading, closeBtn);
+
+      // Scrollable list area
+      const listWrap = document.createElement('div');
+      listWrap.style.cssText = 'overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:5px;';
+
+      const loadingMsg = document.createElement('p');
+      loadingMsg.textContent = 'Loading…';
+      loadingMsg.style.cssText = 'margin:0;font-size:13px;color:var(--muted);';
+      listWrap.appendChild(loadingMsg);
+
+      // New-playlist row (always visible at bottom)
+      const divider = document.createElement('hr');
+      divider.style.cssText = 'border:none;border-top:1px solid var(--border);margin:2px 0;flex-shrink:0;';
+
+      const newRow = document.createElement('div');
+      newRow.style.cssText = 'display:flex;gap:7px;flex-shrink:0;';
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.placeholder = 'New playlist name…';
+      nameInput.maxLength = 80;
+      nameInput.style.cssText = [
+        'flex:1;background:var(--bg);color:var(--fg)',
+        'border:1px solid var(--border);border-radius:8px',
+        'padding:7px 10px;font-size:13px;min-width:0;',
+      ].join(';');
+      const createBtn = document.createElement('button');
+      createBtn.className = 'album-action-btn';
+      createBtn.textContent = '+ New';
+      createBtn.style.cssText = 'border-color:var(--accent);color:var(--accent);white-space:nowrap;flex-shrink:0;';
+
+      async function doCreate() {
+        const name = nameInput.value.trim();
+        if (!name) { nameInput.focus(); return; }
+        createBtn.disabled = true;
+        createBtn.textContent = '…';
+        try {
+          const res = await fetch('/api/playlists', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            overlay.remove();
+            onSelect(data.playlist.id);
+          } else {
+            createBtn.disabled = false;
+            createBtn.textContent = '+ New';
+            showAddToast(data.error || 'Could not create playlist', true);
+          }
+        } catch {
+          createBtn.disabled = false;
+          createBtn.textContent = '+ New';
+          showAddToast('Network error', true);
+        }
+      }
+
+      createBtn.onclick = doCreate;
+      nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doCreate(); });
+      newRow.append(nameInput, createBtn);
+
+      modal.append(headerRow, listWrap, divider, newRow);
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+      // Fetch and render playlists
+      let playlists = [];
+      try {
+        const res = await fetch('/api/playlists');
+        const data = await res.json();
+        playlists = Array.isArray(data.playlists) ? data.playlists : [];
+      } catch {
+        loadingMsg.textContent = 'Failed to load playlists.';
+        return;
+      }
+
+      listWrap.innerHTML = '';
+
+      if (!playlists.length) {
+        const empty = document.createElement('p');
+        empty.style.cssText = 'margin:0;font-size:13px;color:var(--muted);';
+        empty.textContent = 'No playlists yet — create one below.';
+        listWrap.appendChild(empty);
+      } else {
+        for (const pl of playlists) {
+          const btn = document.createElement('button');
+          btn.className = 'album-action-btn';
+          btn.style.cssText = 'width:100%;justify-content:flex-start;gap:0;';
+          const count = (pl.tracks || []).length;
+          btn.innerHTML =
+            `<span style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(pl.name)}</span>` +
+            `<span style="color:var(--muted);font-size:11px;flex-shrink:0;margin-left:8px;">${count} track${count !== 1 ? 's' : ''}</span>`;
+          btn.onclick = () => {
+            overlay.remove();
+            onSelect(pl.id);
+          };
+          listWrap.appendChild(btn);
+        }
+      }
+
+      nameInput.focus();
+    }
+
+    // ----------------------------------------------------------------
+    // handleAddToPlaylist — single track
+    // ----------------------------------------------------------------
+    window.handleAddToPlaylist = function (album, track, audioUrl) {
+      showPlaylistPicker(async (playlistId) => {
+        try {
+          const res = await fetch(`/api/playlists/${encodeURIComponent(playlistId)}/tracks`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              track: {
+                recordId:    track.recordId    || '',
+                name:        track.name        || track.songName || '',
+                albumTitle:  album.title       || album.albumTitle || '',
+                albumArtist: album.artist      || album.albumArtist || '',
+                trackArtist: track.trackArtist || track.artist || album.artist || '',
+                mp3:         track.S3_URL      || track.mp3 || audioUrl || '',
+                resolvedSrc: audioUrl          || track.S3_URL || track.resolvedSrc || '',
+                artwork:     album.picture     || album.artwork || '',
+              },
+            }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            showAddToast(data.duplicate ? 'Already in playlist' : '✓ Track added');
+          } else {
+            showAddToast(data.error || 'Failed to add track', true);
+          }
+        } catch {
+          showAddToast('Network error', true);
+        }
+      });
+    };
+
+    // ----------------------------------------------------------------
+    // handleAddAlbumToPlaylist — all tracks in an album
+    // ----------------------------------------------------------------
+    window.handleAddAlbumToPlaylist = function (album) {
+      showPlaylistPicker(async (playlistId) => {
+        const tracks = (album.tracks || []).map((t) => ({
+          recordId:    t.recordId    || '',
+          name:        t.name        || t.songName || '',
+          albumTitle:  album.title   || album.albumTitle || '',
+          albumArtist: album.artist  || album.albumArtist || '',
+          trackArtist: t.trackArtist || t.artist || album.artist || '',
+          mp3:         t.S3_URL      || t.mp3 || '',
+          resolvedSrc: t.S3_URL      || t.resolvedSrc || '',
+          artwork:     album.picture || album.artwork || '',
+        }));
+
+        try {
+          const res = await fetch(`/api/playlists/${encodeURIComponent(playlistId)}/tracks/bulk`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tracks }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            const added = (data.added || []).length;
+            const dupes = (data.duplicates || []).length;
+            const msg = added > 0
+              ? `✓ ${added} track${added !== 1 ? 's' : ''} added${dupes > 0 ? ` (${dupes} already in playlist)` : ''}`
+              : 'All tracks already in playlist';
+            showAddToast(msg);
+          } else {
+            showAddToast(data.error || 'Failed to add album', true);
+          }
+        } catch {
+          showAddToast('Network error', true);
+        }
+      });
+    };
+
+  })();
+  </script>
+
 </body>
 </html>
