@@ -4555,6 +4555,12 @@
           _list.push(playlist);
         }
         renderSidebar();
+        // If this playlist is currently visible in the main view, refresh it in-place.
+        // Don't open it if the user is browsing something else.
+        const playlistView = document.getElementById('playlistView');
+        if (_currentId === playlist.id && playlistView?.classList.contains('active')) {
+          _openFromList(playlist.id, listEl?.querySelector(`[data-playlist-id="${CSS.escape(playlist.id)}"]`));
+        }
       }
 
       // Open a playlist by id using current in-memory state
