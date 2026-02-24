@@ -4555,12 +4555,6 @@
           _list.push(playlist);
         }
         renderSidebar();
-        // If this playlist is currently visible in the main view, refresh it in-place.
-        // Don't open it if the user is browsing something else.
-        const playlistView = document.getElementById('playlistView');
-        if (_currentId === playlist.id && playlistView?.classList.contains('active')) {
-          _openFromList(playlist.id, listEl?.querySelector(`[data-playlist-id="${CSS.escape(playlist.id)}"]`));
-        }
       }
 
       // Open a playlist by id using current in-memory state
@@ -4598,8 +4592,18 @@
       window.addEventListener('mass:access-ready', () => load());
       if (window.massAccessReady) load();
 
+      // Re-fetch playlists from server and, if the named playlist is currently
+      // showing, refresh its track list in-place.
+      async function sync(playlistId) {
+        await load();
+        if (_currentId === playlistId) {
+          const btn = listEl?.querySelector(`[data-playlist-id="${CSS.escape(playlistId)}"]`);
+          _openFromList(playlistId, btn);
+        }
+      }
+
       console.log('[MP] My playlists initialized');
-      return { load, update, open, get list() { return _list; } };
+      return { load, update, open, sync, get list() { return _list; } };
     })();
   </script>
 
@@ -5274,10 +5278,10 @@
           const data = await res.json();
           if (data.ok) {
             showAddToast(data.duplicate ? 'Already in playlist' : '✓ Track added');
-            // Update sidebar count without switching away from the current view,
-            // so the user can keep adding more tracks to the same album.
-            if (!data.duplicate && data.playlist && window.MP) {
-              window.MP.update(data.playlist);
+            if (!data.duplicate && window.MP) {
+              // sync() re-fetches from server so the sidebar and any open playlist
+              // view always reflect the latest state, regardless of in-memory cache.
+              window.MP.sync(playlistId);
             }
           } else {
             showAddToast(data.error || 'Failed to add track', true);
