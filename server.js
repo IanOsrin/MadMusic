@@ -349,6 +349,15 @@ app.use('/api/', async (req, res, next) => {
   const validation = await validateAccessToken(accessToken);
 
   if (!validation.valid) {
+    // Stale-while-error: if FM is temporarily down and we have a recently-seen
+    // valid result for this token (even if expired from cache), use it rather
+    // than locking the user out due to a transient FM outage.
+    const STALE_GRACE_MS = 24 * 60 * 60 * 1000; // 24 hours
+    if (cached && cached.data && (Date.now() - cached.expiresAt) < STALE_GRACE_MS) {
+      console.warn(`[MASS] FM validation failed (${validation.reason}), using stale cache for token ${cacheKey.slice(0, 8)}…`);
+      req.accessToken = cached.data;
+      return next();
+    }
     return res.status(403).json({
       ok: false,
       error: 'Invalid or expired access token',
@@ -2892,8 +2901,11 @@ function requireTokenEmail(req, res) {
   // Email from FM token record, with fallback to the cached email cookie set
   // at validation time — survives server restarts / Render deploys where
   // data/access_tokens.json resets and FM token may have no Email field.
-  const email = req.accessToken?.email || parseCookies(req)['mass.email'];
+  const tokenEmail = req.accessToken?.email || null;
+  const cookieEmail = parseCookies(req)['mass.email'] || null;
+  const email = tokenEmail || cookieEmail;
   if (!email) {
+    console.warn(`[MASS] requireTokenEmail: no email — tokenEmail=${tokenEmail}, cookieEmail=${cookieEmail}, token=${req.accessToken?.code?.slice(0,8)}…`);
     res.status(401).json({ ok: false, error: 'Access token required' });
     return null;
   }
@@ -3279,8 +3291,12 @@ app.post('/api/playlists/:playlistId/tracks', async (req, res) => {
     }
 
     const playlists = await loadPlaylists();
+    console.log(`[MASS] Add track: email=${email}, playlistId=${playlistId}, totalPlaylists=${playlists.length}`);
     const index = playlists.findIndex((p) => p && p.id === playlistId && playlistOwnerMatches(p.userId, email));
     if (index === -1) {
+      const ids = playlists.map(p => p?.id).join(',');
+      const owners = playlists.map(p => p?.userId).join(',');
+      console.warn(`[MASS] Playlist not found: looking for id=${playlistId} owner=${email}; stored ids=[${ids}] owners=[${owners}]`);
       res.status(404).json({ ok: false, error: 'Playlist not found' });
       return;
     }
@@ -3289,8 +3305,9 @@ app.post('/api/playlists/:playlistId/tracks', async (req, res) => {
     playlist.tracks = Array.isArray(playlist.tracks) ? playlist.tracks : [];
 
     const duplicateIndex = buildPlaylistDuplicateIndex(playlist);
-    const { entry: duplicate } = resolveDuplicate(duplicateIndex, trackPayload);
+    const { key: dupKey, entry: duplicate } = resolveDuplicate(duplicateIndex, trackPayload);
     if (duplicate) {
+      console.log(`[MASS] Duplicate track: key=${dupKey}`);
       res.status(200).json({ ok: true, playlist, track: duplicate, duplicate: true });
       return;
     }

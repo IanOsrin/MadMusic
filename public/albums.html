@@ -5268,9 +5268,10 @@
           const data = await res.json();
           if (data.ok) {
             showAddToast(data.duplicate ? 'Already in playlist' : '✓ Track added');
+            // Update sidebar count without switching away from the current view,
+            // so the user can keep adding more tracks to the same album.
             if (!data.duplicate && data.playlist && window.MP) {
               window.MP.update(data.playlist);
-              window.MP.open(playlistId);
             }
           } else {
             showAddToast(data.error || 'Failed to add track', true);
