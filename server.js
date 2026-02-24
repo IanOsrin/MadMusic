@@ -3909,7 +3909,7 @@ app.get('/jukebox', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'albums.ht
 // Mobile-optimized view
 app.get('/mobile', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mobile.html')));
 app.get('/m', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mobile.html')));
-// Library page
+// Library page — serves saved songs & albums view
 app.get('/library', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'library.html')));
 
 /* ========= Search ========= */
