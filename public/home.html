@@ -1887,19 +1887,6 @@
 
   <!-- Main Content -->
   <div class="container">
-    <!-- Featured Albums Section -->
-    <section class="section">
-      <div class="section-header">
-        <div>
-          <h2 class="section-title">Featured Albums</h2>
-          <p class="section-subtitle">Curated selection from our collection</p>
-        </div>
-      </div>
-      <div id="featuredContainer" class="random-grid">
-        <div class="loading"><div class="spinner"></div></div>
-      </div>
-    </section>
-
     <!-- Trending Now Section -->
     <section class="section">
       <div class="section-header">
@@ -2521,7 +2508,7 @@
 
     // API endpoints
     const API = {
-      featured: '/api/featured-albums?limit=100',
+      featured: '/api/featured-albums?limit=1',
       highlights: '/api/random-songs?count=2&_t=' + Date.now(),
       random: '/api/random-songs?count=20&_t=' + Date.now(), // Increased to 20, added timestamp for fresh results
       trending: '/api/trending',
@@ -3679,7 +3666,7 @@
         return;
       }
 
-      // Filter to items with valid audio
+      // Filter items to only include those with valid audio
       const validItems = items.filter(item => hasValidAudio(item));
       console.log('[Featured] Filtered', validItems.length, 'items with valid audio out of', items.length, 'total');
 
@@ -3693,39 +3680,45 @@
         return;
       }
 
-      // Group by album, one representative track per album, up to 18
-      const albumMap = new Map();
-      for (const item of validItems) {
-        const fields = item.fields || {};
-        const album = getAlbumField(fields);
-        if (!albumMap.has(album)) {
-          albumMap.set(album, item);
-          itemsStore.set(item.recordId, item);
-        }
-        if (albumMap.size >= 18) break;
-      }
+      const item = validItems[0];
+      const fields = item.fields || {};
+      const artworkUrl = getArtworkUrl(fields);
+      const title = getTitleField(fields);
+      const artist = getArtistField(fields);
+      const album = getAlbumField(fields);
 
-      container.innerHTML = Array.from(albumMap.values()).map(item => {
-        const fields = item.fields || {};
-        const artworkUrl = getArtworkUrl(fields);
-        const album = getAlbumField(fields);
-        const artist = getArtistField(fields);
-        return `
-          <div class="random-card" data-record-id="${escapeHtml(item.recordId)}">
-            <div class="random-artwork" onclick="playSong('${escapeHtml(item.recordId)}')">
-              ${artworkUrl
-                ? `<img src="${escapeHtml(artworkUrl)}" alt="${escapeHtml(album)}" onerror="this.closest('.random-card').style.display='none'" />`
-                : '<div class="artwork-placeholder">♪</div>'
-              }
-              <div class="play-overlay"><div class="play-icon">▶</div></div>
-            </div>
-            <div class="random-info">
-              <div class="random-title">${escapeHtml(album)}</div>
-              <div class="random-artist">${escapeHtml(artist)}</div>
+      console.log('[Featured] Item:', {recordId: item.recordId, title, artist, album, artworkUrl});
+
+      // Store item for later reference
+      itemsStore.set(item.recordId, item);
+
+      // Create URL for Jukebox view with album filter
+      const jukeboxUrl = `/classic?album=${encodeURIComponent(album)}&artist=${encodeURIComponent(artist)}`;
+
+      container.innerHTML = `
+        <div class="featured-release">
+          <div class="featured-artwork">
+            ${artworkUrl
+              ? `<img src="${escapeHtml(artworkUrl)}" alt="${escapeHtml(album)}" onerror="this.closest('.featured-release').style.display='none'" />`
+              : '<div class="artwork-placeholder">♪</div>'
+            }
+          </div>
+          <div class="featured-info">
+            <div class="featured-label">Featured Release</div>
+            <h1 class="featured-title">${escapeHtml(title)}</h1>
+            <p class="featured-artist">${escapeHtml(artist)}</p>
+            <p class="featured-album">${escapeHtml(album)}</p>
+            <div class="featured-actions">
+              <button class="btn-play" onclick="playSong('${escapeHtml(item.recordId)}')">
+                ▶ Play Now
+              </button>
+              <a href="${escapeHtml(jukeboxUrl)}" class="btn-secondary" style="text-decoration: none;">
+                💿 View Album
+              </a>
             </div>
           </div>
-        `;
-      }).join('');
+        </div>
+      `;
     }
 
     function renderHighlights(items) {
