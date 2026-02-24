@@ -2178,7 +2178,7 @@
     async function initializeHomePage() {
       try {
         // Fetch featured albums for Major Releases
-        const response = await fetch('/api/featured-albums?limit=10');
+        const response = await fetch('/api/featured-albums?limit=18');
         if (response.ok) {
           const data = await response.json();
           const items = data.items || [];
