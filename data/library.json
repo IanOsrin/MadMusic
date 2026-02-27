@@ -1,0 +1,29 @@
+{
+  "savana@contentca.co.za": {
+    "songs": [
+      {
+        "id": "62472ce5-559d-4d7b-a8fc-1cc06e815222",
+        "trackRecordId": "4959",
+        "name": "Swiss Yodelling Song",
+        "albumTitle": "Geula Gill On Tour",
+        "albumArtist": "Geula Gill",
+        "trackArtist": "Geula Gill",
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi4162.jpg",
+        "S3_URL": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GMVE13147.mp3",
+        "mp3": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GMVE13147.mp3",
+        "addedAt": "2026-02-25T10:17:30.917Z"
+      }
+    ],
+    "albums": [
+      {
+        "id": "53c8d7f6-7157-4bce-8f56-d425b0f5ccf2",
+        "title": "Geula Gill On Tour",
+        "artist": "Geula Gill",
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi4162.jpg",
+        "genre": "",
+        "year": "",
+        "addedAt": "2026-02-25T10:17:34.894Z"
+      }
+    ]
+  }
+}

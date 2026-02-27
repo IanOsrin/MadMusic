@@ -1,0 +1,32 @@
+[
+  {
+    "id": "f9f560ad-0639-48e4-ac30-a349efc1aafd",
+    "playlistId": "dd08d666-cb8a-45b6-b00c-0afdc34cb478",
+    "playlistName": "Ians Favourites",
+    "trackCount": 6,
+    "userEmail": "ian@test.co.za",
+    "note": "",
+    "createdAt": "2025-10-13T10:21:35.856Z",
+    "status": "queued"
+  },
+  {
+    "id": "fe5768c7-44c6-438d-91fb-ce37bf6200c8",
+    "playlistId": "dd08d666-cb8a-45b6-b00c-0afdc34cb478",
+    "playlistName": "Ians Favourites",
+    "trackCount": 6,
+    "userEmail": "ian@test.co.za",
+    "note": "",
+    "createdAt": "2025-10-13T10:22:11.007Z",
+    "status": "queued"
+  },
+  {
+    "id": "1a6c0858-d843-4955-abc6-a642aed7cfb0",
+    "playlistId": "dd08d666-cb8a-45b6-b00c-0afdc34cb478",
+    "playlistName": "Ians Favourites",
+    "trackCount": 6,
+    "userEmail": "ian@test.co.za",
+    "note": "plerase create",
+    "createdAt": "2025-10-20T10:51:43.906Z",
+    "status": "queued"
+  }
+]

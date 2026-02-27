@@ -1,0 +1,43 @@
+{
+  "name": "mass-music",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "node cluster.js",
+    "start:single": "node server.js",
+    "start:cluster": "node cluster.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "smoke": "node scripts/smoke.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.12.2",
+    "axios-cookiejar-support": "^6.0.4",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
+    "kafkajs": "^2.2.4",
+    "lru-cache": "^11.2.2",
+    "morgan": "^1.10.1",
+    "nodemailer": "^7.0.13",
+    "tough-cookie": "^5.1.2",
+    "undici": "^7"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IanOsrin/MASS.git"
+  },
+  "bugs": {
+    "url": "https://github.com/IanOsrin/MASS/issues"
+  },
+  "homepage": "https://github.com/IanOsrin/MASS#readme"
+}
