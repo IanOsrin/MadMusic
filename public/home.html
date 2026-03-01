@@ -675,117 +675,127 @@
       box-shadow: 0 4px 16px rgba(0, 113, 227, 0.3);
     }
 
-    /* Trending Now Section - 40% smaller (60% of original size) */
+    /* Trending Now Section */
+    /* Trending Now — same Netflix card treatment as Discover More */
     .trending-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(192px, 1fr));
-      gap: 0.9rem;
+      grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+      gap: 1.5rem;
     }
 
     .trending-card {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      padding: 0.6rem 0.75rem;
-      border-radius: 10px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-      transition: border-color 0.2s ease, transform 0.2s ease;
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      background: #1a1a1a;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
     }
 
     .trending-card:hover {
-      border-color: var(--accent);
-      transform: translateY(-2px);
+      transform: translateY(-5px) scale(1.02);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
     }
 
+    /* Rank badge — frosted pill in top-left corner */
     .trending-rank {
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: var(--accent);
-      min-width: 20px;
-      text-align: center;
+      position: absolute;
+      top: 0.55rem;
+      left: 0.55rem;
+      z-index: 3;
+      font-size: 0.7rem;
+      font-weight: 800;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.52);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      padding: 0.18rem 0.5rem;
+      border-radius: 6px;
+      line-height: 1.4;
+      letter-spacing: 0.02em;
     }
 
     .trending-artwork {
-      width: 44px;
-      height: 44px;
-      border-radius: 8px;
-      overflow: hidden;
-      flex-shrink: 0;
+      width: 100%;
+      padding-bottom: 100%;
       position: relative;
+      overflow: hidden;
+      background: #2a2a2a;
       cursor: pointer;
     }
 
     .trending-artwork img {
+      position: absolute;
+      inset: 0;
       width: 100%;
       height: 100%;
       object-fit: cover;
+      transition: transform 0.35s ease;
     }
 
+    .trending-card:hover .trending-artwork img {
+      transform: scale(1.06);
+    }
+
+    /* Info overlay — hidden until hover */
     .trending-info {
-      flex: 1;
-      min-width: 0;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 2.5rem 0.85rem 0.85rem;
+      background: linear-gradient(transparent, rgba(0, 0, 0, 0.88));
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      pointer-events: none;
+    }
+
+    .trending-card:hover .trending-info {
+      opacity: 1;
+      transform: translateY(0);
     }
 
     .trending-title {
-      font-size: 0.6rem;
-      font-weight: 600;
-      color: var(--text-primary);
-      margin-bottom: 0.09rem;
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 0.2rem;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
     }
 
     .trending-artist {
-      font-size: 0.54rem;
-      color: var(--text-secondary);
-      margin-bottom: 0.15rem;
+      font-size: 0.775rem;
+      color: rgba(255, 255, 255, 0.8);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 0.2rem;
     }
 
     .trending-meta {
-      font-size: 0.48rem;
-      color: var(--text-muted);
+      font-size: 0.65rem;
+      color: rgba(255, 255, 255, 0.5);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
+    /* Hide the old row-style buttons */
     .trending-play-btn {
-      border: none;
-      background: var(--accent);
-      color: #fff;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.6rem;
-      transition: transform 0.2s ease;
+      display: none;
     }
 
     .trending-card:hover .trending-play-btn {
-      transform: scale(1.05);
+      display: none;
     }
 
     .trending-album-btn {
-      border: none;
-      background: var(--bg-secondary);
-      color: var(--text-primary);
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.72rem;
-      transition: transform 0.2s ease, background 0.2s ease;
-      text-decoration: none;
-      border: 1px solid var(--border);
-    }
-
-    .trending-album-btn:hover {
-      background: var(--accent);
-      transform: scale(1.05);
-      border-color: var(--accent);
+      display: none;
     }
 
     .highlight-info {
@@ -853,38 +863,31 @@
       box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
     }
 
-    /* Random Selection Grid - 30% smaller (70% of original size) */
+    /* Random Selection Grid */
     .random-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-      gap: 1.05rem;
+      grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+      gap: 1.5rem;
     }
 
     .random-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
+      position: relative;
+      border-radius: 12px;
       overflow: hidden;
-      transition: all 0.3s ease;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+      cursor: pointer;
+      background: #1a1a1a;
     }
 
     .random-card:hover {
-      border-color: var(--accent);
-      transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      transform: translateY(-5px) scale(1.02);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
     }
 
     .random-card.now-playing {
-      border-color: #8b5cf6;
-      border-width: 2px;
-      background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(139, 92, 246, 0.1) 100%);
-      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15), 0 8px 24px rgba(0, 0, 0, 0.12);
+      box-shadow: 0 0 0 3px #8b5cf6, 0 8px 24px rgba(0, 0, 0, 0.2);
       transform: translateY(-3px);
-    }
-
-    .random-card.now-playing .random-title {
-      color: #8b5cf6;
     }
 
     .random-artwork {
@@ -892,7 +895,7 @@
       padding-bottom: 100%;
       position: relative;
       overflow: hidden;
-      background: #f0f0f5;
+      background: #2a2a2a;
       cursor: pointer;
     }
 
@@ -902,66 +905,79 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
+      transition: transform 0.35s ease;
     }
 
+    .random-card:hover .random-artwork img {
+      transform: scale(1.06);
+    }
+
+    /* Netflix-style text overlay — hidden until hover */
     .random-info {
-      padding: 0.7rem;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 2.5rem 0.85rem 0.85rem;
+      background: linear-gradient(transparent, rgba(0, 0, 0, 0.88));
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      pointer-events: none;
+    }
+
+    .random-card:hover .random-info {
+      opacity: 1;
+      transform: translateY(0);
     }
 
     .random-title {
-      font-size: 0.7rem;
-      font-weight: 600;
-      color: var(--text-primary);
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: #ffffff;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      margin-bottom: 0.175rem;
+      margin-bottom: 0.2rem;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.5);
     }
 
     .random-artist {
-      font-size: 0.61rem;
-      color: var(--text-secondary);
+      font-size: 0.775rem;
+      color: rgba(255, 255, 255, 0.8);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .random-album {
-      font-size: 0.53rem;
-      color: var(--text-muted);
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.55);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      margin-top: 0.175rem;
+      margin-top: 0.2rem;
     }
 
     .random-genre {
-      margin-top: 0.35rem;
+      display: none;
     }
 
     .genre-badge {
-      display: inline-block;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      font-size: 0.49rem;
-      font-weight: 600;
-      padding: 0.175rem 0.42rem;
-      border-radius: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.35px;
-      box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+      display: none;
     }
 
+    /* Hide the View Album button — card is fully clickable now */
     .random-actions {
-      padding: 0 0.7rem 0.7rem;
+      display: none;
     }
 
     .random-album-btn {
       width: 100%;
-      padding: 0.455rem 0.7rem;
+      padding: 0.5rem 0.75rem;
       border-radius: 6px;
       border: 1px solid var(--border);
-      font-size: 0.61rem;
+      font-size: 0.75rem;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s ease;
@@ -969,7 +985,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.245rem;
+      gap: 0.35rem;
       background: var(--bg-secondary);
       color: var(--text-primary);
     }
@@ -978,8 +994,8 @@
       background: var(--accent);
       color: white;
       border-color: var(--accent);
-      transform: translateY(-1.4px);
-      box-shadow: 0 2.8px 8.4px rgba(74, 144, 226, 0.3);
+      transform: translateY(-1px);
+      box-shadow: 0 3px 8px rgba(74, 144, 226, 0.3);
     }
 
     /* Loading States */
@@ -1050,7 +1066,7 @@
       }
 
       .random-grid {
-        grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       }
     }
 
@@ -1115,8 +1131,8 @@
       }
 
       .random-grid {
-        grid-template-columns: repeat(auto-fill, minmax(98px, 1fr));
-        gap: 0.7rem;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 1rem;
       }
 
       .mini-player {
@@ -3319,7 +3335,12 @@
 
       miniPlayer.classList.add('active');
       if (playerTitle) playerTitle.textContent = title;
-      if (playerArtist) playerArtist.textContent = artist;
+      if (playerArtist) {
+        playerArtist.textContent = artist;
+        playerArtist.onclick = artist
+          ? () => { window.location.href = `/albums?artist=${encodeURIComponent(artist)}`; }
+          : null;
+      }
       if (playerArtwork) playerArtwork.src = artworkUrl || '';
 
       if (toggleBtn) toggleBtn.title = isPlaying ? 'Pause' : 'Play';
@@ -4206,12 +4227,25 @@
         console.log('[Random] Response:', data);
         if (data.ok && data.items) {
           const items = Array.isArray(data.items) ? data.items : [];
-          randomItems = items;
-          console.log('[Random] Loaded', items.length, 'items');
+          // Deduplicate: one track per album, then one album per artist
+          const albums = groupByAlbum(items);
+          const seenArtists = new Set();
+          const deduped = albums
+            .map(album => album.tracks[0])
+            .filter(Boolean)
+            .filter(track => {
+              const artist = getArtistField(track.fields || {});
+              const key = artist.toLowerCase().trim();
+              if (seenArtists.has(key)) return false;
+              seenArtists.add(key);
+              return true;
+            });
+          randomItems = deduped;
+          console.log('[Random] Loaded', items.length, 'items, deduped to', deduped.length, 'unique artists');
           if (!selectedGenres.length && !isSearching) {
             setDiscoverTitle(false);
             setDiscoverSubtitleDefault();
-            renderRandom(items);
+            renderRandom(deduped);
           }
         } else {
           randomItems = [];
