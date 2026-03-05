@@ -1,0 +1,43 @@
+{
+  "MASS-PVP-NR7": {
+    "songs": [],
+    "albums": [
+      {
+        "id": "7e9e3763-6291-4d9c-bda9-fd34a113bb8d",
+        "title": "Hakebatle Basali",
+        "artist": "Lilala Tsa Sekhonyana",
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi4690.jpg",
+        "genre": "",
+        "year": "",
+        "addedAt": "2026-02-25T20:25:54.669Z"
+      }
+    ]
+  },
+  "ian@digitalcupboard.net": {
+    "songs": [
+      {
+        "id": "5ff2d88d-9df1-448b-b737-746f58f8bee7",
+        "trackRecordId": "50412",
+        "name": "African Carnival",
+        "albumTitle": "African Carnival",
+        "albumArtist": "Makhaya",
+        "trackArtist": "Makhaya",
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi3852.jpg",
+        "S3_URL": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GMVD1971.mp3",
+        "mp3": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GMVD1971.mp3",
+        "addedAt": "2026-02-25T22:26:22.562Z"
+      }
+    ],
+    "albums": [
+      {
+        "id": "3eb60024-5c43-4a89-bb5a-4d66da3b52a7",
+        "title": "Hammond Hits",
+        "artist": "Heinz Alexander",
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi3935.jpg",
+        "genre": "",
+        "year": "",
+        "addedAt": "2026-02-25T22:26:35.574Z"
+      }
+    ]
+  }
+}
