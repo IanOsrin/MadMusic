@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import {
   requireTokenEmail, validators, playlistOwnerMatches, normalizeTrackPayload,
   buildPlaylistDuplicateIndex, resolveDuplicate, summarizeTrackPayload, buildTrackEntry,
-  normalizeShareId, generateShareId, sanitizePlaylistForShare, buildShareUrl
+  normalizeShareId, generateShareId, sanitizePlaylistForShare, buildShareUrl,
+  AUDIO_FIELD_CANDIDATES, ARTWORK_FIELD_CANDIDATES
 } from '../helpers.js';
 import { loadPlaylists, savePlaylists } from '../store.js';
 import { fmGetRecordById, fmUpdateRecord } from '../fm-client.js';
@@ -11,11 +12,6 @@ import { fmGetRecordById, fmUpdateRecord } from '../fm-client.js';
 const router = Router();
 
 const FM_LAYOUT = process.env.FM_LAYOUT || 'API_Album_Songs';
-const AUDIO_FIELD_CANDIDATES = ['S3_URL', 'mp3', 'MP3', 'Audio File', 'Audio::mp3'];
-const ARTWORK_FIELD_CANDIDATES = [
-  'Artwork_S3_URL', 'Tape Files::Artwork_S3_URL', 'Artwork::Picture', 'Artwork Picture',
-  'Picture', 'CoverArtURL', 'AlbumCover', 'Cover Art', 'CoverArt'
-];
 
 router.get('/', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');

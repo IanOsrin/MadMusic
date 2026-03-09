@@ -708,16 +708,6 @@ function validateAccessTokenFromJSON(tokenCode) {
 
   const trimmedCode = tokenCode.trim().toUpperCase();
 
-  if (trimmedCode === 'MASS-UNLIMITED-ACCESS') {
-    return {
-      valid: true,
-      type: 'unlimited',
-      expirationDate: null,
-      email: null,
-      message: 'Unlimited access token'
-    };
-  }
-
   const tokenData = getAccessTokensCacheData() || { tokens: [] };
   const token = tokenData.tokens.find(t =>
     t.code && t.code.trim().toUpperCase() === trimmedCode
@@ -756,16 +746,6 @@ async function validateAccessToken(tokenCode, sessionId = null, req = null) {
   }
 
   const trimmedCode = tokenCode.trim().toUpperCase();
-
-  if (trimmedCode === 'MASS-UNLIMITED-ACCESS') {
-    return {
-      valid: true,
-      type: 'unlimited',
-      expirationDate: null,
-      email: null,
-      message: 'Unlimited access token'
-    };
-  }
 
   try {
     const layout = process.env.FM_TOKENS_LAYOUT || 'API_Access_Tokens';

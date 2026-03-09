@@ -210,18 +210,8 @@ export async function loadAccessTokens() {
     try {
       parsed = JSON.parse(raw);
     } catch (parseErr) {
-      console.warn('[MASS] Access tokens file contained invalid JSON, resetting to default:', parseErr);
-      const defaultData = {
-        tokens: [
-          {
-            code: 'MASS-UNLIMITED-ACCESS',
-            type: 'unlimited',
-            issuedDate: new Date().toISOString(),
-            expirationDate: null,
-            notes: 'Master cheat token - never expires'
-          }
-        ]
-      };
+      console.warn('[MASS] Access tokens file contained invalid JSON, resetting to empty list:', parseErr);
+      const defaultData = { tokens: [] };
       await fs.writeFile(ACCESS_TOKENS_PATH, JSON.stringify(defaultData, null, 2), 'utf8');
       accessTokensCache = { data: defaultData, mtimeMs: Date.now() };
       return defaultData;
@@ -237,17 +227,7 @@ export async function loadAccessTokens() {
   } catch (err) {
     if (err && err.code === 'ENOENT') {
       await ensureDataDir();
-      const defaultData = {
-        tokens: [
-          {
-            code: 'MASS-UNLIMITED-ACCESS',
-            type: 'unlimited',
-            issuedDate: new Date().toISOString(),
-            expirationDate: null,
-            notes: 'Master cheat token - never expires'
-          }
-        ]
-      };
+      const defaultData = { tokens: [] };
       await fs.writeFile(ACCESS_TOKENS_PATH, JSON.stringify(defaultData, null, 2), 'utf8');
       accessTokensCache = { data: defaultData, mtimeMs: Date.now() };
       return defaultData;
@@ -325,7 +305,7 @@ export async function createAccessToken(days, notes, email) {
       'Token_Code': code,
       'Token_Type': 'trial',
       'Active': 1,
-      'Token_Duration_Hours': String(durationSeconds),
+      'Token_Duration_Hours': String(durationSeconds), // FM field named Hours but actually expects seconds — leave as-is
       'Notes': token.notes
     };
     if (token.email) fmFields['Email'] = token.email;

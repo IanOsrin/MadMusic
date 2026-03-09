@@ -1,4 +1,3 @@
-import express from 'express';
 import { Router } from 'express';
 import { createHmac } from 'node:crypto';
 import { sendTokenEmail, paystackRequest, verifyPaystackWebhook } from '../helpers.js';
@@ -44,9 +43,13 @@ router.post('/initialize', async (req, res) => {
       return res.status(503).json({ ok: false, error: 'Payment system not configured' });
     }
 
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const host = req.headers['x-forwarded-host'] || req.headers.host;
-    const callbackUrl = `${protocol}://${host}/api/payments/callback`;
+    // Use APP_URL from env to avoid host-header injection via X-Forwarded-Host.
+    // Fall back to Express's req.protocol + req.get('host'), which already
+    // respects the trust-proxy setting configured in server.js.
+    const APP_BASE = (process.env.APP_URL || '').replace(/\/$/, '');
+    const callbackUrl = APP_BASE
+      ? `${APP_BASE}/api/payments/callback`
+      : `${req.protocol}://${req.get('host')}/api/payments/callback`;
 
     const data = await paystackRequest('POST', '/transaction/initialize', {
       email: email.trim().toLowerCase(),
@@ -122,7 +125,9 @@ router.get('/callback', async (req, res) => {
   }
 });
 
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+// Note: raw body parsing for this route is handled globally in server.js
+// (app.use('/api/payments/webhook', express.raw(...))), so no need to repeat it here.
+router.post('/webhook', async (req, res) => {
   try {
     const rawBody = req.body;
     const signature = req.headers['x-paystack-signature'];

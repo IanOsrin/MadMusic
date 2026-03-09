@@ -109,27 +109,16 @@
         <svg viewBox="0 0 24 24" fill="currentColor">
           <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
         </svg>
-        Highlights
+        Home
       </button>
-
-      <!-- Profile / Auth -->
-      <div class="sidebar-profile" id="sidebarProfile">
-        <button class="header-profile-btn" id="profileBtn" title="Account" aria-haspopup="true" aria-expanded="false">
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-          </svg>
-        </button>
-        <div id="authControls" class="auth-controls" hidden>
-          <span id="userBadge" class="badge" hidden></span>
-          <button id="logoutButton" type="button" class="btn small" hidden>Log out</button>
-        </div>
-      </div>
 
       <!-- Library Section -->
       <div class="nav-section" id="librarySection">
         <div class="nav-section-header" onclick="toggleNavSection('librarySection')">
           <span>Library</span>
-          <span class="chevron">&#9650;</span>
+          <svg class="chevron" viewBox="0 0 12 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 1.5 L6 6.5 L11 1.5"/>
+          </svg>
         </div>
         <div class="nav-section-content">
           <button class="nav-item" data-view="artists">
@@ -163,7 +152,9 @@
       <div class="nav-section" id="playlistsSection">
         <div class="nav-section-header" onclick="toggleNavSection('playlistsSection')">
           <span>Playlists</span>
-          <span class="chevron">&#9650;</span>
+          <svg class="chevron" viewBox="0 0 12 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 1.5 L6 6.5 L11 1.5"/>
+          </svg>
         </div>
         <div class="nav-section-content">
           <!-- Dynamic user playlists -->
@@ -181,6 +172,26 @@
         </div>
       </div>
     </nav>
+
+    <!-- Bottom Profile Section -->
+    <div class="sidebar-bottom-profile" id="sidebarProfile">
+      <button class="bottom-profile-btn" id="profileBtn" title="Account" aria-expanded="false" aria-haspopup="true">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+        </svg>
+      </button>
+      <span class="bottom-profile-name" id="profileUserName">My Account</span>
+
+      <!-- Profile Popup Menu (hidden until clicked) -->
+      <div class="profile-popup" id="profilePopupMenu" role="menu" hidden>
+        <button class="profile-popup-item" role="menuitem" data-action="account">View my Account</button>
+        <button class="profile-popup-item" role="menuitem" data-action="settings">Settings</button>
+        <button class="profile-popup-item" role="menuitem" data-action="whats-new">What's New</button>
+        <button class="profile-popup-item" role="menuitem" data-action="listening-stats">Listening Stats</button>
+        <div class="profile-popup-divider"></div>
+        <button class="profile-popup-item" role="menuitem" data-action="signout">Sign Out</button>
+      </div>
+    </div>
   </aside>
 
 
@@ -192,17 +203,24 @@
 
         <!-- Search Bar -->
         <section class="section" style="padding-bottom:0;margin-bottom:1.5rem;">
-          <div class="highlights-search-bar" style="display:flex;gap:8px;align-items:center;margin-bottom:0;margin-left:20%;">
-            <input
-              type="search"
-              id="searchInput"
-              class="search-input"
-              placeholder="Search artists, albums, songs…"
-              autocomplete="off"
-              style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--surface);color:var(--fg);outline:none;"
-            />
+          <div class="highlights-search-bar" style="display:flex;gap:8px;align-items:center;margin-bottom:0;">
+            <div style="position:relative;display:flex;align-items:center;max-width:520px;width:100%;">
+              <span id="searchIcon" style="position:absolute;left:12px;display:inline-flex;align-items:center;color:var(--text-muted);pointer-events:none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="7"/>
+                  <path d="M21 21l-4.35-4.35"/>
+                </svg>
+              </span>
+              <input
+                type="search"
+                id="searchInput"
+                class="search-input"
+                placeholder="Search artists, albums, songs…"
+                autocomplete="off"
+                style="width:100%;padding:10px 14px 10px 42px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--surface);color:var(--fg);outline:none;"
+              />
+            </div>
             <button id="searchClear" type="button" style="display:none;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:13px;">✕ Clear</button>
-            <span id="searchIcon" style="font-size:18px;color:var(--muted);">🔍</span>
           </div>
         </section>
 
@@ -2942,26 +2960,94 @@
     document.addEventListener('DOMContentLoaded', function() {
       const profileBtn = document.getElementById('profileBtn');
       const sidebarProfile = document.getElementById('sidebarProfile');
-      const authControls = document.getElementById('authControls');
-      if (!profileBtn || !sidebarProfile || !authControls) return;
+      const profilePopup = document.getElementById('profilePopupMenu');
+      if (!profileBtn || !sidebarProfile || !profilePopup) return;
 
-      profileBtn.addEventListener('click', function(e) {
+      // Keep the profile name in sync with the auth system.
+      // app.min.js updates #userBadge whenever auth state changes; we mirror
+      // its text to #profileUserName so the sidebar always shows the real email.
+      const profileUserName = document.getElementById('profileUserName');
+      const userBadge = document.getElementById('userBadge');
+
+      function syncProfileName() {
+        if (!profileUserName) return;
+        const email = (userBadge && userBadge.textContent.trim()) || '';
+        profileUserName.textContent = email ? email.split('@')[0] : 'My Account';
+      }
+
+      syncProfileName(); // run immediately in case already logged in
+      if (userBadge) {
+        new MutationObserver(syncProfileName).observe(userBadge, {
+          childList: true, subtree: true, characterData: true
+        });
+      }
+
+      function openMenu() {
+        profilePopup.hidden = false;
+        sidebarProfile.classList.add('open');
+        profileBtn.setAttribute('aria-expanded', 'true');
+      }
+
+      function closeMenu() {
+        profilePopup.hidden = true;
+        sidebarProfile.classList.remove('open');
+        profileBtn.setAttribute('aria-expanded', 'false');
+      }
+
+      // Clicking the profile button or name opens the menu
+      sidebarProfile.addEventListener('click', function(e) {
+        // Don't toggle if clicking inside the menu itself
+        if (profilePopup.contains(e.target)) return;
         e.stopPropagation();
-        const isOpen = sidebarProfile.classList.toggle('open');
-        profileBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+
+        if (sidebarProfile.classList.contains('open')) {
+          closeMenu();
+        } else {
+          openMenu();
+        }
       });
 
       // Close when clicking anywhere outside
       document.addEventListener('click', function() {
         if (sidebarProfile.classList.contains('open')) {
-          sidebarProfile.classList.remove('open');
-          profileBtn.setAttribute('aria-expanded', 'false');
+          closeMenu();
         }
       });
 
-      // Prevent clicks inside the dropdown from closing it
-      authControls.addEventListener('click', function(e) {
-        e.stopPropagation();
+      // Prevent clicks inside the dropdown from closing it (except for menu items)
+      profilePopup.addEventListener('click', function(e) {
+        if (!e.target.classList.contains('profile-popup-item')) {
+          e.stopPropagation();
+        }
+      });
+
+      // Handle menu item clicks
+      profilePopup.querySelectorAll('.profile-popup-item').forEach(function(item) {
+        item.addEventListener('click', function(e) {
+          const action = this.dataset.action;
+          closeMenu();
+
+          switch(action) {
+            case 'account':
+              console.log('View my Account clicked');
+              break;
+            case 'settings':
+              console.log('Settings clicked');
+              break;
+            case 'whats-new':
+              console.log("What's New clicked");
+              break;
+            case 'listening-stats':
+              console.log('Listening Stats clicked');
+              break;
+            case 'signout':
+              // Delegate to the existing performLogout by clicking the hidden
+              // #logoutButton, which app.min.js has already wired up correctly.
+              var lb = document.getElementById('logoutButton');
+              if (lb) { lb.click(); } else { window.location.reload(); }
+              break;
+          }
+        });
       });
     });
   })();

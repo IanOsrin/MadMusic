@@ -112,6 +112,7 @@
       letter-spacing: 0.1em; text-transform: uppercase;
     }
     body.african-theme .nav-section-header:hover { background: rgba(212,43,43,0.12); }
+    body.african-theme .sidebar-bottom-profile:hover { background: rgba(212,43,43,0.12); }
 
     /* Section titles — bold red with thick black left bar */
     body.african-theme .section-title {
@@ -143,7 +144,7 @@
       overflow-y: auto;
       z-index: 100;
       border-right: none;
-      padding-bottom: 80px;
+      padding-bottom: 130px; /* space for bottom profile + player */
     }
     .sidebar-logo {
       display: flex;
@@ -151,7 +152,7 @@
       padding: 20px 20px 12px;
     }
     .sidebar-logo img {
-      height: 32px;
+      height: 55px;
       width: auto;
     }
     body.african-theme .sidebar-logo img {
@@ -383,8 +384,9 @@
     .nav-section-header {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px 8px;
+      justify-content: flex-start;
+      gap: 10px;
+      padding: 12px 20px 8px;
       font-size: 13px;
       font-weight: 600;
       color: var(--fg);
@@ -395,9 +397,11 @@
       background: var(--hover-bg);
     }
     .nav-section-header .chevron {
-      font-size: 10px;
+      width: 8px;
+      height: 5px;
       transition: transform 0.2s ease;
       color: var(--muted);
+      flex-shrink: 0;
     }
     .nav-section.collapsed .chevron {
       transform: rotate(180deg);
@@ -444,10 +448,10 @@
       height: 22px;
     }
     .header-profile-btn {
-      width: 36px;
-      height: 36px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
-      border: 2px solid var(--accent);
+      border: 1.5px solid var(--accent);
       background: var(--hover-bg);
       color: var(--accent);
       cursor: pointer;
@@ -461,8 +465,8 @@
       background: rgba(139,92,246,0.1);
     }
     .header-profile-btn svg {
-      width: 20px;
-      height: 20px;
+      width: 14px;
+      height: 14px;
     }
     /* Sidebar profile section */
     .sidebar-profile {
@@ -514,6 +518,105 @@
       width: 100%;
       text-align: center;
       justify-content: center;
+    }
+
+    /* Bottom Profile Section - positioned at bottom of sidebar above player */
+    .sidebar-bottom-profile {
+      position: absolute;
+      bottom: 72px; /* matches player height so hover state touches player top */
+      left: 0;
+      right: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px; /* same as nav-item gap */
+      padding: 12px 20px; /* same as nav-item padding */
+      background: var(--sidebar-bg);
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .sidebar-bottom-profile:hover {
+      background: var(--hover-bg);
+    }
+    .sidebar-bottom-profile::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: rgba(0, 0, 0, 0.07);
+    }
+    body.dark-mode .sidebar-bottom-profile::before {
+      background: rgba(255, 255, 255, 0.07);
+    }
+    .bottom-profile-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 1.5px solid var(--accent);
+      background: var(--hover-bg);
+      color: var(--accent);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+    .bottom-profile-btn:hover {
+      background: rgba(139,92,246,0.1);
+    }
+    .bottom-profile-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+    .bottom-profile-name {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--fg);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sidebar-bottom-profile .profile-popup {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 8px;
+      right: 8px;
+      display: flex;
+      flex-direction: column;
+      background: #383838;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+      z-index: 200;
+      overflow: hidden;
+      padding: 6px 0;
+    }
+    .sidebar-bottom-profile .profile-popup[hidden] {
+      display: none !important;
+    }
+
+    /* Profile Popup Menu Items */
+    .profile-popup-item {
+      display: block;
+      width: 100%;
+      padding: 10px 18px;
+      background: none;
+      border: none;
+      font-size: 13px;
+      font-weight: 400;
+      color: rgba(255,255,255,0.9);
+      cursor: pointer;
+      transition: background 0.15s ease;
+      text-align: left;
+    }
+    .profile-popup-item:hover {
+      background: rgba(255,255,255,0.08);
+    }
+    .profile-popup-divider {
+      height: 1px;
+      background: rgba(255,255,255,0.1);
+      margin: 6px 0;
     }
 
     /* Home Page Title */
@@ -1517,7 +1620,7 @@
     /* Responsive header */
     @media (max-width: 1024px) {
       .header-main{grid-template-columns:1fr;gap:12px;}
-      .header-logo-wrap{width:auto;padding-left:12px;} .header-logo{max-height:29px;}
+      .header-logo-wrap{width:auto;padding-left:12px;} .header-logo{max-height:51px;}
       .search-fields{grid-template-columns:1fr;}
       .header-actions{justify-content:center;}
     }
@@ -1823,7 +1926,7 @@
     }
     .access-token-info {
       position: fixed;
-      bottom: 20px;
+      bottom: calc(var(--player-height) + 16px);
       right: 20px;
       background: var(--card);
       border: 1px solid var(--border);
@@ -1831,7 +1934,7 @@
       padding: 12px 16px;
       font-size: 13px;
       color: var(--muted);
-      z-index: 100;
+      z-index: 300;
       max-width: 280px;
     }
     .access-token-info.hidden {
@@ -2049,7 +2152,7 @@
       width: calc(var(--sidebar-width) - 20px);
     }
     .nav-logo img {
-      height: 29px;
+      height: 51px;
       width: auto;
     }
 
@@ -2061,7 +2164,7 @@
     }
 
     .logo img {
-      max-width: 57px;
+      max-width: 99px;
       height: auto;
     }
 
@@ -2452,6 +2555,7 @@
       text-transform: uppercase;
     }
     body.african-theme .nav-section-header:hover { background: rgba(212,43,43,0.12); }
+    body.african-theme .sidebar-bottom-profile:hover { background: rgba(212,43,43,0.12); }
 
     /* Playlist items — white names, muted counts */
     body.african-theme .sidebar-playlists-section,
@@ -3218,7 +3322,7 @@
 
       /* Logo responsive */
       .logo img {
-        max-width: 58px;
+        max-width: 100px;
         height: auto;
       }
 
@@ -3412,13 +3516,13 @@
       overflow-y: auto;
       z-index: 100;
       border-right: none;
-      padding-bottom: 100px;
+      padding-bottom: 130px; /* space for bottom profile + player */
     }
     .sidebar-logo {
       padding: 24px 20px 16px;
     }
     .sidebar-logo img {
-      max-width: 57px;
+      max-width: 99px;
       height: auto;
     }
     .sidebar-nav {
@@ -3433,10 +3537,10 @@
       position: relative;
     }
     .header-profile-btn {
-      width: 36px;
-      height: 36px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
-      border: 2px solid var(--accent);
+      border: 1.5px solid var(--accent);
       background: var(--hover-bg);
       color: var(--accent);
       cursor: pointer;
@@ -3447,7 +3551,7 @@
       flex-shrink: 0;
     }
     .header-profile-btn:hover { background: rgba(139,92,246,0.1); }
-    .header-profile-btn svg { width: 20px; height: 20px; }
+    .header-profile-btn svg { width: 14px; height: 14px; }
     .sidebar-profile .auth-controls [hidden] { display: none !important; }
     .nav-item {
       display: flex;
@@ -3490,8 +3594,9 @@
     .nav-section-header {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px 8px;
+      justify-content: flex-start;
+      gap: 10px;
+      padding: 12px 20px 8px;
       font-size: 13px;
       font-weight: 600;
       color: var(--fg);
@@ -3502,9 +3607,11 @@
       background: var(--hover-bg);
     }
     .nav-section-header .chevron {
-      font-size: 10px;
+      width: 8px;
+      height: 5px;
       transition: transform 0.2s ease;
       color: var(--muted);
+      flex-shrink: 0;
     }
     .nav-section.collapsed .chevron {
       transform: rotate(180deg);
@@ -3518,7 +3625,8 @@
       max-height: 0;
     }
     .chevron {
-      font-size: 10px;
+      width: 8px;
+      height: 5px;
       transition: transform 0.2s ease;
       color: var(--muted);
     }

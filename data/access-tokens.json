@@ -5,49 +5,7 @@
       "type": "unlimited",
       "issuedDate": "2025-01-01T00:00:00.000Z",
       "expirationDate": null,
-      "notes": "Master cheat token - never expires"
-    },
-    {
-      "code": "MASS-WSC-8QY",
-      "type": "trial",
-      "issuedDate": "2025-11-21T10:58:07.021Z",
-      "expirationDate": "2025-11-21T13:58:07.021Z",
-      "notes": "3-hour test token (expires 1:58 PM UTC)"
-    },
-    {
-      "code": "MASS-TRIAL-7DAY",
-      "type": "trial",
-      "issuedDate": "2025-11-21T00:00:00.000Z",
-      "expirationDate": "2025-11-28T00:00:00.000Z",
-      "notes": "Valid 7-day trial token (expires Nov 28)"
-    },
-    {
-      "code": "MASS-TRIAL-30DAY",
-      "type": "trial",
-      "issuedDate": "2025-11-21T00:00:00.000Z",
-      "expirationDate": "2025-12-21T00:00:00.000Z",
-      "notes": "Valid 30-day trial token (expires Dec 21)"
-    },
-    {
-      "code": "MASS-EXPIRED-TOKEN",
-      "type": "trial",
-      "issuedDate": "2025-11-01T00:00:00.000Z",
-      "expirationDate": "2025-11-10T00:00:00.000Z",
-      "notes": "EXPIRED token (expired Nov 10) - should be REJECTED"
-    },
-    {
-      "code": "MASS-DEMO-1HOUR",
-      "type": "trial",
-      "issuedDate": "2025-11-21T14:00:00.000Z",
-      "expirationDate": "2025-11-21T15:00:00.000Z",
-      "notes": "1-hour demo token (expires at 3pm today) - for quick expiration testing"
-    },
-    {
-      "code": "MASS-CUSTOMER-ABC",
-      "type": "trial",
-      "issuedDate": "2025-11-21T00:00:00.000Z",
-      "expirationDate": "2026-11-21T00:00:00.000Z",
-      "notes": "Customer ABC - 1 year trial (expires Nov 21, 2026)"
+      "notes": "Admin access token - no expiry"
     },
     {
       "code": "MASS-PUP-G7R",
@@ -404,6 +362,38 @@
       "issuedDate": "2026-03-05T22:17:45.392Z",
       "expirationDate": "2026-03-12T22:17:45.392Z",
       "notes": "Paystack purchase: 7-day (ian@digitalcupboard.net, ref: tp76fkph2p)",
+      "email": "ian@digitalcupboard.net"
+    },
+    {
+      "code": "MASS-EA2-F94",
+      "type": "trial",
+      "issuedDate": "2026-03-09T18:12:25.585Z",
+      "expirationDate": "2026-03-16T18:12:25.585Z",
+      "notes": "Paystack purchase: 7-day (ian@digitalcupboard.net, ref: x8mialjbn1)",
+      "email": "ian@digitalcupboard.net"
+    },
+    {
+      "code": "MASS-H63-WRX",
+      "type": "trial",
+      "issuedDate": "2026-03-09T18:29:37.742Z",
+      "expirationDate": "2026-03-16T18:29:37.742Z",
+      "notes": "Paystack purchase: 7-day (ian@digitalcupboard.net, ref: wbcro97gfz)",
+      "email": "ian@digitalcupboard.net"
+    },
+    {
+      "code": "MASS-FSZ-V48",
+      "type": "trial",
+      "issuedDate": "2026-03-09T18:33:19.572Z",
+      "expirationDate": "2026-04-08T18:33:19.572Z",
+      "notes": "Paystack purchase: 30-day (ian@digitalcupboard.net, ref: lyozrpb7qq)",
+      "email": "ian@digitalcupboard.net"
+    },
+    {
+      "code": "MASS-44Z-PU4",
+      "type": "trial",
+      "issuedDate": "2026-03-09T18:41:25.724Z",
+      "expirationDate": "2026-03-10T18:41:25.724Z",
+      "notes": "Paystack purchase: 1-day (ian@digitalcupboard.net, ref: eq9n838cbm)",
       "email": "ian@digitalcupboard.net"
     }
   ]

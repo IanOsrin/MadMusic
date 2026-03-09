@@ -18,7 +18,6 @@ const FM_STREAM_EVENTS_LAYOUT = process.env.FM_STREAM_EVENTS_LAYOUT || 'Stream_E
 console.log('[MASS] Registering access token validation endpoint');
 
 router.post('/validate', async (req, res) => {
-  console.log('[MASS] /api/access/validate route hit');
   try {
     const { token, sessionId } = req.body;
 
@@ -73,10 +72,11 @@ router.post('/validate', async (req, res) => {
 });
 
 router.post('/logout', async (req, res) => {
-  console.log('[MASS] /api/access/logout route hit');
   try {
     const { token, sessionId } = req.body;
-    console.log(`[MASS LOGOUT] Token: ${token}, SessionID: ${sessionId}`);
+    // Redact token in logs — only show first 8 chars to avoid leaking the full code
+    const tokenPreview = token ? `${String(token).trim().slice(0, 8)}…` : '(none)';
+    console.log(`[MASS LOGOUT] Token: ${tokenPreview}, SessionID: ${sessionId}`);
 
     if (!token || !sessionId) {
       console.log('[MASS LOGOUT] ❌ Missing token or sessionId');
