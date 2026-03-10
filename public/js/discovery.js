@@ -171,7 +171,7 @@
       highlights: '/api/random-songs?count=2&_t=' + Date.now(),
       random: '/api/random-songs?count=20&_t=' + Date.now(), // Increased to 20, added timestamp for fresh results
       trending: '/api/trending',
-      newReleases: '/api/catalog/new-releases',
+      newReleases: '/api/new-releases',
       search: '/api/search',
       container: '/api/container'
     };
@@ -2261,7 +2261,22 @@
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         const data = await response.json();
-        const items = (data.items || []).filter(item => hasValidAudio(item));
+        const allItems = (data.items || []).filter(item => hasValidAudio(item));
+
+        // One card per album — first track encountered per album wins
+        const seenAlbums = new Set();
+        const items = allItems.filter(item => {
+          const fields = item.fields || {};
+          const album  = getAlbumField(fields);
+          const artist = getArtistField(fields);
+          // Use artist+album as key; fall back to recordId if both are generic
+          const key = (album && album !== 'Unknown Album')
+            ? `${artist}|${album}`
+            : item.recordId;
+          if (seenAlbums.has(key)) return false;
+          seenAlbums.add(key);
+          return true;
+        });
 
         if (!items.length) {
           section.hidden = true;
