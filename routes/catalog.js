@@ -262,7 +262,7 @@ router.get('/wake', async (req, res) => {
     res.json({
       status: 'ok',
       timestamp: Date.now(),
-      tokenValid: !!fmWithAuth
+      tokenValid: true
     });
   } catch (err) {
     console.error('[MASS] Wake endpoint error:', err);
@@ -560,7 +560,60 @@ router.get('/public-playlists', async (req, res) => {
       return res.json(cached);
     }
 
-    const finalPayload = { ok: true, playlists: [] };
+    if (nameParam) {
+      // Return tracks for a specific public playlist by querying FM
+      const result = await fmFindRecords(
+        FM_LAYOUT,
+        [{ 'PublicPlaylist': `==${nameParam}` }],
+        { limit, offset: 1 }
+      );
+      if (!result.ok) {
+        return res.status(404).json({ ok: false, error: 'Playlist not found or FM error' });
+      }
+      const tracks = result.data
+        .filter(r => hasValidAudio(r.fieldData || {}))
+        .map(r => {
+          const f = r.fieldData || {};
+          const audioInfo = pickFieldValueCaseInsensitive(f, AUDIO_FIELD_CANDIDATES);
+          return {
+            recordId: r.recordId,
+            trackRecordId: r.recordId,
+            name: firstNonEmpty(f, ['Track Name', 'Tape Files::Track Name', 'Song Title']) || 'Unknown Track',
+            albumTitle: firstNonEmpty(f, ['Album Title', 'Tape Files::Album Title', 'Album']) || '',
+            albumArtist: firstNonEmpty(f, ['Album Artist', 'Tape Files::Album Artist', 'Artist']) || '',
+            trackArtist: f['Track Artist'] || firstNonEmpty(f, ['Album Artist', 'Tape Files::Album Artist']) || '',
+            mp3: audioInfo.value || '',
+            resolvedSrc: resolvePlayableSrc(audioInfo.value)
+          };
+        });
+      const payload = { ok: true, tracks };
+      publicPlaylistsCache.set(cacheKey, payload);
+      return res.json(payload);
+    }
+
+    // Return all unique public playlist names by fetching records with PublicPlaylist set
+    const result = await fmFindRecords(
+      FM_LAYOUT,
+      [{ 'PublicPlaylist': '*' }],
+      { limit: 2000, offset: 1 }
+    );
+    if (!result.ok) {
+      return res.status(500).json({ ok: false, error: 'Failed to load public playlists from FileMaker' });
+    }
+
+    // Deduplicate by playlist name and count tracks per playlist
+    const playlistMap = new Map();
+    for (const r of result.data) {
+      const name = (r.fieldData?.PublicPlaylist || '').trim();
+      if (!name) continue;
+      if (!playlistMap.has(name)) {
+        playlistMap.set(name, { name, trackCount: 0 });
+      }
+      playlistMap.get(name).trackCount += 1;
+    }
+
+    const playlists = Array.from(playlistMap.values()).slice(0, limit);
+    const finalPayload = { ok: true, playlists };
     publicPlaylistsCache.set(cacheKey, finalPayload);
     res.json(finalPayload);
   } catch (err) {
@@ -715,6 +768,72 @@ router.get('/album', async (req, res) => {
   } catch (err) {
     const detail = err?.message || String(err);
     return res.status(500).json({ error: 'Album lookup failed', status: 500, detail });
+  }
+});
+
+// ── /my-stats — top 10 most-played tracks for the authenticated user ──────────
+router.get('/my-stats', async (req, res) => {
+  try {
+    const token = (req.query.token || '').toString().trim().toUpperCase();
+    if (!token) return res.status(400).json({ ok: false, error: 'token param required' });
+
+    // Fetch all stream events for this token (PLAY events carry TotalPlayedSec)
+    const findResult = await fmFindRecords(
+      FM_STREAM_EVENTS_LAYOUT,
+      [{ Token_Number: `==${token}` }],
+      { limit: 2000, offset: 1 }
+    );
+
+    if (!findResult.ok) {
+      return res.status(500).json({ ok: false, error: 'Could not fetch stream events' });
+    }
+
+    // Aggregate by TrackRecordID — sum seconds and count play events
+    const byTrack = new Map();
+    for (const entry of findResult.data || []) {
+      const f = entry.fieldData || {};
+      const trackId = normalizeRecordId(f.TrackRecordID || f['Track Record ID'] || '');
+      if (!trackId) continue;
+      const secs = normalizeSeconds(f.TotalPlayedSec ?? f.DeltaSec ?? 0);
+      if (!byTrack.has(trackId)) {
+        byTrack.set(trackId, { trackId, plays: 0, totalSeconds: 0 });
+      }
+      const s = byTrack.get(trackId);
+      s.plays += 1;
+      s.totalSeconds += secs;
+    }
+
+    if (!byTrack.size) return res.json({ ok: true, tracks: [] });
+
+    // Sort by plays desc, then seconds desc — take top 10
+    const top10 = Array.from(byTrack.values())
+      .sort((a, b) => b.plays !== a.plays ? b.plays - a.plays : b.totalSeconds - a.totalSeconds)
+      .slice(0, 10);
+
+    // Fetch track details from FM in parallel
+    const withDetails = await Promise.all(
+      top10.map(async (s) => {
+        try {
+          const record = await fmGetRecordById(FM_LAYOUT, s.trackId);
+          const f = record?.fieldData || {};
+          return {
+            trackId: s.trackId,
+            plays: s.plays,
+            totalSeconds: s.totalSeconds,
+            name: firstNonEmpty(f, ['Track Name', 'Tape Files::Track Name', 'Song Title']) || 'Unknown Track',
+            artist: f['Album Artist'] || f['Tape Files::Album Artist'] || f['Track Artist'] || 'Unknown Artist',
+            album: f['Album Title'] || f['Tape Files::Album Title'] || ''
+          };
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    const tracks = withDetails.filter(Boolean);
+    return res.json({ ok: true, tracks });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'my-stats failed' });
   }
 });
 

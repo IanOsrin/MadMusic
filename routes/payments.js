@@ -84,22 +84,25 @@ router.get('/callback', async (req, res) => {
   }
 
   try {
-    if (pendingPayments.has(reference)) {
-      const existing = pendingPayments.get(reference);
+    const existing = pendingPayments.get(reference);
+    if (existing) {
+      if (existing.processing) {
+        console.log(`[MASS] Payment callback already in progress for ${reference}, redirecting to pending`);
+        return res.redirect(`/?payment=pending&reason=processing`);
+      }
       console.log(`[MASS] Payment callback duplicate for ${reference}, returning existing token ${existing.tokenCode}`);
       return res.redirect(`/?payment=success&token=${encodeURIComponent(existing.tokenCode)}`);
     }
 
+    // Mark as in-progress immediately to block concurrent requests for the same reference
+    pendingPayments.set(reference, { processing: true, timestamp: Date.now() });
+
     const data = await paystackRequest('GET', `/transaction/verify/${encodeURIComponent(reference)}`);
 
     if (!data.data || data.data.status !== 'success') {
+      pendingPayments.delete(reference);
       console.warn(`[MASS] Payment verification failed for ${reference}: status=${data.data?.status}`);
       return res.redirect(`/?payment=failed&reason=not_successful`);
-    }
-
-    if (pendingPayments.has(reference)) {
-      const existing = pendingPayments.get(reference);
-      return res.redirect(`/?payment=success&token=${encodeURIComponent(existing.tokenCode)}`);
     }
 
     const metadata = data.data.metadata || {};

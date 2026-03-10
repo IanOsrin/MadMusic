@@ -171,6 +171,20 @@
           </button>
         </div>
       </div>
+
+      <!-- Suggested Playlists Section -->
+      <div class="nav-section sidebar-playlists" id="suggestedPlaylistsSection">
+        <div class="nav-section-header" id="sidebarPlaylistsHeader">
+          <span>Suggested Playlists</span>
+          <svg class="chevron" viewBox="0 0 12 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 1.5 L6 6.5 L11 1.5"/>
+          </svg>
+        </div>
+        <div class="nav-section-content">
+          <ul id="sidebarPlaylistsList" style="list-style:none;padding:0;margin:0;"></ul>
+          <div id="sidebarPlaylistsEmpty" hidden style="padding:6px 20px;font-size:12px;color:var(--muted);">No suggested playlists</div>
+        </div>
+      </div>
     </nav>
 
     <!-- Bottom Profile Section -->
@@ -449,6 +463,164 @@
         </div>
       </main>
   </div>
+
+  <!-- ── Account Modals ─────────────────────────────────────────────────── -->
+  <div id="accountModalBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;align-items:center;justify-content:center;">
+    <!-- View My Account -->
+    <div id="modalAccount" class="account-modal" hidden>
+      <div class="account-modal-header">
+        <h2>My Account</h2>
+        <button class="account-modal-close" data-close-modal>&times;</button>
+      </div>
+      <div class="account-modal-body">
+        <div class="account-row"><span class="account-label">Email</span><span class="account-value" id="acctEmail">—</span></div>
+        <div class="account-row"><span class="account-label">Token</span><span class="account-value account-mono" id="acctToken">—</span></div>
+        <div class="account-row"><span class="account-label">Expires</span><span class="account-value" id="acctExpiry">—</span></div>
+        <div class="account-row"><span class="account-label">Status</span><span class="account-value" id="acctStatus">—</span></div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div id="modalSettings" class="account-modal" hidden>
+      <div class="account-modal-header">
+        <h2>Settings</h2>
+        <button class="account-modal-close" data-close-modal>&times;</button>
+      </div>
+      <div class="account-modal-body">
+        <div class="account-row" style="justify-content:space-between;align-items:center;">
+          <span class="account-label" style="margin:0;">Dark Mode</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="settingDarkMode">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </label>
+        </div>
+        <div class="account-row" style="justify-content:space-between;align-items:center;margin-top:16px;">
+          <span class="account-label" style="margin:0;">Auto-play next track</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="settingAutoplay">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- What's New -->
+    <div id="modalWhatsNew" class="account-modal" hidden>
+      <div class="account-modal-header">
+        <h2>What's New</h2>
+        <button class="account-modal-close" data-close-modal>&times;</button>
+      </div>
+      <div class="account-modal-body">
+        <div class="whats-new-entry">
+          <span class="whats-new-date">March 2025</span>
+          <strong>Suggested Playlists</strong>
+          <p>Curated playlists now appear in your sidebar — click any to start listening instantly.</p>
+        </div>
+        <div class="whats-new-entry">
+          <span class="whats-new-date">February 2025</span>
+          <strong>Listening Stats</strong>
+          <p>See your personal top 10 most-played tracks under My Account → Listening Stats.</p>
+        </div>
+        <div class="whats-new-entry">
+          <span class="whats-new-date">January 2025</span>
+          <strong>Shared Playlists</strong>
+          <p>Share any playlist with a friend using a unique link — no account needed to listen.</p>
+        </div>
+        <div class="whats-new-entry">
+          <span class="whats-new-date">December 2024</span>
+          <strong>Improved Search</strong>
+          <p>Search now covers track names, artists, albums, genres and catalogue numbers simultaneously.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Listening Stats -->
+    <div id="modalStats" class="account-modal account-modal-wide" hidden>
+      <div class="account-modal-header">
+        <h2>My Top 10 Tracks</h2>
+        <button class="account-modal-close" data-close-modal>&times;</button>
+      </div>
+      <div class="account-modal-body">
+        <div id="statsLoading" style="text-align:center;padding:32px;color:var(--muted);">Loading your listening history…</div>
+        <ol id="statsList" style="display:none;list-style:none;margin:0;padding:0;"></ol>
+        <div id="statsEmpty" style="display:none;text-align:center;padding:32px;color:var(--muted);">No listening history yet — start playing some tracks!</div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .account-modal-backdrop-flex { display: flex !important; }
+    .account-modal {
+      background: var(--card, #fff);
+      color: var(--fg, #1a1a1a);
+      border: 1px solid var(--border, #e5e5e5);
+      border-radius: 16px;
+      width: 420px;
+      max-width: 94vw;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+      animation: modalIn 0.18s ease;
+    }
+    .account-modal-wide { width: 560px; }
+    @keyframes modalIn {
+      from { opacity:0; transform:translateY(12px) scale(0.97); }
+      to   { opacity:1; transform:none; }
+    }
+    .account-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--border, #333);
+    }
+    .account-modal-header h2 { margin:0; font-size:18px; font-weight:700; }
+    .account-modal-close {
+      background: none; border: none; font-size: 22px; cursor: pointer;
+      color: var(--muted, #888); line-height:1; padding:0 4px;
+    }
+    .account-modal-close:hover { color: var(--fg, #fff); }
+    .account-modal-body { padding: 20px 24px 24px; }
+    .account-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 16px;
+    }
+    .account-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted, #666); }
+    .account-value { font-size: 15px; color: var(--fg, #1a1a1a); }
+    .account-mono { font-family: monospace; font-size: 13px; word-break: break-all; }
+    /* Toggle switch */
+    .toggle-switch { position:relative; display:inline-block; cursor:pointer; }
+    .toggle-switch input { opacity:0; width:0; height:0; position:absolute; }
+    .toggle-track {
+      display: block; width: 44px; height: 24px; background: var(--border, #444);
+      border-radius: 12px; transition: background 0.2s; position: relative;
+    }
+    .toggle-switch input:checked + .toggle-track { background: var(--accent, #62f5a9); }
+    .toggle-thumb {
+      position:absolute; top:3px; left:3px; width:18px; height:18px;
+      background:#fff; border-radius:50%; transition:transform 0.2s;
+    }
+    .toggle-switch input:checked + .toggle-track .toggle-thumb { transform: translateX(20px); }
+    /* What's New */
+    .whats-new-entry { margin-bottom: 20px; }
+    .whats-new-entry:last-child { margin-bottom: 0; }
+    .whats-new-date { display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--accent,#62f5a9); margin-bottom:4px; }
+    .whats-new-entry strong { font-size:15px; display:block; margin-bottom:4px; color:var(--fg,#1a1a1a); }
+    .whats-new-entry p { margin:0; font-size:13px; color:var(--muted,#888); line-height:1.5; }
+    /* Stats list */
+    .stats-track-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 0; border-bottom: 1px solid var(--border, #333);
+    }
+    .stats-track-item:last-child { border-bottom: none; }
+    .stats-rank { font-size:13px; font-weight:700; color:var(--muted,#888); width:20px; flex-shrink:0; text-align:right; }
+    .stats-info { flex:1; min-width:0; }
+    .stats-track-name { font-size:14px; font-weight:600; color:var(--fg,#1a1a1a); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .stats-track-artist { font-size:12px; color:var(--muted,#888); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .stats-plays { font-size:12px; color:var(--accent,#62f5a9); flex-shrink:0; white-space:nowrap; }
+  </style>
 
   <div class="mini-player" id="miniPlayer">
     <!-- Left: Album Art + Track Info -->
@@ -1813,7 +1985,7 @@
             btn.appendChild(count);
           }
 
-          btn.addEventListener('click', () => handlePlaylistClick(playlist, btn));
+          btn.addEventListener('click', (e) => { e.stopPropagation(); handlePlaylistClick(playlist, btn); });
 
           li.appendChild(btn);
           playlistsList.appendChild(li);
@@ -1860,13 +2032,140 @@
         }
       }
 
-      // Initialize on access ready
-      window.addEventListener('mass:access-ready', () => {
-        loadRecommendedPlaylists();
-      });
+      // ── showPlaylistView ──────────────────────────────────────────────────────
+      // Renders a public/suggested playlist into #publicPlaylistView (single-column).
+      // Always uses the single-column view — never the two-column album layout.
+      window.showPlaylistView = function(playlistName, tracks, playlistId = '') {
+        // Ensure the albums view section is visible
+        if (typeof window.showView === 'function') window.showView('albums');
 
-      // Check if already ready
-      if (window.massAccessReady) {
+        // Hide the two-column album layout — it is for album details only
+        const playlistView = document.getElementById('playlistView');
+        if (playlistView) {
+          playlistView.classList.remove('active');
+          playlistView.style.display = 'none';
+        }
+
+        // Hide the regular album grid
+        const albumsEl  = document.getElementById('albums');
+        const loadingEl = document.getElementById('loadingIndicator');
+        const pagerEl   = document.getElementById('pager');
+        const loadMoreEl = document.getElementById('loadMoreContainer');
+        if (albumsEl)   albumsEl.hidden   = true;
+        if (loadingEl)  loadingEl.hidden  = true;
+        if (pagerEl)    pagerEl.hidden    = true;
+        if (loadMoreEl) loadMoreEl.hidden = true;
+
+        // Show the single-column public playlist view
+        const publicView = document.getElementById('publicPlaylistView');
+        if (!publicView) return;
+
+        const titleEl = document.getElementById('publicPlaylistTitle');
+        const metaEl  = document.getElementById('publicPlaylistMeta');
+        const listEl  = document.getElementById('publicPlaylistTracks');
+        const emptyEl = document.getElementById('publicPlaylistEmpty');
+
+        if (titleEl) titleEl.textContent = playlistName || 'Playlist';
+        if (metaEl)  metaEl.textContent  = tracks.length ? `${tracks.length} track${tracks.length !== 1 ? 's' : ''}` : '';
+
+        if (!listEl) return;
+        listEl.innerHTML = '';
+
+        if (!tracks || !tracks.length) {
+          if (emptyEl) emptyEl.hidden = false;
+          publicView.hidden = false;
+          return;
+        }
+        if (emptyEl) emptyEl.hidden = true;
+
+        tracks.forEach((track, index) => {
+          const li = document.createElement('li');
+          li.className = 'playlist-track-item';
+          li.dataset.trackIndex = index;
+          li.dataset.audioUrl   = track.audioUrl || track.resolvedSrc || '';
+          li.dataset.recordId   = track.trackRecordId || track.recordId || '';
+          li.innerHTML = `
+            <span class="playlist-track-number">${index + 1}.</span>
+            <span class="playlist-track-name">${track.name || 'Unknown Track'}</span>
+            <span class="playlist-track-artist">${track.artist || track.trackArtist || track.albumArtist || ''}</span>
+            <span class="playlist-track-duration">${track.duration || ''}</span>
+          `;
+          li.addEventListener('click', async () => {
+            let audioUrl = li.dataset.audioUrl;
+
+            if (!audioUrl && li.dataset.recordId) {
+              try {
+                const r = await fetch(`/api/track/${li.dataset.recordId}/container`);
+                const d = await r.json();
+                if (d.url) audioUrl = d.url;
+              } catch (e) { console.warn('[PublicPlaylist] container fetch failed', e); }
+            }
+
+            if (audioUrl && /^https?:\/\//i.test(audioUrl) && !/\.s3[.-]/.test(audioUrl) && !audioUrl.includes('/api/container?')) {
+              audioUrl = `/api/container?u=${encodeURIComponent(audioUrl)}`;
+            }
+
+            const player = document.getElementById('player');
+            if (player && audioUrl) {
+              player.src = audioUrl;
+              if (typeof window.massSetCurrentTrack === 'function') {
+                window.massSetCurrentTrack({
+                  trackRecordId: li.dataset.recordId || '',
+                  trackName:     track.name    || 'Unknown Track',
+                  trackArtist:   track.artist  || track.trackArtist || track.albumArtist || '',
+                  albumTitle:    track.albumTitle || '',
+                  picture:       ''
+                });
+              }
+              player.play().catch(err => console.warn('[PublicPlaylist] playback failed:', err));
+
+              const nowPlayingTitle    = document.getElementById('nowPlayingTitle');
+              const nowPlayingSubtitle = document.getElementById('nowPlayingSubtitle');
+              if (nowPlayingTitle)    nowPlayingTitle.textContent    = track.name || 'Unknown Track';
+              if (nowPlayingSubtitle) nowPlayingSubtitle.textContent = track.artist || track.trackArtist || track.albumArtist || '';
+            }
+
+            listEl.querySelectorAll('.playlist-track-item').forEach(el => el.classList.remove('playing'));
+            li.classList.add('playing');
+          });
+
+          listEl.appendChild(li);
+        });
+
+        publicView.hidden = false;
+        publicView.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        // Something else (likely a bubbling user-playlist handler) re-adds .active
+        // to #playlistView after we hide it. Re-assert correct state after all
+        // synchronous and short-async handlers have completed.
+        setTimeout(() => {
+          const pv = document.getElementById('playlistView');
+          if (pv) { pv.classList.remove('active'); pv.style.display = 'none'; }
+          const pub = document.getElementById('publicPlaylistView');
+          if (pub) pub.hidden = false;
+        }, 100);
+      };
+
+      // Close button
+      const closePublicPlaylistBtn = document.getElementById('closePublicPlaylistBtn');
+      if (closePublicPlaylistBtn) {
+        closePublicPlaylistBtn.addEventListener('click', () => {
+          const view = document.getElementById('publicPlaylistView');
+          if (view) view.hidden = true;
+          // Restore album grid
+          // Restore album grid
+          const albumsEl  = document.getElementById('albums');
+          const loadingEl = document.getElementById('loadingIndicator');
+          if (albumsEl)  albumsEl.hidden  = false;
+          if (loadingEl) loadingEl.hidden = false;
+          // Don't restore #playlistView — user is done with it
+        });
+      }
+
+      // Public playlists don't require auth — load immediately on DOM ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadRecommendedPlaylists);
+      } else {
         loadRecommendedPlaylists();
       }
 
@@ -2211,6 +2510,7 @@
 
         // Hide regular grid, show playlist view
         layoutGrid.style.display = 'none';
+        playlistView.style.display = '';
         playlistView.classList.add('active');
         playlistView.dataset.playlistMode = 'album';
 
@@ -3021,30 +3321,144 @@
         }
       });
 
-      // Handle menu item clicks
+      // ── Modal helpers ──────────────────────────────────────────────────
+      const backdrop = document.getElementById('accountModalBackdrop');
+
+      function openModal(id) {
+        document.querySelectorAll('.account-modal').forEach(m => m.hidden = true);
+        const modal = document.getElementById(id);
+        if (!modal || !backdrop) return;
+        modal.hidden = false;
+        backdrop.style.display = 'flex';
+      }
+
+      function closeModal() {
+        if (backdrop) backdrop.style.display = 'none';
+        document.querySelectorAll('.account-modal').forEach(m => m.hidden = true);
+      }
+
+      // Close on backdrop click or [data-close-modal] button
+      if (backdrop) {
+        backdrop.addEventListener('click', function(e) {
+          if (e.target === backdrop) closeModal();
+        });
+        backdrop.querySelectorAll('[data-close-modal]').forEach(function(btn) {
+          btn.addEventListener('click', closeModal);
+        });
+      }
+
+      // ── View my Account ────────────────────────────────────────────────
+      function openAccountModal() {
+        let email = '—', token = '—', expiry = '—', status = '✅ Active';
+        try {
+          // auth.js stores info under 'mass_access_token_info' with field 'expirationDate'
+          const info = JSON.parse(localStorage.getItem('mass_access_token_info') || '{}');
+          email = localStorage.getItem('mass_token_email') || '—';
+          token = (localStorage.getItem('mass_access_token') || '—').toUpperCase();
+          if (info.expirationDate && info.expirationDate.trim()) {
+            const d = new Date(info.expirationDate);
+            if (!isNaN(d)) {
+              expiry = d.toLocaleDateString(undefined, { year:'numeric', month:'long', day:'numeric' });
+              status = d < new Date() ? '⚠️ Expired' : '✅ Active';
+            } else {
+              expiry = info.expirationDate; // show raw value if unparseable
+            }
+          } else if (info.type === 'unlimited') {
+            expiry = 'Never';
+            status = '✅ Unlimited';
+          }
+        } catch(e) {}
+        document.getElementById('acctEmail').textContent  = email;
+        document.getElementById('acctToken').textContent  = token.slice(0,8) + (token.length > 8 ? '…' : '');
+        document.getElementById('acctExpiry').textContent = expiry;
+        document.getElementById('acctStatus').textContent = status;
+        openModal('modalAccount');
+      }
+
+      // ── Settings ───────────────────────────────────────────────────────
+      function openSettingsModal() {
+        const darkToggle    = document.getElementById('settingDarkMode');
+        const autoplayToggle = document.getElementById('settingAutoplay');
+        // Detect current theme
+        try {
+          darkToggle.checked    = (localStorage.getItem('mass_theme') || document.body.dataset.theme || 'dark') === 'dark';
+          autoplayToggle.checked = localStorage.getItem('mass_autoplay') !== 'false';
+        } catch(e) {}
+
+        darkToggle.onchange = function() {
+          const theme = this.checked ? 'dark' : 'light';
+          document.body.dataset.theme = theme;
+          try { localStorage.setItem('mass_theme', theme); } catch(e) {}
+        };
+        autoplayToggle.onchange = function() {
+          try { localStorage.setItem('mass_autoplay', this.checked ? 'true' : 'false'); } catch(e) {}
+          window.massAutoplay = this.checked;
+        };
+        openModal('modalSettings');
+      }
+
+      // ── Listening Stats ────────────────────────────────────────────────
+      async function openStatsModal() {
+        openModal('modalStats');
+        const loadingEl = document.getElementById('statsLoading');
+        const listEl    = document.getElementById('statsList');
+        const emptyEl   = document.getElementById('statsEmpty');
+        loadingEl.style.display = 'block';
+        listEl.style.display = 'none';
+        emptyEl.style.display = 'none';
+        listEl.innerHTML = '';
+
+        try {
+          const token = (localStorage.getItem('mass_access_token') || '').trim();
+          if (!token) { throw new Error('no token'); }
+          const res  = await fetch(`/api/catalog/my-stats?token=${encodeURIComponent(token)}`);
+          const data = await res.json();
+          loadingEl.style.display = 'none';
+
+          if (!data.ok || !data.tracks || !data.tracks.length) {
+            emptyEl.style.display = 'block';
+            return;
+          }
+
+          data.tracks.forEach(function(t, i) {
+            const li = document.createElement('li');
+            li.className = 'stats-track-item';
+            const mins = Math.round((t.totalSeconds || 0) / 60);
+            li.innerHTML = `
+              <span class="stats-rank">${i + 1}</span>
+              <div class="stats-info">
+                <div class="stats-track-name">${t.name || 'Unknown'}</div>
+                <div class="stats-track-artist">${t.artist || ''}${t.album ? ' · ' + t.album : ''}</div>
+              </div>
+              <span class="stats-plays">${t.plays} play${t.plays !== 1 ? 's' : ''}${mins ? ' · ' + mins + 'm' : ''}</span>
+            `;
+            listEl.appendChild(li);
+          });
+          listEl.style.display = 'block';
+        } catch(e) {
+          loadingEl.style.display = 'none';
+          emptyEl.style.display = 'block';
+        }
+      }
+
+      // ── Handle menu item clicks ────────────────────────────────────────
       profilePopup.querySelectorAll('.profile-popup-item').forEach(function(item) {
         item.addEventListener('click', function(e) {
           const action = this.dataset.action;
           closeMenu();
 
           switch(action) {
-            case 'account':
-              console.log('View my Account clicked');
-              break;
-            case 'settings':
-              console.log('Settings clicked');
-              break;
-            case 'whats-new':
-              console.log("What's New clicked");
-              break;
-            case 'listening-stats':
-              console.log('Listening Stats clicked');
-              break;
+            case 'account':       openAccountModal();          break;
+            case 'settings':      openSettingsModal();         break;
+            case 'whats-new':     openModal('modalWhatsNew');  break;
+            case 'listening-stats': openStatsModal();          break;
             case 'signout':
-              // Delegate to the existing performLogout by clicking the hidden
-              // #logoutButton, which app.min.js has already wired up correctly.
-              var lb = document.getElementById('logoutButton');
-              if (lb) { lb.click(); } else { window.location.reload(); }
+              if (typeof window.performLogout === 'function') {
+                window.performLogout();
+              } else {
+                ['mass_access_token','mass_token_info','mass_token_email'].forEach(k => localStorage.removeItem(k));
+                window.location.reload();
+              }
               break;
           }
         });

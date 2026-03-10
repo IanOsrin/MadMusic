@@ -9,7 +9,7 @@ const FM_HOST = process.env.FM_HOST;
 const FM_LAYOUT = process.env.FM_LAYOUT || 'API_Album_Songs';
 const REGEX_HTTP_HTTPS = /^https?:\/\//i;
 
-const fmBase = FM_HOST ? `${FM_HOST}/fmi/data/v1/databases/${encodeURIComponent(process.env.FM_DB)}/layouts/${encodeURIComponent(FM_LAYOUT)}` : '';
+const fmBase = FM_HOST ? `${FM_HOST}/fmi/data/vLatest/databases/${encodeURIComponent(process.env.FM_DB)}/layouts/${encodeURIComponent(FM_LAYOUT)}` : '';
 
 const MIRROR_HEADERS = new Map([
   ['content-type', 'Content-Type'],
@@ -164,11 +164,11 @@ router.get('/container', async (req, res) => {
   req.once('close', onClose);
 
   try {
-    await ensureToken();
+    let fmToken = await ensureToken();
 
     const headers = new Headers();
     if (requiresAuth && fmBase) {
-      // Would set auth token here if available
+      headers.set('Authorization', `Bearer ${fmToken}`);
     }
     if (req.headers.range) headers.set('Range', req.headers.range);
     if (req.headers['if-none-match']) headers.set('If-None-Match', req.headers['if-none-match']);
@@ -181,7 +181,8 @@ router.get('/container', async (req, res) => {
     );
 
     if (upstream.status === 401 && requiresAuth) {
-      await fmLogin();
+      fmToken = await fmLogin();
+      headers.set('Authorization', `Bearer ${fmToken}`);
       upstream = await safeFetch(
         upstreamUrl,
         { headers, signal: controller.signal },

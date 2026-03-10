@@ -751,9 +751,14 @@
     }
     .playlist-view.active {
       display: flex;
+      margin-left: -32px;
+      margin-right: -32px;
+      margin-top: -24px;
+      width: calc(100% + 64px);
     }
     .playlist-view-header {
       margin-bottom: 8px;
+      padding: 16px 32px 0;
     }
     .playlist-view-header-top {
       display: flex;
@@ -826,7 +831,10 @@
     }
     .playlist-view-content {
       display: flex;
-      gap: 32px;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 0;
+      width: 100%;
       flex: 1;
       min-height: 0;
       overflow: hidden;
@@ -834,13 +842,17 @@
 
     /* Left Column - Album List */
     .playlist-albums-list {
-      flex: 0 0 380px;
+      flex: 0 0 260px;
+      width: 260px;
+      min-width: 260px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 0;
       overflow-y: auto;
-      padding-right: 16px;
+      padding: 8px 0;
       height: 100%;
+      border-right: 1px solid var(--border);
+      background: var(--card);
     }
     .playlist-albums-list::-webkit-scrollbar {
       width: 6px;
@@ -852,11 +864,12 @@
     .playlist-album-item {
       display: flex;
       gap: 10px;
-      padding: 6px 8px;
-      border-radius: 6px;
+      padding: 8px 12px;
+      border-radius: 0;
       cursor: pointer;
       align-items: center;
       transition: background 0.15s ease;
+      border-bottom: 1px solid var(--border);
     }
     .playlist-album-item:hover {
       background: var(--hover-bg);
@@ -910,10 +923,11 @@
     /* Right Column - Selected Album Details */
     .playlist-album-detail {
       flex: 1;
+      min-width: 0;
+      padding: 0 16px;
       display: flex;
       flex-direction: column;
       gap: 20px;
-      min-width: 0;
       overflow-y: auto;
       height: 100%;
     }
@@ -926,21 +940,26 @@
     }
     .playlist-detail-header {
       display: flex;
-      gap: 24px;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 20px;
+      padding: 16px 0;
+      justify-content: flex-start;
     }
     .playlist-detail-artwork {
-      width: 180px;
-      height: 180px;
-      border-radius: 12px;
-      overflow: hidden;
+      width: 170px;
+      height: 170px;
       flex-shrink: 0;
+      border-radius: 6px;
+      overflow: hidden;
       background: var(--border);
       box-shadow: 0 8px 24px rgba(0,0,0,0.15);
     }
     .playlist-detail-artwork img {
-      width: 100%;
-      height: 100%;
+      width: 170px;
+      height: 170px;
       object-fit: cover;
+      border-radius: 6px;
     }
     .playlist-detail-info {
       flex: 1;
@@ -1004,7 +1023,8 @@
       display: flex;
       flex-direction: column;
       gap: 0;
-      margin-top: 24px;
+      margin-top: 12px;
+      width: 100%;
     }
     .playlist-track-item {
       display: flex;
@@ -1247,21 +1267,11 @@
 
     /* Responsive */
     @media (max-width: 1000px) {
-      .playlist-view-content {
-        flex-direction: column;
-      }
       .playlist-albums-list {
-        flex: none;
-        max-height: 300px;
-      }
-      .playlist-detail-header {
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-      }
-      .playlist-detail-meta,
-      .playlist-detail-stats {
-        justify-content: center;
+        flex: 0 0 200px;
+        width: 200px;
+        min-width: 200px;
+        max-height: none;
       }
     }
 
@@ -1491,7 +1501,7 @@
     .public-playlist-count{color:var(--muted);font-size:12px;}
     .public-featured-row{display:flex;align-items:flex-start;gap:18px;width:100%;}
     .public-featured-row > .public-playlists{flex:0 0 220px;max-width:240px;}
-    .public-playlist-view{display:flex;flex-direction:column;gap:12px;border:1px solid var(--border);border-radius:14px;background:var(--card);padding:12px;flex:1;min-width:0;}
+    .public-playlist-view{display:flex;flex-direction:column;gap:12px;flex:1;min-width:0;}
     .public-playlist-view[hidden]{display:none !important;}
     .public-playlist-header{display:flex;align-items:center;justify-content:space-between;gap:8px;}
     .public-playlist-title{margin:0;font-size:18px;}
