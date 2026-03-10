@@ -41,6 +41,9 @@ let yearFieldCache = null;
 let publicPlaylistFieldCache = null;
 let featuredAlbumCache = { items: [], total: 0, updatedAt: 0 };
 let cachedFeaturedFieldName = null;
+let newReleasesCache = { items: [], total: 0, updatedAt: 0 };
+const NEW_RELEASES_VALUE = 'New';
+const NEW_RELEASES_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
 
 // ---- featured-albums helpers ----
 
@@ -768,6 +771,77 @@ router.get('/album', async (req, res) => {
   } catch (err) {
     const detail = err?.message || String(err);
     return res.status(500).json({ error: 'Album lookup failed', status: 500, detail });
+  }
+});
+
+// ── /new-releases — albums where featured field == "New" ─────────────────────
+async function fetchNewReleaseRecords(limit = 200) {
+  if (!FEATURED_FIELD_CANDIDATES.length) return [];
+  const normalizedLimit = Math.max(1, Math.min(1000, limit));
+  console.log(`[new-releases] Searching with value "${NEW_RELEASES_VALUE}" across fields:`, FEATURED_FIELD_CANDIDATES);
+
+  for (const field of FEATURED_FIELD_CANDIDATES) {
+    if (!field) continue;
+    const query = applyVisibility({ [field]: `==${NEW_RELEASES_VALUE}` });
+    const payload = { query: [query], limit: normalizedLimit, offset: 1 };
+    console.log(`[new-releases] Trying field "${field}" with query:`, JSON.stringify(query));
+    try {
+      const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
+      const json = await response.json().catch(() => ({}));
+      const fmCode = String(json?.messages?.[0]?.code ?? '');
+      const fmMsg  = json?.messages?.[0]?.message ?? '';
+      if (!response.ok) {
+        console.log(`[new-releases] Field "${field}" HTTP ${response.status} code=${fmCode} msg=${fmMsg}`);
+        if (isMissingFieldError(json)) { console.log(`[new-releases] Field "${field}" missing, skipping`); continue; }
+        if (fmCode === '401') { console.log(`[new-releases] Field "${field}" returned 0 matches (401)`); continue; }
+        continue;
+      }
+      const rawData = json?.response?.data || [];
+      console.log(`[new-releases] Field "${field}" raw=${rawData.length} records`);
+      const afterVisibility = rawData.filter(r => recordIsVisible(r.fieldData || {}));
+      console.log(`[new-releases] After visibility filter: ${afterVisibility.length}`);
+      const filtered = afterVisibility.filter(r => hasValidAudio(r.fieldData || {}));
+      console.log(`[new-releases] After audio filter: ${filtered.length}`);
+      if (filtered.length > 0) {
+        console.log(`[new-releases] SUCCESS — returning ${filtered.length} records via field "${field}"`);
+        return filtered;
+      }
+      // Log first record's field keys to help diagnose filter failures
+      if (rawData.length > 0) {
+        const sample = rawData[0].fieldData || {};
+        const audioKeys = Object.keys(sample).filter(k => /s3|mp3|audio/i.test(k));
+        console.log(`[new-releases] Sample record audio-related field keys:`, audioKeys);
+      }
+    } catch (err) {
+      console.warn(`[new-releases] Fetch threw for field "${field}"`, err);
+    }
+  }
+  console.warn('[new-releases] All field candidates exhausted — returning []');
+  return [];
+}
+
+async function loadNewReleases({ limit = 200, refresh = false } = {}) {
+  const now = Date.now();
+  if (!refresh && newReleasesCache.items.length && now - newReleasesCache.updatedAt < NEW_RELEASES_CACHE_TTL_MS) {
+    return { items: cloneRecordsForLimit(newReleasesCache.items, limit), total: newReleasesCache.total };
+  }
+  const records = await fetchNewReleaseRecords(limit);
+  const items = records.map(r => ({ recordId: r.recordId, modId: r.modId, fields: r.fieldData || {} }));
+  newReleasesCache = { items, total: items.length, updatedAt: now };
+  console.log(`[new-releases] Cached ${items.length} records`);
+  return { items: cloneRecordsForLimit(items, limit), total: items.length };
+}
+
+router.get('/new-releases', async (req, res) => {
+  try {
+    const limit   = Math.max(1, Math.min(100, parseInt(req.query.limit || '20', 10)));
+    const refresh = req.query.refresh === '1';
+    const result  = await loadNewReleases({ limit, refresh });
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    return res.json({ ok: true, items: result.items, total: result.total });
+  } catch (err) {
+    console.error('[new-releases] Failed', err);
+    return res.status(500).json({ ok: false, error: 'Failed to load new releases' });
   }
 });
 

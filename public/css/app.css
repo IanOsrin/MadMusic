@@ -141,15 +141,16 @@
       top: 0;
       left: 0;
       height: 100vh;
-      overflow-y: auto;
+      overflow: hidden;
       z-index: 100;
       border-right: none;
-      padding-bottom: 130px; /* space for bottom profile + player */
+      padding-bottom: 0;
     }
     .sidebar-logo {
       display: flex;
       align-items: center;
       padding: 20px 20px 12px;
+      flex-shrink: 0;
     }
     .sidebar-logo img {
       height: 55px;
@@ -160,6 +161,9 @@
     }
     .sidebar-nav {
       padding: 8px 0 8px;
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
     }
     .nav-item {
       display: flex;
@@ -225,19 +229,17 @@
       background-repeat: no-repeat;
     }
     .sidebar-playlists {
-      padding: 16px 12px;
+      padding: 0;
       border-top: 1px solid var(--border);
     }
     .sidebar-playlists-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 8px 4px;
+      padding: 12px 20px 8px;
       font-size: 13px;
       font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      color: var(--fg);
       cursor: pointer;
       user-select: none;
     }
@@ -522,14 +524,13 @@
 
     /* Bottom Profile Section - positioned at bottom of sidebar above player */
     .sidebar-bottom-profile {
-      position: absolute;
-      bottom: 72px; /* matches player height so hover state touches player top */
-      left: 0;
-      right: 0;
+      position: relative;
+      flex-shrink: 0;
+      margin-bottom: 72px; /* keep clear of the fixed player bar */
       display: flex;
       align-items: center;
-      gap: 12px; /* same as nav-item gap */
-      padding: 12px 20px; /* same as nav-item padding */
+      gap: 12px;
+      padding: 12px 20px;
       background: var(--sidebar-bg);
       cursor: pointer;
       transition: background 0.15s ease;
@@ -2972,6 +2973,31 @@
       display: none;
     }
 
+    /* ── New Releases grid ── */
+    .nr-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .nr-new-badge {
+      position: absolute;
+      top: 0.55rem;
+      right: 0.55rem;
+      z-index: 3;
+      font-size: 0.65rem;
+      font-weight: 800;
+      color: #fff;
+      background: rgba(34, 197, 94, 0.85);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      padding: 0.18rem 0.5rem;
+      border-radius: 6px;
+      line-height: 1.4;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
     .highlight-info {
       display: flex;
       flex-direction: column;
@@ -3523,13 +3549,14 @@
       top: 0;
       left: 0;
       height: 100vh;
-      overflow-y: auto;
+      overflow: hidden;
       z-index: 100;
       border-right: none;
-      padding-bottom: 130px; /* space for bottom profile + player */
+      padding-bottom: 0;
     }
     .sidebar-logo {
       padding: 24px 20px 16px;
+      flex-shrink: 0;
     }
     .sidebar-logo img {
       max-width: 99px;
@@ -3538,6 +3565,8 @@
     .sidebar-nav {
       padding: 16px 0 8px;
       flex: 1;
+      overflow-y: auto;
+      min-height: 0;
     }
     .sidebar-profile {
       padding: 8px 16px 12px;

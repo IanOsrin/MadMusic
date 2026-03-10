@@ -171,6 +171,7 @@
       highlights: '/api/random-songs?count=2&_t=' + Date.now(),
       random: '/api/random-songs?count=20&_t=' + Date.now(), // Increased to 20, added timestamp for fresh results
       trending: '/api/trending',
+      newReleases: '/api/catalog/new-releases',
       search: '/api/search',
       container: '/api/container'
     };
@@ -664,6 +665,15 @@
 
     // Global storage for items (so we can reference them by ID in onclick handlers)
     const itemsStore = new Map();
+
+    // Helper: write to both local store and player.js's shared store
+    function storeItem(recordId, item) {
+      itemsStore.set(recordId, item);
+      if (window.itemsStore && window.itemsStore !== itemsStore) {
+        window.itemsStore.set(recordId, item);
+      }
+    }
+
     let currentAudio = null;
     let currentTrackInfo = null;
     let isPlaying = false;
@@ -1365,7 +1375,7 @@
       console.log('[Featured] Item:', {recordId: item.recordId, title, artist, album, artworkUrl});
 
       // Store item for later reference
-      itemsStore.set(item.recordId, item);
+      storeItem(item.recordId, item);
 
       // Create URL for Jukebox view with album filter
       const jukeboxUrl = `/classic?album=${encodeURIComponent(album)}&artist=${encodeURIComponent(artist)}`;
@@ -1431,7 +1441,7 @@
         const album = getAlbumField(fields);
 
         // Store item for later reference
-        itemsStore.set(item.recordId, item);
+        storeItem(item.recordId, item);
 
         // Create URL for Jukebox view with album filter
         const jukeboxUrl = `/classic?album=${encodeURIComponent(album)}&artist=${encodeURIComponent(artist)}`;
@@ -1493,7 +1503,7 @@
         const album = getAlbumField(fields);
         const meta = formatTrendingMeta(item.metrics || {});
 
-        itemsStore.set(item.recordId, item);
+        storeItem(item.recordId, item);
 
         // Create URL for Jukebox view with album filter
         const jukeboxUrl = `/classic?album=${encodeURIComponent(album)}&artist=${encodeURIComponent(artist)}`;
@@ -1534,7 +1544,7 @@
       console.log('[Random] Item:', {recordId: item.recordId, title, artist, album, genre, artworkUrl});
 
       // Store item for later reference
-      itemsStore.set(item.recordId, item);
+      storeItem(item.recordId, item);
 
       // Create URL for Jukebox view with album filter
       const jukeboxUrl = `/classic?album=${encodeURIComponent(album)}&artist=${encodeURIComponent(artist)}`;
@@ -1752,7 +1762,7 @@
 
         // Store all tracks for this album
         tracks.forEach(track => {
-          itemsStore.set(track.recordId, track);
+          storeItem(track.recordId, track);
         });
 
         // Get first track's recordId for playing
@@ -2043,6 +2053,8 @@
 
       // loadFeatured(); // Removed - Featured section disabled
       // loadHighlights(); // Removed - Highlights section disabled
+      console.log('[MADMusic] About to call loadNewReleases()');
+      loadNewReleases();
       console.log('[MADMusic] About to call loadTrending()');
       loadTrending();
       console.log('[MADMusic] About to call syncGenreFilters()');
@@ -2237,10 +2249,66 @@
       loadInitialContent();
     });
 
+    // ── New Releases ──────────────────────────────────────────────────────────
+    async function loadNewReleases() {
+      const section   = document.getElementById('newReleasesSection');
+      const container = document.getElementById('newReleasesContainer');
+      if (!section || !container) return;
+
+      try {
+        const url = `${API.newReleases}?limit=20&_t=${Date.now()}`;
+        const response = await apiFetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        const items = (data.items || []).filter(item => hasValidAudio(item));
+
+        if (!items.length) {
+          section.hidden = true;
+          return;
+        }
+
+        container.innerHTML = items.map(item => {
+          const fields     = item.fields || {};
+          const artworkUrl = getArtworkUrl(fields);
+          const title      = getTitleField(fields);
+          const artist     = getArtistField(fields);
+          const album      = getAlbumField(fields);
+
+          storeItem(item.recordId, item);
+
+          return `
+            <div class="trending-card">
+              <span class="nr-new-badge">New</span>
+              <div class="trending-artwork" onclick="playSong('${escapeHtml(item.recordId)}')">
+                ${artworkUrl
+                  ? `<img src="${escapeHtml(artworkUrl)}" alt="${escapeHtml(title)}" onerror="this.closest('.trending-card').style.display='none'" />`
+                  : '<div class="artwork-placeholder">♪</div>'
+                }
+                <div class="play-overlay"><div class="play-icon">▶</div></div>
+              </div>
+              <div class="trending-info">
+                <div class="trending-title">${escapeHtml(title)}</div>
+                <div class="trending-artist">${escapeHtml(artist)}</div>
+                <div class="trending-meta">${escapeHtml(album)}</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        section.hidden = false;
+        console.log(`[NewReleases] Rendered ${items.length} items`);
+      } catch (err) {
+        console.warn('[NewReleases] Failed to load:', err);
+        section.hidden = true;
+      }
+    }
+
   // ---- PUBLIC API ----
   window.loadFeatured = loadFeatured;
   window.loadHighlights = loadHighlights;
   window.loadTrending = loadTrending;
+  window.loadNewReleases = loadNewReleases;
   window.loadRandom = loadRandom;
   window.loadInitialContent = loadInitialContent;
   window.performSearch = performSearch;
@@ -2252,6 +2320,7 @@
     loadFeatured,
     loadHighlights,
     loadTrending,
+    loadNewReleases,
     loadRandom,
     loadInitialContent,
     performSearch,

@@ -112,6 +112,13 @@
         Home
       </button>
 
+      <button class="nav-item" data-view="albums">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+        </svg>
+        Featured
+      </button>
+
       <!-- Library Section -->
       <div class="nav-section" id="librarySection">
         <div class="nav-section-header" onclick="toggleNavSection('librarySection')">
@@ -127,7 +134,7 @@
             </svg>
             Artists
           </button>
-          <button class="nav-item" data-view="albums">
+          <button class="nav-item" id="navAlbumsBtn">
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5zm0-5.5c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/>
             </svg>
@@ -238,11 +245,24 @@
           </div>
         </section>
 
-        <!-- Featured Section -->
+        <!-- New Releases Section -->
+        <section class="section" id="newReleasesSection" hidden>
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">New Releases</h2>
+              <p class="section-subtitle">Fresh additions to the archive</p>
+            </div>
+          </div>
+          <div id="newReleasesContainer" class="nr-grid">
+            <div class="loading"><div class="spinner"></div></div>
+          </div>
+        </section>
+
+        <!-- Trending Section -->
         <section class="section">
           <div class="section-header">
             <div>
-              <h2 class="section-title">Featured</h2>
+              <h2 class="section-title">Trending</h2>
               <p class="section-subtitle">Most streamed songs this week</p>
             </div>
           </div>
@@ -441,6 +461,12 @@
                 <button id="sharedPlaylistCopy" type="button" class="btn small">Copy share link</button>
               </div>
             </section>
+            <!-- Featured Albums Heading -->
+            <div style="padding:16px 4px 8px;">
+              <h2 style="font-size:1.4rem;font-weight:700;color:var(--fg);margin:0 0 4px;">Featured Albums</h2>
+              <p style="font-size:0.85rem;color:var(--muted);margin:0;">Browse and search the full archive</p>
+            </div>
+
             <div id="loadingIndicator" class="loading-indicator">
               <img src="/img/placeholder.png" alt="" class="loading-background" loading="lazy" decoding="async" />
               <div class="loading-spinner"></div>
