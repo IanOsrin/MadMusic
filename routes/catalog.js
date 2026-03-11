@@ -367,6 +367,8 @@ router.get('/search', async (req, res) => {
 
 // ── /explore — browse albums by decade (Year of Release range) ───────────────
 const YEAR_FIELD_CANDIDATES = [
+  'Year of Release',
+  'Tape Files::Year of Release',
   'Year',
   'Year Recorded',
   'Year_Recorded',
