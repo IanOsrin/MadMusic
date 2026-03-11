@@ -367,12 +367,12 @@ router.get('/search', async (req, res) => {
 
 // ── /explore — browse albums by decade (Year of Release range) ───────────────
 const YEAR_FIELD_CANDIDATES = [
-  'Year of Release',
+  'Year',
   'Year Recorded',
   'Year_Recorded',
   'Release Year',
   'Release_Year',
-  'Year',
+  'Tape Files::Year',
 ];
 
 router.get('/explore', async (req, res) => {
@@ -399,7 +399,7 @@ router.get('/explore', async (req, res) => {
     // Try each year field candidate until one returns results
     let rawData = [];
     for (const field of YEAR_FIELD_CANDIDATES) {
-      const query = applyVisibility({ [field]: `${start}...${end}` });
+      const query = applyVisibility({ [field]: `${start}..${end}` });
       const payload = { query: [query], limit: Math.min(500, limit + offset + 1), offset: 1 };
       try {
         const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
