@@ -1519,7 +1519,6 @@
               <div class="play-overlay">
                 <div class="play-icon">▶</div>
               </div>
-              <button class="card-album-btn" title="View album" onclick="event.stopPropagation(); if(window.showView) window.showView('albums'); var s=document.getElementById('search'); if(s){s.value='${escapeHtml(album)}';} if(window.run) window.run('${escapeHtml(album)}');"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>
             </div>
             <div class="trending-info">
               <div class="trending-title">${escapeHtml(title)}</div>
@@ -1528,6 +1527,7 @@
             </div>
             <button class="trending-play-btn" onclick="playSong('${escapeHtml(item.recordId)}')">▶</button>
             <a href="${escapeHtml(jukeboxUrl)}" class="trending-album-btn" title="View album in Jukebox">💿</a>
+            <button class="card-album-btn" title="View album" onclick="if(window.showView) window.showView('albums'); var s=document.getElementById('search'); if(s){s.value='${escapeHtml(album)}';} if(window.run) window.run('${escapeHtml(album)}');"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>
           </div>
         `;
       }).join('');
@@ -2303,13 +2303,13 @@
                   : '<div class="artwork-placeholder">♪</div>'
                 }
                 <div class="play-overlay"><div class="play-icon">▶</div></div>
-                <button class="card-album-btn" title="View album" onclick="event.stopPropagation(); if(window.showView) window.showView('albums'); var s=document.getElementById('search'); if(s){s.value='${escapeHtml(album)}';} if(window.run) window.run('${escapeHtml(album)}');"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>
               </div>
               <div class="trending-info">
                 <div class="trending-title">${escapeHtml(title)}</div>
                 <div class="trending-artist">${escapeHtml(artist)}</div>
                 <div class="trending-meta">${escapeHtml(album)}</div>
               </div>
+              <button class="card-album-btn" title="View album" onclick="if(window.showView) window.showView('albums'); var s=document.getElementById('search'); if(s){s.value='${escapeHtml(album)}';} if(window.run) window.run('${escapeHtml(album)}');"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>
             </div>
           `;
         }).join('');
