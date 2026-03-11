@@ -2642,6 +2642,11 @@
         };
         const existingIdx = artistAlbums.findIndex(a => a.title === album.title);
         if (existingIdx !== -1) {
+          // If the clicked entry has no tracks (e.g. opened from library), keep the
+          // tracks that were fetched from the search result rather than discarding them
+          if (!clickedEntry.tracks || clickedEntry.tracks.length === 0) {
+            clickedEntry.tracks = artistAlbums[existingIdx].tracks || [];
+          }
           artistAlbums[existingIdx] = clickedEntry;
         } else {
           artistAlbums.unshift(clickedEntry);
@@ -3312,31 +3317,49 @@
     var _librarySongs  = new Map();
     var _libraryAlbums = new Map();
 
-    // Play a library song by its library ID — looks up full data from registry
+    // Play a library song using the same <audio id="player"> mechanism as album detail view
     window.playLibrarySong = function(libId) {
       var song = _librarySongs.get(libId);
-      if (!song) { console.warn('[Library] Song not found for id:', libId); return; }
-      var recordId = song.trackRecordId;
-      if (!recordId) { console.warn('[Library] Song has no trackRecordId'); return; }
-      // Resolve audio URL: stored S3/mp3 URL, or fall back to container API
-      var audioUrl = song.S3_URL || song.mp3 || ('/api/track/' + recordId + '/container');
-      var fakeItem = {
-        recordId: recordId,
-        fields: {
-          'Track Name':                 song.name || '',
-          'Album Artist':               song.albumArtist || song.trackArtist || '',
-          'Track Artist':               song.trackArtist || song.albumArtist || '',
-          'Album Title':                song.albumTitle || '',
-          'Tape Files::Album Title':    song.albumTitle || '',
-          'S3_URL':                     audioUrl,
-          'Tape Files::S3_URL':         audioUrl,
-          'Tape Files::Artwork_S3_URL': song.artwork || '',
-          'Artwork::Picture':           song.artwork || ''
-        }
-      };
-      if (window.itemsStore) window.itemsStore.set(recordId, fakeItem);
-      if (window.MADPlayer && window.MADPlayer.itemsStore) window.MADPlayer.itemsStore.set(recordId, fakeItem);
-      if (window.playSong) window.playSong(recordId);
+      if (!song) { console.warn('[Library] Song not found:', libId); return; }
+
+      // Resolve audio URL — stored S3/mp3, or fall back to container API
+      var audioUrl = song.S3_URL || song.mp3 || '';
+      if (!audioUrl && song.trackRecordId) {
+        audioUrl = '/api/track/' + song.trackRecordId + '/container';
+      }
+      if (!audioUrl) { console.warn('[Library] No audio URL for:', song.name); return; }
+
+      // Proxy non-S3 HTTPS URLs through the container endpoint (adds auth headers)
+      if (/^https?:\/\//i.test(audioUrl) && !/\.s3[.-]/.test(audioUrl) && !audioUrl.includes('/api/container?')) {
+        audioUrl = '/api/container?u=' + encodeURIComponent(audioUrl);
+      }
+
+      // Use the shared <audio id="player"> element — same as album detail view tracks
+      var player = document.getElementById('player');
+      if (player) {
+        player.src = audioUrl;
+        player.play().catch(function(err) { console.warn('[Library] Playback failed:', err); });
+      }
+
+      // Update the mini-player bar
+      var title  = song.name || 'Unknown Track';
+      var artist = song.albumArtist || song.trackArtist || '';
+      var art    = song.artwork || '';
+      var artUrl = art && art.includes('://') ? art :
+                   (art ? '/api/container?u=' + encodeURIComponent(art) : '');
+
+      var miniPlayer = document.getElementById('miniPlayer');
+      var titleEl    = document.getElementById('nowPlayingTitle');
+      var subtitleEl = document.getElementById('nowPlayingSubtitle');
+      var thumbImg   = document.getElementById('nowPlayingThumbImg');
+      var nowThumb   = document.getElementById('nowPlayingThumb');
+
+      if (miniPlayer) miniPlayer.classList.add('active');
+      if (titleEl)    titleEl.textContent = title;
+      if (subtitleEl) subtitleEl.textContent = artist;
+      if (thumbImg)   thumbImg.src = artUrl;
+      else if (nowThumb) nowThumb.innerHTML =
+        '<img src="' + artUrl + '" alt="Art" style="width:100%;height:100%;object-fit:cover;border-radius:6px;">';
     };
 
     function albumCardHtml(album) {
