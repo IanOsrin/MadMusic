@@ -1374,6 +1374,9 @@
     .card-expand-btn{position:absolute;top:10px;right:10px;z-index:6;width:30px;height:30px;border-radius:50%;background:rgba(139,92,246,0.85);border:none;color:#fff;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity 0.2s ease,transform 0.2s ease;box-shadow:0 2px 8px rgba(139,92,246,0.4);opacity:0;}
     .card:hover .card-expand-btn{opacity:1;}
     .card-expand-btn:hover{transform:scale(1.1);}
+    .card-album-icon-btn{position:absolute;bottom:10px;right:10px;z-index:6;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,0.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:none;color:rgba(255,255,255,0.9);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity 0.2s ease,transform 0.2s ease,background 0.2s ease;box-shadow:0 2px 8px rgba(0,0,0,0.3);opacity:0;}
+    .card:hover .card-album-icon-btn{opacity:1;}
+    .card-album-icon-btn:hover{background:rgba(139,92,246,0.9)!important;transform:scale(1.12);box-shadow:0 4px 14px rgba(139,92,246,0.45);}
 
     /* Text overlay — hidden until hover */
     .heading{position:absolute;bottom:0;left:0;right:0;z-index:4;padding:2.5rem 0.75rem 2.8rem;background:linear-gradient(transparent,rgba(0,0,0,0.88));display:flex;flex-direction:column;gap:0;opacity:0;transform:translateY(6px);transition:opacity 0.25s ease,transform 0.25s ease;pointer-events:none;}
@@ -2823,9 +2826,7 @@
     }
 
     .trending-card:hover .card-play-btn,
-    .trending-card:hover .card-album-btn,
-    .random-card:hover .card-play-btn,
-    .random-card:hover .card-album-btn {
+    .trending-card:hover .card-album-btn {
       opacity: 1;
       transform: translateY(0);
     }
