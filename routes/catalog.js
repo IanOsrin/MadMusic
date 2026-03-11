@@ -398,6 +398,7 @@ router.get('/explore', async (req, res) => {
 
     // Try each year field candidate until one returns results
     let rawData = [];
+    console.log(`[explore] Searching ${start}..${end} across candidates: ${YEAR_FIELD_CANDIDATES.join(', ')}`);
     for (const field of YEAR_FIELD_CANDIDATES) {
       const query = applyVisibility({ [field]: `${start}..${end}` });
       const payload = { query: [query], limit: Math.min(500, limit + offset + 1), offset: 1 };
@@ -405,19 +406,21 @@ router.get('/explore', async (req, res) => {
         const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
         const json = await response.json().catch(() => ({}));
         if (!response.ok) {
-          if (isMissingFieldError(json)) continue;
           const code = json?.messages?.[0]?.code;
-          if (String(code) === '401') continue; // no records found for this field
-          console.warn(`[explore] field "${field}" error ${response.status}`);
+          const msg  = json?.messages?.[0]?.message || '';
+          if (isMissingFieldError(json)) { console.log(`[explore] field "${field}" → missing (102), skipping`); continue; }
+          if (String(code) === '401') { console.log(`[explore] field "${field}" → no records (401), skipping`); continue; }
+          console.warn(`[explore] field "${field}" → FM error ${response.status} code=${code} msg=${msg}`);
           continue;
         }
         rawData = json?.response?.data || [];
-        console.log(`[explore] ${start}s: ${rawData.length} records via field "${field}"`);
+        console.log(`[explore] field "${field}" → ${rawData.length} records ✓`);
         break;
       } catch (err) {
         console.warn(`[explore] field "${field}" threw`, err.message);
       }
     }
+    console.log(`[explore] Total raw records: ${rawData.length}`);
 
     const valid = rawData.filter(r => hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
     const total = valid.length;
