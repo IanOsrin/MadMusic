@@ -1285,12 +1285,15 @@
       height: var(--player-height);
       background: #F5F8FF;
       border-top: none;
-      display: flex;
+      display: none;
       align-items: center;
       justify-content: center;
       padding: 0 24px;
       gap: 16px;
       z-index: 200;
+    }
+    .mini-player.active {
+      display: flex;
     }
     .mini-player-left {
       display: flex;
@@ -3806,12 +3809,15 @@
       right: 0;
       height: 80px;
       background: #F5F8FF;
-      display: flex;
+      display: none;
       align-items: center;
       justify-content: center;
       padding: 0 24px;
       gap: 16px;
       z-index: 1000;
+    }
+    .mini-player.active {
+      display: flex;
     }
     .mini-player-left {
       display: flex;
