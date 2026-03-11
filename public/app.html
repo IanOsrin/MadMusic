@@ -1953,9 +1953,10 @@
 
             if (audioUrl) {
               window._PLAYER.playTrack(audioUrl, {
-                title:  track.name   || 'Unknown Track',
-                artist: track.artist || track.trackArtist || track.albumArtist || '',
-                artUrl: ''
+                title:    track.name   || 'Unknown Track',
+                artist:   track.artist || track.trackArtist || track.albumArtist || '',
+                artUrl:   '',
+                recordId: track.trackRecordId || track.recordId || li.dataset.recordId || ''
               });
             }
 
@@ -2615,9 +2616,10 @@
                   ? album.artwork
                   : (album.artwork ? `/api/container?u=${encodeURIComponent(album.artwork)}` : '');
                 window._PLAYER.playTrack(audioUrl, {
-                  title:  track.name  || 'Unknown Track',
-                  artist: track.artist || album.artist || '',
-                  artUrl: artUrl
+                  title:    track.name  || 'Unknown Track',
+                  artist:   track.artist || album.artist || '',
+                  artUrl:   artUrl,
+                  recordId: track.recordId || ''
                 });
               }
 
@@ -3103,9 +3105,10 @@
                    (art ? '/api/container?u=' + encodeURIComponent(art) : '');
 
       window._PLAYER.playTrack(audioUrl, {
-        title:  song.name || 'Unknown Track',
-        artist: song.trackArtist || song.albumArtist || '',
-        artUrl: artUrl
+        title:    song.name || 'Unknown Track',
+        artist:   song.trackArtist || song.albumArtist || '',
+        artUrl:   artUrl,
+        recordId: song.trackRecordId || ''
       });
     };
 
