@@ -365,6 +365,80 @@ router.get('/search', async (req, res) => {
   }
 });
 
+// ── /explore — browse albums by decade (Year of Release range) ───────────────
+const YEAR_FIELD_CANDIDATES = [
+  'Year of Release',
+  'Year Recorded',
+  'Year_Recorded',
+  'Release Year',
+  'Release_Year',
+  'Year',
+];
+
+router.get('/explore', async (req, res) => {
+  try {
+    const start  = parseInt(req.query.start  || '0',   10);
+    const end    = parseInt(req.query.end    || '9999',10);
+    const limit  = Math.max(1, Math.min(500, parseInt(req.query.limit  || '400', 10)));
+    const offset = Math.max(0,               parseInt(req.query.offset || '0',   10));
+    const refresh = req.query.refresh === '1';
+
+    if (!start || start < 1900 || start > 2100) {
+      return res.status(400).json({ error: 'Invalid start year' });
+    }
+
+    const cacheKey = `explore:v1:${start}:${end}:${limit}:${offset}`;
+    if (!refresh) {
+      const cached = exploreCache.get(cacheKey);
+      if (cached) {
+        res.setHeader('X-Cache-Hit', 'true');
+        return res.json(cached);
+      }
+    }
+
+    // Try each year field candidate until one returns results
+    let rawData = [];
+    for (const field of YEAR_FIELD_CANDIDATES) {
+      const query = applyVisibility({ [field]: `${start}...${end}` });
+      const payload = { query: [query], limit: Math.min(500, limit + offset + 1), offset: 1 };
+      try {
+        const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
+        const json = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          if (isMissingFieldError(json)) continue;
+          const code = json?.messages?.[0]?.code;
+          if (String(code) === '401') continue; // no records found for this field
+          console.warn(`[explore] field "${field}" error ${response.status}`);
+          continue;
+        }
+        rawData = json?.response?.data || [];
+        console.log(`[explore] ${start}s: ${rawData.length} records via field "${field}"`);
+        break;
+      } catch (err) {
+        console.warn(`[explore] field "${field}" threw`, err.message);
+      }
+    }
+
+    const valid = rawData.filter(r => hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
+    const total = valid.length;
+    const page  = valid.slice(offset, offset + limit);
+    const hasMore = offset + limit < total;
+
+    const result = {
+      items:      page.map(d => ({ recordId: d.recordId, modId: d.modId, fields: d.fieldData || {} })),
+      total,
+      hasMore,
+      nextOffset: hasMore ? offset + limit : null
+    };
+
+    exploreCache.set(cacheKey, result);
+    res.json(result);
+  } catch (err) {
+    console.error('[explore] failed', err);
+    res.status(500).json({ error: 'Explore failed', detail: err?.message || String(err) });
+  }
+});
+
 router.get('/ai-search', async (req, res) => {
   try {
     const query = (req.query.q || '').toString().trim();
