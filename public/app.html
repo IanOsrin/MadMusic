@@ -2195,39 +2195,31 @@
       if (mp) mp.classList.add('active');
     }
 
+    // Returns the player.play() Promise so callers (including app.min.js handlePlay)
+    // can chain .then()/.catch() for button-state / error handling.
     function _playQueueItem(idx) {
       var item   = _queue[idx];
-      if (!item) return;
+      if (!item) return Promise.resolve();
       var player = document.getElementById('player');
-      if (!player) return;
+      if (!player) return Promise.resolve();
       if (!player.paused) player.pause();
       player.src = item.url;
-      player.play().catch(function (e) { console.warn('[_PLAYER] play failed:', e); });
       updateMiniPlayer(item);
+      return player.play() || Promise.resolve();
     }
 
+    // Returns the play Promise — lets app.min.js handlePlay chain .then()/.catch().
     function playTrack(url, meta) {
       meta   = meta || {};
       _queue = [{ url: url, title: meta.title || '', artist: meta.artist || '', artUrl: meta.artUrl || '' }];
       _qIdx  = 0;
-      _playQueueItem(0);
+      return _playQueueItem(0);
     }
 
     function playQueue(tracks, startIdx) {
       _queue = tracks || [];
       _qIdx  = startIdx !== undefined ? startIdx : 0;
       if (_queue.length > 0) _playQueueItem(_qIdx);
-    }
-
-    // Called by app.min.js handlePlay after play() resolves, to register the
-    // track with _PLAYER without triggering a new play.  Keeps _PLAYER's queue
-    // in sync so toggle/mini-player metadata stay correct for home-view tracks.
-    // meta = { title, artist, artUrl }
-    function syncTrack(url, meta) {
-      meta   = meta || {};
-      _queue = [{ url: url, title: meta.title || '', artist: meta.artist || '', artUrl: meta.artUrl || '' }];
-      _qIdx  = 0;
-      updateMiniPlayer(_queue[0]);
     }
 
     function toggle() {
@@ -2382,7 +2374,7 @@
       console.log('[_PLAYER] Button controls wired; polling for audio element…');
     });
 
-    return { playTrack: playTrack, playQueue: playQueue, syncTrack: syncTrack, toggle: toggle, next: next, prev: prev };
+    return { playTrack: playTrack, playQueue: playQueue, toggle: toggle, next: next, prev: prev };
   })();
   </script>
 
