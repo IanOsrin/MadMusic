@@ -43,7 +43,7 @@ let featuredAlbumCache = { items: [], total: 0, updatedAt: 0 };
 let cachedFeaturedFieldName = null;
 let newReleasesCache = { items: [], total: 0, updatedAt: 0 };
 const NEW_RELEASES_VALUE = 'New';
-const NEW_RELEASES_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+const NEW_RELEASES_CACHE_TTL_MS = 60 * 1000; // 1 min
 
 // ---- featured-albums helpers ----
 
@@ -798,19 +798,11 @@ async function fetchNewReleaseRecords(limit = 200) {
       }
       const rawData = json?.response?.data || [];
       console.log(`[new-releases] Field "${field}" raw=${rawData.length} records`);
-      const afterVisibility = rawData.filter(r => recordIsVisible(r.fieldData || {}));
-      console.log(`[new-releases] After visibility filter: ${afterVisibility.length}`);
-      const filtered = afterVisibility.filter(r => hasValidAudio(r.fieldData || {}));
-      console.log(`[new-releases] After audio filter: ${filtered.length}`);
+      const filtered = rawData.filter(r => recordIsVisible(r.fieldData || {}));
+      console.log(`[new-releases] After visibility filter: ${filtered.length}`);
       if (filtered.length > 0) {
         console.log(`[new-releases] SUCCESS — returning ${filtered.length} records via field "${field}"`);
         return filtered;
-      }
-      // Log first record's field keys to help diagnose filter failures
-      if (rawData.length > 0) {
-        const sample = rawData[0].fieldData || {};
-        const audioKeys = Object.keys(sample).filter(k => /s3|mp3|audio/i.test(k));
-        console.log(`[new-releases] Sample record audio-related field keys:`, audioKeys);
       }
     } catch (err) {
       console.warn(`[new-releases] Fetch threw for field "${field}"`, err);

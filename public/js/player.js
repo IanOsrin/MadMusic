@@ -188,7 +188,7 @@
       }
   
       function getAudioUrl(fields, recordId) {
-        const audioFields = ['S3_URL', 'mp3', 'MP3', 'Audio File', 'Audio::mp3'];
+        const audioFields = ['S3_URL', 'Tape Files::S3_URL', 'mp3', 'MP3', 'Tape Files::mp3', 'Tape Files::MP3', 'Audio File', 'Audio::mp3', 'Stream URL', 'Audio URL'];
         const audio = getFieldValue(fields, audioFields);
         if (!audio) return null;
   
@@ -205,7 +205,7 @@
       // Check if an item has valid audio
       function hasValidAudio(item) {
         if (!item || !item.fields) return false;
-        const audioFields = ['S3_URL', 'mp3', 'MP3', 'Audio File', 'Audio::mp3'];
+        const audioFields = ['S3_URL', 'Tape Files::S3_URL', 'mp3', 'MP3', 'Tape Files::mp3', 'Tape Files::MP3', 'Audio File', 'Audio::mp3', 'Stream URL', 'Audio URL'];
         const audio = getFieldValue(item.fields, audioFields);
   
         // Check if audio field exists and is not empty

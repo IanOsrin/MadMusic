@@ -67,7 +67,7 @@ const TRACK_SEQUENCE_FIELDS = [
 ];
 const PUBLIC_PLAYLIST_NAME_SPLIT = /[,;|\r\n]+/;
 const PUBLIC_PLAYLIST_FIELDS = ['PublicPlaylist'];
-const AUDIO_FIELD_CANDIDATES = ['S3_URL', 'mp3', 'MP3', 'Audio File', 'Audio::mp3'];
+const AUDIO_FIELD_CANDIDATES = ['S3_URL', 'Tape Files::S3_URL', 'mp3', 'MP3', 'Tape Files::mp3', 'Tape Files::MP3', 'Audio File', 'Audio::mp3', 'Stream URL', 'Audio URL'];
 const ARTWORK_FIELD_CANDIDATES = [
   'Artwork_S3_URL', 'Tape Files::Artwork_S3_URL', 'Artwork::Picture', 'Artwork Picture',
   'Picture', 'CoverArtURL', 'AlbumCover', 'Cover Art', 'CoverArt'

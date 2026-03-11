@@ -128,12 +128,6 @@
           </svg>
         </div>
         <div class="nav-section-content">
-          <button class="nav-item" data-view="artists">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
-            </svg>
-            Artists
-          </button>
           <button class="nav-item" id="navAlbumsBtn">
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5zm0-5.5c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/>
@@ -488,6 +482,59 @@
           </section>
         </div>
       </main>
+  </div>
+
+  <!-- ── Library: Albums ───────────────────────────────────────────────── -->
+  <div id="view-library-albums" class="view-section" hidden>
+    <main>
+      <div style="padding:20px 20px 0;">
+        <h2 style="font-size:1.4rem;font-weight:700;color:var(--fg);margin:0 0 4px;">Albums</h2>
+        <p style="font-size:0.85rem;color:var(--muted);margin:0;">Albums you've saved to your library</p>
+      </div>
+      <div style="padding:20px;">
+        <div id="libraryAlbumsGrid" class="nr-grid">
+          <div class="loading"><div class="spinner"></div></div>
+        </div>
+        <div id="libraryAlbumsEmpty" hidden style="padding:40px 0;text-align:center;color:var(--muted);">
+          <div style="font-size:2rem;margin-bottom:8px;">💿</div>
+          <p>No albums saved yet. Heart an album to add it here.</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ── Library: Songs ─────────────────────────────────────────────────── -->
+  <div id="view-tracks" class="view-section" hidden>
+    <main>
+      <div style="padding:20px 20px 0;">
+        <h2 style="font-size:1.4rem;font-weight:700;color:var(--fg);margin:0 0 4px;">Songs</h2>
+        <p style="font-size:0.85rem;color:var(--muted);margin:0;">Songs you've saved to your library</p>
+      </div>
+      <div style="padding:20px;">
+        <div id="librarySongsList" class="library-songs-list"></div>
+        <div id="librarySongsEmpty" hidden style="padding:40px 0;text-align:center;color:var(--muted);">
+          <div style="font-size:2rem;margin-bottom:8px;">🎵</div>
+          <p>No songs saved yet. Heart a track to add it here.</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ── Library: Recently Added ────────────────────────────────────────── -->
+  <div id="view-recent" class="view-section" hidden>
+    <main>
+      <div style="padding:20px 20px 0;">
+        <h2 style="font-size:1.4rem;font-weight:700;color:var(--fg);margin:0 0 4px;">Recently Added</h2>
+        <p style="font-size:0.85rem;color:var(--muted);margin:0;">Your latest additions</p>
+      </div>
+      <div style="padding:20px;">
+        <div id="libraryRecentList" class="library-songs-list"></div>
+        <div id="libraryRecentEmpty" hidden style="padding:40px 0;text-align:center;color:var(--muted);">
+          <div style="font-size:2rem;margin-bottom:8px;">🕐</div>
+          <p>Nothing added yet.</p>
+        </div>
+      </div>
+    </main>
   </div>
 
   <!-- ── Account Modals ─────────────────────────────────────────────────── -->
@@ -3244,9 +3291,224 @@
   </script>
 
 
+  <!-- ── Library Views ─────────────────────────────────────────────────── -->
+  <script>
+  (function() {
+    'use strict';
+
+    function libFetch(url, opts) {
+      const token = (localStorage.getItem('mass_access_token') || '').trim();
+      const headers = Object.assign({ 'X-Access-Token': token }, (opts && opts.headers) || {});
+      return fetch(url, Object.assign({}, opts, { headers }));
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return d.toLocaleDateString(undefined, { day:'numeric', month:'short', year:'numeric' });
+    }
+
+    // Inject a library song into itemsStore so playSong() can find it, then play it
+    window.playLibrarySong = function(songJson) {
+      try {
+        const song = JSON.parse(songJson);
+        const recordId = song.trackRecordId;
+        if (!recordId) return;
+        // Build a minimal item compatible with player.js field helpers
+        const fakeItem = {
+          recordId: recordId,
+          fields: {
+            'Track Name':                 song.name || '',
+            'Album Artist':               song.albumArtist || song.trackArtist || '',
+            'Track Artist':               song.trackArtist || song.albumArtist || '',
+            'Album Title':                song.albumTitle || '',
+            'Tape Files::Album Title':    song.albumTitle || '',
+            'S3_URL':                     song.S3_URL || '',
+            'mp3':                        song.mp3 || '',
+            'Tape Files::S3_URL':         song.S3_URL || '',
+            'Tape Files::mp3':            song.mp3 || '',
+            'Tape Files::Artwork_S3_URL': song.artwork || '',
+            'Artwork::Picture':           song.artwork || ''
+          }
+        };
+        if (window.itemsStore) window.itemsStore.set(recordId, fakeItem);
+        if (window.MADPlayer && window.MADPlayer.itemsStore) window.MADPlayer.itemsStore.set(recordId, fakeItem);
+        if (window.playSong) window.playSong(recordId);
+      } catch(e) { console.warn('[Library] playLibrarySong error', e); }
+    };
+
+    function albumCardHtml(album) {
+      const art = album.artwork && album.artwork.startsWith('http')
+        ? album.artwork
+        : (album.artwork ? '/api/container?u=' + encodeURIComponent(album.artwork) : '/img/placeholder.jpg');
+      return `
+        <div class="trending-card library-album-card" data-lib-album-id="${album.id}"
+             style="cursor:pointer;" onclick="window.openLibraryAlbum(${JSON.stringify(JSON.stringify(album))})">
+          <div class="trending-artwork">
+            <img src="${art}" alt="${album.title}" onerror="this.src='/img/placeholder.jpg'" />
+            <div class="play-overlay"><div class="play-icon">▶</div></div>
+          </div>
+          <div class="trending-info">
+            <div class="trending-title">${album.title}</div>
+            <div class="trending-artist">${album.artist || ''}</div>
+            <div class="trending-meta">${album.genre || ''}</div>
+          </div>
+          <button class="library-remove-btn" title="Remove from library"
+            onclick="event.stopPropagation();removeLibraryAlbum('${album.id}')">✕</button>
+        </div>`;
+    }
+
+    function songRowHtml(song, extraMeta) {
+      const art = song.artwork && song.artwork.startsWith('http')
+        ? song.artwork
+        : (song.artwork ? '/api/container?u=' + encodeURIComponent(song.artwork) : '/img/placeholder.jpg');
+      const songJson = JSON.stringify(JSON.stringify(song));
+      return `
+        <div class="library-song-row" data-lib-song-id="${song.id}"
+             style="cursor:pointer;" onclick="window.playLibrarySong(${songJson})">
+          <img class="library-song-artwork" src="${art}" alt="${song.name}"
+               onerror="this.src='/img/placeholder.jpg'" />
+          <div class="library-song-info">
+            <p class="library-song-title">${song.name || 'Unknown Track'}</p>
+            <p class="library-song-artist">${song.albumArtist || song.trackArtist || ''}</p>
+          </div>
+          <span class="library-song-meta">${extraMeta || formatDate(song.addedAt)}</span>
+          <button class="library-remove-btn" title="Remove from library"
+            onclick="event.stopPropagation();removeLibrarySong('${song.id}')">✕</button>
+        </div>`;
+    }
+
+    async function loadLibraryAlbums() {
+      const grid  = document.getElementById('libraryAlbumsGrid');
+      const empty = document.getElementById('libraryAlbumsEmpty');
+      if (!grid) return;
+      grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+      try {
+        const res  = await libFetch('/api/library');
+        const data = await res.json();
+        const albums = (data.albums || []).sort((a,b) => new Date(b.addedAt) - new Date(a.addedAt));
+        if (!albums.length) { grid.innerHTML = ''; if (empty) empty.hidden = false; return; }
+        if (empty) empty.hidden = true;
+        grid.innerHTML = albums.map(albumCardHtml).join('');
+      } catch(e) {
+        grid.innerHTML = '<p style="color:var(--muted);padding:20px">Could not load library.</p>';
+      }
+    }
+
+    async function loadLibrarySongs() {
+      const list  = document.getElementById('librarySongsList');
+      const empty = document.getElementById('librarySongsEmpty');
+      if (!list) return;
+      list.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+      try {
+        const res  = await libFetch('/api/library');
+        const data = await res.json();
+        const songs = (data.songs || []).sort((a,b) => new Date(b.addedAt) - new Date(a.addedAt));
+        if (!songs.length) { list.innerHTML = ''; if (empty) empty.hidden = false; return; }
+        if (empty) empty.hidden = true;
+        list.innerHTML = songs.map(s => songRowHtml(s, s.albumTitle || '')).join('');
+      } catch(e) {
+        list.innerHTML = '<p style="color:var(--muted);padding:20px">Could not load library.</p>';
+      }
+    }
+
+    async function loadLibraryRecent() {
+      const list  = document.getElementById('libraryRecentList');
+      const empty = document.getElementById('libraryRecentEmpty');
+      if (!list) return;
+      list.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+      try {
+        const res  = await libFetch('/api/library');
+        const data = await res.json();
+
+        // Merge songs and albums, sort by addedAt desc
+        const songs  = (data.songs  || []).map(s => Object.assign({}, s, { _type: 'song'  }));
+        const albums = (data.albums || []).map(a => Object.assign({}, a, { _type: 'album' }));
+        const all    = [...songs, ...albums].sort((a,b) => new Date(b.addedAt) - new Date(a.addedAt));
+
+        if (!all.length) { list.innerHTML = ''; if (empty) empty.hidden = false; return; }
+        if (empty) empty.hidden = true;
+
+        let html = '';
+        let lastDate = null;
+        all.forEach(item => {
+          const d = formatDate(item.addedAt);
+          if (d !== lastDate) {
+            html += `<div class="library-section-label">${d}</div>`;
+            lastDate = d;
+          }
+          if (item._type === 'song') {
+            html += songRowHtml(item, item.albumTitle || '');
+          } else {
+            const art = item.artwork && item.artwork.startsWith('http')
+              ? item.artwork
+              : (item.artwork ? '/api/container?u=' + encodeURIComponent(item.artwork) : '/img/placeholder.jpg');
+            const albumJson = JSON.stringify(JSON.stringify(item));
+            html += `
+              <div class="library-song-row" data-lib-album-id="${item.id}"
+                   style="cursor:pointer;" onclick="window.openLibraryAlbum(${albumJson})">
+                <img class="library-song-artwork" src="${art}" alt="${item.title}"
+                     onerror="this.src='/img/placeholder.jpg'" style="border-radius:4px;" />
+                <div class="library-song-info">
+                  <p class="library-song-title">${item.title}</p>
+                  <p class="library-song-artist">${item.artist || ''}</p>
+                </div>
+                <span class="library-song-meta" style="font-size:0.7rem;background:var(--border);padding:2px 6px;border-radius:4px;">album</span>
+                <button class="library-remove-btn" title="Remove from library"
+                  onclick="event.stopPropagation();removeLibraryAlbum('${item.id}')">✕</button>
+              </div>`;
+          }
+        });
+        list.innerHTML = html;
+      } catch(e) {
+        list.innerHTML = '<p style="color:var(--muted);padding:20px">Could not load library.</p>';
+      }
+    }
+
+    window.removeLibraryAlbum = async function(id) {
+      await libFetch('/api/library/albums/' + id, { method: 'DELETE' });
+      loadLibraryAlbums();
+      loadLibraryRecent();
+    };
+
+    window.removeLibrarySong = async function(id) {
+      await libFetch('/api/library/songs/' + id, { method: 'DELETE' });
+      loadLibrarySongs();
+      loadLibraryRecent();
+    };
+
+    window.openLibraryAlbum = function(jsonStr) {
+      try {
+        const album = JSON.parse(jsonStr);
+        if (window.showAlbumDetailView) {
+          window.showView('albums');
+          window.showAlbumDetailView({
+            title:   album.title,
+            artist:  album.artist,
+            picture: album.artwork,
+            genre:   album.genre  || '',
+            year:    album.year   || '',
+            tracks:  []
+          });
+        }
+      } catch(e) { console.warn('[Library] openLibraryAlbum error', e); }
+    };
+
+    window.loadLibraryAlbums  = loadLibraryAlbums;
+    window.loadLibrarySongs   = loadLibrarySongs;
+    window.loadLibraryRecent  = loadLibraryRecent;
+  })();
+  </script>
+
   <!-- Section navigation: switches between #view-highlights and #view-albums -->
   <script>
   (function() {
+    var libraryLoaders = {
+      'library-albums': function() { if (window.loadLibraryAlbums) window.loadLibraryAlbums(); },
+      'tracks':         function() { if (window.loadLibrarySongs)  window.loadLibrarySongs();  },
+      'recent':         function() { if (window.loadLibraryRecent) window.loadLibraryRecent(); }
+    };
+
     function showView(name) {
       document.querySelectorAll('.view-section').forEach(function(s) { s.hidden = true; });
       var el = document.getElementById('view-' + name);
@@ -3255,25 +3517,34 @@
         i.classList.toggle('active', i.getAttribute('data-view') === name);
       });
       try { localStorage.setItem('mass_last_view', name); } catch(e) {}
+      if (libraryLoaders[name]) libraryLoaders[name]();
     }
 
     // Restore last view or default to highlights
     var lastView = 'highlights';
     try { lastView = localStorage.getItem('mass_last_view') || 'highlights'; } catch(e) {}
+    // Don't restore library views on load — go to highlights
+    if (libraryLoaders[lastView]) lastView = 'highlights';
     showView(lastView);
 
     document.querySelectorAll('.nav-item[data-view]').forEach(function(item) {
       item.addEventListener('click', function() {
         var v = item.getAttribute('data-view');
-        if (v === 'highlights' || v === 'albums') {
-          showView(v);
-        }
-        // artists/tracks/recent are stubs — mark active only
-        document.querySelectorAll('.nav-item[data-view]').forEach(function(i) {
-          i.classList.toggle('active', i === item);
-        });
+        showView(v);
       });
     });
+
+    // Albums button inside Library (no data-view — shows saved albums)
+    var navAlbumsBtn = document.getElementById('navAlbumsBtn');
+    if (navAlbumsBtn) {
+      navAlbumsBtn.addEventListener('click', function() {
+        showView('library-albums');
+        document.querySelectorAll('.nav-item[data-view]').forEach(function(i) {
+          i.classList.remove('active');
+        });
+        navAlbumsBtn.classList.add('active');
+      });
+    }
 
     window.showView = showView;
   })();

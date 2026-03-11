@@ -2998,6 +2998,101 @@
       text-transform: uppercase;
     }
 
+    /* ── Library views ── */
+    .library-songs-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .library-song-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    .library-song-row:hover {
+      background: var(--hover-bg);
+    }
+
+    .library-song-artwork {
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      max-width: 44px;
+      max-height: 44px;
+      border-radius: 6px;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: var(--border);
+      display: block;
+    }
+
+    .library-song-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .library-song-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--fg);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin: 0 0 2px;
+    }
+
+    .library-song-artist {
+      font-size: 0.8rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin: 0;
+    }
+
+    .library-song-meta {
+      font-size: 0.75rem;
+      color: var(--muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .library-remove-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 4px;
+      font-size: 1rem;
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s;
+      flex-shrink: 0;
+    }
+
+    .library-song-row:hover .library-remove-btn {
+      opacity: 1;
+    }
+
+    .library-remove-btn:hover {
+      color: #e55;
+    }
+
+    .library-section-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      padding: 16px 12px 6px;
+    }
+
     .highlight-info {
       display: flex;
       flex-direction: column;
