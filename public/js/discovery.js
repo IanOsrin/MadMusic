@@ -1519,7 +1519,6 @@
               <div class="play-overlay">
                 <div class="play-icon">▶</div>
               </div>
-              <button class="card-play-btn" onclick="event.stopPropagation(); playSong('${escapeHtml(item.recordId)}')" title="Play"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
               <a href="${escapeHtml(jukeboxUrl)}" class="card-album-btn" title="View album" onclick="event.stopPropagation()"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
             </div>
             <div class="trending-info">
@@ -2304,7 +2303,6 @@
                   : '<div class="artwork-placeholder">♪</div>'
                 }
                 <div class="play-overlay"><div class="play-icon">▶</div></div>
-                <button class="card-play-btn" onclick="event.stopPropagation(); playSong('${escapeHtml(item.recordId)}')" title="Play"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
                 <a href="${escapeHtml(jukeboxUrl)}" class="card-album-btn" title="View album" onclick="event.stopPropagation()"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
               </div>
               <div class="trending-info">
