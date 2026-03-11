@@ -1551,288 +1551,20 @@
 
 
   <script>
-  // 🎵 Animated Record Player - Tonearm and spinning vinyl (Now Playing only)
+  // Show mini-player bar whenever audio starts — all icon/control management
+  // is handled by the unified _PLAYER module further below.
   (function() {
-    let currentAudio = null;
-
-    // Listen for audio playback events
-    document.addEventListener('DOMContentLoaded', () => {
-      const nowPlayingThumb = document.querySelector('.mini-player-artwork');
-
-      if (!nowPlayingThumb) {
-        console.warn('⚠️ Mini player artwork not found');
-        return;
-      }
-
-      // Monitor all audio elements
-      const checkAudioPlayback = () => {
-        const allAudio = document.querySelectorAll('audio');
-
-        allAudio.forEach(audio => {
-          if (!audio.dataset.recordPlayerListenerAdded) {
-            audio.dataset.recordPlayerListenerAdded = 'true';
-
-            const toggleJukeboxGlow = (isPlaying) => {
-              // Placeholder for jukebox glow effect
-            };
-
-            // When audio starts playing
-            audio.addEventListener('play', () => {
-              currentAudio = audio;
-              const thumb = document.querySelector('.mini-player-artwork');
-              const miniPlayer = document.getElementById('miniPlayer');
-              const modalAlbumSleeve = document.getElementById('modalAlbumSleeve');
-              const toggleBtn = document.getElementById('nowPlayingToggle');
-
-              console.log('[PLAYER] Audio playing, showing mini player');
-
-              // Show mini player ribbon
-              if (miniPlayer) {
-                miniPlayer.classList.add('active');
-                console.log('[MINI PLAYER] Ribbon shown');
-              }
-
-              // Toggle button icon is managed by the SVG-based handler below; skip textContent here
-
-              // Extract track info from the currently playing track in modal
-              const playingTrack = document.querySelector('.track.playing, .playlist-track.playing');
-              if (playingTrack) {
-                const trackName = playingTrack.querySelector('.track-name, .name')?.textContent || 'Unknown Track';
-                const artistName = playingTrack.querySelector('.artist')?.textContent || 'Unknown Artist';
-
-                document.getElementById('nowPlayingTitle').textContent = trackName;
-                document.getElementById('nowPlayingSubtitle').textContent = artistName;
-                console.log('[RIBBON] Updated track info:', trackName, '-', artistName);
-              }
-
-              // Extract metadata from modal
-              const modalYear = document.getElementById('modalYear')?.textContent.trim();
-              const modalCat = document.getElementById('modalCat')?.textContent.trim();
-              const modalArtist = document.getElementById('modalArtist')?.textContent.trim();
-
-              // Update metadata fields (only show if available)
-              const yearEl = document.getElementById('nowPlayingYear');
-              const genreEl = document.getElementById('nowPlayingGenre');
-              const languageEl = document.getElementById('nowPlayingLanguage');
-              const composerEl = document.getElementById('nowPlayingComposer');
-              const producerEl = document.getElementById('nowPlayingProducer');
-              const sourceEl = document.getElementById('nowPlayingSource');
-
-              if (yearEl && modalYear) yearEl.textContent = modalYear;
-              if (sourceEl && modalCat) sourceEl.textContent = modalCat;
-
-              // Try to extract additional metadata from track data attributes
-              if (playingTrack && playingTrack.dataset) {
-                if (genreEl && playingTrack.dataset.genre) genreEl.textContent = playingTrack.dataset.genre;
-                if (languageEl && playingTrack.dataset.language) languageEl.textContent = playingTrack.dataset.language;
-                if (composerEl && playingTrack.dataset.composer) composerEl.textContent = `♫ ${playingTrack.dataset.composer}`;
-                if (producerEl && playingTrack.dataset.producer) producerEl.textContent = `⚙ ${playingTrack.dataset.producer}`;
-              }
-
-              console.log('[RIBBON] Updated metadata:', {year: modalYear, cat: modalCat});
-
-              // Try to get album artwork from modal or page
-              let artworkUrl = null;
-
-              // Try multiple selectors to find artwork
-              const artworkSelectors = [
-                '.modal.open .cover-wrap img',
-                '#modalCover img',
-                '.modal header .cover-wrap img',
-                '.card.active .cover-wrap img',
-                '.album.active .cover-wrap img'
-              ];
-
-              for (const selector of artworkSelectors) {
-                const img = document.querySelector(selector);
-                if (img && img.src && !img.src.includes('placeholder')) {
-                  artworkUrl = img.src;
-                  break;
-                }
-              }
-
-              if (artworkUrl && thumb) {
-                thumb.innerHTML = `<img src="${artworkUrl}" alt="Album artwork">`;
-                console.log('[RIBBON] Updated artwork:', artworkUrl);
-              }
-
-              // Show and populate album sleeve in modal if overlay is open
-              if (modalAlbumSleeve) {
-                const overlay = document.getElementById('overlay');
-                if (overlay && overlay.classList.contains('open')) {
-                  modalAlbumSleeve.classList.add('show');
-
-                  // Get artwork from audio element's data attributes or find it
-                  const trackData = audio.dataset;
-                  const artworkUrl = trackData.artwork || trackData.artworkUrl;
-
-                  if (artworkUrl) {
-                    modalAlbumSleeve.innerHTML = `<img src="${artworkUrl}" alt="Album artwork">`;
-                    console.log('[ALBUM SLEEVE] Showing artwork:', artworkUrl);
-                  }
-                }
-              }
-
-              if (thumb) {
-                thumb.classList.add('playing');
-                console.log('[PLAYER] Added playing class to artwork');
-              }
-              toggleJukeboxGlow(true);
-            });
-
-            // Track playback progress
-            audio.addEventListener('timeupdate', () => {
-              const progressFill = document.getElementById('nowPlayingProgressFill');
-
-              if (audio.duration && !audio.paused) {
-                const progress = audio.currentTime / audio.duration;
-
-                // Update progress bar
-                if (progressFill) {
-                  progressFill.style.width = `${progress * 100}%`;
-                }
-              }
-            });
-
-            // When audio pauses
-            audio.addEventListener('pause', () => {
-              const thumb = document.querySelector('.mini-player-artwork');
-              // Toggle button icon managed by SVG-based handler; only update aria state
-              const toggleBtn = document.getElementById('nowPlayingToggle');
-              if (thumb) {
-                thumb.classList.remove('playing');
-              }
-              if (toggleBtn) {
-                toggleBtn.title = 'Play';
-              }
-              toggleJukeboxGlow(false);
-            });
-
-            // When audio ends
-            audio.addEventListener('ended', () => {
-              const thumb = document.querySelector('.mini-player-artwork');
-              const progressFill = document.getElementById('nowPlayingProgressFill');
-              // Toggle button icon managed by SVG-based handler; only update title/progress
-              const toggleBtn = document.getElementById('nowPlayingToggle');
-
-              if (thumb) {
-                thumb.classList.remove('playing');
-              }
-              if (toggleBtn) {
-                toggleBtn.title = 'Play';
-              }
-
-              // Reset progress bar
-              if (progressFill) {
-                progressFill.style.width = '0%';
-              }
-
-              toggleJukeboxGlow(false);
-            });
-          }
-        });
-      };
-
-      // Initial check
-      checkAudioPlayback();
-
-      // Monitor for new audio elements being added
-      const audioObserver = new MutationObserver(() => {
-        checkAudioPlayback();
+    document.addEventListener('DOMContentLoaded', function() {
+      var audio = document.getElementById('player');
+      if (!audio) return;
+      audio.addEventListener('play', function() {
+        var mp = document.getElementById('miniPlayer');
+        if (mp) mp.classList.add('active');
       });
-
-      audioObserver.observe(document.body, {
-        childList: true,
-        subtree: true
-      });
-
-      // Also check periodically for the #player element (created by app.min.js)
-      const playerCheckInterval = setInterval(() => {
-        const player = document.getElementById('player');
-        if (player && !player.dataset.recordPlayerListenerAdded) {
-          console.log('[RIBBON] Found #player element, attaching listeners');
-          checkAudioPlayback();
-          clearInterval(playerCheckInterval);
-        }
-      }, 100);
-
-      // Stop checking after 10 seconds
-      setTimeout(() => clearInterval(playerCheckInterval), 10000);
-
-      console.log('🎵 Record player animations initialized (Now Playing only)');
     });
   })();
   </script>
 
-  <script>
-  // Change "Pause" to "Stop" on now playing button
-  (function() {
-    const updateButtonText = () => {
-      const btn = document.getElementById('nowPlayingToggle');
-      if (btn && btn.textContent.trim() === 'Pause') {
-        btn.textContent = 'Stop';
-      }
-    };
-
-    // Monitor button text changes
-    const observer = new MutationObserver(updateButtonText);
-
-    document.addEventListener('DOMContentLoaded', () => {
-      const btn = document.getElementById('nowPlayingToggle');
-      if (btn) {
-        observer.observe(btn, {
-          childList: true,
-          characterData: true,
-          subtree: true
-        });
-        updateButtonText(); // Initial check
-      }
-    });
-  })();
-  </script>
-
-  <script>
-  // Fix play button arrow disappearing after playback
-  (function() {
-    const playSymbol = '▶';
-
-    const fixPlayButtons = () => {
-      // Find all buttons in album cards
-      const buttons = document.querySelectorAll('.card button, .albums button');
-
-      buttons.forEach(btn => {
-        const text = btn.textContent.trim();
-        // If button text is empty or doesn't contain play symbol, restore it
-        if (text === '' || (text.length < 2 && !text.includes(playSymbol))) {
-          btn.textContent = playSymbol;
-        }
-      });
-    };
-
-    // Run on DOM load
-    document.addEventListener('DOMContentLoaded', () => {
-      fixPlayButtons();
-
-      // Monitor for changes to buttons
-      const observer = new MutationObserver(() => {
-        fixPlayButtons();
-      });
-
-      // Observe the albums container
-      const albumsContainer = document.querySelector('.albums');
-      if (albumsContainer) {
-        observer.observe(albumsContainer, {
-          childList: true,
-          subtree: true,
-          characterData: true
-        });
-      }
-
-      // Also run periodically as a fallback
-      setInterval(fixPlayButtons, 2000);
-    });
-  })();
-  </script>
 
   <script>
   // Dark mode functionality
@@ -2173,25 +1905,12 @@
               audioUrl = `/api/container?u=${encodeURIComponent(audioUrl)}`;
             }
 
-            const player = document.getElementById('player');
-            if (player && audioUrl) {
-              if (!player.paused) player.pause(); // stop current audio cleanly before switching
-              player.src = audioUrl;
-              if (typeof window.massSetCurrentTrack === 'function') {
-                window.massSetCurrentTrack({
-                  trackRecordId: li.dataset.recordId || '',
-                  trackName:     track.name    || 'Unknown Track',
-                  trackArtist:   track.artist  || track.trackArtist || track.albumArtist || '',
-                  albumTitle:    track.albumTitle || '',
-                  picture:       ''
-                });
-              }
-              player.play().catch(err => console.warn('[PublicPlaylist] playback failed:', err));
-
-              const nowPlayingTitle    = document.getElementById('nowPlayingTitle');
-              const nowPlayingSubtitle = document.getElementById('nowPlayingSubtitle');
-              if (nowPlayingTitle)    nowPlayingTitle.textContent    = track.name || 'Unknown Track';
-              if (nowPlayingSubtitle) nowPlayingSubtitle.textContent = track.artist || track.trackArtist || track.albumArtist || '';
+            if (audioUrl) {
+              window._PLAYER.playTrack(audioUrl, {
+                title:  track.name   || 'Unknown Track',
+                artist: track.artist || track.trackArtist || track.albumArtist || '',
+                artUrl: ''
+              });
             }
 
             listEl.querySelectorAll('.playlist-track-item').forEach(el => el.classList.remove('playing'));
@@ -2427,163 +2146,192 @@
   </script>
 
   <script>
-  // Player time display and controls
-  (function() {
-    function formatTime(seconds) {
-      if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.floor(seconds % 60);
-      return `${mins}:${secs.toString().padStart(2, '0')}`;
+  // ─── Unified _PLAYER module ────────────────────────────────────────────────
+  // Single source of truth for ALL audio playback (home, library, albums,
+  // public playlists).  All play paths call window._PLAYER.playTrack() or
+  // window._PLAYER.playQueue(), and all mini-player controls are wired here.
+  window._PLAYER = (function () {
+    'use strict';
+
+    var _queue = [];   // [{url, title, artist, artUrl}, ...]
+    var _qIdx  = -1;
+
+    var SVG_NS     = 'http://www.w3.org/2000/svg';
+    var PLAY_PATH  = 'M8 5v14l11-7z';
+    var PAUSE_PATH = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
+
+    function formatTime(s) {
+      if (isNaN(s) || !isFinite(s)) return '0:00';
+      var m = Math.floor(s / 60), sec = Math.floor(s % 60);
+      return m + ':' + (sec < 10 ? '0' : '') + sec;
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-      const player = document.getElementById('player');
-      const currentTimeEl = document.getElementById('playerCurrentTime');
-      const durationEl = document.getElementById('playerDuration');
-      const progressBar = document.getElementById('playerProgressBar');
-      const progressFill = document.getElementById('nowPlayingProgressFill');
-      const prevBtn = document.getElementById('playerPrev');
-      const nextBtn = document.getElementById('playerNext');
-      const volumeBtn = document.getElementById('volumeBtn');
-      const volumeSlider = document.getElementById('volumeSlider');
-      const volumeFill = document.getElementById('volumeFill');
+    function ensurePlayIconSvg(btn) {
+      var svg = btn.querySelector('svg#playIcon');
+      if (!svg) {
+        btn.textContent = '';
+        svg = document.createElementNS(SVG_NS, 'svg');
+        svg.setAttribute('width', '18'); svg.setAttribute('height', '18');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'currentColor');
+        svg.id = 'playIcon';
+        btn.appendChild(svg);
+      }
+      return svg;
+    }
+
+    function updateMiniPlayer(meta) {
+      var titleEl    = document.getElementById('nowPlayingTitle');
+      var subtitleEl = document.getElementById('nowPlayingSubtitle');
+      var thumb      = document.querySelector('.mini-player-artwork');
+      var mp         = document.getElementById('miniPlayer');
+      if (titleEl)    titleEl.textContent    = meta.title  || 'Unknown Track';
+      if (subtitleEl) subtitleEl.textContent = meta.artist || '';
+      if (thumb) {
+        thumb.innerHTML = meta.artUrl
+          ? '<img src="' + meta.artUrl + '" alt="artwork" onerror="this.src=\'/img/placeholder.jpg\'">'
+          : '';
+      }
+      if (mp) mp.classList.add('active');
+    }
+
+    function _playQueueItem(idx) {
+      var item   = _queue[idx];
+      if (!item) return;
+      var player = document.getElementById('player');
+      if (!player) return;
+      if (!player.paused) player.pause();
+      player.src = item.url;
+      player.play().catch(function (e) { console.warn('[_PLAYER] play failed:', e); });
+      updateMiniPlayer(item);
+    }
+
+    function playTrack(url, meta) {
+      meta   = meta || {};
+      _queue = [{ url: url, title: meta.title || '', artist: meta.artist || '', artUrl: meta.artUrl || '' }];
+      _qIdx  = 0;
+      _playQueueItem(0);
+    }
+
+    function playQueue(tracks, startIdx) {
+      _queue = tracks || [];
+      _qIdx  = startIdx !== undefined ? startIdx : 0;
+      if (_queue.length > 0) _playQueueItem(_qIdx);
+    }
+
+    function toggle() {
+      var player = document.getElementById('player');
+      if (!player || !player.src || player.src === window.location.href) return;
+      if (player.paused) {
+        player.play().catch(function (e) { console.warn('[_PLAYER] toggle failed:', e); });
+      } else {
+        player.pause();
+      }
+    }
+
+    function next() {
+      if (_qIdx < _queue.length - 1) { _qIdx++; _playQueueItem(_qIdx); }
+    }
+
+    function prev() {
+      var player = document.getElementById('player');
+      if (!player) return;
+      if (player.currentTime > 3) { player.currentTime = 0; return; }
+      if (_qIdx > 0) { _qIdx--; _playQueueItem(_qIdx); }
+    }
+
+    // ── Wire up all mini-player controls once DOM is ready ──
+    document.addEventListener('DOMContentLoaded', function () {
+      var player       = document.getElementById('player');
+      var toggleBtn    = document.getElementById('nowPlayingToggle');
+      var prevBtn      = document.getElementById('playerPrev');
+      var nextBtn      = document.getElementById('playerNext');
+      var currentTimeEl = document.getElementById('playerCurrentTime');
+      var durationEl    = document.getElementById('playerDuration');
+      var progressBar   = document.getElementById('playerProgressBar');
+      var progressFill  = document.getElementById('nowPlayingProgressFill');
+      var volumeSlider  = document.getElementById('volumeSlider');
+      var volumeFill    = document.getElementById('volumeFill');
 
       if (!player) return;
 
-      // Update time display
-      player.addEventListener('timeupdate', () => {
+      // Time / progress
+      player.addEventListener('timeupdate', function () {
         if (currentTimeEl) currentTimeEl.textContent = formatTime(player.currentTime);
-        if (progressFill && player.duration) {
-          const percent = (player.currentTime / player.duration) * 100;
-          progressFill.style.width = percent + '%';
-        }
+        if (progressFill && player.duration)
+          progressFill.style.width = ((player.currentTime / player.duration) * 100) + '%';
       });
-
-      player.addEventListener('loadedmetadata', () => {
+      player.addEventListener('loadedmetadata', function () {
+        if (durationEl) durationEl.textContent = formatTime(player.duration);
+      });
+      player.addEventListener('durationchange', function () {
         if (durationEl) durationEl.textContent = formatTime(player.duration);
       });
 
-      player.addEventListener('durationchange', () => {
-        if (durationEl) durationEl.textContent = formatTime(player.duration);
-      });
-
-      // Click on progress bar to seek
+      // Seek on progress bar click
       if (progressBar) {
-        progressBar.addEventListener('click', (e) => {
-          const rect = progressBar.getBoundingClientRect();
-          const percent = (e.clientX - rect.left) / rect.width;
-          if (player.duration) {
-            player.currentTime = percent * player.duration;
-          }
+        progressBar.addEventListener('click', function (e) {
+          var rect = progressBar.getBoundingClientRect();
+          if (player.duration) player.currentTime = ((e.clientX - rect.left) / rect.width) * player.duration;
         });
       }
 
-      // Volume control
+      // Volume slider
       if (volumeSlider && volumeFill) {
-        // Initialise fill to current volume (default 1.0 = 100%)
         volumeFill.style.width = (player.volume * 100) + '%';
-
-        const setVolume = (e) => {
-          const rect = volumeSlider.getBoundingClientRect();
-          const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-          player.volume = percent;
-          volumeFill.style.width = (percent * 100) + '%';
+        var setVol = function (e) {
+          var rect = volumeSlider.getBoundingClientRect();
+          var pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+          player.volume = pct;
+          volumeFill.style.width = (pct * 100) + '%';
         };
-        volumeSlider.addEventListener('click', setVolume);
-        // Also support drag on the slider
-        volumeSlider.addEventListener('mousedown', (e) => {
-          setVolume(e);
-          const onMove = (ev) => setVolume(ev);
-          const onUp   = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+        volumeSlider.addEventListener('click', setVol);
+        volumeSlider.addEventListener('mousedown', function (e) {
+          setVol(e);
+          var onMove = function (ev) { setVol(ev); };
+          var onUp   = function () { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
           document.addEventListener('mousemove', onMove);
           document.addEventListener('mouseup', onUp);
         });
       }
 
-      // Play/pause icon sync — app.min.js skips this because albums.html has no
-      // #nowPlayingCard element, so we update the toggle button icon directly.
-      // Look up #playIcon dynamically each time (never cache — other code may rebuild the SVG)
-      const toggleBtn  = document.getElementById('nowPlayingToggle');
-      const PLAY_PATH  = 'M8 5v14l11-7z';
-      const PAUSE_PATH = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
-      const SVG_NS = 'http://www.w3.org/2000/svg';
-
-      function ensurePlayIconSvg(btn) {
-        // Re-create the SVG icon inside the button if it was removed
-        let svg = btn.querySelector('svg[id="playIcon"], svg#playIcon');
-        if (!svg) {
-          btn.textContent = ''; // clear any emoji fallback
-          svg = document.createElementNS(SVG_NS, 'svg');
-          svg.setAttribute('width', '18');
-          svg.setAttribute('height', '18');
-          svg.setAttribute('viewBox', '0 0 24 24');
-          svg.setAttribute('fill', 'currentColor');
-          svg.id = 'playIcon';
-          btn.appendChild(svg);
-        }
-        return svg;
-      }
-
+      // Play/pause icon sync
       if (toggleBtn) {
-        player.addEventListener('play', () => {
-          const svg = ensurePlayIconSvg(toggleBtn);
-          svg.innerHTML = `<path d="${PAUSE_PATH}"/>`;
+        player.addEventListener('play', function () {
+          var svg = ensurePlayIconSvg(toggleBtn);
+          svg.innerHTML = '<path d="' + PAUSE_PATH + '"/>';
           toggleBtn.title = 'Pause';
         });
-        player.addEventListener('pause', () => {
-          const svg = ensurePlayIconSvg(toggleBtn);
-          svg.innerHTML = `<path d="${PLAY_PATH}"/>`;
+        player.addEventListener('pause', function () {
+          var svg = ensurePlayIconSvg(toggleBtn);
+          svg.innerHTML = '<path d="' + PLAY_PATH + '"/>';
           toggleBtn.title = 'Play';
         });
-        player.addEventListener('ended', () => {
-          const svg = ensurePlayIconSvg(toggleBtn);
-          svg.innerHTML = `<path d="${PLAY_PATH}"/>`;
+        player.addEventListener('ended', function () {
+          var svg = ensurePlayIconSvg(toggleBtn);
+          svg.innerHTML = '<path d="' + PLAY_PATH + '"/>';
           toggleBtn.title = 'Play';
+          // Auto-advance queue on track end
+          if (_qIdx < _queue.length - 1) { _qIdx++; _playQueueItem(_qIdx); }
         });
 
-        // Override app.min.js's toggle handler with a reliable direct approach.
-        // app.min.js uses nowPlayingInfo.meta.src to decide what to resume, but
-        // that meta gets overwritten by its own play-event handler whenever
-        // currentRow is set (home view track), causing it to try resuming the
-        // wrong URL. Simple direct control is always correct: player.src is
-        // already the right track, so just play/pause it.
-        // Use capture phase so this fires BEFORE app.min.js's bubble handler.
-        toggleBtn.addEventListener('click', (e) => {
-          e.stopImmediatePropagation(); // prevent app.min.js handler from running
-          if (!player.src || player.src === window.location.href) return;
-          if (player.paused) {
-            player.play().catch(err => console.warn('[Toggle] play failed:', err));
-          } else {
-            player.pause();
-          }
-        }, true); // capture phase
+        // Capture-phase click so _PLAYER fires BEFORE app.min.js bubble handler
+        // (app.min.js overwrites nowPlayingInfo.meta.src with stale data on play events,
+        //  causing it to resume the wrong track — we bypass it entirely here).
+        toggleBtn.addEventListener('click', function (e) {
+          e.stopImmediatePropagation();
+          toggle();
+        }, true);
       }
 
-      // Prev/Next buttons
-      if (prevBtn) {
-        prevBtn.addEventListener('click', () => {
-          if (window.__isDetailViewActive && window.__isDetailViewActive()) {
-            // <= 3s: go to previous track; > 3s: restart current
-            if (player.currentTime <= 3) {
-              window.__advanceDetailTrack('prev');
-            } else {
-              player.currentTime = 0;
-            }
-          } else {
-            if (player.currentTime > 3) player.currentTime = 0;
-          }
-        });
-      }
-      if (nextBtn) {
-        nextBtn.addEventListener('click', () => {
-          if (window.__isDetailViewActive && window.__isDetailViewActive()) {
-            window.__advanceDetailTrack('next');
-          }
-        });
-      }
+      // Prev / Next — capture phase so they always work regardless of other handlers
+      if (prevBtn) prevBtn.addEventListener('click', function () { prev(); }, true);
+      if (nextBtn) nextBtn.addEventListener('click', function () { next(); }, true);
 
-      console.log('[Player] Time display initialized');
+      console.log('[_PLAYER] Unified player initialized');
     });
+
+    return { playTrack: playTrack, playQueue: playQueue, toggle: toggle, next: next, prev: prev };
   })();
   </script>
 
@@ -2854,43 +2602,16 @@
                 audioUrl = `/api/container?u=${encodeURIComponent(audioUrl)}`;
               }
 
-              // Play the track
-              const player = document.getElementById('player');
-              if (player && audioUrl) {
-                if (!player.paused) player.pause(); // stop current audio cleanly before switching
-                player.src = audioUrl;
-
-                // Register track with app.min.js BEFORE play() so stream events and
-                // the mini-player toggle button both get the correct track metadata.
-                if (typeof window.massSetCurrentTrack === 'function') {
-                  window.massSetCurrentTrack({
-                    trackRecordId: track.recordId || '',
-                    trackName:     track.name    || 'Unknown Track',
-                    trackArtist:   track.artist  || album.artist || '',
-                    albumTitle:    album.title   || '',
-                    picture:       album.artwork || album.picture || ''
-                  });
-                }
-
-                player.play().catch(err => console.warn('[Player] Playback failed:', err));
-
-                // Update mini player
-                const nowPlayingTitle = document.getElementById('nowPlayingTitle');
-                const nowPlayingSubtitle = document.getElementById('nowPlayingSubtitle');
-                const nowPlayingThumb = document.getElementById('nowPlayingThumb');
-
-                if (nowPlayingTitle) nowPlayingTitle.textContent = track.name || 'Unknown Track';
-                if (nowPlayingSubtitle) nowPlayingSubtitle.textContent = album.artist || '';
-                if (nowPlayingThumb) {
-                  const artUrl = album.artwork && album.artwork.includes('://') ? album.artwork :
-                                (album.artwork ? `/api/container?u=${encodeURIComponent(album.artwork)}` : '/img/placeholder.jpg');
-                  const thumbImg = document.getElementById('nowPlayingThumbImg') || nowPlayingThumb.querySelector('img');
-                  if (thumbImg) {
-                    thumbImg.src = artUrl;
-                  } else {
-                    nowPlayingThumb.innerHTML = `<img src="${artUrl}" alt="Album art" style="width:100%;height:100%;object-fit:cover;border-radius:6px;">`;
-                  }
-                }
+              // Play the track via unified _PLAYER
+              if (audioUrl) {
+                const artUrl = album.artwork && album.artwork.includes('://')
+                  ? album.artwork
+                  : (album.artwork ? `/api/container?u=${encodeURIComponent(album.artwork)}` : '');
+                window._PLAYER.playTrack(audioUrl, {
+                  title:  track.name  || 'Unknown Track',
+                  artist: track.artist || album.artist || '',
+                  artUrl: artUrl
+                });
               }
 
               // Mark as playing
@@ -3352,7 +3073,7 @@
     var _librarySongs  = new Map();
     var _libraryAlbums = new Map();
 
-    // Play a library song using the same <audio id="player"> mechanism as album detail view
+    // Play a library song via the unified _PLAYER module
     window.playLibrarySong = function(libId) {
       var song = _librarySongs.get(libId);
       if (!song) { console.warn('[Library] Song not found:', libId); return; }
@@ -3369,38 +3090,16 @@
         audioUrl = '/api/container?u=' + encodeURIComponent(audioUrl);
       }
 
-      // Use the shared <audio id="player"> element — same as album detail view tracks
-      var player = document.getElementById('player');
-      if (player) {
-        // Explicitly stop any current playback before switching source.
-        // This prevents overlapping audio if the browser hasn't released the old stream yet.
-        if (!player.paused) {
-          player.pause();
-        }
-
-        player.src = audioUrl;
-        player.play().catch(function(err) { console.warn('[Library] Playback failed:', err); });
-      }
-
-      // Update the mini-player bar
-      var title  = song.name || 'Unknown Track';
-      var artist = song.albumArtist || song.trackArtist || '';
+      // Resolve artwork URL
       var art    = song.artwork || '';
       var artUrl = art && art.includes('://') ? art :
                    (art ? '/api/container?u=' + encodeURIComponent(art) : '');
 
-      var miniPlayer = document.getElementById('miniPlayer');
-      var titleEl    = document.getElementById('nowPlayingTitle');
-      var subtitleEl = document.getElementById('nowPlayingSubtitle');
-      var thumbImg   = document.getElementById('nowPlayingThumbImg');
-      var nowThumb   = document.getElementById('nowPlayingThumb');
-
-      if (miniPlayer) miniPlayer.classList.add('active');
-      if (titleEl)    titleEl.textContent = title;
-      if (subtitleEl) subtitleEl.textContent = artist;
-      if (thumbImg)   thumbImg.src = artUrl;
-      else if (nowThumb) nowThumb.innerHTML =
-        '<img src="' + artUrl + '" alt="Art" style="width:100%;height:100%;object-fit:cover;border-radius:6px;">';
+      window._PLAYER.playTrack(audioUrl, {
+        title:  song.name || 'Unknown Track',
+        artist: song.albumArtist || song.trackArtist || '',
+        artUrl: artUrl
+      });
     };
 
     function albumCardHtml(album) {
