@@ -695,52 +695,112 @@
     .stats-plays { font-size:12px; color:var(--accent,#62f5a9); flex-shrink:0; white-space:nowrap; }
   </style>
 
-  <div class="mini-player" id="miniPlayer">
-    <!-- Left: Album Art + Track Info -->
-    <div class="mini-player-left">
-      <div class="mini-player-artwork" id="nowPlayingThumb">
-        <img src="" alt="Album artwork" id="nowPlayingThumbImg">
-      </div>
-      <div class="mini-player-info">
-        <div class="mini-player-title" id="nowPlayingTitle"></div>
-        <div class="mini-player-artist" id="nowPlayingSubtitle"></div>
-      </div>
-    </div>
 
-    <!-- Center: Controls & Progress -->
-    <div class="mini-player-center">
-      <button class="player-btn" id="playerPrev" title="Previous">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
-        </svg>
-      </button>
-      <button class="player-btn play-pause" id="nowPlayingToggle" title="Play/Pause">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" id="playIcon">
+  <!-- ── Unified mini-player ─────────────────────────────────────────────────
+       Uses all-new IDs so app.min.js never touches these elements.
+       Shown/hidden purely by listening to the <audio id="player"> events.
+  ──────────────────────────────────────────────────────────────────────── -->
+  <style>
+    #unifiedPlayer {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 72px;
+      background: #1a1a2e;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      display: none;
+      align-items: center;
+      gap: 16px;
+      padding: 0 20px;
+      z-index: 2000;
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.3);
+    }
+    #unifiedPlayer.active { display: flex; }
+
+    #upArtwork {
+      width: 48px; height: 48px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    #upArtwork img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    .up-info { flex: 1; min-width: 0; }
+    #upTitle {
+      font-size: 14px; font-weight: 600;
+      color: #fff;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #upArtist {
+      font-size: 12px; color: rgba(255,255,255,0.55);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .up-centre {
+      display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+    }
+    .up-btn {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: var(--accent, #62f5a9);
+      color: #1a1a2e;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.12s, opacity 0.12s;
+    }
+    .up-btn:hover { transform: scale(1.08); }
+    .up-btn svg { pointer-events: none; }
+
+    #upProgress {
+      flex: 1;
+      height: 4px;
+      background: rgba(255,255,255,0.12);
+      border-radius: 2px;
+      cursor: pointer;
+      min-width: 80px;
+      max-width: 320px;
+      position: relative;
+    }
+    #upProgressFill {
+      height: 100%;
+      background: var(--accent, #62f5a9);
+      border-radius: 2px;
+      width: 0%;
+      transition: width 0.25s linear;
+      pointer-events: none;
+    }
+    #upTime {
+      font-size: 12px; color: rgba(255,255,255,0.45);
+      flex-shrink: 0; min-width: 36px; text-align: right;
+    }
+
+    /* Push page content up so the player doesn't cover it */
+    body.player-active { padding-bottom: 72px; }
+
+    @media (max-width: 600px) {
+      #upProgress { max-width: 120px; }
+      #upArtwork { width: 38px; height: 38px; }
+    }
+  </style>
+
+  <div id="unifiedPlayer">
+    <div id="upArtwork"></div>
+    <div class="up-info">
+      <div id="upTitle"></div>
+      <div id="upArtist"></div>
+    </div>
+    <div class="up-centre">
+      <button id="upToggle" class="up-btn" title="Play / Pause" aria-label="Play / Pause">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" id="upIcon">
           <path d="M8 5v14l11-7z"/>
         </svg>
       </button>
-      <button class="player-btn" id="playerNext" title="Next">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
-        </svg>
-      </button>
-      <div class="player-progress-bar" id="playerProgressBar">
-        <div class="player-progress-fill" id="nowPlayingProgressFill"></div>
-      </div>
-      <span class="player-time" id="playerCurrentTime">0:00</span>
     </div>
-
-    <!-- Right: Volume -->
-    <div class="mini-player-right">
-      <button class="player-volume-btn" id="volumeBtn" title="Volume">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-        </svg>
-      </button>
-      <div class="player-volume-slider" id="volumeSlider">
-        <div class="player-volume-fill" id="volumeFill"></div>
-      </div>
-    </div>
+    <div id="upProgress"><div id="upProgressFill"></div></div>
+    <span id="upTime">0:00</span>
   </div>
 
   <!-- Single centered modal (reused for all albums) -->
@@ -1550,20 +1610,6 @@
   </script>
 
 
-  <script>
-  // Show mini-player bar whenever audio starts — all icon/control management
-  // is handled by the unified _PLAYER module further below.
-  (function() {
-    document.addEventListener('DOMContentLoaded', function() {
-      var audio = document.getElementById('player');
-      if (!audio) return;
-      audio.addEventListener('play', function() {
-        var mp = document.getElementById('miniPlayer');
-        if (mp) mp.classList.add('active');
-      });
-    });
-  })();
-  </script>
 
 
   <script>
@@ -2146,230 +2192,141 @@
   </script>
 
   <script>
-  // ─── Unified _PLAYER module ────────────────────────────────────────────────
-  // Single source of truth for ALL audio playback (home, library, albums,
-  // public playlists).  All play paths call window._PLAYER.playTrack() or
-  // window._PLAYER.playQueue(), and all mini-player controls are wired here.
+  // ─── Unified player ────────────────────────────────────────────────────────
+  // Wires the #unifiedPlayer bar to the single <audio id="player"> element.
+  // Uses all-new element IDs — app.min.js has zero knowledge of these.
+  // Metadata flows two ways:
+  //   • Library / album / playlist calls: _PLAYER.playTrack(url, meta) sets it.
+  //   • Home-view calls: we scrape from whatever row has the ".playing" class
+  //     (app.min.js adds that class when a home-view track starts).
   window._PLAYER = (function () {
     'use strict';
 
-    var _queue = [];   // [{url, title, artist, artUrl}, ...]
-    var _qIdx  = -1;
+    var _meta = {};   // { title, artist, artUrl } — set by playTrack() or scraped
 
-    var SVG_NS     = 'http://www.w3.org/2000/svg';
-    var PLAY_PATH  = 'M8 5v14l11-7z';
-    var PAUSE_PATH = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
-
-    function formatTime(s) {
-      if (isNaN(s) || !isFinite(s)) return '0:00';
+    // ── helpers ───────────────────────────────────────────────────────────────
+    function fmt(s) {
+      if (!s || isNaN(s) || !isFinite(s)) return '0:00';
       var m = Math.floor(s / 60), sec = Math.floor(s % 60);
       return m + ':' + (sec < 10 ? '0' : '') + sec;
     }
 
-    function ensurePlayIconSvg(btn) {
-      var svg = btn.querySelector('svg#playIcon');
-      if (!svg) {
-        btn.textContent = '';
-        svg = document.createElementNS(SVG_NS, 'svg');
-        svg.setAttribute('width', '18'); svg.setAttribute('height', '18');
-        svg.setAttribute('viewBox', '0 0 24 24');
-        svg.setAttribute('fill', 'currentColor');
-        svg.id = 'playIcon';
-        btn.appendChild(svg);
-      }
-      return svg;
+    function setIcon(playing) {
+      var icon = document.getElementById('upIcon');
+      if (!icon) return;
+      icon.innerHTML = playing
+        ? '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>'   // pause
+        : '<path d="M8 5v14l11-7z"/>';                       // play
     }
 
-    function updateMiniPlayer(meta) {
-      var titleEl    = document.getElementById('nowPlayingTitle');
-      var subtitleEl = document.getElementById('nowPlayingSubtitle');
-      var thumb      = document.querySelector('.mini-player-artwork');
-      var mp         = document.getElementById('miniPlayer');
-      if (titleEl)    titleEl.textContent    = meta.title  || 'Unknown Track';
-      if (subtitleEl) subtitleEl.textContent = meta.artist || '';
-      if (thumb) {
-        thumb.innerHTML = meta.artUrl
-          ? '<img src="' + meta.artUrl + '" alt="artwork" onerror="this.src=\'/img/placeholder.jpg\'">'
+    function applyMeta(m) {
+      var title  = document.getElementById('upTitle');
+      var artist = document.getElementById('upArtist');
+      var art    = document.getElementById('upArtwork');
+      if (title)  title.textContent  = m.title  || 'Now Playing';
+      if (artist) artist.textContent = m.artist || '';
+      if (art) {
+        art.innerHTML = m.artUrl
+          ? '<img src="' + m.artUrl + '" alt="" onerror="this.style.display=\'none\'">'
           : '';
       }
-      if (mp) mp.classList.add('active');
     }
 
-    // Returns the player.play() Promise so callers (including app.min.js handlePlay)
-    // can chain .then()/.catch() for button-state / error handling.
-    function _playQueueItem(idx) {
-      var item   = _queue[idx];
-      if (!item) return Promise.resolve();
+    // Try to read metadata from the DOM element currently marked .playing
+    // (app.min.js adds this class to the active home-view row).
+    function scrapeMeta() {
+      var row = document.querySelector('.playing');
+      if (row && row._meta) {
+        return {
+          title:  row._meta.trackName  || row._meta.name   || '',
+          artist: row._meta.trackArtist || row._meta.albumArtist || '',
+          artUrl: row._meta.picture    || row._meta.artwork || ''
+        };
+      }
+      return null;
+    }
+
+    // ── public API ────────────────────────────────────────────────────────────
+    function playTrack(url, meta) {
+      if (!url) return Promise.resolve();
+      _meta = meta || {};
       var player = document.getElementById('player');
       if (!player) return Promise.resolve();
-      if (!player.paused) player.pause();
-      player.src = item.url;
-      updateMiniPlayer(item);
+      // Normalise to absolute so we can compare against player.src (which is always absolute)
+      var abs = (function(u){ try { return new URL(u, window.location.href).href; } catch(e){ return u; } })(url);
+      if (player.src !== abs) {
+        // Different track — pause current (if playing) then load new src
+        if (!player.paused) player.pause();
+        player.src = url;
+      }
+      // Same track paused → just resume; different track → starts fresh
       return player.play() || Promise.resolve();
     }
 
-    // Returns the play Promise — lets app.min.js handlePlay chain .then()/.catch().
-    function playTrack(url, meta) {
-      meta   = meta || {};
-      _queue = [{ url: url, title: meta.title || '', artist: meta.artist || '', artUrl: meta.artUrl || '' }];
-      _qIdx  = 0;
-      return _playQueueItem(0);
-    }
-
     function playQueue(tracks, startIdx) {
-      _queue = tracks || [];
-      _qIdx  = startIdx !== undefined ? startIdx : 0;
-      if (_queue.length > 0) _playQueueItem(_qIdx);
+      var t = (tracks || [])[startIdx !== undefined ? startIdx : 0];
+      if (t) playTrack(t.url || t, t);
     }
 
-    function toggle() {
-      var player = document.getElementById('player');
-      if (!player || !player.src || player.src === window.location.href) return;
-      if (player.paused) {
-        player.play().catch(function (e) { console.warn('[_PLAYER] toggle failed:', e); });
-      } else {
-        player.pause();
-      }
-    }
-
-    function next() {
-      if (_qIdx < _queue.length - 1) { _qIdx++; _playQueueItem(_qIdx); }
-    }
-
-    function prev() {
-      var player = document.getElementById('player');
-      if (!player) return;
-      if (player.currentTime > 3) { player.currentTime = 0; return; }
-      if (_qIdx > 0) { _qIdx--; _playQueueItem(_qIdx); }
-    }
-
-    // ── Wire up all mini-player controls ──
-    // Split into two phases:
-    //   Phase 1 (DOMContentLoaded): wire the static HTML buttons (toggle/prev/next/volume/progress)
-    //   Phase 2 (poll): wire the <audio id="player"> element which app.min.js creates
-    //                   AFTER DOMContentLoaded, so we must poll until it appears.
-
-    var _wired = false; // true once #player listeners are attached
-
-    function _wirePlayer(player) {
-      if (_wired) return;
-      _wired = true;
-
-      var currentTimeEl = document.getElementById('playerCurrentTime');
-      var durationEl    = document.getElementById('playerDuration');
-      var progressFill  = document.getElementById('nowPlayingProgressFill');
-      var toggleBtn     = document.getElementById('nowPlayingToggle');
-
-      // Time / progress bar fill
-      player.addEventListener('timeupdate', function () {
-        if (currentTimeEl) currentTimeEl.textContent = formatTime(player.currentTime);
-        if (progressFill && player.duration)
-          progressFill.style.width = ((player.currentTime / player.duration) * 100) + '%';
-      });
-      player.addEventListener('loadedmetadata', function () {
-        if (durationEl) durationEl.textContent = formatTime(player.duration);
-      });
-      player.addEventListener('durationchange', function () {
-        if (durationEl) durationEl.textContent = formatTime(player.duration);
-      });
-      // Mini-player visibility is controlled by _PLAYER.updateMiniPlayer(), called
-      // only from playTrack/playQueue (library, album detail, playlist views).
-      // Home/discover view plays via app.min.js natively — no mini-player there.
-
-      // Play/pause icon sync (needs toggleBtn which is static HTML, so always available)
-      if (toggleBtn) {
-        player.addEventListener('play', function () {
-          var svg = ensurePlayIconSvg(toggleBtn);
-          svg.innerHTML = '<path d="' + PAUSE_PATH + '"/>';
-          toggleBtn.title = 'Pause';
-        });
-        player.addEventListener('pause', function () {
-          var svg = ensurePlayIconSvg(toggleBtn);
-          svg.innerHTML = '<path d="' + PLAY_PATH + '"/>';
-          toggleBtn.title = 'Play';
-        });
-        player.addEventListener('ended', function () {
-          var svg = ensurePlayIconSvg(toggleBtn);
-          svg.innerHTML = '<path d="' + PLAY_PATH + '"/>';
-          toggleBtn.title = 'Play';
-          // Auto-advance queue on track end
-          if (_qIdx < _queue.length - 1) { _qIdx++; _playQueueItem(_qIdx); }
-        });
-      }
-
-      console.log('[_PLAYER] Audio element wired');
-    }
-
+    // ── wire everything to the audio element via DOMContentLoaded ─────────────
     document.addEventListener('DOMContentLoaded', function () {
-      var toggleBtn   = document.getElementById('nowPlayingToggle');
-      var prevBtn     = document.getElementById('playerPrev');
-      var nextBtn     = document.getElementById('playerNext');
-      var progressBar = document.getElementById('playerProgressBar');
-      var volumeSlider = document.getElementById('volumeSlider');
-      var volumeFill   = document.getElementById('volumeFill');
+      var player   = document.getElementById('player');
+      var bar      = document.getElementById('unifiedPlayer');
+      var toggle   = document.getElementById('upToggle');
+      var progress = document.getElementById('upProgress');
+      var fill     = document.getElementById('upProgressFill');
+      var timeEl   = document.getElementById('upTime');
 
-      // ── Seek on progress bar click ──
-      if (progressBar) {
-        progressBar.addEventListener('click', function (e) {
-          var player = document.getElementById('player');
-          if (!player) return;
-          var rect = progressBar.getBoundingClientRect();
-          if (player.duration) player.currentTime = ((e.clientX - rect.left) / rect.width) * player.duration;
+      if (!player || !bar) return;
+
+      player.addEventListener('play', function () {
+        // Prefer explicitly-set meta; fall back to DOM scrape for home-view tracks
+        var m = (_meta && _meta.title) ? _meta : (scrapeMeta() || _meta);
+        applyMeta(m);
+        bar.classList.add('active');
+        document.body.classList.add('player-active');
+        setIcon(true);
+      });
+
+      player.addEventListener('pause', function () {
+        setIcon(false);
+      });
+
+      player.addEventListener('ended', function () {
+        setIcon(false);
+      });
+
+      player.addEventListener('timeupdate', function () {
+        var pct = player.duration ? (player.currentTime / player.duration * 100) : 0;
+        if (fill)   fill.style.width   = pct + '%';
+        if (timeEl) timeEl.textContent = fmt(player.currentTime);
+      });
+
+      // Toggle play / pause
+      if (toggle) {
+        toggle.addEventListener('click', function () {
+          if (!player.src || player.src === window.location.href) return;
+          if (player.paused) {
+            player.play().catch(function (e) { console.warn('[_PLAYER] resume failed:', e); });
+          } else {
+            player.pause();
+          }
         });
       }
 
-      // ── Volume slider ──
-      if (volumeSlider && volumeFill) {
-        var setVol = function (e) {
-          var player = document.getElementById('player');
-          if (!player) return;
-          var rect = volumeSlider.getBoundingClientRect();
-          var pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-          player.volume = pct;
-          volumeFill.style.width = (pct * 100) + '%';
-        };
-        volumeSlider.addEventListener('click', setVol);
-        volumeSlider.addEventListener('mousedown', function (e) {
-          setVol(e);
-          var onMove = function (ev) { setVol(ev); };
-          var onUp   = function () { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
-          document.addEventListener('mousemove', onMove);
-          document.addEventListener('mouseup', onUp);
+      // Seek by clicking the progress bar
+      if (progress) {
+        progress.addEventListener('click', function (e) {
+          if (!player.duration) return;
+          var rect = progress.getBoundingClientRect();
+          player.currentTime = ((e.clientX - rect.left) / rect.width) * player.duration;
         });
       }
 
-      // ── Toggle button — capture phase so _PLAYER fires BEFORE app.min.js ──
-      // app.min.js overwrites nowPlayingInfo.meta.src with stale currentRow data on
-      // every play event, so its own toggle handler resumes the wrong URL.
-      // We intercept here and directly play/pause the element instead.
-      if (toggleBtn) {
-        toggleBtn.addEventListener('click', function (e) {
-          e.stopImmediatePropagation();
-          toggle();
-        }, true);
-      }
-
-      // ── Prev / Next ──
-      if (prevBtn) prevBtn.addEventListener('click', function () { prev(); }, true);
-      if (nextBtn) nextBtn.addEventListener('click', function () { next(); }, true);
-
-      // ── Phase 2: poll for #player (created by app.min.js after DOM ready) ──
-      var attempts = 0;
-      var poll = setInterval(function () {
-        var player = document.getElementById('player');
-        if (player) {
-          clearInterval(poll);
-          _wirePlayer(player);
-          // Initialise volume fill once we have the element
-          if (volumeFill) volumeFill.style.width = (player.volume * 100) + '%';
-        }
-        if (++attempts > 100) clearInterval(poll); // give up after ~10 s
-      }, 100);
-
-      console.log('[_PLAYER] Button controls wired; polling for audio element…');
+      console.log('[_PLAYER] Unified player wired');
     });
 
-    return { playTrack: playTrack, playQueue: playQueue, toggle: toggle, next: next, prev: prev };
+    return { playTrack: playTrack, playQueue: playQueue };
   })();
   </script>
 

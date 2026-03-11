@@ -20,6 +20,8 @@
       const STREAM_EVENTS_ENDPOINT = '/api/access/stream-events';
       const STREAM_SESSION_STORAGE_KEY = 'mass.session';
       const STREAM_PROGRESS_INTERVAL_MS = 30 * 1000; // 30 seconds
+      let _playAbortCtrl = null;  // AbortController for per-track event listeners
+
       let streamSessionId = null;
       try {
         streamSessionId = localStorage.getItem(STREAM_SESSION_STORAGE_KEY);
@@ -272,37 +274,15 @@
   // ---- UI UPDATES ----
 
       function updateMiniPlayer(title, artist, artworkUrl) {
-        const miniPlayer = document.getElementById('miniPlayer');
-        const playerTitle = document.getElementById('nowPlayingTitle');
-        const playerArtist = document.getElementById('nowPlayingSubtitle');
-        const playerArtwork = document.getElementById('nowPlayingThumbImg');
-        const playIcon = document.getElementById('playIcon');
-        const toggleBtn = document.getElementById('nowPlayingToggle');
-  
-        miniPlayer.classList.add('active');
-        if (playerTitle) playerTitle.textContent = title;
-        if (playerArtist) {
-          playerArtist.textContent = artist;
-          playerArtist.onclick = artist
-            ? () => { window.location.href = `/albums?artist=${encodeURIComponent(artist)}`; }
-            : null;
-        }
-        if (playerArtwork) playerArtwork.src = artworkUrl || '';
-  
-        if (toggleBtn) toggleBtn.title = isPlaying ? 'Pause' : 'Play';
-        if (playIcon) {
-          playIcon.querySelector('path').setAttribute('d',
-            isPlaying
-              ? 'M6 19h4V5H6v14zm8-14v14h4V5h-4z'  // pause icon
-              : 'M8 5v14l11-7z'                       // play icon
-          );
-        }
+        // The #unifiedPlayer bar is driven entirely by _PLAYER's audio event
+        // listeners on <audio id="player">. Nothing to do here.
       }
-  
+
       // Hide mini player
       function hideMiniPlayer() {
-        const miniPlayer = document.getElementById('miniPlayer');
-        miniPlayer.classList.remove('active');
+        var bar = document.getElementById('unifiedPlayer');
+        if (bar) bar.classList.remove('active');
+        document.body.classList.remove('player-active');
       }
   
 
@@ -438,140 +418,127 @@
         const isrc = (item.fields?.['ISRC'] || '').trim();
   
         console.log(`[PlaySong] Playing: ${title} by ${artist}`);
-  
-        // Store current track info with recordId for stream tracking
-        currentTrackInfo = { title, artist, album, artworkUrl, recordId: item.recordId, isrc };
-  
-        // Update visual state - highlight currently playing card
-        updateNowPlayingCard(recordId);
-  
-        // Stop current audio if playing
-        if (currentAudio) {
+
+        // ── Abort listeners from the previous track ─────────────────────────
+        if (_playAbortCtrl) {
+          _playAbortCtrl.abort();
+        }
+        _playAbortCtrl = new AbortController();
+        const { signal } = _playAbortCtrl;
+
+        // ── Stop current audio if playing ────────────────────────────────────
+        if (currentAudio && !currentAudio.paused) {
           console.log('[PlaySong] Stopping previous audio');
-          isSwitchingTracks = true; // Prevent pause event from firing
+          isSwitchingTracks = true;
           stopProgressTracking();
           sendStreamEvent('END');
-          currentAudio.pause();
-          currentAudio = null;
+          isSwitchingTracks = false;
         }
-  
-        // Reset stream tracking state
+
+        // ── Grab the shared audio element (owned by _PLAYER) ─────────────────
+        const player = document.getElementById('player');
+        if (!player) return;
+        currentAudio = player;
+
+        // ── Store track info for stream event reporting ───────────────────────
+        currentTrackInfo = { title, artist, album, artworkUrl, recordId: item.recordId, isrc };
+        updateNowPlayingCard(recordId);
+
+        // ── Reset stream tracking state ───────────────────────────────────────
         lastStreamReportTs = 0;
         lastStreamReportPos = 0;
         lastProgressSentAt = 0;
         hasReportedPlay = false;
-  
-        // Create and play new audio
-        console.log('[PlaySong] Creating new Audio element');
-        currentAudio = new Audio(audioUrl);
-  
-        const _thisAudio = currentAudio;
-  
-        // Add stream event listeners
-        currentAudio.addEventListener('ended', () => {
-          if (currentAudio !== _thisAudio) return;
-          isPlaying = false;
-          const duration = _thisAudio.duration || 0;
-          const finalPosition = _thisAudio.currentTime || duration;
-          const delta = Math.abs((finalPosition || 0) - lastStreamReportPos);
-          sendStreamEvent('END', finalPosition, duration, delta);
-          stopProgressTracking();
-          updateMiniPlayer(title, artist, artworkUrl);
-  
-          // Auto-play next track in shuffle queue
-          if (isShuffleActive) {
-            setTimeout(() => playNextInQueue(), 500);
-          }
-        });
-  
-        currentAudio.addEventListener('error', (e) => {
-          if (currentAudio !== _thisAudio) return;
-          console.error('[PlaySong] Audio error:', e);
-          sendStreamEvent('ERROR');
-          stopProgressTracking();
-          isPlaying = false;
-          updateMiniPlayer(title, artist, artworkUrl);
-        });
-  
-        currentAudio.addEventListener('pause', () => {
-          if (currentAudio !== _thisAudio) return;
-          // Don't send PAUSE if we're switching tracks or if the track has ended
-          if (!_thisAudio.ended && isPlaying && !isSwitchingTracks) {
-            sendStreamEvent('PAUSE');
-            stopProgressTracking();
-          }
-        });
-  
-        // Update progress bar and time display
-        currentAudio.addEventListener('timeupdate', () => {
-          if (currentAudio !== _thisAudio) return;
-          if (!_thisAudio || !_thisAudio.duration) return;
-          const pct = (_thisAudio.currentTime / _thisAudio.duration) * 100;
-          const fill = document.getElementById('nowPlayingProgressFill');
-          const timeEl = document.getElementById('playerCurrentTime');
-          if (fill) fill.style.width = pct + '%';
-          if (timeEl) {
-            const s = Math.floor(_thisAudio.currentTime);
-            timeEl.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-          }
-        });
-  
-        // Reset progress bar when a new track starts
+
+        // ── Reset progress bar ────────────────────────────────────────────────
         const fillEl = document.getElementById('nowPlayingProgressFill');
         const timeEl = document.getElementById('playerCurrentTime');
         if (fillEl) fillEl.style.width = '0%';
         if (timeEl) timeEl.textContent = '0:00';
-  
-        // Start playback and send PLAY event after metadata loads
-        let metadataLoaded = false;
-        currentAudio.addEventListener('loadedmetadata', () => {
-          if (currentAudio !== _thisAudio) return;
-          console.log(`[PlaySong] Duration loaded: ${_thisAudio.duration}s`);
-          metadataLoaded = true;
-        });
-  
-        currentAudio.play().then(() => {
-          if (currentAudio !== _thisAudio) return;
-          console.log(`[PlaySong] ✓ Now playing: ${title} by ${artist}`);
-          isPlaying = true;
-          isSwitchingTracks = false; // Reset flag after successful play
-  
-          // Wait a moment for metadata if not loaded yet, then send PLAY event
-          const sendPlayEvent = () => {
-            if (currentAudio !== _thisAudio) return;
-            if (!hasReportedPlay) {
-              const duration = _thisAudio.duration || 0;
-              console.log(`[Stream Event] Sending PLAY with duration: ${duration}s`);
-              sendStreamEvent('PLAY', 0, duration, 0);
-              hasReportedPlay = true;
-            }
-          };
-  
-          if (metadataLoaded || _thisAudio.duration) {
-            sendPlayEvent();
-          } else {
-            setTimeout(sendPlayEvent, 100);
+
+        // ── Per-track stream event listeners (auto-removed via AbortController)
+        player.addEventListener('ended', () => {
+          if (signal.aborted) return;
+          isPlaying = false;
+          const duration = player.duration || 0;
+          const finalPosition = player.currentTime || duration;
+          const delta = Math.abs((finalPosition || 0) - lastStreamReportPos);
+          sendStreamEvent('END', finalPosition, duration, delta);
+          stopProgressTracking();
+          if (isShuffleActive) {
+            setTimeout(() => playNextInQueue(), 500);
           }
-  
-          startProgressTracking();
-          updateMiniPlayer(title, artist, artworkUrl);
-        }).catch(err => {
-          isSwitchingTracks = false;
-          console.error('[PlaySong] ✗ Playback failed:', err);
+        }, { signal });
+
+        player.addEventListener('error', (e) => {
+          if (signal.aborted) return;
+          console.error('[PlaySong] Audio error:', e);
           sendStreamEvent('ERROR');
           stopProgressTracking();
           isPlaying = false;
-        });
-  
-        // Emit event for potential integration with classic view
-        window.dispatchEvent(new CustomEvent('play-track', {
-          detail: {
-            url: audioUrl,
-            title,
-            artist,
-            album,
-            recordId: item.recordId
+        }, { signal });
+
+        player.addEventListener('pause', () => {
+          if (signal.aborted) return;
+          if (!player.ended && isPlaying && !isSwitchingTracks) {
+            sendStreamEvent('PAUSE');
+            stopProgressTracking();
           }
+        }, { signal });
+
+        player.addEventListener('timeupdate', () => {
+          if (signal.aborted || !player.duration) return;
+          const pct = (player.currentTime / player.duration) * 100;
+          const fill = document.getElementById('nowPlayingProgressFill');
+          const tEl  = document.getElementById('playerCurrentTime');
+          if (fill) fill.style.width = pct + '%';
+          if (tEl) {
+            const s = Math.floor(player.currentTime);
+            tEl.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+          }
+        }, { signal });
+
+        player.addEventListener('loadedmetadata', () => {
+          if (signal.aborted) return;
+          console.log(`[PlaySong] Duration loaded: ${player.duration}s`);
+        }, { signal });
+
+        // ── Delegate actual playback to _PLAYER (it owns <audio id="player">)
+        window._PLAYER.playTrack(audioUrl, { title, artist, artUrl: artworkUrl })
+          .then(() => {
+            if (signal.aborted) return;
+            console.log(`[PlaySong] ✓ Now playing: ${title} by ${artist}`);
+            isPlaying = true;
+            isSwitchingTracks = false;
+            if (!hasReportedPlay) {
+              const duration = player.duration || 0;
+              console.log(`[Stream Event] Sending PLAY with duration: ${duration}s`);
+              sendStreamEvent('PLAY', 0, duration, 0);
+              hasReportedPlay = true;
+              if (!duration) {
+                // metadata not loaded yet — retry once it arrives
+                player.addEventListener('loadedmetadata', () => {
+                  if (!hasReportedPlay) {
+                    sendStreamEvent('PLAY', 0, player.duration || 0, 0);
+                    hasReportedPlay = true;
+                  }
+                }, { signal, once: true });
+              }
+            }
+            startProgressTracking();
+          })
+          .catch(err => {
+            if (signal.aborted) return;
+            isSwitchingTracks = false;
+            console.error('[PlaySong] ✗ Playback failed:', err);
+            sendStreamEvent('ERROR');
+            stopProgressTracking();
+            isPlaying = false;
+          });
+
+        // Emit event for potential integration with other views
+        window.dispatchEvent(new CustomEvent('play-track', {
+          detail: { url: audioUrl, title, artist, album, recordId: item.recordId }
         }));
       }
   
@@ -599,6 +566,11 @@
   
 
       function stopPlayback() {
+        // Cancel all per-track event listeners
+        if (_playAbortCtrl) {
+          _playAbortCtrl.abort();
+          _playAbortCtrl = null;
+        }
         if (currentAudio) {
           isSwitchingTracks = true; // Suppress pause event
           sendStreamEvent('END');
