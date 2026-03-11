@@ -1592,11 +1592,7 @@
                 console.log('[MINI PLAYER] Ribbon shown');
               }
 
-              // Update toggle button to show pause icon
-              if (toggleBtn) {
-                toggleBtn.textContent = '⏸';
-                toggleBtn.title = 'Pause';
-              }
+              // Toggle button icon is managed by the SVG-based handler below; skip textContent here
 
               // Extract track info from the currently playing track in modal
               const playingTrack = document.querySelector('.track.playing, .playlist-track.playing');
@@ -1701,13 +1697,12 @@
             // When audio pauses
             audio.addEventListener('pause', () => {
               const thumb = document.querySelector('.mini-player-artwork');
+              // Toggle button icon managed by SVG-based handler; only update aria state
               const toggleBtn = document.getElementById('nowPlayingToggle');
-
               if (thumb) {
                 thumb.classList.remove('playing');
               }
               if (toggleBtn) {
-                toggleBtn.textContent = '▶';
                 toggleBtn.title = 'Play';
               }
               toggleJukeboxGlow(false);
@@ -1717,13 +1712,13 @@
             audio.addEventListener('ended', () => {
               const thumb = document.querySelector('.mini-player-artwork');
               const progressFill = document.getElementById('nowPlayingProgressFill');
+              // Toggle button icon managed by SVG-based handler; only update title/progress
               const toggleBtn = document.getElementById('nowPlayingToggle');
 
               if (thumb) {
                 thumb.classList.remove('playing');
               }
               if (toggleBtn) {
-                toggleBtn.textContent = '▶';
                 toggleBtn.title = 'Play';
               }
 
@@ -2506,21 +2501,42 @@
 
       // Play/pause icon sync — app.min.js skips this because albums.html has no
       // #nowPlayingCard element, so we update the toggle button icon directly.
+      // Look up #playIcon dynamically each time (never cache — other code may rebuild the SVG)
       const toggleBtn  = document.getElementById('nowPlayingToggle');
-      const playIconEl = document.getElementById('playIcon');
       const PLAY_PATH  = 'M8 5v14l11-7z';
       const PAUSE_PATH = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
-      if (toggleBtn && playIconEl) {
+      const SVG_NS = 'http://www.w3.org/2000/svg';
+
+      function ensurePlayIconSvg(btn) {
+        // Re-create the SVG icon inside the button if it was removed
+        let svg = btn.querySelector('svg[id="playIcon"], svg#playIcon');
+        if (!svg) {
+          btn.textContent = ''; // clear any emoji fallback
+          svg = document.createElementNS(SVG_NS, 'svg');
+          svg.setAttribute('width', '18');
+          svg.setAttribute('height', '18');
+          svg.setAttribute('viewBox', '0 0 24 24');
+          svg.setAttribute('fill', 'currentColor');
+          svg.id = 'playIcon';
+          btn.appendChild(svg);
+        }
+        return svg;
+      }
+
+      if (toggleBtn) {
         player.addEventListener('play', () => {
-          playIconEl.innerHTML = `<path d="${PAUSE_PATH}"/>`;
+          const svg = ensurePlayIconSvg(toggleBtn);
+          svg.innerHTML = `<path d="${PAUSE_PATH}"/>`;
           toggleBtn.title = 'Pause';
         });
         player.addEventListener('pause', () => {
-          playIconEl.innerHTML = `<path d="${PLAY_PATH}"/>`;
+          const svg = ensurePlayIconSvg(toggleBtn);
+          svg.innerHTML = `<path d="${PLAY_PATH}"/>`;
           toggleBtn.title = 'Play';
         });
         player.addEventListener('ended', () => {
-          playIconEl.innerHTML = `<path d="${PLAY_PATH}"/>`;
+          const svg = ensurePlayIconSvg(toggleBtn);
+          svg.innerHTML = `<path d="${PLAY_PATH}"/>`;
           toggleBtn.title = 'Play';
         });
       }
@@ -3338,6 +3354,18 @@
       var player = document.getElementById('player');
       if (player) {
         player.src = audioUrl;
+
+        // Register with app.min.js so the mini-player toggle button works
+        if (typeof window.massSetCurrentTrack === 'function') {
+          window.massSetCurrentTrack({
+            trackRecordId: song.trackRecordId || '',
+            trackName:     song.name || 'Unknown Track',
+            trackArtist:   song.albumArtist || song.trackArtist || '',
+            albumTitle:    song.albumTitle || '',
+            picture:       song.artwork || ''
+          });
+        }
+
         player.play().catch(function(err) { console.warn('[Library] Playback failed:', err); });
       }
 
