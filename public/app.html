@@ -2907,7 +2907,7 @@
                       albumArtist: album.artist || '',
                       trackArtist: track.trackArtist || track.artist || '',
                       artwork: album.picture || album.artwork || '',
-                      S3_URL: track.S3_URL || '',
+                      S3_URL: track.S3_URL || track.audioUrl || track.resolvedSrc || '',
                       mp3: track.mp3 || ''
                     })
                   });
@@ -3308,42 +3308,45 @@
       return d.toLocaleDateString(undefined, { day:'numeric', month:'short', year:'numeric' });
     }
 
-    // Inject a library song into itemsStore so playSong() can find it, then play it
-    window.playLibrarySong = function(songJson) {
-      try {
-        const song = JSON.parse(songJson);
-        const recordId = song.trackRecordId;
-        if (!recordId) return;
-        // Build a minimal item compatible with player.js field helpers
-        const fakeItem = {
-          recordId: recordId,
-          fields: {
-            'Track Name':                 song.name || '',
-            'Album Artist':               song.albumArtist || song.trackArtist || '',
-            'Track Artist':               song.trackArtist || song.albumArtist || '',
-            'Album Title':                song.albumTitle || '',
-            'Tape Files::Album Title':    song.albumTitle || '',
-            'S3_URL':                     song.S3_URL || '',
-            'mp3':                        song.mp3 || '',
-            'Tape Files::S3_URL':         song.S3_URL || '',
-            'Tape Files::mp3':            song.mp3 || '',
-            'Tape Files::Artwork_S3_URL': song.artwork || '',
-            'Artwork::Picture':           song.artwork || ''
-          }
-        };
-        if (window.itemsStore) window.itemsStore.set(recordId, fakeItem);
-        if (window.MADPlayer && window.MADPlayer.itemsStore) window.MADPlayer.itemsStore.set(recordId, fakeItem);
-        if (window.playSong) window.playSong(recordId);
-      } catch(e) { console.warn('[Library] playLibrarySong error', e); }
+    // Registries: store full song/album data keyed by library ID (avoids JSON-in-onclick)
+    var _librarySongs  = new Map();
+    var _libraryAlbums = new Map();
+
+    // Play a library song by its library ID — looks up full data from registry
+    window.playLibrarySong = function(libId) {
+      var song = _librarySongs.get(libId);
+      if (!song) { console.warn('[Library] Song not found for id:', libId); return; }
+      var recordId = song.trackRecordId;
+      if (!recordId) { console.warn('[Library] Song has no trackRecordId'); return; }
+      // Resolve audio URL: stored S3/mp3 URL, or fall back to container API
+      var audioUrl = song.S3_URL || song.mp3 || ('/api/track/' + recordId + '/container');
+      var fakeItem = {
+        recordId: recordId,
+        fields: {
+          'Track Name':                 song.name || '',
+          'Album Artist':               song.albumArtist || song.trackArtist || '',
+          'Track Artist':               song.trackArtist || song.albumArtist || '',
+          'Album Title':                song.albumTitle || '',
+          'Tape Files::Album Title':    song.albumTitle || '',
+          'S3_URL':                     audioUrl,
+          'Tape Files::S3_URL':         audioUrl,
+          'Tape Files::Artwork_S3_URL': song.artwork || '',
+          'Artwork::Picture':           song.artwork || ''
+        }
+      };
+      if (window.itemsStore) window.itemsStore.set(recordId, fakeItem);
+      if (window.MADPlayer && window.MADPlayer.itemsStore) window.MADPlayer.itemsStore.set(recordId, fakeItem);
+      if (window.playSong) window.playSong(recordId);
     };
 
     function albumCardHtml(album) {
+      _libraryAlbums.set(album.id, album);
       const art = album.artwork && album.artwork.startsWith('http')
         ? album.artwork
         : (album.artwork ? '/api/container?u=' + encodeURIComponent(album.artwork) : '/img/placeholder.jpg');
       return `
         <div class="trending-card library-album-card" data-lib-album-id="${album.id}"
-             style="cursor:pointer;" onclick="window.openLibraryAlbum(${JSON.stringify(JSON.stringify(album))})">
+             style="cursor:pointer;" onclick="window.openLibraryAlbum('${album.id}')">
           <div class="trending-artwork">
             <img src="${art}" alt="${album.title}" onerror="this.src='/img/placeholder.jpg'" />
             <div class="play-overlay"><div class="play-icon">▶</div></div>
@@ -3359,13 +3362,13 @@
     }
 
     function songRowHtml(song, extraMeta) {
+      _librarySongs.set(song.id, song);
       const art = song.artwork && song.artwork.startsWith('http')
         ? song.artwork
         : (song.artwork ? '/api/container?u=' + encodeURIComponent(song.artwork) : '/img/placeholder.jpg');
-      const songJson = JSON.stringify(JSON.stringify(song));
       return `
         <div class="library-song-row" data-lib-song-id="${song.id}"
-             style="cursor:pointer;" onclick="window.playLibrarySong(${songJson})">
+             style="cursor:pointer;" onclick="window.playLibrarySong('${song.id}')">
           <img class="library-song-artwork" src="${art}" alt="${song.name}"
                onerror="this.src='/img/placeholder.jpg'" />
           <div class="library-song-info">
@@ -3443,10 +3446,10 @@
             const art = item.artwork && item.artwork.startsWith('http')
               ? item.artwork
               : (item.artwork ? '/api/container?u=' + encodeURIComponent(item.artwork) : '/img/placeholder.jpg');
-            const albumJson = JSON.stringify(JSON.stringify(item));
+            _libraryAlbums.set(item.id, item);
             html += `
               <div class="library-song-row" data-lib-album-id="${item.id}"
-                   style="cursor:pointer;" onclick="window.openLibraryAlbum(${albumJson})">
+                   style="cursor:pointer;" onclick="window.openLibraryAlbum('${item.id}')">
                 <img class="library-song-artwork" src="${art}" alt="${item.title}"
                      onerror="this.src='/img/placeholder.jpg'" style="border-radius:4px;" />
                 <div class="library-song-info">
@@ -3477,21 +3480,20 @@
       loadLibraryRecent();
     };
 
-    window.openLibraryAlbum = function(jsonStr) {
-      try {
-        const album = JSON.parse(jsonStr);
-        if (window.showAlbumDetailView) {
-          window.showView('albums');
-          window.showAlbumDetailView({
-            title:   album.title,
-            artist:  album.artist,
-            picture: album.artwork,
-            genre:   album.genre  || '',
-            year:    album.year   || '',
-            tracks:  []
-          });
-        }
-      } catch(e) { console.warn('[Library] openLibraryAlbum error', e); }
+    window.openLibraryAlbum = function(libId) {
+      var album = _libraryAlbums.get(libId);
+      if (!album) { console.warn('[Library] Album not found for id:', libId); return; }
+      if (window.showAlbumDetailView) {
+        window.showView('albums');
+        window.showAlbumDetailView({
+          title:   album.title,
+          artist:  album.artist,
+          picture: album.artwork,
+          genre:   album.genre  || '',
+          year:    album.year   || '',
+          tracks:  []
+        });
+      }
     };
 
     window.loadLibraryAlbums  = loadLibraryAlbums;
