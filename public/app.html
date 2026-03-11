@@ -2175,6 +2175,7 @@
 
             const player = document.getElementById('player');
             if (player && audioUrl) {
+              if (!player.paused) player.pause(); // stop current audio cleanly before switching
               player.src = audioUrl;
               if (typeof window.massSetCurrentTrack === 'function') {
                 window.massSetCurrentTrack({
@@ -2839,6 +2840,7 @@
               // Play the track
               const player = document.getElementById('player');
               if (player && audioUrl) {
+                if (!player.paused) player.pause(); // stop current audio cleanly before switching
                 player.src = audioUrl;
 
                 // Register track with app.min.js BEFORE play() so stream events and
@@ -3353,9 +3355,18 @@
       // Use the shared <audio id="player"> element — same as album detail view tracks
       var player = document.getElementById('player');
       if (player) {
+        // Explicitly stop any current playback before switching source.
+        // This prevents overlapping audio if the browser hasn't released the old stream yet.
+        if (!player.paused) {
+          player.pause();
+        }
+
         player.src = audioUrl;
 
-        // Register with app.min.js so the mini-player toggle button works
+        // Notify app.min.js of the new track AFTER setting player.src.
+        // massSetCurrentTrack reads player.src to capture meta.src, so the order is critical.
+        // This keeps nowPlayingInfo.meta in sync so the toggle button works correctly —
+        // both for pausing this library song and for resuming it later.
         if (typeof window.massSetCurrentTrack === 'function') {
           window.massSetCurrentTrack({
             trackRecordId: song.trackRecordId || '',
