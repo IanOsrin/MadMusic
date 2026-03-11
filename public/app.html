@@ -2540,6 +2540,23 @@
           svg.innerHTML = `<path d="${PLAY_PATH}"/>`;
           toggleBtn.title = 'Play';
         });
+
+        // Override app.min.js's toggle handler with a reliable direct approach.
+        // app.min.js uses nowPlayingInfo.meta.src to decide what to resume, but
+        // that meta gets overwritten by its own play-event handler whenever
+        // currentRow is set (home view track), causing it to try resuming the
+        // wrong URL. Simple direct control is always correct: player.src is
+        // already the right track, so just play/pause it.
+        // Use capture phase so this fires BEFORE app.min.js's bubble handler.
+        toggleBtn.addEventListener('click', (e) => {
+          e.stopImmediatePropagation(); // prevent app.min.js handler from running
+          if (!player.src || player.src === window.location.href) return;
+          if (player.paused) {
+            player.play().catch(err => console.warn('[Toggle] play failed:', err));
+          } else {
+            player.pause();
+          }
+        }, true); // capture phase
       }
 
       // Prev/Next buttons
@@ -3362,21 +3379,6 @@
         }
 
         player.src = audioUrl;
-
-        // Notify app.min.js of the new track AFTER setting player.src.
-        // massSetCurrentTrack reads player.src to capture meta.src, so the order is critical.
-        // This keeps nowPlayingInfo.meta in sync so the toggle button works correctly —
-        // both for pausing this library song and for resuming it later.
-        if (typeof window.massSetCurrentTrack === 'function') {
-          window.massSetCurrentTrack({
-            trackRecordId: song.trackRecordId || '',
-            trackName:     song.name || 'Unknown Track',
-            trackArtist:   song.albumArtist || song.trackArtist || '',
-            albumTitle:    song.albumTitle || '',
-            picture:       song.artwork || ''
-          });
-        }
-
         player.play().catch(function(err) { console.warn('[Library] Playback failed:', err); });
       }
 
