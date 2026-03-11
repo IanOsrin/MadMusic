@@ -2240,22 +2240,24 @@
       if (_qIdx > 0) { _qIdx--; _playQueueItem(_qIdx); }
     }
 
-    // ── Wire up all mini-player controls once DOM is ready ──
-    document.addEventListener('DOMContentLoaded', function () {
-      var player       = document.getElementById('player');
-      var toggleBtn    = document.getElementById('nowPlayingToggle');
-      var prevBtn      = document.getElementById('playerPrev');
-      var nextBtn      = document.getElementById('playerNext');
+    // ── Wire up all mini-player controls ──
+    // Split into two phases:
+    //   Phase 1 (DOMContentLoaded): wire the static HTML buttons (toggle/prev/next/volume/progress)
+    //   Phase 2 (poll): wire the <audio id="player"> element which app.min.js creates
+    //                   AFTER DOMContentLoaded, so we must poll until it appears.
+
+    var _wired = false; // true once #player listeners are attached
+
+    function _wirePlayer(player) {
+      if (_wired) return;
+      _wired = true;
+
       var currentTimeEl = document.getElementById('playerCurrentTime');
       var durationEl    = document.getElementById('playerDuration');
-      var progressBar   = document.getElementById('playerProgressBar');
       var progressFill  = document.getElementById('nowPlayingProgressFill');
-      var volumeSlider  = document.getElementById('volumeSlider');
-      var volumeFill    = document.getElementById('volumeFill');
+      var toggleBtn     = document.getElementById('nowPlayingToggle');
 
-      if (!player) return;
-
-      // Time / progress
+      // Time / progress bar fill
       player.addEventListener('timeupdate', function () {
         if (currentTimeEl) currentTimeEl.textContent = formatTime(player.currentTime);
         if (progressFill && player.duration)
@@ -2267,35 +2269,13 @@
       player.addEventListener('durationchange', function () {
         if (durationEl) durationEl.textContent = formatTime(player.duration);
       });
+      // Show mini-player whenever playback starts (covers home view tracks played by app.min.js)
+      player.addEventListener('play', function () {
+        var mp = document.getElementById('miniPlayer');
+        if (mp) mp.classList.add('active');
+      });
 
-      // Seek on progress bar click
-      if (progressBar) {
-        progressBar.addEventListener('click', function (e) {
-          var rect = progressBar.getBoundingClientRect();
-          if (player.duration) player.currentTime = ((e.clientX - rect.left) / rect.width) * player.duration;
-        });
-      }
-
-      // Volume slider
-      if (volumeSlider && volumeFill) {
-        volumeFill.style.width = (player.volume * 100) + '%';
-        var setVol = function (e) {
-          var rect = volumeSlider.getBoundingClientRect();
-          var pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-          player.volume = pct;
-          volumeFill.style.width = (pct * 100) + '%';
-        };
-        volumeSlider.addEventListener('click', setVol);
-        volumeSlider.addEventListener('mousedown', function (e) {
-          setVol(e);
-          var onMove = function (ev) { setVol(ev); };
-          var onUp   = function () { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
-          document.addEventListener('mousemove', onMove);
-          document.addEventListener('mouseup', onUp);
-        });
-      }
-
-      // Play/pause icon sync
+      // Play/pause icon sync (needs toggleBtn which is static HTML, so always available)
       if (toggleBtn) {
         player.addEventListener('play', function () {
           var svg = ensurePlayIconSvg(toggleBtn);
@@ -2314,21 +2294,78 @@
           // Auto-advance queue on track end
           if (_qIdx < _queue.length - 1) { _qIdx++; _playQueueItem(_qIdx); }
         });
+      }
 
-        // Capture-phase click so _PLAYER fires BEFORE app.min.js bubble handler
-        // (app.min.js overwrites nowPlayingInfo.meta.src with stale data on play events,
-        //  causing it to resume the wrong track — we bypass it entirely here).
+      console.log('[_PLAYER] Audio element wired');
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      var toggleBtn   = document.getElementById('nowPlayingToggle');
+      var prevBtn     = document.getElementById('playerPrev');
+      var nextBtn     = document.getElementById('playerNext');
+      var progressBar = document.getElementById('playerProgressBar');
+      var volumeSlider = document.getElementById('volumeSlider');
+      var volumeFill   = document.getElementById('volumeFill');
+
+      // ── Seek on progress bar click ──
+      if (progressBar) {
+        progressBar.addEventListener('click', function (e) {
+          var player = document.getElementById('player');
+          if (!player) return;
+          var rect = progressBar.getBoundingClientRect();
+          if (player.duration) player.currentTime = ((e.clientX - rect.left) / rect.width) * player.duration;
+        });
+      }
+
+      // ── Volume slider ──
+      if (volumeSlider && volumeFill) {
+        var setVol = function (e) {
+          var player = document.getElementById('player');
+          if (!player) return;
+          var rect = volumeSlider.getBoundingClientRect();
+          var pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+          player.volume = pct;
+          volumeFill.style.width = (pct * 100) + '%';
+        };
+        volumeSlider.addEventListener('click', setVol);
+        volumeSlider.addEventListener('mousedown', function (e) {
+          setVol(e);
+          var onMove = function (ev) { setVol(ev); };
+          var onUp   = function () { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+      }
+
+      // ── Toggle button — capture phase so _PLAYER fires BEFORE app.min.js ──
+      // app.min.js overwrites nowPlayingInfo.meta.src with stale currentRow data on
+      // every play event, so its own toggle handler resumes the wrong URL.
+      // We intercept here and directly play/pause the element instead.
+      if (toggleBtn) {
         toggleBtn.addEventListener('click', function (e) {
           e.stopImmediatePropagation();
           toggle();
         }, true);
       }
 
-      // Prev / Next — capture phase so they always work regardless of other handlers
+      // ── Prev / Next ──
       if (prevBtn) prevBtn.addEventListener('click', function () { prev(); }, true);
       if (nextBtn) nextBtn.addEventListener('click', function () { next(); }, true);
 
-      console.log('[_PLAYER] Unified player initialized');
+      // ── Phase 2: poll for #player (created by app.min.js after DOM ready) ──
+      var attempts = 0;
+      var poll = setInterval(function () {
+        var player = document.getElementById('player');
+        if (player) {
+          clearInterval(poll);
+          _wirePlayer(player);
+          // Initialise volume fill once we have the element
+          if (volumeFill) volumeFill.style.width = (player.volume * 100) + '%';
+        }
+        if (++attempts > 100) clearInterval(poll); // give up after ~10 s
+      }, 100);
+
+      console.log('[_PLAYER] Button controls wired; polling for audio element…');
     });
 
     return { playTrack: playTrack, playQueue: playQueue, toggle: toggle, next: next, prev: prev };
