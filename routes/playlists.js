@@ -37,6 +37,7 @@ router.post('/', async (req, res) => {
   try {
     const email = user.email;
     const nameRaw = req.body?.name;
+    const artworkRaw = req.body?.artwork;
 
     if (!nameRaw) {
       res.status(400).json({ ok: false, error: 'Playlist name required' });
@@ -48,6 +49,12 @@ router.post('/', async (req, res) => {
       return;
     }
     const name = nameValidation.value;
+
+    // Validate artwork URL if provided — must be a recognised S3 origin
+    const S3_ARTWORK_BASE = 'https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/';
+    const artwork = typeof artworkRaw === 'string' && artworkRaw.startsWith(S3_ARTWORK_BASE)
+      ? artworkRaw.trim()
+      : '';
 
     const now = new Date().toISOString();
     const playlists = await loadPlaylists();
@@ -63,6 +70,7 @@ router.post('/', async (req, res) => {
       id: randomUUID(),
       userId: email,
       name,
+      artwork,
       tracks: [],
       createdAt: now,
       updatedAt: now
