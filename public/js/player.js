@@ -236,7 +236,7 @@
       }
   
       function getArtistField(fields) {
-        const artistFields = ['Album Artist', 'Artist', 'Artist Name'];
+        const artistFields = ['Artist', 'Artist Name', 'Album Artist'];
         return getFieldValue(fields, artistFields) || 'Unknown Artist';
       }
   
