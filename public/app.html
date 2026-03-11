@@ -2272,14 +2272,9 @@
       player.addEventListener('durationchange', function () {
         if (durationEl) durationEl.textContent = formatTime(player.duration);
       });
-      // Show mini-player whenever playback starts.
-      // Metadata is populated by:
-      //  • _PLAYER.playTrack / playQueue  (library, album detail, public playlist views)
-      //  • _PLAYER.syncTrack              (home/discover view — called by app.min.js handlePlay)
-      player.addEventListener('play', function () {
-        var mp = document.getElementById('miniPlayer');
-        if (mp) mp.classList.add('active');
-      });
+      // Mini-player visibility is controlled by _PLAYER.updateMiniPlayer(), called
+      // only from playTrack/playQueue (library, album detail, playlist views).
+      // Home/discover view plays via app.min.js natively — no mini-player there.
 
       // Play/pause icon sync (needs toggleBtn which is static HTML, so always available)
       if (toggleBtn) {
