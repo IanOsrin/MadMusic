@@ -456,15 +456,11 @@
         if (fillEl) fillEl.style.width = '0%';
         if (timeEl) timeEl.textContent = '0:00';
 
-        // ── Per-track stream event listeners (auto-removed via AbortController)
+        // ── Per-track listeners — visual state only, no stream events
+        // (app.min.js owns all stream-event tracking via its native audio listeners)
         player.addEventListener('ended', () => {
           if (signal.aborted) return;
           isPlaying = false;
-          const duration = player.duration || 0;
-          const finalPosition = player.currentTime || duration;
-          const delta = Math.abs((finalPosition || 0) - lastStreamReportPos);
-          sendStreamEvent('END', finalPosition, duration, delta);
-          stopProgressTracking();
           if (isShuffleActive) {
             setTimeout(() => playNextInQueue(), 500);
           }
@@ -473,17 +469,7 @@
         player.addEventListener('error', (e) => {
           if (signal.aborted) return;
           console.error('[PlaySong] Audio error:', e);
-          sendStreamEvent('ERROR');
-          stopProgressTracking();
           isPlaying = false;
-        }, { signal });
-
-        player.addEventListener('pause', () => {
-          if (signal.aborted) return;
-          if (!player.ended && isPlaying && !isSwitchingTracks) {
-            sendStreamEvent('PAUSE');
-            stopProgressTracking();
-          }
         }, { signal });
 
         player.addEventListener('timeupdate', () => {
@@ -498,41 +484,20 @@
           }
         }, { signal });
 
-        player.addEventListener('loadedmetadata', () => {
-          if (signal.aborted) return;
-          console.log(`[PlaySong] Duration loaded: ${player.duration}s`);
-        }, { signal });
-
         // ── Delegate actual playback to _PLAYER (it owns <audio id="player">)
-        window._PLAYER.playTrack(audioUrl, { title, artist, artUrl: artworkUrl })
+        // Pass recordId so _PLAYER can call massSetCurrentTrack, giving app.min.js's
+        // stream-event listeners the correct trackRecordId before play fires.
+        window._PLAYER.playTrack(audioUrl, { title, artist, artUrl: artworkUrl, recordId: item.recordId })
           .then(() => {
             if (signal.aborted) return;
             console.log(`[PlaySong] ✓ Now playing: ${title} by ${artist}`);
             isPlaying = true;
             isSwitchingTracks = false;
-            if (!hasReportedPlay) {
-              const duration = player.duration || 0;
-              console.log(`[Stream Event] Sending PLAY with duration: ${duration}s`);
-              sendStreamEvent('PLAY', 0, duration, 0);
-              hasReportedPlay = true;
-              if (!duration) {
-                // metadata not loaded yet — retry once it arrives
-                player.addEventListener('loadedmetadata', () => {
-                  if (!hasReportedPlay) {
-                    sendStreamEvent('PLAY', 0, player.duration || 0, 0);
-                    hasReportedPlay = true;
-                  }
-                }, { signal, once: true });
-              }
-            }
-            startProgressTracking();
           })
           .catch(err => {
             if (signal.aborted) return;
             isSwitchingTracks = false;
             console.error('[PlaySong] ✗ Playback failed:', err);
-            sendStreamEvent('ERROR');
-            stopProgressTracking();
             isPlaying = false;
           });
 
@@ -554,8 +519,6 @@
           // Resume playback
           currentAudio.play().then(() => {
             isPlaying = true;
-            startProgressTracking();
-            updateMiniPlayer(currentTrackInfo.title, currentTrackInfo.artist, currentTrackInfo.artworkUrl);
           });
         }
   
@@ -572,13 +535,10 @@
           _playAbortCtrl = null;
         }
         if (currentAudio) {
-          isSwitchingTracks = true; // Suppress pause event
-          sendStreamEvent('END');
-          stopProgressTracking();
+          // app.min.js's pause listener sends the END/PAUSE stream event
           currentAudio.pause();
           currentAudio.currentTime = 0;
           currentAudio = null;
-          isSwitchingTracks = false;
         }
         isPlaying = false;
         hasReportedPlay = false;

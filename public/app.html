@@ -2259,6 +2259,18 @@
         if (!player.paused) player.pause();
         player.src = url;
       }
+      // Register with app.min.js's stream-event tracker so that the native
+      // play / pause / ended / timeupdate listeners fire with the correct
+      // trackRecordId.  Must happen AFTER player.src is set, BEFORE player.play().
+      if (_meta.recordId && typeof window.massSetCurrentTrack === 'function') {
+        window.massSetCurrentTrack({
+          trackRecordId: _meta.recordId,
+          trackName:     _meta.title  || '',
+          trackArtist:   _meta.artist || '',
+          albumTitle:    _meta.album  || '',
+          picture:       _meta.artUrl || ''
+        });
+      }
       // Same track paused → just resume; different track → starts fresh
       return player.play() || Promise.resolve();
     }
