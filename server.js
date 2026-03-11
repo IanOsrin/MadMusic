@@ -174,7 +174,7 @@ const TOKEN_CACHE_TTL_MS = 5 * 60 * 1000;
 app.use('/api/', async (req, res, next) => {
   const skipPaths = [
     '/access/validate', '/wake', '/container', '/random-songs', '/public-playlists',
-    '/search', '/album', '/trending', '/featured-albums', '/missing-audio-songs',
+    '/search', '/album', '/trending', '/explore', '/featured-albums', '/missing-audio-songs',
     '/auth', '/payments/initialize', '/payments/callback', '/payments/webhook', '/payments/plans',
     '/access/stream-events'
   ];

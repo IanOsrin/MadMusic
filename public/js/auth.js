@@ -61,6 +61,7 @@
         '/api/search',
         '/api/album',
         '/api/trending',
+        '/api/explore',
         '/api/featured-albums',
         '/api/missing-audio-songs',
         '/api/payments/'  // payment flow must work before token exists
