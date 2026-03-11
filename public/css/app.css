@@ -2786,6 +2786,64 @@
       display: none;
     }
 
+    /* ── Card action icon buttons (play + go-to-album) ── */
+    .card-play-btn,
+    .card-album-btn {
+      position: absolute;
+      bottom: 0.55rem;
+      z-index: 4;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.2s ease, transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+      text-decoration: none;
+    }
+
+    .card-play-btn {
+      left: 0.55rem;
+      background: rgba(255, 255, 255, 0.95);
+      color: var(--accent, #4a90e2);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-album-btn {
+      right: 0.55rem;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .trending-card:hover .card-play-btn,
+    .trending-card:hover .card-album-btn,
+    .random-card:hover .card-play-btn,
+    .random-card:hover .card-album-btn {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .card-play-btn:hover {
+      background: var(--accent, #4a90e2) !important;
+      color: #fff !important;
+      transform: scale(1.12) !important;
+      box-shadow: 0 4px 14px rgba(74, 144, 226, 0.45) !important;
+    }
+
+    .card-album-btn:hover {
+      background: var(--accent, #4a90e2) !important;
+      color: #fff !important;
+      transform: scale(1.12) !important;
+      box-shadow: 0 4px 14px rgba(74, 144, 226, 0.45) !important;
+    }
+
     /* ── New Releases grid ── */
     .nr-grid {
       display: grid;
