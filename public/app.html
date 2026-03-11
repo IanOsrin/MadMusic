@@ -2219,6 +2219,17 @@
       if (_queue.length > 0) _playQueueItem(_qIdx);
     }
 
+    // Called by app.min.js handlePlay after play() resolves, to register the
+    // track with _PLAYER without triggering a new play.  Keeps _PLAYER's queue
+    // in sync so toggle/mini-player metadata stay correct for home-view tracks.
+    // meta = { title, artist, artUrl }
+    function syncTrack(url, meta) {
+      meta   = meta || {};
+      _queue = [{ url: url, title: meta.title || '', artist: meta.artist || '', artUrl: meta.artUrl || '' }];
+      _qIdx  = 0;
+      updateMiniPlayer(_queue[0]);
+    }
+
     function toggle() {
       var player = document.getElementById('player');
       if (!player || !player.src || player.src === window.location.href) return;
@@ -2269,33 +2280,13 @@
       player.addEventListener('durationchange', function () {
         if (durationEl) durationEl.textContent = formatTime(player.duration);
       });
-      // Show mini-player and populate metadata whenever playback starts.
-      // When _PLAYER started the track (_qIdx is valid) the metadata is already set.
-      // When app.min.js started it (home/discover view), scrape from the row element:
-      //   app.min.js adds .loading to currentRow BEFORE calling player.play(), and stores
-      //   full track metadata in row._meta = { trackName, trackArtist, albumArtist, picture }.
+      // Show mini-player whenever playback starts.
+      // Metadata is populated by:
+      //  • _PLAYER.playTrack / playQueue  (library, album detail, public playlist views)
+      //  • _PLAYER.syncTrack              (home/discover view — called by app.min.js handlePlay)
       player.addEventListener('play', function () {
         var mp = document.getElementById('miniPlayer');
         if (mp) mp.classList.add('active');
-
-        // Only scrape if _PLAYER doesn't own this track
-        if (_qIdx >= 0 && _queue[_qIdx]) return;
-
-        // Find the loading/playing row that app.min.js is managing
-        var el = document.querySelector('.card.loading, .card.playing, li.loading, li.playing');
-        if (el && el._meta) {
-          var m   = el._meta;
-          var pic = m.picture || '';
-          // Proxy non-S3 URLs through the container endpoint (same logic as other play paths)
-          if (pic && !/^https?:/.test(pic) && !pic.startsWith('/api/')) {
-            pic = '/api/container?u=' + encodeURIComponent(pic);
-          }
-          updateMiniPlayer({
-            title:  m.trackName  || '',
-            artist: m.trackArtist || m.albumArtist || '',
-            artUrl: pic
-          });
-        }
       });
 
       // Play/pause icon sync (needs toggleBtn which is static HTML, so always available)
@@ -2391,7 +2382,7 @@
       console.log('[_PLAYER] Button controls wired; polling for audio element…');
     });
 
-    return { playTrack: playTrack, playQueue: playQueue, toggle: toggle, next: next, prev: prev };
+    return { playTrack: playTrack, playQueue: playQueue, syncTrack: syncTrack, toggle: toggle, next: next, prev: prev };
   })();
   </script>
 
