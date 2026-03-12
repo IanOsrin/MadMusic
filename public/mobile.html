@@ -1994,15 +1994,17 @@
         elements.floatingPlayer.style.top = snapTop;
         elements.floatingPlayer.style.bottom = snapBottom;
       } else {
-        // It's a tap, expand player
-        if (deltaTime < 300) {
-          state.playerModal.visible = true;
-          elements.playerModal.classList.add('show');
-          updatePlayerModal();
-        }
+        // It's a tap — let the click handler open the modal to avoid double-fire
       }
 
       isDragging = false;
+    });
+
+    // Open player modal on click (covers desktop and browsers where touchend alone is unreliable)
+    elements.floatingPlayer.addEventListener('click', () => {
+      state.playerModal.visible = true;
+      elements.playerModal.classList.add('show');
+      updatePlayerModal();
     });
 
     // Close player modal
