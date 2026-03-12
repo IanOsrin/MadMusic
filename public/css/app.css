@@ -1921,22 +1921,22 @@
     }
 
     html.dark-mode {
-      background: #1a1a2e !important;
+      background: #0a0a0a !important;
     }
 
     body.dark-mode {
-      --bg-primary: #1a1a2e;
-      --bg-secondary: #16213e;
-      --bg-card: #0f3460;
+      --bg-primary: #0a0a0a;
+      --bg-secondary: #111111;
+      --bg-card: #1a1a1a;
       --text-primary: #e8edf2;
       --text-secondary: #b8c4d0;
       --text-muted: #8b98a5;
       --accent: #a78bfa;
       --accent-hover: #8b5cf6;
-      --border: #2c3e50;
+      --border: #2a2a2a;
       --shadow: rgba(255, 255, 255, 0.05);
       --overlay: rgba(0, 0, 0, 0.7);
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 25%, #0f3460 50%, #16213e 75%, #1a1a2e 100%) !important;
+      background: #0a0a0a !important;
       background-attachment: fixed !important;
     }
 
@@ -1969,7 +1969,7 @@
     }
 
     body.dark-mode .nav-header {
-      background: #1a1a2e;
+      background: #0a0a0a;
     }
 
     .nav-logo {
