@@ -1525,9 +1525,12 @@
       const artworkFields = ['Artwork_S3_URL', 'Tape Files::Artwork_S3_URL', 'Artwork::Picture', 'Artwork Picture', 'Picture'];
       const artwork = getFieldValue(item.fields, artworkFields);
 
-      // Check if artwork field exists and is not empty
-      if (!artwork) return false;
-      if (typeof artwork === 'string' && artwork.trim() === '') return false;
+      // Must be a non-empty string that is a real HTTP/HTTPS URL
+      if (!artwork || typeof artwork !== 'string') return false;
+      const trimmed = artwork.trim();
+      if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) return false;
+      // Must look like an image URL (has some path/extension after the host)
+      if (trimmed.length < 12) return false;
 
       return true;
     }
@@ -1554,8 +1557,10 @@
         albums.get(albumKey).tracks.push(track);
       });
 
-      // Convert to array and sort by track count (most tracks first)
-      return Array.from(albums.values()).sort((a, b) => b.tracks.length - a.tracks.length);
+      // Convert to array, filter out albums with no real cover art, sort by track count
+      return Array.from(albums.values())
+        .filter(album => album.artwork && album.artwork !== '/img/placeholder.png')
+        .sort((a, b) => b.tracks.length - a.tracks.length);
     }
 
     function createAlbumCard(album) {
