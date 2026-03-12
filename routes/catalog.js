@@ -282,11 +282,12 @@ router.get('/search', async (req, res) => {
     const artist = (req.query.artist || '').toString().trim();
     const album = (req.query.album || '').toString().trim();
     const track = (req.query.track || '').toString().trim();
+    const genre = (req.query.genre || '').toString().trim();
     const limit = Math.max(1, Math.min(500, parseInt(req.query.limit || '10', 10)));
     const uiOff0 = Math.max(0, parseInt(req.query.offset || '0', 10));
     const fmOff = uiOff0 + 1;
 
-    const cacheKey = `search:v1:${q}:${artist}:${album}:${track}:${limit}:${uiOff0}`;
+    const cacheKey = `search:v2:${q}:${artist}:${album}:${track}:${genre}:${limit}:${uiOff0}`;
     const cached = searchCache.get(cacheKey);
     if (cached) {
       console.log(`[CACHE HIT] search`);
@@ -297,11 +298,16 @@ router.get('/search', async (req, res) => {
     const SEARCH_FIELDS_BASE = ['Album Artist', 'Album Title', 'Track Name'];
     const SEARCH_FIELDS_OPTIONAL = ['Year of Release', 'Local Genre', 'Language Code', 'Track Artist', 'Genre'];
     const SEARCH_FIELDS_DEFAULT = [...SEARCH_FIELDS_BASE, ...SEARCH_FIELDS_OPTIONAL];
+    const GENRE_FIELDS = ['Local Genre', 'Genre'];
 
-    const buildQueries = ({ q, artist, album, track }) => {
+    const buildQueries = ({ q, artist, album, track, genre }) => {
+      // Genre-only search: query FM directly by genre field
+      if (genre && !q && !artist && !album && !track) {
+        return GENRE_FIELDS.map(f => ({ [f]: `*${genre}*` }));
+      }
+
       const queries = [];
       if (artist) {
-        // Artist search: only match against artist fields, not Album Title or Track Name
         ['Album Artist', 'Track Artist'].forEach(f => queries.push({ [f]: begins(artist) }));
       }
       if (album) {
@@ -316,7 +322,7 @@ router.get('/search', async (req, res) => {
       return queries.length ? queries : [{ 'Album Title': '*' }];
     };
 
-    const queries = buildQueries({ q, artist, album, track });
+    const queries = buildQueries({ q, artist, album, track, genre });
     const payload = { query: queries, limit: Math.min(500, limit * 10), offset: fmOff };
 
     const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
@@ -329,29 +335,33 @@ router.get('/search', async (req, res) => {
       return res.status(httpStatus).json({ error: 'Album search failed', status: httpStatus, detail: `${msg} (FM ${code})` });
     }
 
-    const rawData = json?.response?.data || [];
+    let rawData = json?.response?.data || [];
+
+    // When text + genre: post-filter by genre since FM can't AND across OR queries
+    if (genre && (q || artist || album || track)) {
+      const genreLower = genre.toLowerCase();
+      rawData = rawData.filter(r => {
+        const f = r.fieldData || {};
+        return GENRE_FIELDS.some(field => (f[field] || '').toLowerCase().includes(genreLower));
+      });
+    }
+
     const validRecords = rawData.filter(r => hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
 
-    // Sort so Album Artist matches always come first, regardless of whether search was ?artist= or ?q=
+    // Sort so Album Artist matches always come first
     const needle = (artist || q).toLowerCase();
     if (needle) {
       validRecords.sort((a, b) => {
-        const aFields = a.fieldData || {};
-        const bFields = b.fieldData || {};
-        const aAlbumArtist = (aFields['Album Artist'] || '').toLowerCase();
-        const bAlbumArtist = (bFields['Album Artist'] || '').toLowerCase();
-        // Rank: 0 = Album Artist starts with needle, 1 = Album Artist contains needle, 2 = no Album Artist match
-        const rank = (albumArtist) => {
-          if (albumArtist.startsWith(needle)) return 0;
-          if (albumArtist.includes(needle)) return 1;
-          return 2;
-        };
+        const aAlbumArtist = (a.fieldData?.['Album Artist'] || '').toLowerCase();
+        const bAlbumArtist = (b.fieldData?.['Album Artist'] || '').toLowerCase();
+        const rank = (s) => s.startsWith(needle) ? 0 : s.includes(needle) ? 1 : 2;
         return rank(aAlbumArtist) - rank(bAlbumArtist);
       });
     }
 
     const response_obj = {
       items: validRecords.slice(0, limit).map((d) => ({ recordId: d.recordId, modId: d.modId, fields: d.fieldData || {} })),
+      rawReturnedCount: validRecords.length,
       total: json?.response?.dataInfo?.foundCount || validRecords.length,
       offset: uiOff0,
       limit
