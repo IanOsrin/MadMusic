@@ -1287,43 +1287,11 @@
         window.history.replaceState({}, document.title, window.location.pathname);
       }
 
-      // Step 1: Check and require access token first
-      const accessToken = localStorage.getItem('mass_access_token');
-      if (!accessToken) {
-        // Show friendly message with both options
-        elements.discoverContent.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-icon">🔑</div>
-            <p style="margin-bottom: 8px;"><strong>Access Token Required</strong></p>
-            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">You need an access token to use MASS Mobile</p>
-            <button class="btn btn-primary" onclick="setAccessToken()" style="margin-bottom: 8px;">Enter Access Token</button>
-            <button class="btn btn-secondary" onclick="buyAccess()">Buy Access</button>
-          </div>
-        `;
-        updateAuthUI();
-        return;
-      }
-
-      // Step 2: Validate access token and set user identity
-      const user = await checkAuth();
-      if (user) {
-        state.currentUser = user;
-        updateAuthUI();
-        loadDiscover();
-        loadPlaylists();
-      } else {
-        // Token was invalid/expired — cleared by checkAuth
-        updateAuthUI();
-        elements.discoverContent.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-icon">🔑</div>
-            <p style="margin-bottom: 8px;"><strong>Access Token Expired</strong></p>
-            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">Your access token is no longer valid</p>
-            <button class="btn btn-primary" onclick="setAccessToken()" style="margin-bottom: 8px;">Enter New Token</button>
-            <button class="btn btn-secondary" onclick="buyAccess()">Buy Access</button>
-          </div>
-        `;
-      }
+      // No token gate — load the app directly
+      state.currentUser = { email: localStorage.getItem('mass_token_email') || '' };
+      updateAuthUI();
+      loadDiscover();
+      loadPlaylists();
     }
 
     // Function to set access token
