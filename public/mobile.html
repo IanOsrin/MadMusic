@@ -1943,9 +1943,8 @@
       state.playerBubble.visible = true;
       elements.floatingPlayer.classList.add('visible', 'playing');
 
-      // Stream event
+      // Generate a new session ID for this track — stream event fired by the audio 'play' listener
       state.streamSessionId = generateSessionId();
-      sendStreamEvent('PLAY');
     }
 
     function updateFloatingPlayer() {
