@@ -1273,6 +1273,11 @@
       } else if (paymentStatus === 'failed' || paymentStatus === 'error') {
         window.history.replaceState({}, document.title, window.location.pathname);
         showToast('Payment was not completed. Please try again.', 'error');
+      } else if (paymentToken && !paymentStatus) {
+        // Token passed directly from main app — save it silently
+        console.log('[Mobile] Token passed from main app, saving');
+        localStorage.setItem('mass_access_token', paymentToken.trim().toUpperCase());
+        window.history.replaceState({}, document.title, window.location.pathname);
       }
 
       // Step 1: Check and require access token first
