@@ -1176,9 +1176,11 @@
       const accessToken = localStorage.getItem('mass_access_token');
       if (!accessToken) return null;
 
-      // Ensure a session ID exists for this session
+      // Reuse the main app's session ID if present (same localStorage origin),
+      // so the server doesn't reject the token as "in use on another device"
       if (!state.streamSessionId) {
-        state.streamSessionId = generateSessionId();
+        state.streamSessionId = localStorage.getItem('mass.session') || generateSessionId();
+        localStorage.setItem('mass.session', state.streamSessionId);
       }
 
       try {
