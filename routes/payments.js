@@ -27,7 +27,7 @@ router.get('/plans', (req, res) => {
 
 router.post('/initialize', async (req, res) => {
   try {
-    const { email, plan } = req.body;
+    const { email, plan, source } = req.body;
 
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       return res.status(400).json({ ok: false, error: 'Valid email is required' });
@@ -47,9 +47,12 @@ router.post('/initialize', async (req, res) => {
     // Fall back to Express's req.protocol + req.get('host'), which already
     // respects the trust-proxy setting configured in server.js.
     const APP_BASE = (process.env.APP_URL || '').replace(/\/$/, '');
-    const callbackUrl = APP_BASE
+    const callbackBase = APP_BASE
       ? `${APP_BASE}/api/payments/callback`
       : `${req.protocol}://${req.get('host')}/api/payments/callback`;
+    const callbackUrl = source === 'mobile'
+      ? `${callbackBase}?source=mobile`
+      : callbackBase;
 
     const data = await paystackRequest('POST', '/transaction/initialize', {
       email: email.trim().toLowerCase(),
@@ -59,7 +62,8 @@ router.post('/initialize', async (req, res) => {
       metadata: {
         plan_id: plan,
         plan_label: selectedPlan.label,
-        days: selectedPlan.days
+        days: selectedPlan.days,
+        source: source === 'mobile' ? 'mobile' : 'desktop'
       }
     });
 
@@ -79,19 +83,24 @@ router.post('/initialize', async (req, res) => {
 router.get('/callback', async (req, res) => {
   const { reference } = req.query;
 
+  // Detect mobile source from a query param passed through the Paystack flow
+  // (Paystack preserves query params on the callback_url)
+  const mobileCallback = req.query.source === 'mobile';
+
   if (!reference) {
-    return res.redirect('/?payment=error&reason=missing_reference');
+    return res.redirect(`${mobileCallback ? '/mobile.html' : '/'}?payment=error&reason=missing_reference`);
   }
 
   try {
     const existing = pendingPayments.get(reference);
     if (existing) {
+      const base = mobileCallback ? '/mobile.html' : '/';
       if (existing.processing) {
         console.log(`[MASS] Payment callback already in progress for ${reference}, redirecting to pending`);
-        return res.redirect(`/?payment=pending&reason=processing`);
+        return res.redirect(`${base}?payment=pending&reason=processing`);
       }
       console.log(`[MASS] Payment callback duplicate for ${reference}, returning existing token ${existing.tokenCode}`);
-      return res.redirect(`/?payment=success&token=${encodeURIComponent(existing.tokenCode)}`);
+      return res.redirect(`${base}?payment=success&token=${encodeURIComponent(existing.tokenCode)}`);
     }
 
     // Mark as in-progress immediately to block concurrent requests for the same reference
@@ -102,7 +111,7 @@ router.get('/callback', async (req, res) => {
     if (!data.data || data.data.status !== 'success') {
       pendingPayments.delete(reference);
       console.warn(`[MASS] Payment verification failed for ${reference}: status=${data.data?.status}`);
-      return res.redirect(`/?payment=failed&reason=not_successful`);
+      return res.redirect(`${mobileCallback ? '/mobile.html' : '/'}?payment=failed&reason=not_successful`);
     }
 
     const metadata = data.data.metadata || {};
@@ -121,10 +130,11 @@ router.get('/callback', async (req, res) => {
 
     console.log(`[MASS] Payment successful: ${reference} → token ${token.code} (${days} days)`);
 
-    res.redirect(`/?payment=success&token=${encodeURIComponent(token.code)}`);
+    const successBase = mobileCallback ? '/mobile.html' : '/';
+    res.redirect(`${successBase}?payment=success&token=${encodeURIComponent(token.code)}`);
   } catch (err) {
     console.error(`[MASS] Payment callback error for ${reference}:`, err);
-    res.redirect(`/?payment=error&reason=verification_failed`);
+    res.redirect(`${mobileCallback ? '/mobile.html' : '/'}?payment=error&reason=verification_failed`);
   }
 });
 

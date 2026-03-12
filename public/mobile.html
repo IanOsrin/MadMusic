@@ -1333,7 +1333,7 @@
         const response = await fetch('/api/payments/initialize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email.trim(), plan: '7-day' })
+          body: JSON.stringify({ email: email.trim(), plan: '7-day', source: 'mobile' })
         });
 
         const data = await response.json();
