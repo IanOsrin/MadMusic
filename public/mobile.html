@@ -12,17 +12,17 @@
   <style>
     /* ===== CSS Variables ===== */
     :root {
-      /* Colors - Dark Theme */
-      --bg-primary: #000000;
-      --bg-secondary: #1c1c1e;
-      --bg-card: #2c2c2e;
-      --text-primary: #f5f5f7;
-      --text-secondary: #a1a1a6;
-      --text-muted: #86868b;
-      --accent: #00d4d4;
-      --accent-hover: #00b4b4;
-      --border: #3a3a3c;
-      --shadow: rgba(0, 0, 0, 0.3);
+      /* Colors - Light Theme */
+      --bg-primary: #f5f5f7;
+      --bg-secondary: #ffffff;
+      --bg-card: #ffffff;
+      --text-primary: #1c1c1e;
+      --text-secondary: #48484a;
+      --text-muted: #8e8e93;
+      --accent: #00a8a8;
+      --accent-hover: #008888;
+      --border: #d1d1d6;
+      --shadow: rgba(0, 0, 0, 0.1);
       --error: #ef4444;
       --success: #10b981;
 
@@ -386,7 +386,7 @@
     #player-modal {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.95);
+      background: var(--bg-primary);
       z-index: 2000;
       display: none;
       opacity: 0;
@@ -417,7 +417,7 @@
       width: var(--touch-target-min);
       height: var(--touch-target-min);
       border-radius: 50%;
-      background: rgba(255, 255, 255, 0.1);
+      background: var(--border);
       border: none;
       color: var(--text-primary);
       font-size: 24px;
@@ -589,7 +589,7 @@
     .modal-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(0, 0, 0, 0.4);
       z-index: 1500;
       display: none;
       opacity: 0;
