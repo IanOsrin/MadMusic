@@ -1176,11 +1176,16 @@
       const accessToken = localStorage.getItem('mass_access_token');
       if (!accessToken) return null;
 
+      // Ensure a session ID exists for this session
+      if (!state.streamSessionId) {
+        state.streamSessionId = generateSessionId();
+      }
+
       try {
         const response = await fetch('/api/access/validate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: accessToken.trim().toUpperCase() })
+          body: JSON.stringify({ token: accessToken.trim().toUpperCase(), sessionId: state.streamSessionId })
         });
 
         const data = await response.json();
