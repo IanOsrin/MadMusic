@@ -692,12 +692,19 @@
   <!-- Desktop User Notice -->
   <script>
     (function() {
-      // Auto-redirect desktop users to the full app, unless they explicitly chose mobile
+      // Show a soft notice to desktop users suggesting the full app
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       const isLargeScreen = window.innerWidth > 768;
 
       if (!isMobile && isLargeScreen && !sessionStorage.getItem('forceMobileView')) {
-        window.location.replace('/');
+        window.addEventListener('DOMContentLoaded', () => {
+          const notice = document.createElement('div');
+          notice.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #d1d1d6;padding:10px 20px;border-radius:24px;font-size:13px;color:#48484a;z-index:1000;box-shadow:0 4px 16px rgba(0,0,0,0.12);white-space:nowrap;';
+          notice.innerHTML = 'You\'re on desktop — <a href="/" style="color:#00a8a8;font-weight:600;text-decoration:none;" onclick="sessionStorage.setItem(\'forceDesktopView\',\'true\')">Switch to full app</a>';
+          document.body.appendChild(notice);
+          setTimeout(() => { notice.style.transition = 'opacity 0.5s'; notice.style.opacity = '0'; }, 8000);
+          setTimeout(() => notice.remove(), 8500);
+        });
       }
     })();
   </script>
@@ -1263,9 +1270,12 @@
 
       if (paymentStatus === 'success' && paymentToken) {
         console.log('[Mobile] Payment success, saving token:', paymentToken);
-        localStorage.setItem('mass_access_token', paymentToken);
+        localStorage.setItem('mass_access_token', paymentToken.trim().toUpperCase());
+        // Clean URL then reload so the app starts a fresh session with the new token
         window.history.replaceState({}, document.title, window.location.pathname);
         showToast('Payment successful! Access activated.', 'success');
+        setTimeout(() => window.location.reload(), 1500);
+        return;
       } else if (paymentStatus === 'failed' || paymentStatus === 'error') {
         window.history.replaceState({}, document.title, window.location.pathname);
         showToast('Payment was not completed. Please try again.', 'error');
