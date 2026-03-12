@@ -1287,7 +1287,23 @@
         window.history.replaceState({}, document.title, window.location.pathname);
       }
 
-      // No token gate — load the app directly
+      // Check token exists locally — no server round-trip (avoids session conflict)
+      const accessToken = localStorage.getItem('mass_access_token');
+      if (!accessToken) {
+        elements.discoverContent.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">🔑</div>
+            <p style="margin-bottom: 8px;"><strong>Access Token Required</strong></p>
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">You need an access token to use MASS Mobile</p>
+            <button class="btn btn-primary" onclick="setAccessToken()" style="margin-bottom: 8px;">Enter Access Token</button>
+            <button class="btn btn-secondary" onclick="buyAccess()">Buy Access</button>
+          </div>
+        `;
+        updateAuthUI();
+        return;
+      }
+
+      // Token present — load app; server validates on each protected API call
       state.currentUser = { email: localStorage.getItem('mass_token_email') || '' };
       updateAuthUI();
       loadDiscover();
