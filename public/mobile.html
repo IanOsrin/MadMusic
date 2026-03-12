@@ -1579,6 +1579,7 @@
 
       card.querySelector('.play-btn').addEventListener('click', () => {
         if (album.tracks.length > 0) {
+          state.playlistContext = { tracks: album.tracks, currentIndex: 0, playFn: playTrack };
           playTrack(album.tracks[0]);
         }
       });
@@ -1609,6 +1610,7 @@
       elements.bottomSheet.querySelectorAll('[data-track-index]').forEach(btn => {
         btn.addEventListener('click', () => {
           const trackIndex = parseInt(btn.dataset.trackIndex);
+          state.playlistContext = { tracks: album.tracks, currentIndex: trackIndex, playFn: playTrack };
           playTrack(album.tracks[trackIndex]);
           closeModal();
         });
@@ -1750,7 +1752,7 @@
         card.querySelector('.play-playlist-btn').addEventListener('click', (e) => {
           e.stopPropagation();
           if (trackCount === 0) { showToast('Playlist is empty', 'error'); return; }
-          state.playlistContext = { tracks: playlist.tracks, currentIndex: 0 };
+          state.playlistContext = { tracks: playlist.tracks, currentIndex: 0, playFn: playPlaylistTrack };
           playPlaylistTrack(playlist.tracks[0]);
         });
 
@@ -1775,7 +1777,7 @@
       elements.bottomSheet.querySelectorAll('[data-index]').forEach(btn => {
         btn.addEventListener('click', () => {
           const idx = parseInt(btn.dataset.index);
-          state.playlistContext = { tracks, currentIndex: idx };
+          state.playlistContext = { tracks, currentIndex: idx, playFn: playPlaylistTrack };
           playPlaylistTrack(tracks[idx]);
           closeModal();
         });
@@ -2082,7 +2084,7 @@
       const newIdx = Math.max(0, ctx.currentIndex - 1);
       if (newIdx !== ctx.currentIndex) {
         ctx.currentIndex = newIdx;
-        playPlaylistTrack(ctx.tracks[newIdx]);
+        (ctx.playFn || playTrack)(ctx.tracks[newIdx]);
       }
     });
 
@@ -2092,17 +2094,17 @@
       const newIdx = Math.min(ctx.tracks.length - 1, ctx.currentIndex + 1);
       if (newIdx !== ctx.currentIndex) {
         ctx.currentIndex = newIdx;
-        playPlaylistTrack(ctx.tracks[newIdx]);
+        (ctx.playFn || playTrack)(ctx.tracks[newIdx]);
       }
     });
 
-    // Auto-advance to next playlist track on end
+    // Auto-advance to next track on end (works for both album and playlist contexts)
     elements.audio.addEventListener('ended', () => {
       sendStreamEvent('END');
       const ctx = state.playlistContext;
       if (ctx && ctx.tracks && ctx.currentIndex < ctx.tracks.length - 1) {
         ctx.currentIndex += 1;
-        playPlaylistTrack(ctx.tracks[ctx.currentIndex]);
+        (ctx.playFn || playTrack)(ctx.tracks[ctx.currentIndex]);
       }
     });
 
