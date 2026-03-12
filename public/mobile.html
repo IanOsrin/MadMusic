@@ -1704,10 +1704,15 @@
 
     // ===== Playlists =====
     async function loadPlaylists() {
-      if (!state.currentUser) return;
-
       try {
         const response = await fetch('/api/playlists');
+        if (!response.ok) {
+          console.error('Failed to load playlists:', response.status);
+          if (response.status === 401) {
+            elements.playlistsContent.innerHTML = '<div class="empty-state"><div class="empty-icon">🔒</div><p>Token not recognised by server. Try re-entering your access token.</p></div>';
+          }
+          return;
+        }
         const data = await response.json();
         state.playlists = data.playlists || [];
         renderPlaylists();
@@ -1717,11 +1722,6 @@
     }
 
     function renderPlaylists() {
-      if (!state.currentUser) {
-        elements.playlistsContent.innerHTML = '<div class="empty-state"><div class="empty-icon">🔒</div><p>Please log in to view playlists</p></div>';
-        return;
-      }
-
       if (state.playlists.length === 0) {
         elements.playlistsContent.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No playlists yet. Create one!</p></div>';
         return;
@@ -1729,17 +1729,72 @@
 
       elements.playlistsContent.innerHTML = '';
       state.playlists.forEach(playlist => {
+        const trackCount = playlist.tracks?.length || 0;
         const card = document.createElement('div');
         card.className = 'track-card';
+        card.style.cursor = 'pointer';
         card.innerHTML = `
           <div class="track-info">
             <div class="track-title">${playlist.name}</div>
-            <div class="track-artist">${playlist.tracks?.length || 0} tracks</div>
+            <div class="track-artist">${trackCount} track${trackCount !== 1 ? 's' : ''}</div>
           </div>
-          <button class="btn-icon">▶</button>
+          <button class="btn-icon play-playlist-btn" title="Play playlist">▶</button>
         `;
+
+        // Tap card body → show track list
+        card.querySelector('.track-info').addEventListener('click', () => {
+          showPlaylistTracks(playlist);
+        });
+
+        // Tap ▶ → play from first track
+        card.querySelector('.play-playlist-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (trackCount === 0) { showToast('Playlist is empty', 'error'); return; }
+          state.playlistContext = { tracks: playlist.tracks, currentIndex: 0 };
+          playPlaylistTrack(playlist.tracks[0]);
+        });
+
         elements.playlistsContent.appendChild(card);
       });
+    }
+
+    function showPlaylistTracks(playlist) {
+      const tracks = playlist.tracks || [];
+      elements.bottomSheet.innerHTML = `
+        <div class="bottom-sheet-header">${playlist.name}</div>
+        ${tracks.length === 0 ? '<p style="text-align:center;color:var(--text-muted);padding:16px;">No tracks yet</p>' :
+          tracks.map((t, i) => `
+            <button class="bottom-sheet-option" data-index="${i}" style="display:flex;align-items:center;gap:10px;text-align:left;">
+              <span style="flex:1;">${t.name || 'Unknown'}<br><small style="color:var(--text-muted)">${t.albumArtist || t.albumTitle || ''}</small></span>
+              <span>▶</span>
+            </button>
+          `).join('')}
+        <button class="btn btn-secondary" style="width:100%;margin-top:16px;" onclick="closeModal()">Close</button>
+      `;
+      elements.modalOverlay.classList.add('show');
+      elements.bottomSheet.querySelectorAll('[data-index]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.index);
+          state.playlistContext = { tracks, currentIndex: idx };
+          playPlaylistTrack(tracks[idx]);
+          closeModal();
+        });
+      });
+    }
+
+    // Adapt a stored playlist track (mp3/artwork/name fields) into the format playTrack() expects
+    function playPlaylistTrack(playlistTrack) {
+      const adapted = {
+        recordId: playlistTrack.trackRecordId || playlistTrack.recordId || '',
+        fields: {
+          'Track Name': playlistTrack.name || '',
+          'Album Title': playlistTrack.albumTitle || '',
+          'Album Artist': playlistTrack.albumArtist || playlistTrack.trackArtist || '',
+          'Artwork_S3_URL': playlistTrack.artwork || '',
+          'mp3': playlistTrack.mp3 || ''
+        }
+      };
+      playTrack(adapted);
     }
 
     document.getElementById('create-playlist-btn').addEventListener('click', () => {
@@ -2021,6 +2076,37 @@
       }
     });
 
+    // Prev / Next — step through playlist context if active
+    document.getElementById('prev-btn').addEventListener('click', () => {
+      const ctx = state.playlistContext;
+      if (!ctx || !ctx.tracks || ctx.tracks.length === 0) return;
+      const newIdx = Math.max(0, ctx.currentIndex - 1);
+      if (newIdx !== ctx.currentIndex) {
+        ctx.currentIndex = newIdx;
+        playPlaylistTrack(ctx.tracks[newIdx]);
+      }
+    });
+
+    document.getElementById('next-btn').addEventListener('click', () => {
+      const ctx = state.playlistContext;
+      if (!ctx || !ctx.tracks || ctx.tracks.length === 0) return;
+      const newIdx = Math.min(ctx.tracks.length - 1, ctx.currentIndex + 1);
+      if (newIdx !== ctx.currentIndex) {
+        ctx.currentIndex = newIdx;
+        playPlaylistTrack(ctx.tracks[newIdx]);
+      }
+    });
+
+    // Auto-advance to next playlist track on end
+    elements.audio.addEventListener('ended', () => {
+      sendStreamEvent('END');
+      const ctx = state.playlistContext;
+      if (ctx && ctx.tracks && ctx.currentIndex < ctx.tracks.length - 1) {
+        ctx.currentIndex += 1;
+        playPlaylistTrack(ctx.tracks[ctx.currentIndex]);
+      }
+    });
+
     // Audio events
     elements.audio.addEventListener('play', () => {
       document.getElementById('play-pause-btn').textContent = '⏸';
@@ -2042,10 +2128,6 @@
         sendStreamEvent('PROGRESS');
         state.lastProgressUpdate = now;
       }
-    });
-
-    elements.audio.addEventListener('ended', () => {
-      sendStreamEvent('END');
     });
 
     elements.audio.addEventListener('error', () => {
