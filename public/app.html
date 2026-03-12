@@ -3451,16 +3451,14 @@
       function openSettingsModal() {
         const darkToggle    = document.getElementById('settingDarkMode');
         const autoplayToggle = document.getElementById('settingAutoplay');
-        // Detect current theme
+        // Reflect current state — dark-mode class is the source of truth
         try {
-          darkToggle.checked    = (localStorage.getItem('mass_theme') || document.body.dataset.theme || 'dark') === 'dark';
+          darkToggle.checked     = document.body.classList.contains('dark-mode');
           autoplayToggle.checked = localStorage.getItem('mass_autoplay') !== 'false';
         } catch(e) {}
 
         darkToggle.onchange = function() {
-          const theme = this.checked ? 'dark' : 'light';
-          document.body.dataset.theme = theme;
-          try { localStorage.setItem('mass_theme', theme); } catch(e) {}
+          if (window.toggleDarkMode) window.toggleDarkMode();
         };
         autoplayToggle.onchange = function() {
           try { localStorage.setItem('mass_autoplay', this.checked ? 'true' : 'false'); } catch(e) {}
