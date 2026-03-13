@@ -921,8 +921,27 @@ async function loadNewReleases({ limit = 200, refresh = false } = {}) {
   if (!refresh && newReleasesCache.items.length && now - newReleasesCache.updatedAt < NEW_RELEASES_CACHE_TTL_MS) {
     return { items: cloneRecordsForLimit(newReleasesCache.items, limit), total: newReleasesCache.total };
   }
-  const records = await fetchNewReleaseRecords(limit);
-  const items = records.map(r => ({ recordId: r.recordId, modId: r.modId, fields: r.fieldData || {} }));
+
+  // Fetch a large batch so we can deduplicate by album server-side.
+  // FM returns one record per track — without this we'd fill the limit with
+  // multiple tracks from the same album and end up with very few unique albums.
+  const records = await fetchNewReleaseRecords(1000);
+
+  // Deduplicate: one record per album (first track encountered wins)
+  const seenAlbums = new Set();
+  const deduped = [];
+  for (const r of records) {
+    const f = r.fieldData || {};
+    const artist = (f['Album Artist'] || f['Tape Files::Album Artist'] || '').toLowerCase().trim();
+    const album  = (f['Album Title']  || f['Tape Files::Album_Title']  || '').toLowerCase().trim();
+    const key = album ? `${artist}|||${album}` : r.recordId;
+    if (seenAlbums.has(key)) continue;
+    seenAlbums.add(key);
+    deduped.push(r);
+  }
+
+  console.log(`[new-releases] After album dedup: ${deduped.length} unique albums from ${records.length} tracks`);
+  const items = deduped.map(r => ({ recordId: r.recordId, modId: r.modId, fields: r.fieldData || {} }));
   newReleasesCache = { items, total: items.length, updatedAt: now };
   console.log(`[new-releases] Cached ${items.length} records`);
   return { items: cloneRecordsForLimit(items, limit), total: items.length };
