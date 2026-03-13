@@ -1548,9 +1548,10 @@
             <div class="random-artist">${escapeHtml(artist)}</div>
             <div class="random-album">${escapeHtml(album)}</div>
             ${genre ? `<div class="random-genre"><span class="genre-badge">${escapeHtml(genre)}</span></div>` : ''}
-          </div>
-          <div class="random-actions">
-            <a href="${escapeHtml(jukeboxUrl)}" class="random-album-btn" title="View album in Jukebox">💿 View Album</a>
+            <div class="card-quick-actions">
+              <button class="track-action-btn card-playlist-btn" title="Add to playlist">+ Playlist</button>
+              <button class="track-action-btn card-library-btn" title="Save to library">♡ Save</button>
+            </div>
           </div>
         </div>
       `;
@@ -1584,6 +1585,7 @@
       }
 
       container.innerHTML = validItems.map(item => createRandomCardHtml(item)).join('');
+      setupCardQuickActions(container);
     }
 
     // Shuffle array utility
@@ -1632,6 +1634,7 @@
         const cardHtml = createRandomCardHtml(item);
         container.insertAdjacentHTML('beforeend', cardHtml);
       }
+      setupCardQuickActions(container);
     }
 
     // Render albums (grouped by album)
@@ -2190,7 +2193,7 @@
           storeItem(item.recordId, item);
 
           return `
-            <div class="trending-card">
+            <div class="trending-card" data-record-id="${escapeHtml(item.recordId)}">
               <span class="nr-new-badge">New</span>
               <div class="trending-artwork" onclick="playSong('${escapeHtml(item.recordId)}')">
                 ${artworkUrl
@@ -2203,12 +2206,17 @@
                 <div class="trending-title">${escapeHtml(title)}</div>
                 <div class="trending-artist">${escapeHtml(artist)}</div>
                 <div class="trending-meta">${escapeHtml(album)}</div>
+                <div class="card-quick-actions">
+                  <button class="track-action-btn card-playlist-btn" title="Add to playlist">+ Playlist</button>
+                  <button class="track-action-btn card-library-btn" title="Save to library">♡ Save</button>
+                </div>
               </div>
               <button class="card-album-btn" title="View album" onclick="if(window.showView) window.showView('albums'); var s=document.getElementById('search'); if(s){s.value='${escapeHtml(album)}';} if(window.run) window.run('${escapeHtml(album)}');"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>
             </div>
           `;
         }).join('');
 
+        setupCardQuickActions(container);
         section.hidden = false;
         console.log(`[NewReleases] Rendered ${items.length} items`);
       } catch (err) {
@@ -2216,6 +2224,83 @@
         section.hidden = true;
       }
     }
+
+  // ── Card quick-action buttons (+ Playlist / ♡ Save) ─────────────────────────
+  // Builds the album + track objects needed by handleAddToPlaylist / library API
+  function buildAlbumTrackFromItem(item) {
+    const fields   = item.fields || {};
+    const title    = getTitleField(fields);
+    const artist   = getArtistField(fields);
+    const album    = getAlbumField(fields);
+    const artwork  = getArtworkUrl(fields) || '';
+    const rawAudio = getFieldValue(fields, ['S3_URL', 'Tape Files::S3_URL', 'mp3', 'MP3',
+                       'Tape Files::mp3', 'Tape Files::MP3']) || '';
+    const audioUrl = getAudioUrl(fields, item.recordId) || '';
+
+    return {
+      album: { title: album, artist, artwork, picture: artwork },
+      track: { recordId: item.recordId, name: title, artist, S3_URL: rawAudio, mp3: rawAudio, resolvedSrc: audioUrl },
+      audioUrl
+    };
+  }
+
+  // Single delegated handler — wired up once on each container after first render
+  function setupCardQuickActions(container) {
+    if (!container || container._cardActionsReady) return;
+    container._cardActionsReady = true;
+
+    container.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.card-playlist-btn, .card-library-btn');
+      if (!btn) return;
+      e.stopPropagation();
+
+      const card     = btn.closest('[data-record-id]');
+      const recordId = card && card.dataset.recordId;
+      if (!recordId) return;
+
+      const item = itemsStore.get(recordId);
+      if (!item) return;
+
+      const { album, track, audioUrl } = buildAlbumTrackFromItem(item);
+
+      if (btn.classList.contains('card-playlist-btn')) {
+        if (typeof window.handleAddToPlaylist === 'function') {
+          window.handleAddToPlaylist(album, track, audioUrl);
+        }
+      } else {
+        // ♡ Save / ♥ Saved toggle
+        if (btn.dataset.libraryId) {
+          const res = await fetch(`/api/library/songs/${btn.dataset.libraryId}`, { method: 'DELETE' });
+          if ((await res.json()).ok) {
+            btn.classList.remove('saved');
+            delete btn.dataset.libraryId;
+            btn.textContent = '♡ Save';
+          }
+        } else {
+          const res = await fetch('/api/library/songs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              trackRecordId: track.recordId || '',
+              name:          track.name     || 'Unknown Track',
+              albumTitle:    album.title    || '',
+              albumArtist:   album.artist   || '',
+              trackArtist:   track.artist   || '',
+              artwork:       album.artwork  || '',
+              S3_URL:        track.S3_URL   || '',
+              mp3:           track.mp3      || ''
+            })
+          });
+          const data = await res.json();
+          if (data.ok) {
+            btn.classList.add('saved');
+            btn.dataset.libraryId = data.song.id;
+            btn.textContent = '♥ Saved';
+          }
+        }
+      }
+    });
+  }
 
   // ---- PUBLIC API ----
   window.loadFeatured = loadFeatured;

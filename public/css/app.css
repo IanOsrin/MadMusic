@@ -3126,6 +3126,25 @@
       display: none;
     }
 
+    /* ── Card quick-action buttons (+ Playlist / ♡ Save) ──────────────────── */
+    .card-quick-actions {
+      display: flex;
+      gap: 4px;
+      margin-top: 0.4rem;
+    }
+
+    .card-quick-actions .track-action-btn {
+      flex: 1;
+      text-align: center;
+      font-size: 10px;
+      padding: 3px 6px;
+    }
+
+    .card-quick-actions .track-action-btn.saved {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
     .random-album-btn {
       width: 100%;
       padding: 0.5rem 0.75rem;
