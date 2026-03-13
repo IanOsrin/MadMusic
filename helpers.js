@@ -30,7 +30,7 @@ const STREAM_TIME_FIELD = 'TimeStreamed';
 const STREAM_TIME_FIELD_LEGACY = 'PositionSec';
 const PLAYLIST_IMAGE_EXTS = ['.webp', '.jpg', '.jpeg', '.png', '.gif', '.svg'];
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const PLAYLIST_IMAGE_DIR = path.join(PUBLIC_DIR, 'img', 'Playlists');
+const PLAYLIST_IMAGE_DIR = path.join(PUBLIC_DIR, 'img', 'playlists'); // lowercase — matches actual directory name on disk
 
 // Email configuration
 const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.ionos.com';
@@ -175,17 +175,20 @@ function parseNonNegativeInt(value, fallback) {
   return fallback;
 }
 
+// Module-level map: shared across all calls so concurrent requests for the same
+// key actually share one in-flight promise rather than each creating a new Map.
+const _pendingRequests = new Map();
+
 async function deduplicatedFetch(cacheKey, cache, fetchFn) {
-  const pendingRequests = new Map();
   const cached = cache.get(cacheKey);
   if (cached !== undefined) return cached;
-  if (pendingRequests.has(cacheKey)) {
-    return pendingRequests.get(cacheKey);
+  if (_pendingRequests.has(cacheKey)) {
+    return _pendingRequests.get(cacheKey);
   }
   const promise = fetchFn().finally(() => {
-    pendingRequests.delete(cacheKey);
+    _pendingRequests.delete(cacheKey);
   });
-  pendingRequests.set(cacheKey, promise);
+  _pendingRequests.set(cacheKey, promise);
   return promise;
 }
 
@@ -580,7 +583,7 @@ async function resolvePlaylistImage(name) {
     const fullPath = path.join(PLAYLIST_IMAGE_DIR, slug + ext);
     try {
       await fs.access(fullPath);
-      const relative = `/img/Playlists/${slug}${ext}`;
+      const relative = `/img/playlists/${slug}${ext}`;
       playlistImageLRU.set(slug, relative);
       return relative;
     } catch {

@@ -148,6 +148,10 @@ const paymentLimiter = rateLimit({
 // Apply general rate limiting to all API routes
 app.use('/api/', apiLimiter);
 
+// Apply stricter rate limits to expensive and payment-sensitive endpoints
+app.use(['/api/explore', '/api/trending', '/api/featured-albums', '/api/missing-audio-songs'], expensiveLimiter);
+app.use('/api/payments/initialize', paymentLimiter);
+
 // Add Cache-Control headers
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {
@@ -312,7 +316,7 @@ app.get('/jukebox', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html'
 app.get('/home', (_req, res) => res.redirect(301, '/'));
 app.get('/mobile', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mobile.html')));
 app.get('/m', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mobile.html')));
-app.get('/library', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'library.html')));
+app.get('/library', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html'))); // library.html never existed — unified app handles this view
 
 // ========= STARTUP =========
 const PORT = process.env.PORT || 3000;

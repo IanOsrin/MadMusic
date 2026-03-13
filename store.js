@@ -30,6 +30,58 @@ const LIBRARY_PATH = path.join(DATA_DIR, 'library.json');
 const FM_USERS_LAYOUT = process.env.FM_USERS_LAYOUT || 'API_Users';
 
 // ============================================================================
+// CROSS-PROCESS WRITE LOCK (lockfile-based)
+// Prevents concurrent writes from multiple cluster workers corrupting data files.
+// Uses O_EXCL (fail-if-exists) to create an advisory lockfile atomically.
+// Stale locks older than LOCK_STALE_MS are automatically broken.
+// ============================================================================
+
+const LOCK_STALE_MS = 10_000; // treat lock as stale after 10 seconds
+const LOCK_RETRY_INTERVAL_MS = 30;
+const LOCK_TIMEOUT_MS = 8_000;
+
+async function acquireLock(targetPath) {
+  const lockPath = `${targetPath}.lock`;
+  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+
+  while (true) {
+    try {
+      // O_EXCL: fails atomically if file already exists — no TOCTOU race
+      const fh = await fs.open(lockPath, 'wx');
+      await fh.close();
+      return lockPath; // caller must pass this to releaseLock()
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+
+      // Check if the existing lock is stale (e.g. process crashed mid-write)
+      try {
+        const stat = await fs.stat(lockPath);
+        if (Date.now() - stat.mtimeMs > LOCK_STALE_MS) {
+          await fs.unlink(lockPath).catch(() => {});
+          continue; // retry immediately after breaking stale lock
+        }
+      } catch {
+        // lock was already removed between our check and stat — retry
+        continue;
+      }
+
+      if (Date.now() >= deadline) {
+        throw new Error(`[MASS] Write lock timeout for ${targetPath} — another process may be stuck`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_INTERVAL_MS));
+    }
+  }
+}
+
+async function releaseLock(lockPath) {
+  try {
+    await fs.unlink(lockPath);
+  } catch {
+    // ignore: lock may have already been cleaned up
+  }
+}
+
+// ============================================================================
 // INTERNAL CACHE STATE
 // ============================================================================
 
@@ -133,8 +185,10 @@ export async function loadPlaylists() {
 }
 
 export async function savePlaylists(playlists) {
+  let lockPath;
   try {
     await ensureDataDir();
+    lockPath = await acquireLock(PLAYLISTS_PATH);
     const normalized = Array.isArray(playlists) ? playlists : [];
     for (const entry of normalized) {
       if (entry && typeof entry === 'object') {
@@ -164,6 +218,8 @@ export async function savePlaylists(playlists) {
   } catch (err) {
     console.error('[MASS] Failed to write playlists file:', err);
     throw err;
+  } finally {
+    if (lockPath) await releaseLock(lockPath);
   }
 }
 
@@ -181,10 +237,16 @@ export async function loadLibrary() {
 }
 
 export async function saveLibrary(data) {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  const tempPath = `${LIBRARY_PATH}.tmp`;
-  await fs.writeFile(tempPath, JSON.stringify(data, null, 2), 'utf8');
-  await fs.rename(tempPath, LIBRARY_PATH);
+  let lockPath;
+  try {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    lockPath = await acquireLock(LIBRARY_PATH);
+    const tempPath = `${LIBRARY_PATH}.tmp`;
+    await fs.writeFile(tempPath, JSON.stringify(data, null, 2), 'utf8');
+    await fs.rename(tempPath, LIBRARY_PATH);
+  } finally {
+    if (lockPath) await releaseLock(lockPath);
+  }
 }
 
 export function getUserLibrary(library, email) {
@@ -238,8 +300,10 @@ export async function loadAccessTokens() {
 }
 
 export async function saveAccessTokens(tokenData) {
+  let lockPath;
   try {
     await ensureDataDir();
+    lockPath = await acquireLock(ACCESS_TOKENS_PATH);
     const normalized = tokenData && typeof tokenData === 'object' ? tokenData : { tokens: [] };
     if (!Array.isArray(normalized.tokens)) {
       normalized.tokens = [];
@@ -259,6 +323,8 @@ export async function saveAccessTokens(tokenData) {
   } catch (err) {
     console.error('[MASS] Failed to write access tokens file:', err);
     throw err;
+  } finally {
+    if (lockPath) await releaseLock(lockPath);
   }
 }
 
