@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
-import { requireTokenEmail } from '../helpers.js';
+import { requireTokenEmail } from '../lib/auth.js';
 import { loadLibrary, saveLibrary, getUserLibrary } from '../store.js';
 
 const router = Router();

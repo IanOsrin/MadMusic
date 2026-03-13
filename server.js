@@ -18,8 +18,7 @@ import libraryRouter from './routes/library.js';
 import streamRouter from './routes/stream.js';
 import adminRouter from './routes/admin.js';
 
-// Import helpers
-import { validateAccessToken } from './helpers.js';
+import { validateAccessToken } from './lib/auth.js';
 import { tokenValidationCache } from './cache.js';
 import { ensureToken, closeFmPool } from './fm-client.js';
 import { ensureDataDir, loadAccessTokens, loadPlaylists } from './store.js';
@@ -204,7 +203,7 @@ app.use('/api/', async (req, res, next) => {
     '/access/validate', '/wake', '/container', '/random-songs', '/public-playlists',
     '/search', '/album', '/trending', '/explore', '/featured-albums', '/missing-audio-songs',
     '/auth', '/payments/initialize', '/payments/callback', '/payments/webhook', '/payments/plans',
-    '/access/stream-events'
+    '/access/stream-events', '/health'
   ];
 
   if (skipPaths.some(path => req.path === path || req.path.startsWith(path))) {

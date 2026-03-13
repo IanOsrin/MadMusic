@@ -1,12 +1,15 @@
 import { Router } from 'express';
-import { randomUUID } from 'node:crypto';
+import { requireTokenEmail } from '../lib/auth.js';
+import { validators } from '../lib/validators.js';
+import { normalizeShareId, generateShareId, escapeHtml } from '../lib/format.js';
+import { buildShareUrl } from '../lib/http.js';
 import {
-  requireTokenEmail, validators, playlistOwnerMatches, normalizeTrackPayload,
-  buildPlaylistDuplicateIndex, resolveDuplicate, summarizeTrackPayload, buildTrackEntry,
-  normalizeShareId, generateShareId, sanitizePlaylistForShare, buildShareUrl,
-  escapeHtml,
-  AUDIO_FIELD_CANDIDATES, ARTWORK_FIELD_CANDIDATES
-} from '../helpers.js';
+  playlistOwnerMatches, sanitizePlaylistForShare,
+  buildPlaylistDuplicateIndex, resolveDuplicate, summarizeTrackPayload, buildTrackEntry
+} from '../lib/playlist.js';
+import { normalizeTrackPayload } from '../lib/track.js';
+import { AUDIO_FIELD_CANDIDATES, ARTWORK_FIELD_CANDIDATES } from '../lib/fm-fields.js';
+import { emailTransporter } from '../lib/email.js';
 import { loadPlaylists, savePlaylists } from '../store.js';
 import { fmGetRecordById, fmUpdateRecord } from '../fm-client.js';
 
@@ -341,17 +344,12 @@ router.post('/:playlistId/share/email', async (req, res) => {
     const trackCount = Array.isArray(playlist.tracks) ? playlist.tracks.length : 0;
     const trackWord  = trackCount === 1 ? 'track' : 'tracks';
 
-    // 3. Build and send email via Nodemailer
-    const nodemailer = (await import('nodemailer')).default;
-    const transporter = nodemailer.createTransport({
-      host:   process.env.EMAIL_HOST,
-      port:   Number(process.env.EMAIL_PORT) || 587,
-      secure: Number(process.env.EMAIL_PORT) === 465,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
+    // 3. Build and send email via the shared Nodemailer singleton
+    const transporter = emailTransporter;
+    if (!transporter) {
+      console.warn('[MASS] Email transporter not configured — cannot send share email');
+      return res.status(503).json({ ok: false, error: 'Email service not configured' });
+    }
 
     const html = `<!DOCTYPE html>
 <html lang="en">

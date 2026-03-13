@@ -10,13 +10,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { fmGetRecordById, fmCreateRecord } from './fm-client.js';
+import { normalizeEmail, normalizeShareId } from './lib/format.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Local helpers
-const normalizeEmail = (email) => (typeof email === 'string' ? email.trim().toLowerCase() : '');
-const normalizeShareId = (value) => (typeof value === 'string' ? value.trim() : '');
 
 // ============================================================================
 // FILE PATHS

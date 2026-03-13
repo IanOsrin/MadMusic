@@ -1,41 +1,28 @@
 import { Router } from 'express';
 import { fmPost, fmWithAuth, ensureToken, fmFindRecords, fmGetRecordById } from '../fm-client.js';
 import { searchCache, exploreCache, albumCache, publicPlaylistsCache, trendingCache, genreCache } from '../cache.js';
+import { hasValidAudio, hasValidArtwork, resolvePlayableSrc, resolveArtworkSrc } from '../lib/track.js';
 import {
-  hasValidAudio, hasValidArtwork, recordIsVisible, recordIsFeatured, isMissingFieldError, applyVisibility,
-  firstNonEmptyFast, AUDIO_FIELD_CANDIDATES, ARTWORK_FIELD_CANDIDATES, CATALOGUE_FIELD_CANDIDATES,
-  parsePositiveInt, validators, formatTimestampUTC, normalizeRecordId, toCleanString,
-  normalizeSeconds, parseFileMakerTimestamp, pickFieldValueCaseInsensitive, composersFromFields,
-  parseTrackSequence, resolvePlayableSrc, resolveArtworkSrc, fmErrorToHttpStatus,
-  makeAlbumKey, normTitle, firstNonEmpty, validateQueryString
-} from '../helpers.js';
+  recordIsVisible, recordIsFeatured, isMissingFieldError, applyVisibility,
+  firstNonEmptyFast, firstNonEmpty, AUDIO_FIELD_CANDIDATES, ARTWORK_FIELD_CANDIDATES,
+  CATALOGUE_FIELD_CANDIDATES, pickFieldValueCaseInsensitive, composersFromFields,
+  parseTrackSequence, FM_LAYOUT, FM_STREAM_EVENTS_LAYOUT,
+  FM_FEATURED_FIELD, FM_FEATURED_VALUE, FEATURED_FIELD_CANDIDATES
+} from '../lib/fm-fields.js';
+import {
+  parsePositiveInt, normalizeRecordId, formatTimestampUTC, toCleanString,
+  normalizeSeconds, parseFileMakerTimestamp, makeAlbumKey, normTitle
+} from '../lib/format.js';
+import { fmErrorToHttpStatus } from '../lib/http.js';
+import { validators, validateQueryString } from '../lib/validators.js';
+import { STREAM_TIME_FIELD } from '../lib/stream-events.js';
 
 const router = Router();
 
-const FM_LAYOUT = process.env.FM_LAYOUT || 'API_Album_Songs';
-const FM_STREAM_EVENTS_LAYOUT = process.env.FM_STREAM_EVENTS_LAYOUT || 'Stream_Events';
-const TRENDING_LOOKBACK_HOURS = parsePositiveInt(process.env.TRENDING_LOOKBACK_HOURS, 168);
-const TRENDING_FETCH_LIMIT = parsePositiveInt(process.env.TRENDING_FETCH_LIMIT, 400);
-const TRENDING_MAX_LIMIT = parsePositiveInt(process.env.TRENDING_MAX_LIMIT, 20);
-
-const FM_FEATURED_FIELD = (process.env.FM_FEATURED_FIELD || 'Tape Files::featured').trim();
-const FM_FEATURED_VALUE = (process.env.FM_FEATURED_VALUE || 'yes').trim();
+const TRENDING_LOOKBACK_HOURS     = parsePositiveInt(process.env.TRENDING_LOOKBACK_HOURS, 168);
+const TRENDING_FETCH_LIMIT        = parsePositiveInt(process.env.TRENDING_FETCH_LIMIT, 400);
+const TRENDING_MAX_LIMIT          = parsePositiveInt(process.env.TRENDING_MAX_LIMIT, 20);
 const FEATURED_ALBUM_CACHE_TTL_MS = parsePositiveInt(process.env.FEATURED_ALBUM_CACHE_TTL_MS, 30 * 1000);
-const FEATURED_FIELD_BASE = FM_FEATURED_FIELD.replace(/^tape files::/i, '').trim();
-const FEATURED_FIELD_CANDIDATES = Array.from(
-  new Set(
-    [
-      FM_FEATURED_FIELD,
-      FEATURED_FIELD_BASE && `Tape Files::${FEATURED_FIELD_BASE}`,
-      FEATURED_FIELD_BASE,
-      'Tape Files::featured',
-      'Tape Files::Featured',
-      'featured',
-      'Featured'
-    ].filter(Boolean)
-  )
-);
-const STREAM_TIME_FIELD = 'TimeStreamed';
 
 let yearFieldCache = null;
 let publicPlaylistFieldCache = null;

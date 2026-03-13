@@ -1,12 +1,10 @@
 import { Router } from 'express';
 import { fmGetRecordById, ensureToken, safeFetch, fmLogin } from '../fm-client.js';
-import { validators, pickFieldValueCaseInsensitive, AUDIO_FIELD_CANDIDATES } from '../helpers.js';
+import { validators } from '../lib/validators.js';
+import { pickFieldValueCaseInsensitive, AUDIO_FIELD_CANDIDATES, FM_LAYOUT, FM_HOST } from '../lib/fm-fields.js';
 import { containerUrlCache } from '../cache.js';
 
 const router = Router();
-
-const FM_HOST = process.env.FM_HOST;
-const FM_LAYOUT = process.env.FM_LAYOUT || 'API_Album_Songs';
 const REGEX_HTTP_HTTPS = /^https?:\/\//i;
 
 const fmBase = FM_HOST ? `${FM_HOST}/fmi/data/vLatest/databases/${encodeURIComponent(process.env.FM_DB)}/layouts/${encodeURIComponent(FM_LAYOUT)}` : '';

@@ -6,19 +6,7 @@
 
 import 'dotenv/config';
 import { fetch, Agent } from 'undici';
-
-// Local helpers (same logic as server.js versions)
-function parsePositiveInt(value, fallback) {
-  const num = Number.parseInt(value, 10);
-  if (Number.isFinite(num) && num > 0) return num;
-  return fallback;
-}
-
-function parseNonNegativeInt(value, fallback) {
-  const num = Number.parseInt(value, 10);
-  if (Number.isFinite(num) && num >= 0) return num;
-  return fallback;
-}
+import { parsePositiveInt, parseNonNegativeInt } from './lib/format.js';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

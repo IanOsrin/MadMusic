@@ -1,12 +1,14 @@
 import { Router } from 'express';
+import { validateAccessToken, MASS_SESSION_COOKIE, MASS_SESSION_MAX_AGE_SECONDS } from '../lib/auth.js';
+import { parseCookies, getClientIP } from '../lib/http.js';
+import { formatTimestampUTC, toCleanString, normalizeSeconds } from '../lib/format.js';
+import { validateSessionId } from '../lib/validators.js';
 import {
-  validateAccessToken, parseCookies, formatTimestampUTC, toCleanString,
-  normalizeSeconds, STREAM_EVENT_TYPES, STREAM_EVENT_DEBUG, MASS_SESSION_COOKIE,
-  MASS_SESSION_MAX_AGE_SECONDS, validateSessionId, getClientIP,
-  ensureStreamRecord, findStreamRecord, setCachedStreamRecordId, clearCachedStreamRecordId,
-  getCachedStreamRecordId,
-  STREAM_TERMINAL_EVENTS, STREAM_TIME_FIELD, STREAM_TIME_FIELD_LEGACY
-} from '../helpers.js';
+  STREAM_EVENT_TYPES, STREAM_EVENT_DEBUG, STREAM_TERMINAL_EVENTS,
+  STREAM_TIME_FIELD, STREAM_TIME_FIELD_LEGACY,
+  ensureStreamRecord, findStreamRecord,
+  setCachedStreamRecordId, clearCachedStreamRecordId, getCachedStreamRecordId
+} from '../lib/stream-events.js';
 import { fmUpdateRecord, fmFindRecords } from '../fm-client.js';
 import { tokenValidationCache } from '../cache.js';
 import { randomUUID } from 'node:crypto';

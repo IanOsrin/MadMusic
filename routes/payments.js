@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { createHmac } from 'node:crypto';
-import { sendTokenEmail, paystackRequest, verifyPaystackWebhook, PAYSTACK_PLANS } from '../helpers.js';
+import { sendTokenEmail } from '../lib/email.js';
+import { paystackRequest, verifyPaystackWebhook, PAYSTACK_PLANS } from '../lib/paystack.js';
 import { createAccessToken } from '../store.js';
 import { pendingPaymentsCache } from '../cache.js';
 
