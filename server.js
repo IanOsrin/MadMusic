@@ -19,6 +19,9 @@ import streamRouter from './routes/stream.js';
 import adminRouter from './routes/admin.js';
 
 import { validateAccessToken } from './lib/auth.js';
+import { normalizeShareId } from './lib/format.js';
+import { sanitizePlaylistForShare } from './lib/playlist.js';
+import { buildShareUrl } from './lib/http.js';
 import { tokenValidationCache } from './cache.js';
 import { ensureToken, closeFmPool } from './fm-client.js';
 import { ensureDataDir, loadAccessTokens, loadPlaylists } from './store.js';
@@ -91,11 +94,11 @@ app.use((req, res, next) => {
     [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline'",   // inline scripts used in app.html
-      "style-src 'self' 'unsafe-inline'",    // inline styles used throughout
-      "img-src 'self' data: blob:",          // blob: for canvas/artwork, data: for inline images
-      "media-src 'self' blob:",              // blob: for streamed audio
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",  // googleapis for Google Fonts CSS
+      "img-src 'self' https: data: blob:",    // https: for S3 artwork URLs; blob: for canvas; data: for inline
+      "media-src 'self' https: blob:",       // https: for direct S3 audio URLs; blob: for streamed audio
       "connect-src 'self'",
-      "font-src 'self'",
+      "font-src 'self' https:",              // https: for Google Fonts (fonts.gstatic.com)
       "frame-src 'none'",
       "object-src 'none'",
       "base-uri 'self'",
@@ -303,9 +306,6 @@ app.use('/api', adminRouter);
 // Shared playlist routes (not under /api/playlists)
 app.get('/api/shared-playlists/:shareId', async (req, res) => {
   try {
-    const { normalizeShareId, sanitizePlaylistForShare, buildShareUrl } = await import('./helpers.js');
-    const { loadPlaylists } = await import('./store.js');
-
     const shareId = normalizeShareId(req.params?.shareId);
     if (!shareId) {
       res.status(400).json({ ok: false, error: 'Share ID required' });

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import { requireTokenEmail } from '../lib/auth.js';
 import { validators } from '../lib/validators.js';
 import { normalizeShareId, generateShareId, escapeHtml } from '../lib/format.js';
