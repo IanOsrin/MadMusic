@@ -5,6 +5,24 @@
     const STORAGE_INFO_KEY = 'mass_access_token_info';
     const SESSION_ID_KEY = 'mass_session_id';
 
+    // ── Paystack callback guard — MUST run before anything else ──────────────
+    // If we land here with ?payment=success&token=NEW, save the new token and
+    // reload BEFORE reading localStorage (which may hold an old expired token).
+    // Returning from the outer IIFE stops auth.js entirely so the stale token
+    // never gets into the fetch interceptor and no race condition can occur.
+    // On the second load the URL is clean and auth.js activates normally.
+    const _cbp = new URLSearchParams(window.location.search);
+    if (_cbp.get('payment') === 'success' && _cbp.get('token')) {
+      localStorage.setItem(STORAGE_KEY, _cbp.get('token').trim().toUpperCase());
+      localStorage.removeItem(STORAGE_INFO_KEY);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      window.location.reload();
+      return; // halts the entire IIFE — reload re-runs auth.js cleanly
+    }
+    if (_cbp.get('payment') === 'failed' || _cbp.get('payment') === 'error') {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     // Generate or retrieve unique session ID for this device/browser
     function getSessionId() {
       let sessionId = localStorage.getItem(SESSION_ID_KEY);
