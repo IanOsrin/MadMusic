@@ -42,7 +42,9 @@ let publicPlaylistFieldCache = null;
 let featuredAlbumCache = { items: [], total: 0, updatedAt: 0 };
 let cachedFeaturedFieldName = null;
 let newReleasesCache = { items: [], total: 0, updatedAt: 0 };
-const NEW_RELEASES_VALUE = 'New';
+// Dedicated checkbox field — value stored by FileMaker when checked
+const NEW_RELEASES_FIELD_CANDIDATES = ['Tape Files::New_Release', 'New_Release'];
+const NEW_RELEASES_VALUE = 'Yes';
 const NEW_RELEASES_CACHE_TTL_MS = 60 * 1000; // 1 min
 
 // ---- featured-albums helpers ----
@@ -863,15 +865,17 @@ router.get('/album', async (req, res) => {
   }
 });
 
-// ── /new-releases — albums where featured field == "New" ─────────────────────
+// ── /new-releases — albums where Tape Files::New_Release checkbox == "Yes" ────
 async function fetchNewReleaseRecords(limit = 200) {
-  if (!FEATURED_FIELD_CANDIDATES.length) return [];
   const normalizedLimit = Math.max(1, Math.min(1000, limit));
-  console.log(`[new-releases] Searching with value "${NEW_RELEASES_VALUE}" across fields:`, FEATURED_FIELD_CANDIDATES);
+  console.log(`[new-releases] Searching Tape Files::New_Release == "${NEW_RELEASES_VALUE}"`);
 
-  for (const field of FEATURED_FIELD_CANDIDATES) {
+  for (const field of NEW_RELEASES_FIELD_CANDIDATES) {
     if (!field) continue;
-    const query = applyVisibility({ [field]: `==${NEW_RELEASES_VALUE}` });
+    // Do NOT use applyVisibility here — it adds an AND constraint that can exclude
+    // albums whose visibility field is unset. The New_Release checkbox is the sole filter.
+    // Also avoid == exact-match prefix; a plain value find works for checkbox fields.
+    const query = { [field]: NEW_RELEASES_VALUE };
     const payload = { query: [query], limit: normalizedLimit, offset: 1 };
     console.log(`[new-releases] Trying field "${field}" with query:`, JSON.stringify(query));
     try {
@@ -887,10 +891,21 @@ async function fetchNewReleaseRecords(limit = 200) {
       }
       const rawData = json?.response?.data || [];
       console.log(`[new-releases] Field "${field}" raw=${rawData.length} records`);
+      if (rawData.length > 0) {
+        // Log the first record's field keys and the New_Release value so we can diagnose
+        const sample = rawData[0]?.fieldData || {};
+        const nrValue = sample['Tape Files::New_Release'] ?? sample['New_Release'] ?? '(not present)';
+        const albumTitle = sample['Album Title'] || sample['Tape Files::Album_Title'] || '(unknown)';
+        console.log(`[new-releases] Sample record — album="${albumTitle}", New_Release value="${nrValue}"`);
+        console.log(`[new-releases] Sample record field keys: ${Object.keys(sample).join(', ')}`);
+      }
       const filtered = rawData.filter(r => recordIsVisible(r.fieldData || {}));
       console.log(`[new-releases] After visibility filter: ${filtered.length}`);
       if (filtered.length > 0) {
         console.log(`[new-releases] SUCCESS — returning ${filtered.length} records via field "${field}"`);
+        // Log all matched album titles for confirmation
+        const titles = filtered.map(r => r.fieldData?.['Album Title'] || r.fieldData?.['Tape Files::Album_Title'] || r.recordId).slice(0, 10);
+        console.log(`[new-releases] Matched albums: ${titles.join(' | ')}`);
         return filtered;
       }
     } catch (err) {

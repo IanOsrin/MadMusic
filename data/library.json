@@ -26,6 +26,78 @@
         "S3_URL": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GMVD1971.mp3",
         "mp3": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GMVD1971.mp3",
         "addedAt": "2026-02-25T22:26:22.562Z"
+      },
+      {
+        "id": "a0a7acdc-0904-4cec-b1ac-1c160964ea74",
+        "trackRecordId": "105745",
+        "name": "World of Fantasy",
+        "albumTitle": "Stimela",
+        "albumArtist": "Stimela",
+        "trackArtist": "The Cannibals",
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi9716.jpg",
+        "S3_URL": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GCAT24457.mp3",
+        "mp3": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GCAT24457.mp3",
+        "addedAt": "2026-03-11T10:08:30.886Z"
+      },
+      {
+        "id": "3e31ad8b-d630-4fd1-8b69-94cb1dddb1dc",
+        "trackRecordId": "36455",
+        "name": "Siyaya Phambili",
+        "albumTitle": "Siyaya",
+        "albumArtist": "Stimela",
+        "trackArtist": "Stimela",
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi6573.jpg",
+        "S3_URL": "",
+        "mp3": "",
+        "addedAt": "2026-03-11T10:12:22.076Z"
+      },
+      {
+        "id": "fc8db16a-3a3e-4318-a219-233d5d8aada7",
+        "trackRecordId": "36457",
+        "name": "Rhythms Of Oneness",
+        "albumTitle": "Siyaya",
+        "albumArtist": "Stimela",
+        "trackArtist": "Stimela",
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi6573.jpg",
+        "S3_URL": "",
+        "mp3": "",
+        "addedAt": "2026-03-11T10:12:24.597Z"
+      },
+      {
+        "id": "b341152c-32da-420c-b0f1-c390a0543a36",
+        "trackRecordId": "37209",
+        "name": "Wash' Umlenze",
+        "albumTitle": "Phuzushukela_singles",
+        "albumArtist": "various",
+        "trackArtist": "Phuzushukela",
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi13191.jpg",
+        "S3_URL": "",
+        "mp3": "",
+        "addedAt": "2026-03-11T10:17:07.944Z"
+      },
+      {
+        "id": "4dc1eb71-b4d6-4530-9528-cb1ecb8a5249",
+        "trackRecordId": "37211",
+        "name": "Umnakwethu",
+        "albumTitle": "Phuzushukela_singles",
+        "albumArtist": "various",
+        "trackArtist": "Phuzushukela",
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi13191.jpg",
+        "S3_URL": "",
+        "mp3": "",
+        "addedAt": "2026-03-11T10:17:53.311Z"
+      },
+      {
+        "id": "61602515-68be-4b4e-905c-934b47935993",
+        "trackRecordId": "48434",
+        "name": "The Whole World's Dancing Now",
+        "albumTitle": "Kala Harari Rock",
+        "albumArtist": "Harari",
+        "trackArtist": "Harari",
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi3285.jpg",
+        "S3_URL": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GMVD00854.mp3",
+        "mp3": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/mp3/GMVD00854.mp3",
+        "addedAt": "2026-03-11T19:47:05.358Z"
       }
     ],
     "albums": [
@@ -37,6 +109,33 @@
         "genre": "",
         "year": "",
         "addedAt": "2026-02-25T22:26:35.574Z"
+      },
+      {
+        "id": "f3dc6ce6-0caa-4153-8335-3b37f9485808",
+        "title": "Stimela",
+        "artist": "Stimela",
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi9716.jpg",
+        "genre": "",
+        "year": "",
+        "addedAt": "2026-03-11T10:08:33.310Z"
+      },
+      {
+        "id": "706b2035-87c3-4206-9708-4964496169be",
+        "title": "Siyaya",
+        "artist": "Stimela",
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi6573.jpg",
+        "genre": "Afro Pop",
+        "year": "1991",
+        "addedAt": "2026-03-11T10:12:18.583Z"
+      },
+      {
+        "id": "611c0795-3172-4c85-a32c-e57da52e2fb4",
+        "title": "Amashoba",
+        "artist": "Khamba Lomvaleliso",
+        "artwork": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/GMVi4746.jpg",
+        "genre": "",
+        "year": "",
+        "addedAt": "2026-03-11T10:54:49.935Z"
       }
     ]
   }
