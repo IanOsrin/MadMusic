@@ -660,7 +660,7 @@ function sendTokenEmail(customerEmail, tokenCode, days) {
     </div>
   `;
 
-  emailTransporter.sendMail({
+  return emailTransporter.sendMail({
     from: EMAIL_FROM,
     to: customerEmail,
     subject: `Your Mass Music Access Token: ${tokenCode}`,
@@ -669,6 +669,7 @@ function sendTokenEmail(customerEmail, tokenCode, days) {
     console.log(`[MASS] Token email sent to ${customerEmail}`);
   }).catch(err => {
     console.error(`[MASS] Failed to send token email to ${customerEmail}:`, err?.message || err);
+    throw err; // re-throw so callers can react
   });
 }
 
@@ -778,13 +779,15 @@ async function validateAccessToken(tokenCode, sessionId = null, req = null) {
       expirationTime = expirationTime - offsetMs;
       const now = Date.now();
 
-      console.log(`[MASS] Token expiration check for ${trimmedCode}:`);
-      console.log(`  Raw expiration from FM: "${token.Expiration_Date}"`);
-      console.log(`  FM Timezone offset: ${fmTimezoneOffset > 0 ? '+' : ''}${fmTimezoneOffset} hours`);
-      console.log(`  Parsed as local: ${new Date(token.Expiration_Date).toISOString()}`);
-      console.log(`  Adjusted to UTC: ${new Date(expirationTime).toISOString()}`);
-      console.log(`  Current UTC time: ${new Date(now).toISOString()}`);
-      console.log(`  Time until expiry: ${((expirationTime - now) / 1000 / 60 / 60).toFixed(2)} hours`);
+      if (process.env.TOKEN_DEBUG === 'true') {
+        console.log(`[MASS] Token expiration check for ${trimmedCode}:`);
+        console.log(`  Raw expiration from FM: "${token.Expiration_Date}"`);
+        console.log(`  FM Timezone offset: ${fmTimezoneOffset > 0 ? '+' : ''}${fmTimezoneOffset} hours`);
+        console.log(`  Parsed as local: ${new Date(token.Expiration_Date).toISOString()}`);
+        console.log(`  Adjusted to UTC: ${new Date(expirationTime).toISOString()}`);
+        console.log(`  Current UTC time: ${new Date(now).toISOString()}`);
+        console.log(`  Time until expiry: ${((expirationTime - now) / 1000 / 60 / 60).toFixed(2)} hours`);
+      }
 
       if (isNaN(expirationTime)) {
         console.warn(`[MASS] Could not parse expiration date: "${token.Expiration_Date}" - treating as no expiration`);

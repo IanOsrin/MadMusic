@@ -82,6 +82,30 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
+// Security headers (applied to every response)
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",   // inline scripts used in app.html
+      "style-src 'self' 'unsafe-inline'",    // inline styles used throughout
+      "img-src 'self' data: blob:",          // blob: for canvas/artwork, data: for inline images
+      "media-src 'self' blob:",              // blob: for streamed audio
+      "connect-src 'self'",
+      "font-src 'self'",
+      "frame-src 'none'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'"
+    ].join('; ')
+  );
+  next();
+});
+
 // CORS configuration
 const corsOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map(o => o.trim()).filter(Boolean)

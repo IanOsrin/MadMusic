@@ -78,7 +78,11 @@ Examples:
   return options;
 }
 
-// Generate a secure random token code
+// Generate a secure random token code.
+// NOTE: This is intentionally duplicated from store.js (createAccessToken → generateTokenCode).
+// The script cannot import store.js directly because store.js pulls in fm-client.js, which
+// spins up an HTTP connection pool and logs to console on import — unsuitable for a CLI tool.
+// If you change the token format here, update store.js to match (and vice versa).
 function generateTokenCode() {
   // Generate 6 random bytes and encode as base32-like string (readable)
   const bytes = randomBytes(6);

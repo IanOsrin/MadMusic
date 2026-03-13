@@ -4,6 +4,7 @@ import {
   requireTokenEmail, validators, playlistOwnerMatches, normalizeTrackPayload,
   buildPlaylistDuplicateIndex, resolveDuplicate, summarizeTrackPayload, buildTrackEntry,
   normalizeShareId, generateShareId, sanitizePlaylistForShare, buildShareUrl,
+  escapeHtml,
   AUDIO_FIELD_CANDIDATES, ARTWORK_FIELD_CANDIDATES
 } from '../helpers.js';
 import { loadPlaylists, savePlaylists } from '../store.js';
@@ -333,10 +334,10 @@ router.post('/:playlistId/share/email', async (req, res) => {
       await savePlaylists(playlists);
     }
     const shareUrl = buildShareUrl(req, playlist.shareId);
-    const playlistName = playlist.name || 'a playlist';
-    const senderLabel = recipientName
+    const playlistName = escapeHtml(playlist.name || 'a playlist');
+    const senderLabel = escapeHtml(recipientName
       ? `${recipientName}`
-      : (user.email || 'Someone');
+      : (user.email || 'Someone'));
     const trackCount = Array.isArray(playlist.tracks) ? playlist.tracks.length : 0;
     const trackWord  = trackCount === 1 ? 'track' : 'tracks';
 
@@ -377,13 +378,13 @@ router.post('/:playlistId/share/email', async (req, res) => {
           </div>
           <!-- CTA button -->
           <div style="text-align:center;margin:0 0 28px;">
-            <a href="${shareUrl}" style="display:inline-block;background:#62f5a9;color:#0a0a0a;font-weight:700;font-size:15px;text-decoration:none;padding:14px 36px;border-radius:50px;letter-spacing:0.3px;">
+            <a href="${escapeHtml(shareUrl)}" style="display:inline-block;background:#62f5a9;color:#0a0a0a;font-weight:700;font-size:15px;text-decoration:none;padding:14px 36px;border-radius:50px;letter-spacing:0.3px;">
               Listen Now →
             </a>
           </div>
           <p style="color:#555;font-size:13px;margin:0;line-height:1.6;">
             If the button doesn't work, copy this link into your browser:<br>
-            <a href="${shareUrl}" style="color:#62f5a9;word-break:break-all;">${shareUrl}</a>
+            <a href="${escapeHtml(shareUrl)}" style="color:#62f5a9;word-break:break-all;">${escapeHtml(shareUrl)}</a>
           </p>
         </td></tr>
         <!-- Footer -->

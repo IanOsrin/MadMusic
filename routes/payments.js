@@ -1,16 +1,10 @@
 import { Router } from 'express';
 import { createHmac } from 'node:crypto';
-import { sendTokenEmail, paystackRequest, verifyPaystackWebhook } from '../helpers.js';
+import { sendTokenEmail, paystackRequest, verifyPaystackWebhook, PAYSTACK_PLANS } from '../helpers.js';
 import { createAccessToken } from '../store.js';
 import { pendingPaymentsCache } from '../cache.js';
 
 const router = Router();
-
-const PAYSTACK_PLANS = {
-  '1-day':  { amount: 500,   label: '1 Day Access',  days: 1,  display: 'R5' },
-  '7-day':  { amount: 2000,  label: '7 Day Access',  days: 7,  display: 'R20' },
-  '30-day': { amount: 5000,  label: '30 Day Access', days: 30, display: 'R50' }
-};
 
 const pendingPayments = pendingPaymentsCache;
 
@@ -121,7 +115,9 @@ router.get('/callback', async (req, res) => {
 
     const token = await createAccessToken(days, `Paystack purchase: ${planId} (${email}, ref: ${reference})`, email);
 
-    sendTokenEmail(email, token.code, days);
+    sendTokenEmail(email, token.code, days)?.catch(err => {
+      console.error(`[MASS] ⚠️  TOKEN EMAIL FAILED — customer may not have received token. ref=${reference} token=${token.code} email=${email} error=${err?.message || err}`);
+    });
 
     pendingPayments.set(reference, {
       tokenCode: token.code,
@@ -176,7 +172,9 @@ router.post('/webhook', async (req, res) => {
 
     const token = await createAccessToken(days, `Paystack webhook: ${planId} (${email}, ref: ${reference})`, email);
 
-    sendTokenEmail(email, token.code, days);
+    sendTokenEmail(email, token.code, days)?.catch(err => {
+      console.error(`[MASS] ⚠️  TOKEN EMAIL FAILED — customer may not have received token. ref=${reference} token=${token.code} email=${email} error=${err?.message || err}`);
+    });
 
     pendingPayments.set(reference, {
       tokenCode: token.code,
