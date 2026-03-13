@@ -2747,6 +2747,9 @@
     .trending-card:hover .trending-info {
       opacity: 1;
       transform: translateY(0);
+    }
+
+    .trending-card:hover .trending-info .card-quick-actions {
       pointer-events: auto;
     }
 
@@ -3084,6 +3087,9 @@
     .random-card:hover .random-info {
       opacity: 1;
       transform: translateY(0);
+    }
+
+    .random-card:hover .random-info .card-quick-actions {
       pointer-events: auto;
     }
 
