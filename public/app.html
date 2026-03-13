@@ -1903,6 +1903,10 @@
           playlistView.style.display = 'none';
         }
 
+        // Restore the layout-grid in case showAlbumDetailView hid it
+        const layoutGrid = document.querySelector('.layout-grid');
+        if (layoutGrid) layoutGrid.style.display = '';
+
         // Hide the regular album grid
         const albumsEl  = document.getElementById('albums');
         const loadingEl = document.getElementById('loadingIndicator');
