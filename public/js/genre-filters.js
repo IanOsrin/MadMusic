@@ -348,11 +348,6 @@
       function updateGenreRetryButton() {
         if (!genreRetryButton) return;
         const hasGenres = selectedGenres.length > 0;
-        const genreShufflePlayBtn = document.getElementById('genreShufflePlayBtn');
-  
-        // Always show shuffle play button
-        if (genreShufflePlayBtn) genreShufflePlayBtn.hidden = false;
-  
         if (!hasGenres) {
           genreRetryButton.hidden = true;
           genreRetryButton.disabled = false;

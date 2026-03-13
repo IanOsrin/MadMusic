@@ -2123,6 +2123,7 @@
       transform: translateY(-1px);
     }
 
+    /* Active = shuffle is running; turns red so it reads as a stop button */
     .genre-shuffle-btn.active {
       background: #dc2626;
     }

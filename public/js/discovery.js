@@ -489,11 +489,6 @@
     function updateGenreRetryButton() {
       if (!genreRetryButton) return;
       const hasGenres = selectedGenres.length > 0;
-      const genreShufflePlayBtn = document.getElementById('genreShufflePlayBtn');
-
-      // Always show shuffle play button
-      if (genreShufflePlayBtn) genreShufflePlayBtn.hidden = false;
-
       if (!hasGenres) {
         genreRetryButton.hidden = true;
         genreRetryButton.disabled = false;
@@ -677,11 +672,6 @@
     let currentAudio = null;
     let currentTrackInfo = null;
     let isPlaying = false;
-
-    // Shuffle play queue
-    let shuffleQueue = [];
-    let shuffleQueueIndex = 0;
-    let isShuffleActive = false;
 
     // Stream Event Tracking
     const STREAM_EVENTS_ENDPOINT = '/api/access/stream-events';
@@ -1114,10 +1104,6 @@
       // Check if this card is currently displayed
       if (!isCardDisplayed(recordId)) {
         console.warn('[PlaySong] Card not displayed, skipping:', recordId);
-        // If shuffle is active, try playing the next track instead
-        if (isShuffleActive) {
-          playNextInQueue();
-        }
         return;
       }
 
@@ -1184,10 +1170,6 @@
         stopProgressTracking();
         updateMiniPlayer(title, artist, artworkUrl);
 
-        // Auto-play next track in shuffle queue
-        if (isShuffleActive) {
-          setTimeout(() => playNextInQueue(), 500);
-        }
       });
 
       currentAudio.addEventListener('error', (e) => {
@@ -1612,97 +1594,6 @@
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
       return shuffled;
-    }
-
-    // Start or stop shuffle play
-    function toggleShufflePl() {
-      if (isShuffleActive) {
-        // Stop shuffle
-        stopShufflePlay();
-      } else {
-        // Start shuffle
-        startShufflePlay();
-      }
-    }
-
-    function startShufflePlay() {
-      // Get all currently displayed cards from the DOM
-      const container = document.getElementById('randomContainer');
-      if (!container) {
-        alert('No tracks available to shuffle');
-        return;
-      }
-
-      // Get record IDs directly from displayed cards
-      const displayedCards = container.querySelectorAll('.random-card[data-record-id]');
-      const recordIds = Array.from(displayedCards)
-        .map(card => card.getAttribute('data-record-id'))
-        .filter(id => {
-          const item = itemsStore.get(id);
-          return item && hasValidAudio(item);
-        });
-
-      if (recordIds.length === 0) {
-        alert('No tracks available to shuffle');
-        return;
-      }
-
-      // Shuffle and create queue
-      shuffleQueue = shuffleArray(recordIds);
-      shuffleQueueIndex = 0;
-      isShuffleActive = true;
-
-      console.log('[Shuffle] Started with', shuffleQueue.length, 'tracks from displayed cards');
-
-      // Update button state
-      updateShuffleButton();
-
-      // Play first track
-      if (shuffleQueue.length > 0) {
-        playSong(shuffleQueue[0]);
-      }
-    }
-
-    function stopShufflePlay() {
-      isShuffleActive = false;
-      shuffleQueue = [];
-      shuffleQueueIndex = 0;
-
-      console.log('[Shuffle] Stopped');
-
-      // Update button state
-      updateShuffleButton();
-    }
-
-    function playNextInQueue() {
-      if (!isShuffleActive || shuffleQueue.length === 0) {
-        return;
-      }
-
-      shuffleQueueIndex++;
-
-      if (shuffleQueueIndex >= shuffleQueue.length) {
-        console.log('[Shuffle] Queue finished');
-        stopShufflePlay();
-        return;
-      }
-
-      const nextRecordId = shuffleQueue[shuffleQueueIndex];
-      console.log('[Shuffle] Playing track', shuffleQueueIndex + 1, 'of', shuffleQueue.length);
-      playSong(nextRecordId);
-    }
-
-    function updateShuffleButton() {
-      const btn = document.getElementById('genreShufflePlayBtn');
-      if (!btn) return;
-
-      if (isShuffleActive) {
-        btn.textContent = '⏹️ Stop Shuffle';
-        btn.classList.add('active');
-      } else {
-        btn.textContent = '🔀 Shuffle Play';
-        btn.classList.remove('active');
-      }
     }
 
     // Progressive rendering - append items one at a time
@@ -2222,10 +2113,14 @@
         });
       }
 
+      // Shuffle play button — delegates entirely to MADPlayer which routes
+      // all playback through _PLAYER / the unified player bar at the bottom.
       const genreShufflePlayBtn = document.getElementById('genreShufflePlayBtn');
       if (genreShufflePlayBtn) {
         genreShufflePlayBtn.addEventListener('click', () => {
-          toggleShufflePl();
+          if (window.MADPlayer && typeof window.MADPlayer.toggleShufflePl === 'function') {
+            window.MADPlayer.toggleShufflePl();
+          }
         });
       }
 

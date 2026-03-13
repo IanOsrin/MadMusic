@@ -1,5 +1,5 @@
 // public/js/player.js
-// Player module - manages audio playback, stream events, and shuffle functionality
+// Player module - manages audio playback, stream events, and shuffle
 
 (function() {
   'use strict';
@@ -10,12 +10,12 @@
       let currentAudio = null;
       let currentTrackInfo = null;
       let isPlaying = false;
-  
-      // Shuffle play queue
-      let shuffleQueue = [];
-      let shuffleQueueIndex = 0;
+
+      // Shuffle queue — populated by startShufflePlay(), cleared by stopShufflePlay()
+      let shuffleQueue    = [];
+      let shuffleQueueIdx = 0;
       let isShuffleActive = false;
-  
+
       // Stream Event Tracking
       const STREAM_EVENTS_ENDPOINT = '/api/access/stream-events';
       const STREAM_SESSION_STORAGE_KEY = 'mass.session';
@@ -53,7 +53,7 @@
         if (!Number.isFinite(numeric)) return 0;
         return Math.max(0, Math.round(numeric));
       }
-  
+
 
       function getCurrentTrackMeta() {
         if (!currentTrackInfo || !currentTrackInfo.recordId) return {};
@@ -65,7 +65,7 @@
           album: currentTrackInfo.album || ''
         };
       }
-  
+
 
   // ---- STREAM EVENTS ----
 
@@ -73,12 +73,12 @@
         if (typeof fetch !== 'function') return false;
         const requestTs = Date.now();
         const meta = getCurrentTrackMeta();
-  
+
         if (!meta.trackRecordId) {
           console.warn('[Stream Event] No track record ID available');
           return false;
         }
-  
+
         const rawPos = typeof positionOverride === 'number' ? positionOverride : currentAudio?.currentTime || 0;
         const rawDur = typeof durationOverride === 'number' ? durationOverride : currentAudio?.duration || 0;
         const normalizedPos = toSeconds(rawPos);
@@ -88,7 +88,7 @@
         const deltaFromPos = Math.max(0, normalizedPos - (Number.isFinite(lastStreamReportPos) ? lastStreamReportPos : 0));
         const deltaFromTime = lastStreamReportTs ? Math.max(0, Math.round((requestTs - lastStreamReportTs) / 1000)) : 0;
         const normalizedDelta = hasOverride ? overrideDelta : (deltaFromPos || deltaFromTime);
-  
+
         const body = {
           eventType: type,
           trackRecordId: meta.trackRecordId,
@@ -97,35 +97,35 @@
           durationSec: normalizedDur,
           deltaSec: normalizedDelta
         };
-  
+
         try {
           const headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'X-Session-ID': streamSessionId
           };
-  
+
           if (currentAccessToken) {
             headers['X-Access-Token'] = currentAccessToken;
           }
-  
+
           const response = await fetch(STREAM_EVENTS_ENDPOINT, {
             method: 'POST',
             headers: headers,
             body: JSON.stringify(body)
           });
-  
+
           if (!response.ok) {
             console.warn('[Stream Event] Request failed:', response.status);
             return false;
           }
-  
+
           const responseJson = await response.json().catch(() => null);
           if (!responseJson?.ok) {
             console.warn('[Stream Event] Server reported failure');
             return false;
           }
-  
+
           console.log('[Stream Event] Sent:', type, meta.title);
           lastStreamReportTs = requestTs;
           lastStreamReportPos = normalizedPos;
@@ -135,7 +135,7 @@
           return false;
         }
       }
-  
+
 
       function startProgressTracking() {
         if (progressInterval) {
@@ -151,14 +151,14 @@
           }
         }, 5000); // Check every 5 seconds
       }
-  
+
       function stopProgressTracking() {
         if (progressInterval) {
           clearInterval(progressInterval);
           progressInterval = null;
         }
       }
-  
+
 
   // ---- HELPER FUNCTIONS ----
 
@@ -169,12 +169,12 @@
         }
         return null;
       }
-  
+
       function getArtworkUrl(fields) {
         const artworkFields = ['Artwork_S3_URL', 'Tape Files::Artwork_S3_URL', 'Artwork::Picture', 'Artwork Picture', 'Picture'];
         const artwork = getFieldValue(fields, artworkFields);
         if (!artwork) return null;
-  
+
         // Handle FileMaker container URLs
         if (typeof artwork === 'string') {
           if (artwork.startsWith('http')) {
@@ -188,12 +188,12 @@
         }
         return null;
       }
-  
+
       function getAudioUrl(fields, recordId) {
         const audioFields = ['S3_URL', 'Tape Files::S3_URL', 'mp3', 'MP3', 'Tape Files::mp3', 'Tape Files::MP3', 'Audio File', 'Audio::mp3', 'Stream URL', 'Audio URL'];
         const audio = getFieldValue(fields, audioFields);
         if (!audio) return null;
-  
+
         if (typeof audio === 'string' && audio.startsWith('http')) {
           // Check if it's an S3 URL - return directly without proxying
           if (/^https?:\/\/.*\.s3[.-]/.test(audio) || /^https?:\/\/s3[.-]/.test(audio)) {
@@ -203,20 +203,20 @@
         }
         return `/api/track/${recordId}/container`;
       }
-  
+
       // Check if an item has valid audio
       function hasValidAudio(item) {
         if (!item || !item.fields) return false;
         const audioFields = ['S3_URL', 'Tape Files::S3_URL', 'mp3', 'MP3', 'Tape Files::mp3', 'Tape Files::MP3', 'Audio File', 'Audio::mp3', 'Stream URL', 'Audio URL'];
         const audio = getFieldValue(item.fields, audioFields);
-  
+
         // Check if audio field exists and is not empty
         if (!audio) return false;
         if (typeof audio === 'string' && audio.trim() === '') return false;
-  
+
         return true;
       }
-  
+
       // Escape HTML to prevent XSS attacks
       function escapeHtml(unsafe) {
         if (typeof unsafe !== 'string') {
@@ -229,27 +229,27 @@
           .replace(/"/g, '&quot;')
           .replace(/'/g, '&#039;');
       }
-  
+
       function getTitleField(fields) {
         const titleFields = ['Track Name', 'Song Name', 'Track Title', 'Song Title', 'Title'];
         return getFieldValue(fields, titleFields) || 'Unknown Track';
       }
-  
+
       function getArtistField(fields) {
         const artistFields = ['Artist', 'Artist Name', 'Album Artist'];
         return getFieldValue(fields, artistFields) || 'Unknown Artist';
       }
-  
+
       function getAlbumField(fields) {
         const albumFields = ['Album Title', 'Album', 'Album Name'];
         return getFieldValue(fields, albumFields) || 'Unknown Album';
       }
-  
+
       function getGenreField(fields) {
         const genreFields = ['Local Genre', 'Tape Files::Local Genre', 'Genre'];
         return getFieldValue(fields, genreFields) || '';
       }
-  
+
       function formatRelativeTime(value) {
         if (!value) return '';
         const date = value instanceof Date ? value : new Date(value);
@@ -263,7 +263,7 @@
         const days = Math.round(hours / 24);
         return `${days}d ago`;
       }
-  
+
       function formatTrendingMeta(metrics = {}) {
         const plays = Number(metrics.playCount) || 0;
         const playLabel = plays ? `${plays} play${plays === 1 ? '' : 's'}` : '';
@@ -284,7 +284,7 @@
         if (bar) bar.classList.remove('active');
         document.body.classList.remove('player-active');
       }
-  
+
 
       function updateNowPlayingCard(recordId) {
         // Remove now-playing class from all cards and reset play icons
@@ -295,7 +295,7 @@
             playIcon.textContent = '▶';
           }
         });
-  
+
         // Reset play icons in other sections (featured, highlights, trending)
         document.querySelectorAll('.play-icon').forEach(icon => {
           icon.textContent = '▶';
@@ -306,7 +306,7 @@
         document.querySelectorAll('.trending-play-btn').forEach(btn => {
           btn.textContent = '▶';
         });
-  
+
         // Add now-playing class to current card and update icon to stop
         const currentCard = document.querySelector(`.random-card[data-record-id="${recordId}"]`);
         if (currentCard) {
@@ -315,7 +315,7 @@
           if (playIcon) {
             playIcon.textContent = '■';
           }
-  
+
           // Scroll to the card with smooth animation
           setTimeout(() => {
             currentCard.scrollIntoView({
@@ -325,7 +325,7 @@
             });
           }, 100);
         }
-  
+
         // Update featured button if playing from featured
         const featuredBtn = document.querySelector('.featured-release .btn-play');
         if (featuredBtn) {
@@ -334,7 +334,7 @@
             featuredBtn.innerHTML = '■ Stop';
           }
         }
-  
+
         // Update highlight play icons
         document.querySelectorAll('.highlight-card').forEach(card => {
           const artworkDiv = card.querySelector('.highlight-artwork');
@@ -347,7 +347,7 @@
             }
           }
         });
-  
+
         // Update trending play icons
         document.querySelectorAll('.trending-card').forEach(card => {
           const artworkDiv = card.querySelector('.trending-artwork');
@@ -363,60 +363,56 @@
           }
         });
       }
-  
+
 
       function isCardDisplayed(recordId) {
         // Check if the record exists in the itemsStore
         // Items from featured, highlights, trending, and random sections are all stored there
         return itemsStore.has(recordId);
       }
-  
+
 
   // ---- PLAYBACK ----
 
       function playSong(recordId) {
         console.log('[PlaySong] Called with recordId:', recordId);
         console.log('[PlaySong] Items in store:', itemsStore.size);
-  
+
         // If clicking on the currently playing card, stop playback instead
         if (currentTrackInfo && currentTrackInfo.recordId === recordId && currentAudio && !currentAudio.paused) {
           console.log('[PlaySong] Stopping currently playing track');
           stopPlayback();
           return;
         }
-  
+
         // Check if this card is currently displayed
         if (!isCardDisplayed(recordId)) {
           console.warn('[PlaySong] Card not displayed, skipping:', recordId);
-          // If shuffle is active, try playing the next track instead
-          if (isShuffleActive) {
-            playNextInQueue();
-          }
           return;
         }
-  
+
         const item = itemsStore.get(recordId);
         if (!item) {
           console.error('[PlaySong] Item not found in store. RecordId:', recordId);
           console.error('[PlaySong] Available IDs:', Array.from(itemsStore.keys()));
           return;
         }
-  
+
         console.log('[PlaySong] Found item:', item);
         const audioUrl = getAudioUrl(item.fields, item.recordId);
         console.log('[PlaySong] Audio URL:', audioUrl);
-  
+
         if (!audioUrl) {
           console.warn('[PlaySong] Audio not available for this track:', recordId);
           return;
         }
-  
+
         const title = getTitleField(item.fields);
         const artist = getArtistField(item.fields);
         const album = getAlbumField(item.fields);
         const artworkUrl = getArtworkUrl(item.fields);
         const isrc = (item.fields?.['ISRC'] || '').trim();
-  
+
         console.log(`[PlaySong] Playing: ${title} by ${artist}`);
 
         // ── Abort listeners from the previous track ─────────────────────────
@@ -461,8 +457,12 @@
         player.addEventListener('ended', () => {
           if (signal.aborted) return;
           isPlaying = false;
+          // This fires in bubble phase, after app.min.js's own ended handler has
+          // run its cleanup.  For shuffle, all we do is call playSong() for the
+          // next track — which goes through _PLAYER just like any other play,
+          // so the player bar at the bottom stays fully in control.
           if (isShuffleActive) {
-            setTimeout(() => playNextInQueue(), 500);
+            setTimeout(_shuffleAdvance, 400);
           }
         }, { signal });
 
@@ -506,11 +506,11 @@
           detail: { url: audioUrl, title, artist, album, recordId: item.recordId }
         }));
       }
-  
+
 
       function togglePause() {
         if (!currentAudio) return;
-  
+
         if (isPlaying) {
           currentAudio.pause();
           isPlaying = false;
@@ -521,12 +521,12 @@
             isPlaying = true;
           });
         }
-  
+
         if (currentTrackInfo) {
           updateMiniPlayer(currentTrackInfo.title, currentTrackInfo.artist, currentTrackInfo.artworkUrl);
         }
       }
-  
+
 
       function stopPlayback() {
         // Cancel all per-track event listeners
@@ -543,12 +543,12 @@
         isPlaying = false;
         hasReportedPlay = false;
         hideMiniPlayer();
-  
+
         // Remove now-playing class from all cards and reset all play icons
         document.querySelectorAll('.random-card.now-playing').forEach(card => {
           card.classList.remove('now-playing');
         });
-  
+
         // Reset all play icons back to play button
         document.querySelectorAll('.play-icon').forEach(icon => {
           icon.textContent = '▶';
@@ -559,117 +559,101 @@
         document.querySelectorAll('.trending-play-btn').forEach(btn => {
           btn.textContent = '▶';
         });
-  
+
         currentTrackInfo = null;
       }
-  
+
 
   // ---- SHUFFLE ----
+  // All shuffle playback routes through playSong() → _PLAYER.playTrack(), so
+  // the unified player bar at the bottom is always in control.  There is no
+  // parallel audio pipeline — shuffle is just a queue that decides what to pass
+  // to the same play path everything else uses.
 
-      function shuffleArray(array) {
-        const shuffled = [...array];
-        for (let i = shuffled.length - 1; i > 0; i--) {
+      // Randomise an array in place (Fisher-Yates) and return it
+      function _randomise(array) {
+        const a = [...array];
+        for (let i = a.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
-          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          [a[i], a[j]] = [a[j], a[i]];
         }
-        return shuffled;
+        return a;
       }
-  
 
-      function toggleShufflePl() {
-        if (isShuffleActive) {
-          // Stop shuffle
+      function _shuffleAdvance() {
+        if (!isShuffleActive) return;
+        shuffleQueueIdx++;
+        if (shuffleQueueIdx >= shuffleQueue.length) {
+          console.log('[Shuffle] Queue complete');
           stopShufflePlay();
-        } else {
-          // Start shuffle
-          startShufflePlay();
+          return;
         }
+        console.log('[Shuffle] Advancing to track', shuffleQueueIdx + 1, 'of', shuffleQueue.length);
+        playSong(shuffleQueue[shuffleQueueIdx]);
       }
-  
 
       function startShufflePlay() {
-        // Get all currently displayed cards from the DOM
         const container = document.getElementById('randomContainer');
-        if (!container) {
-          alert('No tracks available to shuffle');
-          return;
-        }
-  
-        // Get record IDs directly from displayed cards
-        const displayedCards = container.querySelectorAll('.random-card[data-record-id]');
-        const recordIds = Array.from(displayedCards)
-          .map(card => card.getAttribute('data-record-id'))
-          .filter(id => {
-            const item = itemsStore.get(id);
-            return item && hasValidAudio(item);
-          });
-  
-        if (recordIds.length === 0) {
-          alert('No tracks available to shuffle');
-          return;
-        }
-  
-        // Shuffle and create queue
-        shuffleQueue = shuffleArray(recordIds);
-        shuffleQueueIndex = 0;
+        if (!container) { console.warn('[Shuffle] randomContainer not found'); return; }
+
+        const ids = Array.from(container.querySelectorAll('.random-card[data-record-id]'))
+          .map(c => c.getAttribute('data-record-id'))
+          .filter(id => { const it = itemsStore.get(id); return it && hasValidAudio(it); });
+
+        if (!ids.length) { console.warn('[Shuffle] No playable tracks'); return; }
+
+        shuffleQueue    = _randomise(ids);
+        shuffleQueueIdx = 0;
         isShuffleActive = true;
-  
-        console.log('[Shuffle] Started with', shuffleQueue.length, 'tracks from displayed cards');
-  
-        // Update button state
-        updateShuffleButton();
-  
-        // Play first track
-        if (shuffleQueue.length > 0) {
-          playSong(shuffleQueue[0]);
-        }
+        _updateShuffleBtn();
+
+        console.log('[Shuffle] Starting with', shuffleQueue.length, 'tracks');
+        playSong(shuffleQueue[0]);
       }
-  
 
       function stopShufflePlay() {
         isShuffleActive = false;
-        shuffleQueue = [];
-        shuffleQueueIndex = 0;
-  
+        shuffleQueue    = [];
+        shuffleQueueIdx = 0;
+        _updateShuffleBtn();
         console.log('[Shuffle] Stopped');
-  
-        // Update button state
-        updateShuffleButton();
       }
-  
 
-      function playNextInQueue() {
-        if (!isShuffleActive || shuffleQueue.length === 0) {
-          return;
-        }
-  
-        shuffleQueueIndex++;
-  
-        if (shuffleQueueIndex >= shuffleQueue.length) {
-          console.log('[Shuffle] Queue finished');
-          stopShufflePlay();
-          return;
-        }
-  
-        const nextRecordId = shuffleQueue[shuffleQueueIndex];
-        console.log('[Shuffle] Playing track', shuffleQueueIndex + 1, 'of', shuffleQueue.length);
-        playSong(nextRecordId);
+      function toggleShufflePl() {
+        if (isShuffleActive) stopShufflePlay(); else startShufflePlay();
       }
-  
 
-      function updateShuffleButton() {
+      function _updateShuffleBtn() {
         const btn = document.getElementById('genreShufflePlayBtn');
         if (!btn) return;
-  
         if (isShuffleActive) {
-          btn.textContent = '⏹️ Stop Shuffle';
+          btn.textContent = '⏹ Stop Shuffle';
           btn.classList.add('active');
         } else {
           btn.textContent = '🔀 Shuffle Play';
           btn.classList.remove('active');
         }
       }
-  
+
+
+  // ---- AUDIO STATE SYNC ----
+  // Keep isPlaying in sync with the real audio element regardless of which
+  // system (player bar or app.min.js) triggered the change.
+
+  (function registerAudioStateSync() {
+    function wire() {
+      const audioEl = document.getElementById('player');
+      if (!audioEl) return;
+      audioEl.addEventListener('play',  () => { isPlaying = true;  });
+      audioEl.addEventListener('pause', () => { isPlaying = false; });
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', wire);
+    } else {
+      wire();
+    }
+  }());
+
 
   // ---- PUBLIC API ----
 
@@ -686,16 +670,17 @@
     sendStreamEvent,
     startProgressTracking,
     stopProgressTracking,
+    // Shuffle — all routed through _PLAYER / player bar
     toggleShufflePl,
     startShufflePlay,
     stopShufflePlay,
-    playNextInQueue
+    isShuffleActive: () => isShuffleActive
   };
 
   // Keep direct window assignments for HTML onclick compatibility
-  window.playSong = playSong;
-  window.togglePause = togglePause;
-  window.stopPlayback = stopPlayback;
+  window.playSong       = playSong;
+  window.togglePause    = togglePause;
+  window.stopPlayback   = stopPlayback;
   window.toggleShufflePl = toggleShufflePl;
-  window.itemsStore = itemsStore;
+  window.itemsStore     = itemsStore;
 })();
