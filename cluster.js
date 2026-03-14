@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const numCPUs = os.cpus().length;
-const MAX_WORKERS = parseInt(process.env.MAX_WORKERS || '0', 10) || Math.min(numCPUs, 4);
+const MAX_WORKERS = Number.parseInt(process.env.MAX_WORKERS || '0', 10) || Math.min(numCPUs, 4);
 
 if (cluster.isPrimary) {
   console.log(`[CLUSTER] Primary process ${process.pid} is running`);

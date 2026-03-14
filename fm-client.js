@@ -127,70 +127,67 @@ let fmLoginPromise = null;
 const RETRYABLE_CODES = new Set(['UND_ERR_SOCKET', 'ECONNRESET', 'ETIMEDOUT']);
 const RETRYABLE_NAMES = new Set(['AbortError']);
 
+function buildFetchHeaders(originalHeaders, finalDispatcher) {
+  const headers = new Headers(originalHeaders || {});
+  if (!finalDispatcher && !headers.has('Connection')) {
+    headers.set('Connection', 'close');
+  }
+  return headers;
+}
+
+function wireExternalAbort(originalSignal, timeoutController, state) {
+  if (!originalSignal) return timeoutController.signal;
+  if (originalSignal.aborted) {
+    state.externalAbort = true;
+    timeoutController.abort();
+  } else {
+    originalSignal.addEventListener(
+      'abort',
+      () => { state.externalAbort = true; timeoutController.abort(); },
+      { once: true }
+    );
+  }
+  return AbortSignal.any([timeoutController.signal, originalSignal]);
+}
+
+function isRetryableError(err, externalAbort) {
+  if (externalAbort) return false;
+  if (err.timedOut) return true;
+  if (RETRYABLE_NAMES.has(err?.name)) return true;
+  const code = err?.code || err?.cause?.code;
+  if (code && RETRYABLE_CODES.has(code)) return true;
+  return String(err?.message || '').toLowerCase().includes('terminated');
+}
+
 export async function safeFetch(url, options = {}, { timeoutMs = 15000, retries = 2, dispatcher = null } = {}) {
   let attempt = 0;
   let backoff = 500;
 
   while (true) {
-    let timedOut = false;
-    let externalAbort = false;
+    const state = { timedOut: false, externalAbort: false };
     const timeoutController = new AbortController();
     const timer = setTimeout(() => {
-      timedOut = true;
+      state.timedOut = true;
       timeoutController.abort();
     }, timeoutMs);
 
     const { signal: originalSignal, headers: originalHeaders, dispatcher: optionsDispatcher, ...rest } = options || {};
-
-    const headers = new Headers(originalHeaders || {});
     const finalDispatcher = optionsDispatcher || dispatcher;
-    if (!finalDispatcher && !headers.has('Connection')) {
-      headers.set('Connection', 'close');
-    }
-
-    if (originalSignal) {
-      if (originalSignal.aborted) {
-        externalAbort = true;
-        timeoutController.abort();
-      } else {
-        originalSignal.addEventListener(
-          'abort',
-          () => {
-            externalAbort = true;
-            timeoutController.abort();
-          },
-          { once: true }
-        );
-      }
-    }
-
-    const signals = [timeoutController.signal];
-    if (originalSignal) signals.push(originalSignal);
-    const composedSignal = signals.length > 1 ? AbortSignal.any(signals) : timeoutController.signal;
+    const headers = buildFetchHeaders(originalHeaders, finalDispatcher);
+    const composedSignal = wireExternalAbort(originalSignal, timeoutController, state);
 
     try {
       const fetchOptions = { ...rest, headers, signal: composedSignal };
-      if (finalDispatcher) {
-        fetchOptions.dispatcher = finalDispatcher;
-      }
+      if (finalDispatcher) fetchOptions.dispatcher = finalDispatcher;
       const response = await fetch(url, fetchOptions);
       clearTimeout(timer);
       return response;
     } catch (err) {
       clearTimeout(timer);
-      err.timedOut = err.timedOut || timedOut;
-      err.externalAbort = err.externalAbort || externalAbort;
+      err.timedOut = err.timedOut || state.timedOut;
+      err.externalAbort = err.externalAbort || state.externalAbort;
 
-      const message = String(err?.message || '').toLowerCase();
-      const code = err?.code || err?.cause?.code;
-      const retryable = !externalAbort && (
-        err.timedOut ||
-        RETRYABLE_NAMES.has(err?.name) ||
-        (code && RETRYABLE_CODES.has(code)) ||
-        message.includes('terminated')
-      );
-
-      if (retryable && attempt < retries) {
+      if (isRetryableError(err, state.externalAbort) && attempt < retries) {
         await sleep(backoff);
         attempt += 1;
         backoff *= 2;

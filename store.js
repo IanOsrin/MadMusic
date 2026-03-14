@@ -106,6 +106,47 @@ export async function ensureDataDir() {
 // PLAYLIST STORAGE
 // ============================================================================
 
+async function repairCorruptedPlaylistsFile(parseErr) {
+  console.warn('[MASS] Playlists file contained invalid JSON, resetting to empty list:', parseErr);
+  await fs.writeFile(PLAYLISTS_PATH, '[]', 'utf8');
+  let repairedMtime = Date.now();
+  try {
+    const repairedStat = await fs.stat(PLAYLISTS_PATH);
+    if (repairedStat?.mtimeMs) repairedMtime = repairedStat.mtimeMs;
+  } catch {
+    // ignore stat errors; continue with Date.now()
+  }
+  playlistsCache = { data: [], mtimeMs: repairedMtime };
+  return playlistsCache.data;
+}
+
+async function migrateNumericUserIds(data) {
+  // Strip legacy email field from all entries regardless of migration
+  for (const entry of data) {
+    if (entry && typeof entry === 'object') delete entry.userEmail;
+  }
+  const needsMigration = data.filter(
+    entry => entry && typeof entry === 'object' && entry.userId && /^\d+$/.test(String(entry.userId))
+  );
+  if (!needsMigration.length) return false;
+  // All FM lookups run concurrently via Promise.all instead of sequentially.
+  await Promise.all(needsMigration.map(async (entry) => {
+    try {
+      const record = await fmGetRecordById(FM_USERS_LAYOUT, entry.userId);
+      if (record) {
+        const email = normalizeEmail(record.fieldData?.Email || '');
+        if (email) {
+          console.log(`[MASS] Migrating playlist "${entry.name}" from userId=${entry.userId} to email=${email}`);
+          entry.userId = email;
+        }
+      }
+    } catch (err) {
+      console.warn(`[MASS] Could not migrate playlist "${entry.name}" (userId=${entry.userId}):`, err?.message || err);
+    }
+  }));
+  return true;
+}
+
 export async function loadPlaylists() {
   try {
     const stat = await fs.stat(PLAYLISTS_PATH);
@@ -117,52 +158,12 @@ export async function loadPlaylists() {
     let parsed;
     try {
       parsed = JSON.parse(raw);
-    } catch (parseErr) {
-      console.warn('[MASS] Playlists file contained invalid JSON, resetting to empty list:', parseErr);
-      await fs.writeFile(PLAYLISTS_PATH, '[]', 'utf8');
-      let repairedMtime = Date.now();
-      try {
-        const repairedStat = await fs.stat(PLAYLISTS_PATH);
-        if (repairedStat?.mtimeMs) repairedMtime = repairedStat.mtimeMs;
-      } catch {
-        // ignore stat errors; continue with Date.now()
-      }
-      playlistsCache = { data: [], mtimeMs: repairedMtime };
-      return playlistsCache.data;
+    } catch (error_) {
+      return repairCorruptedPlaylistsFile(error_);
     }
 
     const data = Array.isArray(parsed) ? parsed : [];
-
-    // Migrate legacy numeric userId values to email addresses.
-    // All FM lookups run concurrently via Promise.all instead of sequentially.
-    const needsMigration = data.filter(
-      entry => entry && typeof entry === 'object' && entry.userId && /^\d+$/.test(String(entry.userId))
-    );
-
-    // Strip legacy email field from all entries regardless of migration
-    for (const entry of data) {
-      if (entry && typeof entry === 'object') delete entry.userEmail;
-    }
-
-    let migrated = false;
-    if (needsMigration.length) {
-      await Promise.all(needsMigration.map(async (entry) => {
-        try {
-          const record = await fmGetRecordById(FM_USERS_LAYOUT, entry.userId);
-          if (record) {
-            const email = normalizeEmail(record.fieldData?.Email || '');
-            if (email) {
-              console.log(`[MASS] Migrating playlist "${entry.name}" from userId=${entry.userId} to email=${email}`);
-              entry.userId = email;
-              migrated = true;
-            }
-          }
-        } catch (err) {
-          console.warn(`[MASS] Could not migrate playlist "${entry.name}" (userId=${entry.userId}):`, err?.message || err);
-        }
-      }));
-    }
-
+    const migrated = await migrateNumericUserIds(data);
     if (migrated) {
       try { await savePlaylists(data); } catch (err) { console.warn('[MASS] Failed to save migrated playlists:', err); }
     }
@@ -170,7 +171,7 @@ export async function loadPlaylists() {
     playlistsCache = { data, mtimeMs: stat.mtimeMs };
     return data;
   } catch (err) {
-    if (err && err.code === 'ENOENT') {
+    if (err?.code === 'ENOENT') {
       await ensureDataDir();
       await fs.writeFile(PLAYLISTS_PATH, '[]', 'utf8');
       playlistsCache = { data: [], mtimeMs: Date.now() };
@@ -181,6 +182,19 @@ export async function loadPlaylists() {
   }
 }
 
+function normalizePlaylistEntry(entry) {
+  if (!entry || typeof entry !== 'object') return;
+  if (entry.userId) entry.userId = String(entry.userId).trim();
+  delete entry.userEmail;
+  const shareId = normalizeShareId(entry.shareId);
+  if (shareId) {
+    entry.shareId = shareId;
+  } else {
+    delete entry.shareId;
+    if (entry.sharedAt) entry.sharedAt = null;
+  }
+}
+
 export async function savePlaylists(playlists) {
   let lockPath;
   try {
@@ -188,17 +202,7 @@ export async function savePlaylists(playlists) {
     lockPath = await acquireLock(PLAYLISTS_PATH);
     const normalized = Array.isArray(playlists) ? playlists : [];
     for (const entry of normalized) {
-      if (entry && typeof entry === 'object') {
-        if (entry.userId) entry.userId = String(entry.userId).trim();
-        delete entry.userEmail;
-        const shareId = normalizeShareId(entry.shareId);
-        if (shareId) {
-          entry.shareId = shareId;
-        } else {
-          delete entry.shareId;
-          if (entry.sharedAt) entry.sharedAt = null;
-        }
-      }
+      normalizePlaylistEntry(entry);
     }
     const payload = JSON.stringify(normalized, null, 2);
     const tempPath = `${PLAYLISTS_PATH}.tmp`;
@@ -268,8 +272,8 @@ export async function loadAccessTokens() {
     let parsed;
     try {
       parsed = JSON.parse(raw);
-    } catch (parseErr) {
-      console.warn('[MASS] Access tokens file contained invalid JSON, resetting to empty list:', parseErr);
+    } catch (error_) {
+      console.warn('[MASS] Access tokens file contained invalid JSON, resetting to empty list:', error_);
       const defaultData = { tokens: [] };
       await fs.writeFile(ACCESS_TOKENS_PATH, JSON.stringify(defaultData, null, 2), 'utf8');
       accessTokensCache = { data: defaultData, mtimeMs: Date.now() };
@@ -284,7 +288,7 @@ export async function loadAccessTokens() {
     accessTokensCache = { data, mtimeMs: stat.mtimeMs };
     return data;
   } catch (err) {
-    if (err && err.code === 'ENOENT') {
+    if (err?.code === 'ENOENT') {
       await ensureDataDir();
       const defaultData = { tokens: [] };
       await fs.writeFile(ACCESS_TOKENS_PATH, JSON.stringify(defaultData, null, 2), 'utf8');

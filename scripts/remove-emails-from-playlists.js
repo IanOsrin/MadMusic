@@ -50,4 +50,4 @@ async function removeEmailsFromPlaylists() {
   }
 }
 
-removeEmailsFromPlaylists();
+await removeEmailsFromPlaylists();

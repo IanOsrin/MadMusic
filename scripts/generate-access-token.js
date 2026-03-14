@@ -38,20 +38,22 @@ function parseArgs() {
     notes: ''
   };
 
-  for (let i = 0; i < args.length; i++) {
+  let i = 0;
+  while (i < args.length) {
     const arg = args[i];
 
     if (arg === '--days' && args[i + 1]) {
-      const days = parseInt(args[i + 1], 10);
-      if (!isNaN(days) && days > 0) {
+      const days = Number.parseInt(args[i + 1], 10);
+      if (!Number.isNaN(days) && days > 0) {
         options.days = days;
       }
-      i++;
+      i += 2;
     } else if (arg === '--unlimited') {
       options.unlimited = true;
+      i += 1;
     } else if (arg === '--notes' && args[i + 1]) {
       options.notes = args[i + 1];
-      i++;
+      i += 2;
     } else if (arg === '--help' || arg === '-h') {
       console.log(`
 Access Token Generator for MASS
@@ -72,6 +74,8 @@ Examples:
   node scripts/generate-access-token.js --days 14 --notes "Trial for Client XYZ"
       `);
       process.exit(0);
+    } else {
+      i += 1;
     }
   }
 
@@ -178,7 +182,9 @@ async function main() {
   console.log(`   Total tokens: ${tokenData.tokens.length}\n`);
 }
 
-main().catch(err => {
+try {
+  await main();
+} catch (err) {
   console.error('\n❌ Error:', err.message);
   process.exit(1);
-});
+}

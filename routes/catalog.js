@@ -1,23 +1,34 @@
 import { Router } from 'express';
-import { fmPost, fmWithAuth, ensureToken, fmFindRecords, fmGetRecordById } from '../fm-client.js';
-import { searchCache, exploreCache, albumCache, publicPlaylistsCache, trendingCache, genreCache } from '../cache.js';
+import { randomInt } from 'node:crypto';
+import { fmPost, ensureToken, fmFindRecords, fmGetRecordById } from '../fm-client.js';
+import { searchCache, exploreCache, albumCache, publicPlaylistsCache, trendingCache } from '../cache.js';
 import { hasValidAudio, hasValidArtwork, resolvePlayableSrc, resolveArtworkSrc } from '../lib/track.js';
 import {
   recordIsVisible, recordIsFeatured, isMissingFieldError, applyVisibility,
-  firstNonEmptyFast, firstNonEmpty, AUDIO_FIELD_CANDIDATES, ARTWORK_FIELD_CANDIDATES,
-  CATALOGUE_FIELD_CANDIDATES, pickFieldValueCaseInsensitive, composersFromFields,
-  parseTrackSequence, FM_LAYOUT, FM_STREAM_EVENTS_LAYOUT,
-  FM_FEATURED_FIELD, FM_FEATURED_VALUE, FEATURED_FIELD_CANDIDATES
+  firstNonEmpty, AUDIO_FIELD_CANDIDATES, ARTWORK_FIELD_CANDIDATES,
+  CATALOGUE_FIELD_CANDIDATES, pickFieldValueCaseInsensitive,
+  FM_LAYOUT, FM_STREAM_EVENTS_LAYOUT,
+  FM_FEATURED_VALUE, FEATURED_FIELD_CANDIDATES
 } from '../lib/fm-fields.js';
 import {
   parsePositiveInt, normalizeRecordId, formatTimestampUTC, toCleanString,
-  normalizeSeconds, parseFileMakerTimestamp, makeAlbumKey, normTitle
+  normalizeSeconds, parseFileMakerTimestamp
 } from '../lib/format.js';
 import { fmErrorToHttpStatus } from '../lib/http.js';
-import { validators, validateQueryString } from '../lib/validators.js';
+import { validateQueryString } from '../lib/validators.js';
 import { STREAM_TIME_FIELD } from '../lib/stream-events.js';
 
 const router = Router();
+
+// Cryptographically safe Fisher-Yates shuffle
+function cryptoShuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = randomInt(0, i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 const TRENDING_LOOKBACK_HOURS     = parsePositiveInt(process.env.TRENDING_LOOKBACK_HOURS, 168);
 const TRENDING_FETCH_LIMIT        = parsePositiveInt(process.env.TRENDING_FETCH_LIMIT, 400);
@@ -40,7 +51,7 @@ function cloneRecordsForLimit(records = [], count = records.length) {
   return records.slice(0, Math.min(count, records.length)).map((record) => ({
     recordId: record.recordId,
     modId: record.modId,
-    fields: { ...(record.fieldData || record.fields || {}) }
+    fields: { ...(record.fieldData || record.fields) }
   }));
 }
 
@@ -84,14 +95,14 @@ async function fetchFeaturedAlbumRecords(limit = 400) {
   if (cachedFeaturedFieldName) {
     console.log(`[featured] Trying cached field: "${cachedFeaturedFieldName}"`);
     const result = await tryField(cachedFeaturedFieldName);
-    if (result && result.length > 0) return result;
+    if (result?.length > 0) return result;
     console.warn(`[featured] Cached field "${cachedFeaturedFieldName}" failed, trying all candidates`);
     cachedFeaturedFieldName = null;
   }
 
   for (const field of FEATURED_FIELD_CANDIDATES) {
     const result = await tryField(field);
-    if (result && result.length > 0) return result;
+    if (result?.length > 0) return result;
     if (Array.isArray(result) && result.length === 0) return [];
   }
   return [];
@@ -136,27 +147,9 @@ async function loadFeaturedAlbumRecords({ limit = 400, refresh = false } = {}) {
 
 // ---- trending helpers ----
 
-async function collectTrendingStats({ limit, lookbackHours, fetchLimit }) {
-  const normalizedLimit = Math.max(1, limit || 5);
-  const cutoffDate = lookbackHours && lookbackHours > 0
-    ? new Date(Date.now() - lookbackHours * 60 * 60 * 1000)
-    : null;
-  const baseQuery = { TrackRecordID: '*' };
-  if (cutoffDate) baseQuery.LastEventUTC = `>=${formatTimestampUTC(cutoffDate)}`;
-
-  const findResult = await fmFindRecords(
-    FM_STREAM_EVENTS_LAYOUT,
-    [baseQuery],
-    { limit: fetchLimit, offset: 1, sort: [{ fieldName: 'TimestampUTC', sortOrder: 'descend' }] }
-  );
-
-  if (!findResult.ok) {
-    const detail = `${findResult.msg || 'FM error'}${findResult.code ? ` (FM ${findResult.code})` : ''}`;
-    throw new Error(`Trending stream query failed: ${detail}`);
-  }
-
+function buildStatsByTrack(data) {
   const statsByTrack = new Map();
-  for (const entry of findResult.data) {
+  for (const entry of data) {
     const fields = entry?.fieldData || {};
     const trackRecordId = normalizeRecordId(fields.TrackRecordID || fields['Track Record ID'] || '');
     if (!trackRecordId) continue;
@@ -174,27 +167,16 @@ async function collectTrendingStats({ limit, lookbackHours, fetchLimit }) {
     if (sessionId) stat.sessionIds.add(sessionId);
     if (lastEventTs > stat.lastEvent) stat.lastEvent = lastEventTs;
   }
+  return statsByTrack;
+}
 
-  if (!statsByTrack.size) return [];
+function compareTrendingStats(a, b) {
+  if (b.totalSeconds !== a.totalSeconds) return b.totalSeconds - a.totalSeconds;
+  if (b.playCount !== a.playCount) return b.playCount - a.playCount;
+  return b.lastEvent - a.lastEvent;
+}
 
-  const sortedStats = Array.from(statsByTrack.values()).sort((a, b) => {
-    if (b.totalSeconds !== a.totalSeconds) return b.totalSeconds - a.totalSeconds;
-    if (b.playCount !== a.playCount) return b.playCount - a.playCount;
-    return b.lastEvent - a.lastEvent;
-  });
-
-  // Batch-fetch records in parallel (FM client queue throttles to 8 concurrent)
-  // Fetch 3x the needed limit to account for records that fail validation
-  const BATCH_MULTIPLIER = 3;
-  const candidates = sortedStats.slice(0, normalizedLimit * BATCH_MULTIPLIER);
-  const fetched = await Promise.all(
-    candidates.map((stat) =>
-      fmGetRecordById(FM_LAYOUT, stat.trackRecordId)
-        .then((record) => ({ stat, record }))
-        .catch(() => ({ stat, record: null }))
-    )
-  );
-
+function collectValidResults(fetched, normalizedLimit) {
   const results = [];
   for (const { stat, record } of fetched) {
     if (!record) continue;
@@ -215,6 +197,46 @@ async function collectTrendingStats({ limit, lookbackHours, fetchLimit }) {
     if (results.length >= normalizedLimit) break;
   }
   return results;
+}
+
+async function collectTrendingStats({ limit, lookbackHours, fetchLimit }) {
+  const normalizedLimit = Math.max(1, limit || 5);
+  const cutoffDate = lookbackHours && lookbackHours > 0
+    ? new Date(Date.now() - lookbackHours * 60 * 60 * 1000)
+    : null;
+  const baseQuery = { TrackRecordID: '*' };
+  if (cutoffDate) baseQuery.LastEventUTC = `>=${formatTimestampUTC(cutoffDate)}`;
+
+  const findResult = await fmFindRecords(
+    FM_STREAM_EVENTS_LAYOUT,
+    [baseQuery],
+    { limit: fetchLimit, offset: 1, sort: [{ fieldName: 'TimestampUTC', sortOrder: 'descend' }] }
+  );
+
+  if (!findResult.ok) {
+    const codeStr = findResult.code ? ` (FM ${findResult.code})` : '';
+    const detail = `${findResult.msg || 'FM error'}${codeStr}`;
+    throw new Error(`Trending stream query failed: ${detail}`);
+  }
+
+  const statsByTrack = buildStatsByTrack(findResult.data);
+  if (!statsByTrack.size) return [];
+
+  const sortedStats = Array.from(statsByTrack.values()).sort(compareTrendingStats);
+
+  // Batch-fetch records in parallel (FM client queue throttles to 8 concurrent)
+  // Fetch 3x the needed limit to account for records that fail validation
+  const BATCH_MULTIPLIER = 3;
+  const candidates = sortedStats.slice(0, normalizedLimit * BATCH_MULTIPLIER);
+  const fetched = await Promise.all(
+    candidates.map((stat) =>
+      fmGetRecordById(FM_LAYOUT, stat.trackRecordId)
+        .then((record) => ({ stat, record }))
+        .catch(() => ({ stat, record: null }))
+    )
+  );
+
+  return collectValidResults(fetched, normalizedLimit);
 }
 
 async function fetchTrendingTracks(limit = 5) {
@@ -272,8 +294,8 @@ router.get('/search', async (req, res) => {
     const album = (req.query.album || '').toString().trim();
     const track = (req.query.track || '').toString().trim();
     const genre = (req.query.genre || '').toString().trim();
-    const limit = Math.max(1, Math.min(500, parseInt(req.query.limit || '10', 10)));
-    const uiOff0 = Math.max(0, parseInt(req.query.offset || '0', 10));
+    const limit = Math.max(1, Math.min(500, Number.parseInt(req.query.limit || '10', 10)));
+    const uiOff0 = Math.max(0, Number.parseInt(req.query.offset || '0', 10));
     const fmOff = uiOff0 + 1;
 
     const cacheKey = `search:v2:${q}:${artist}:${album}:${track}:${genre}:${limit}:${uiOff0}`;
@@ -343,7 +365,7 @@ router.get('/search', async (req, res) => {
       validRecords.sort((a, b) => {
         const aAlbumArtist = (a.fieldData?.['Album Artist'] || '').toLowerCase();
         const bAlbumArtist = (b.fieldData?.['Album Artist'] || '').toLowerCase();
-        const rank = (s) => s.startsWith(needle) ? 0 : s.includes(needle) ? 1 : 2;
+        const rank = (s) => { if (s.startsWith(needle)) { return 0; } return s.includes(needle) ? 1 : 2; };
         return rank(aAlbumArtist) - rank(bAlbumArtist);
       });
     }
@@ -365,6 +387,34 @@ router.get('/search', async (req, res) => {
 });
 
 // ── /explore — browse albums by decade (Year of Release range) ───────────────
+
+async function fetchRecordsForYearRange(start, end, limit, offset) {
+  let rawData = [];
+  console.log(`[explore] Searching ${start}..${end} across candidates: ${YEAR_FIELD_CANDIDATES.join(', ')}`);
+  for (const field of YEAR_FIELD_CANDIDATES) {
+    const query = applyVisibility({ [field]: `${start}..${end}` });
+    const payload = { query: [query], limit: Math.min(500, limit + offset + 1), offset: 1 };
+    try {
+      const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const code = json?.messages?.[0]?.code;
+        const msg  = json?.messages?.[0]?.message || '';
+        if (isMissingFieldError(json)) { console.log(`[explore] field "${field}" → missing (102), skipping`); continue; }
+        if (String(code) === '401') { console.log(`[explore] field "${field}" → no records (401), skipping`); continue; }
+        console.warn(`[explore] field "${field}" → FM error ${response.status} code=${code} msg=${msg}`);
+        continue;
+      }
+      rawData = json?.response?.data || [];
+      console.log(`[explore] field "${field}" → ${rawData.length} records ✓`);
+      break;
+    } catch (err) {
+      console.warn(`[explore] field "${field}" threw`, err.message);
+    }
+  }
+  return rawData;
+}
+
 const YEAR_FIELD_CANDIDATES = [
   'Year of Release',
   'Tape Files::Year of Release',
@@ -378,10 +428,10 @@ const YEAR_FIELD_CANDIDATES = [
 
 router.get('/explore', async (req, res) => {
   try {
-    const start  = parseInt(req.query.start  || '0',   10);
-    const end    = parseInt(req.query.end    || '9999',10);
-    const limit  = Math.max(1, Math.min(500, parseInt(req.query.limit  || '400', 10)));
-    const offset = Math.max(0,               parseInt(req.query.offset || '0',   10));
+    const start  = Number.parseInt(req.query.start  || '0',   10);
+    const end    = Number.parseInt(req.query.end    || '9999',10);
+    const limit  = Math.max(1, Math.min(500, Number.parseInt(req.query.limit  || '400', 10)));
+    const offset = Math.max(0,               Number.parseInt(req.query.offset || '0',   10));
     const refresh = req.query.refresh === '1';
 
     if (!start || start < 1900 || start > 2100) {
@@ -398,29 +448,7 @@ router.get('/explore', async (req, res) => {
     }
 
     // Try each year field candidate until one returns results
-    let rawData = [];
-    console.log(`[explore] Searching ${start}..${end} across candidates: ${YEAR_FIELD_CANDIDATES.join(', ')}`);
-    for (const field of YEAR_FIELD_CANDIDATES) {
-      const query = applyVisibility({ [field]: `${start}..${end}` });
-      const payload = { query: [query], limit: Math.min(500, limit + offset + 1), offset: 1 };
-      try {
-        const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
-        const json = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          const code = json?.messages?.[0]?.code;
-          const msg  = json?.messages?.[0]?.message || '';
-          if (isMissingFieldError(json)) { console.log(`[explore] field "${field}" → missing (102), skipping`); continue; }
-          if (String(code) === '401') { console.log(`[explore] field "${field}" → no records (401), skipping`); continue; }
-          console.warn(`[explore] field "${field}" → FM error ${response.status} code=${code} msg=${msg}`);
-          continue;
-        }
-        rawData = json?.response?.data || [];
-        console.log(`[explore] field "${field}" → ${rawData.length} records ✓`);
-        break;
-      } catch (err) {
-        console.warn(`[explore] field "${field}" threw`, err.message);
-      }
-    }
+    const rawData = await fetchRecordsForYearRange(start, end, limit, offset);
     console.log(`[explore] Total raw records: ${rawData.length}`);
 
     const valid = rawData.filter(r => hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
@@ -496,6 +524,65 @@ router.get('/trending', async (req, res) => {
   }
 });
 
+function deduplicateByAlbumArtist(records, count) {
+  const seenAlbums  = new Set();
+  const seenArtists = new Set();
+  const deduped = [];
+  for (const record of records) {
+    const fields = record.fieldData || {};
+    const artist   = (firstNonEmpty(fields, ['Album Artist', 'Tape Files::Album Artist', 'Artist']) || '').toLowerCase().trim();
+    const album    = (firstNonEmpty(fields, ['Album Title',  'Tape Files::Album Title',  'Album'])  || '').toLowerCase().trim();
+    const albumKey = `${album}|||${artist}`;
+    if (seenAlbums.has(albumKey) || seenArtists.has(artist)) continue;
+    seenAlbums.add(albumKey);
+    seenArtists.add(artist);
+    deduped.push(record);
+    if (deduped.length >= count) break;
+  }
+  return deduped;
+}
+
+async function fetchSongsByGenre(genres, fetchLimit) {
+  const genreFieldCandidates = ['Local Genre', 'Genre'];
+  for (const field of genreFieldCandidates) {
+    const query = genres.map(genre => ({ [field]: `*${genre}*` }));
+    const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, { query, limit: fetchLimit });
+    const json = await response.json().catch(() => ({}));
+    if (response.ok) {
+      console.log(`[RANDOM SONGS] Using genre field "${field}", FileMaker returned ${json?.response?.data?.length ?? 0} records`);
+      return json?.response?.data || [];
+    }
+  }
+  return null;
+}
+
+async function fetchRandomSongsData(count) {
+  const query = [{ 'Album Title': '*' }];
+  const countResponse = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, { query, limit: 1 });
+  const countJson = await countResponse.json().catch(() => ({}));
+
+  if (!countResponse.ok) {
+    const msg = countJson?.messages?.[0]?.message || 'FM error';
+    const code = countJson?.messages?.[0]?.code;
+    return { error: true, msg, code };
+  }
+
+  const totalRecords = countJson?.response?.dataInfo?.foundCount || 0;
+  const windowSize = Math.min(Math.max(500, count * 50), 1000);
+  const maxStart = Math.max(1, totalRecords - windowSize + 1);
+  const randStart = randomInt(1, Math.max(2, maxStart + 1));
+
+  const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, { query, limit: windowSize, offset: randStart });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const msg = json?.messages?.[0]?.message || 'FM error';
+    const code = json?.messages?.[0]?.code;
+    return { error: true, msg, code };
+  }
+  console.log(`[RANDOM SONGS] FileMaker returned ${json?.response?.data?.length ?? 0} records`);
+  return { error: false, data: json?.response?.data || [] };
+}
+
 router.get('/random-songs', async (req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
@@ -506,64 +593,25 @@ router.get('/random-songs', async (req, res) => {
     const genreParam = (req.query.genre || req.query.genres || '').toString().trim();
     const genres = genreParam.split(',').map(g => g.trim()).filter(Boolean);
 
-    console.log(`[RANDOM SONGS] Requesting ${count} songs${genres.length ? ` (genres: ${genres.join(', ')})` : ''}`);
+    const genreStr = genres.length ? ` (genres: ${genres.join(', ')})` : '';
+    console.log(`[RANDOM SONGS] Requesting ${count} songs${genreStr}`);
 
     let data = [];
-    const fetchLimit = count * 3;
 
     if (genres.length > 0) {
-      const genreFieldCandidates = ['Local Genre', 'Genre'];
-      let foundField = null;
-
-      for (const field of genreFieldCandidates) {
-        const query = genres.map(genre => ({ [field]: `*${genre}*` }));
-        const payload = { query, limit: fetchLimit };
-
-        const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
-        const json = await response.json().catch(() => ({}));
-
-        if (response.ok) {
-          data = json?.response?.data || [];
-          foundField = field;
-          console.log(`[RANDOM SONGS] Using genre field "${field}", FileMaker returned ${data.length} records`);
-          break;
-        }
-      }
-
-      if (!foundField) {
+      const genreData = await fetchSongsByGenre(genres, count * 3);
+      if (genreData === null) {
         console.error('[RANDOM SONGS] No valid genre field found on layout');
         return res.status(500).json({ ok: false, error: 'Genre filtering not supported on this layout' });
       }
+      data = genreData;
     } else {
-      const query = [{ 'Album Title': '*' }];
-      const countResponse = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, { query, limit: 1 });
-      const countJson = await countResponse.json().catch(() => ({}));
-
-      if (!countResponse.ok) {
-        const msg = countJson?.messages?.[0]?.message || 'FM error';
-        const code = countJson?.messages?.[0]?.code;
-        console.error(`[RANDOM SONGS] FileMaker error: ${msg} (${code})`);
-        return res.status(500).json({ ok: false, error: msg, code });
+      const result = await fetchRandomSongsData(count);
+      if (result.error) {
+        console.error(`[RANDOM SONGS] FileMaker error: ${result.msg} (${result.code})`);
+        return res.status(500).json({ ok: false, error: result.msg, code: result.code });
       }
-
-      const totalRecords = countJson?.response?.dataInfo?.foundCount || 0;
-      const windowSize = Math.min(Math.max(500, count * 50), 1000);
-      const maxStart = Math.max(1, totalRecords - windowSize + 1);
-      const randStart = Math.floor(1 + Math.random() * maxStart);
-
-      const payload = { query, limit: windowSize, offset: randStart };
-      const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
-      const json = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        const msg = json?.messages?.[0]?.message || 'FM error';
-        const code = json?.messages?.[0]?.code;
-        console.error(`[RANDOM SONGS] FileMaker error: ${msg} (${code})`);
-        return res.status(500).json({ ok: false, error: msg, code });
-      }
-
-      data = json?.response?.data || [];
-      console.log(`[RANDOM SONGS] FileMaker returned ${data.length} records`);
+      data = result.data;
     }
 
     const validRecords = data.filter(record => {
@@ -571,24 +619,10 @@ router.get('/random-songs', async (req, res) => {
       return hasValidAudio(fields) && hasValidArtwork(fields);
     });
 
-    const shuffled = validRecords.sort(() => Math.random() - 0.5);
+    const shuffled = cryptoShuffle(validRecords);
 
     // Deduplicate: one track per album, then one album per artist
-    const seenAlbums = new Set();
-    const seenArtists = new Set();
-    const deduped = [];
-    for (const record of shuffled) {
-      const fields = record.fieldData || {};
-      const artist = (firstNonEmpty(fields, ['Album Artist', 'Tape Files::Album Artist', 'Artist']) || '').toLowerCase().trim();
-      const album = (firstNonEmpty(fields, ['Album Title', 'Tape Files::Album Title', 'Album']) || '').toLowerCase().trim();
-      const albumKey = `${album}|||${artist}`;
-      if (seenAlbums.has(albumKey) || seenArtists.has(artist)) continue;
-      seenAlbums.add(albumKey);
-      seenArtists.add(artist);
-      deduped.push(record);
-      if (deduped.length >= count) break;
-    }
-    const selected = deduped;
+    const selected = deduplicateByAlbumArtist(shuffled, count);
 
     const items = selected.map(record => {
       const fields = record.fieldData || {};
@@ -705,7 +739,7 @@ router.get('/public-playlists', async (req, res) => {
 
 router.get('/featured-albums', async (req, res) => {
   try {
-    const limit = Math.max(1, Math.min(1000, parseInt(req.query.limit || '400', 10)));
+    const limit = Math.max(1, Math.min(1000, Number.parseInt(req.query.limit || '400', 10)));
     const refresh = req.query.refresh === '1';
     console.log(`[featured] GET /api/featured-albums limit=${limit} refresh=${refresh}`);
     const result = await loadFeaturedAlbumRecords({ limit, refresh });
@@ -721,7 +755,7 @@ router.get('/featured-albums', async (req, res) => {
 
 router.get('/releases/latest', async (req, res) => {
   try {
-    const limit = Math.max(1, Math.min(1000, parseInt(req.query.limit || '1', 10)));
+    const limit = Math.max(1, Math.min(1000, Number.parseInt(req.query.limit || '1', 10)));
     const refresh = req.query.refresh === '1';
     console.log(`[releases] GET /api/releases/latest limit=${limit} refresh=${refresh}`);
     const result = await loadFeaturedAlbumRecords({ limit, refresh });
@@ -737,13 +771,13 @@ router.get('/releases/latest', async (req, res) => {
 
 router.get('/missing-audio-songs', async (req, res) => {
   try {
-    const count = Math.max(1, Math.min(50, parseInt(req.query.count || '12', 10)));
+    const count = Math.max(1, Math.min(50, Number.parseInt(req.query.count || '12', 10)));
 
     await ensureToken();
 
     const fetchLimit = count * 20;
     const maxOffset = 10000;
-    const randomOffset = Math.floor(Math.random() * maxOffset) + 1;
+    const randomOffset = randomInt(1, maxOffset + 1);
 
     console.log(`[missing-audio-songs] Fetching ${fetchLimit} records from offset ${randomOffset}`);
 
@@ -763,7 +797,7 @@ router.get('/missing-audio-songs', async (req, res) => {
 
     console.log(`[missing-audio-songs] Found ${missingAudioRecords.length} songs without audio out of ${rawData.length} total`);
 
-    const shuffled = missingAudioRecords.sort(() => Math.random() - 0.5);
+    const shuffled = cryptoShuffle(missingAudioRecords);
     const selected = shuffled.slice(0, count);
 
     const items = selected.map(record => ({
@@ -800,7 +834,7 @@ router.get('/album', async (req, res) => {
     const cat = catValidation.value;
     const title = titleValidation.value;
     const artist = artistValidation.value;
-    const limit = Math.max(1, Math.min(1000, parseInt(req.query.limit || '100', 10)));
+    const limit = Math.max(1, Math.min(1000, Number.parseInt(req.query.limit || '100', 10)));
 
     const cacheKey = `album:${cat}:${title}:${artist}:${limit}`;
     const cached = albumCache.get(cacheKey);
@@ -853,48 +887,54 @@ router.get('/album', async (req, res) => {
 });
 
 // ── /new-releases — albums where Tape Files::New_Release checkbox == "Yes" ────
+
+// Returns the filtered records for one candidate field, or null to signal "try next".
+async function tryNewReleaseField(field, normalizedLimit) {
+  // Do NOT use applyVisibility here — it adds an AND constraint that can exclude
+  // albums whose visibility field is unset. The New_Release checkbox is the sole filter.
+  // Also avoid == exact-match prefix; a plain value find works for checkbox fields.
+  const query = { [field]: NEW_RELEASES_VALUE };
+  const payload = { query: [query], limit: normalizedLimit, offset: 1 };
+  console.log(`[new-releases] Trying field "${field}" with query:`, JSON.stringify(query));
+  const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
+  const json = await response.json().catch(() => ({}));
+  const fmCode = String(json?.messages?.[0]?.code ?? '');
+  const fmMsg  = json?.messages?.[0]?.message ?? '';
+  if (!response.ok) {
+    console.log(`[new-releases] Field "${field}" HTTP ${response.status} code=${fmCode} msg=${fmMsg}`);
+    if (isMissingFieldError(json)) { console.log(`[new-releases] Field "${field}" missing, skipping`); }
+    else if (fmCode === '401') { console.log(`[new-releases] Field "${field}" returned 0 matches (401)`); }
+    return null;
+  }
+  const rawData = json?.response?.data || [];
+  console.log(`[new-releases] Field "${field}" raw=${rawData.length} records`);
+  if (rawData.length > 0) {
+    const sample = rawData[0]?.fieldData || {};
+    const nrValue    = sample['Tape Files::New_Release'] ?? sample['New_Release'] ?? '(not present)';
+    const albumTitle = sample['Album Title'] || sample['Tape Files::Album_Title'] || '(unknown)';
+    console.log(`[new-releases] Sample record — album="${albumTitle}", New_Release value="${nrValue}"`);
+    console.log(`[new-releases] Sample record field keys: ${Object.keys(sample).join(', ')}`);
+  }
+  const filtered = rawData.filter(r => recordIsVisible(r.fieldData || {}));
+  console.log(`[new-releases] After visibility filter: ${filtered.length}`);
+  if (filtered.length > 0) {
+    console.log(`[new-releases] SUCCESS — returning ${filtered.length} records via field "${field}"`);
+    const titles = filtered.map(r => r.fieldData?.['Album Title'] || r.fieldData?.['Tape Files::Album_Title'] || r.recordId).slice(0, 10);
+    console.log(`[new-releases] Matched albums: ${titles.join(' | ')}`);
+    return filtered;
+  }
+  return null;
+}
+
 async function fetchNewReleaseRecords(limit = 200) {
   const normalizedLimit = Math.max(1, Math.min(1000, limit));
   console.log(`[new-releases] Searching Tape Files::New_Release == "${NEW_RELEASES_VALUE}"`);
 
   for (const field of NEW_RELEASES_FIELD_CANDIDATES) {
     if (!field) continue;
-    // Do NOT use applyVisibility here — it adds an AND constraint that can exclude
-    // albums whose visibility field is unset. The New_Release checkbox is the sole filter.
-    // Also avoid == exact-match prefix; a plain value find works for checkbox fields.
-    const query = { [field]: NEW_RELEASES_VALUE };
-    const payload = { query: [query], limit: normalizedLimit, offset: 1 };
-    console.log(`[new-releases] Trying field "${field}" with query:`, JSON.stringify(query));
     try {
-      const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
-      const json = await response.json().catch(() => ({}));
-      const fmCode = String(json?.messages?.[0]?.code ?? '');
-      const fmMsg  = json?.messages?.[0]?.message ?? '';
-      if (!response.ok) {
-        console.log(`[new-releases] Field "${field}" HTTP ${response.status} code=${fmCode} msg=${fmMsg}`);
-        if (isMissingFieldError(json)) { console.log(`[new-releases] Field "${field}" missing, skipping`); continue; }
-        if (fmCode === '401') { console.log(`[new-releases] Field "${field}" returned 0 matches (401)`); continue; }
-        continue;
-      }
-      const rawData = json?.response?.data || [];
-      console.log(`[new-releases] Field "${field}" raw=${rawData.length} records`);
-      if (rawData.length > 0) {
-        // Log the first record's field keys and the New_Release value so we can diagnose
-        const sample = rawData[0]?.fieldData || {};
-        const nrValue = sample['Tape Files::New_Release'] ?? sample['New_Release'] ?? '(not present)';
-        const albumTitle = sample['Album Title'] || sample['Tape Files::Album_Title'] || '(unknown)';
-        console.log(`[new-releases] Sample record — album="${albumTitle}", New_Release value="${nrValue}"`);
-        console.log(`[new-releases] Sample record field keys: ${Object.keys(sample).join(', ')}`);
-      }
-      const filtered = rawData.filter(r => recordIsVisible(r.fieldData || {}));
-      console.log(`[new-releases] After visibility filter: ${filtered.length}`);
-      if (filtered.length > 0) {
-        console.log(`[new-releases] SUCCESS — returning ${filtered.length} records via field "${field}"`);
-        // Log all matched album titles for confirmation
-        const titles = filtered.map(r => r.fieldData?.['Album Title'] || r.fieldData?.['Tape Files::Album_Title'] || r.recordId).slice(0, 10);
-        console.log(`[new-releases] Matched albums: ${titles.join(' | ')}`);
-        return filtered;
-      }
+      const result = await tryNewReleaseField(field, normalizedLimit);
+      if (result !== null) return result;
     } catch (err) {
       console.warn(`[new-releases] Fetch threw for field "${field}"`, err);
     }
@@ -936,7 +976,7 @@ async function loadNewReleases({ limit = 200, refresh = false } = {}) {
 
 router.get('/new-releases', async (req, res) => {
   try {
-    const limit   = Math.max(1, Math.min(100, parseInt(req.query.limit || '20', 10)));
+    const limit   = Math.max(1, Math.min(100, Number.parseInt(req.query.limit || '20', 10)));
     const refresh = req.query.refresh === '1';
     const result  = await loadNewReleases({ limit, refresh });
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -979,11 +1019,11 @@ router.get('/my-stats', async (req, res) => {
       s.totalSeconds += secs;
     }
 
-    if (!byTrack.size) return res.json({ ok: true, tracks: [] });
+    if (byTrack.size === 0) return res.json({ ok: true, tracks: [] });
 
     // Sort by plays desc, then seconds desc — take top 10
     const top10 = Array.from(byTrack.values())
-      .sort((a, b) => b.plays !== a.plays ? b.plays - a.plays : b.totalSeconds - a.totalSeconds)
+      .sort((a, b) => b.plays === a.plays ? b.totalSeconds - a.totalSeconds : b.plays - a.plays)
       .slice(0, 10);
 
     // Fetch track details from FM in parallel

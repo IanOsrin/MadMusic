@@ -102,7 +102,7 @@ router.get('/callback', async (req, res) => {
 
     const data = await paystackRequest('GET', `/transaction/verify/${encodeURIComponent(reference)}`);
 
-    if (!data.data || data.data.status !== 'success') {
+    if (data.data?.status !== 'success') {
       pendingPayments.delete(reference);
       console.warn(`[MASS] Payment verification failed for ${reference}: status=${data.data?.status}`);
       return res.redirect(`${mobileCallback ? '/mobile.html' : '/'}?payment=failed&reason=not_successful`);
@@ -110,7 +110,7 @@ router.get('/callback', async (req, res) => {
 
     const metadata = data.data.metadata || {};
     const planId = metadata.plan_id;
-    const days = parseInt(metadata.days) || 7;
+    const days = Number.parseInt(metadata.days) || 7;
     const email = data.data.customer?.email || 'unknown';
 
     const token = await createAccessToken(days, `Paystack purchase: ${planId} (${email}, ref: ${reference})`, email);
@@ -166,7 +166,7 @@ router.post('/webhook', async (req, res) => {
     }
 
     const metadata = paymentData.metadata || {};
-    const days = parseInt(metadata.days) || 7;
+    const days = Number.parseInt(metadata.days) || 7;
     const email = paymentData.customer?.email || 'unknown';
     const planId = metadata.plan_id || 'unknown';
 

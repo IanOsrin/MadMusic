@@ -24,7 +24,7 @@ import { sanitizePlaylistForShare } from './lib/playlist.js';
 import { buildShareUrl } from './lib/http.js';
 import { tokenValidationCache } from './cache.js';
 import { ensureToken, closeFmPool } from './fm-client.js';
-import { ensureDataDir, loadAccessTokens, loadPlaylists } from './store.js';
+import { loadAccessTokens, loadPlaylists } from './store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -234,7 +234,7 @@ app.use('/api/', async (req, res, next) => {
 
   if (!validation.valid) {
     const STALE_GRACE_MS = 24 * 60 * 60 * 1000;
-    if (cached && cached.data && (Date.now() - cached.expiresAt) < STALE_GRACE_MS) {
+    if (cached?.data && (Date.now() - cached.expiresAt) < STALE_GRACE_MS) {
       console.warn(`[MASS] FM validation failed (${validation.reason}), using stale cache for token ${cacheKey.slice(0, 8)}…`);
       req.accessToken = cached.data;
       return next();

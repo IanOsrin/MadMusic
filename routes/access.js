@@ -95,7 +95,7 @@ router.post('/logout', async (req, res) => {
       { 'Token_Code': `==${trimmedCode}` }
     ], { limit: 1 });
 
-    if (result && result.data && result.data.length > 0) {
+    if (result?.data?.length > 0) {
       const tokenData = result.data[0].fieldData;
       const recordId = result.data[0].recordId;
       console.log(`[MASS LOGOUT] Found token. Current session in FM: "${tokenData.Current_Session_ID}", Incoming: "${sessionId}"`);
@@ -113,19 +113,81 @@ router.post('/logout', async (req, res) => {
 
         console.log(`[MASS LOGOUT] ✅ Session cleared for token ${trimmedCode}`);
         return res.json({ ok: true, message: 'Session cleared successfully' });
-      } else {
-        console.log(`[MASS LOGOUT] ⚠️ Session ID mismatch for token ${trimmedCode} - not clearing (FM has different session)`);
-        return res.json({ ok: true, message: 'Session ID mismatch - not current session', warning: true });
       }
-    } else {
-      console.log(`[MASS LOGOUT] ⚠️ Token ${trimmedCode} not found in FileMaker`);
-      return res.json({ ok: true, message: 'Token not found', warning: true });
+      console.log(`[MASS LOGOUT] ⚠️ Session ID mismatch for token ${trimmedCode} - not clearing (FM has different session)`);
+      return res.json({ ok: true, message: 'Session ID mismatch - not current session', warning: true });
     }
+    console.log(`[MASS LOGOUT] ⚠️ Token ${trimmedCode} not found in FileMaker`);
+    return res.json({ ok: true, message: 'Token not found', warning: true });
   } catch (err) {
     console.error('[MASS] Logout failed:', err);
     res.status(500).json({ ok: false, error: 'Logout failed' });
   }
 });
+
+// Resolve and validate the session ID from the request, or mint a fresh UUID.
+function resolveStreamSession(req, cookies) {
+  const headersSessionRaw = req.get?.('X-Session-ID') || req.headers?.['x-session-id'];
+  let sessionId = Array.isArray(headersSessionRaw) ? headersSessionRaw[0] : headersSessionRaw;
+  if (typeof sessionId === 'string') sessionId = sessionId.trim();
+  if (!sessionId) sessionId = cookies[MASS_SESSION_COOKIE] || '';
+
+  const validatedSession = validateSessionId(sessionId);
+  if (!validatedSession) {
+    if (STREAM_EVENT_DEBUG && cookies[MASS_SESSION_COOKIE]) {
+      console.log('[SECURITY] Invalid session ID rejected, generating new one');
+    }
+    return randomUUID();
+  }
+  return validatedSession;
+}
+
+// Merge existing FileMaker field values into baseFields (mutates baseFields).
+function applyExistingFieldsToBase(baseFields, existingFields, normalizedType, timestamp, payloadDelta, normalizedDuration) {
+  const existingPositionValue = existingFields[STREAM_TIME_FIELD] ?? existingFields[STREAM_TIME_FIELD_LEGACY] ?? null;
+  const existingPosition = normalizeSeconds(existingPositionValue);
+  const deltaFromPosition = Math.max(0, baseFields[STREAM_TIME_FIELD] - existingPosition);
+  if (existingPosition > baseFields[STREAM_TIME_FIELD]) {
+    baseFields[STREAM_TIME_FIELD] = existingPosition;
+  }
+  const existingDuration = normalizeSeconds(existingFields.DurationSec);
+  if (existingDuration && !baseFields.DurationSec) baseFields.DurationSec = existingDuration;
+  if (!baseFields.TrackISRC && existingFields.TrackISRC) baseFields.TrackISRC = existingFields.TrackISRC;
+
+  const existingTotalPlayed = normalizeSeconds(existingFields.TotalPlayedSec);
+  const effectiveDelta = payloadDelta || deltaFromPosition;
+  baseFields.DeltaSec = effectiveDelta;
+  baseFields.TotalPlayedSec = existingTotalPlayed + effectiveDelta;
+  baseFields.LastEventUTC = timestamp;
+  if (!existingFields.PlayStartUTC && normalizedType === 'PLAY') baseFields.PlayStartUTC = timestamp;
+  if (normalizedType === 'END' && normalizedDuration && normalizedDuration > baseFields.DurationSec) {
+    baseFields.DurationSec = normalizedDuration;
+  }
+}
+
+function tryEnrichToken(req) {
+  if (req.accessToken) return;
+  const rawToken = (req.headers['x-access-token'] || req.body?.accessToken || '').toString().trim();
+  if (!rawToken) return;
+  const cached = tokenValidationCache.get(rawToken.toUpperCase());
+  if (cached?.data) req.accessToken = cached.data;
+}
+
+async function resolveTerminalRecord(normalizedType, hasCachedSession, sessionId, normalizedTrackRecordId, res) {
+  if (!STREAM_TERMINAL_EVENTS.has(normalizedType) || hasCachedSession) return true;
+  const existing = await findStreamRecord(sessionId, normalizedTrackRecordId);
+  if (!existing?.recordId) {
+    if (STREAM_EVENT_DEBUG) {
+      console.info('[MASS] Terminal event with no existing record — skipping', {
+        eventType: normalizedType, sessionId, trackRecordId: normalizedTrackRecordId
+      });
+    }
+    res.json({ ok: true, skipped: true });
+    return false;
+  }
+  setCachedStreamRecordId(sessionId, normalizedTrackRecordId, existing.recordId);
+  return true;
+}
 
 router.post('/stream-events', async (req, res) => {
   try {
@@ -133,15 +195,7 @@ router.post('/stream-events', async (req, res) => {
     // are never blocked. If the client sent a token header we look it up in the
     // in-memory validation cache (populated by any prior authenticated request) to
     // get the token code and Issued_To email without a FileMaker round-trip.
-    if (!req.accessToken) {
-      const rawToken = (req.headers['x-access-token'] || req.body?.accessToken || '').toString().trim();
-      if (rawToken) {
-        const cached = tokenValidationCache.get(rawToken.toUpperCase());
-        if (cached?.data) {
-          req.accessToken = cached.data;
-        }
-      }
-    }
+    tryEnrichToken(req);
 
     if (STREAM_EVENT_DEBUG) {
       console.log('[MASS] Stream event - Access Token:', req.accessToken?.code || 'NO TOKEN');
@@ -162,26 +216,8 @@ router.post('/stream-events', async (req, res) => {
       return;
     }
 
-    const headersSessionRaw = req.get?.('X-Session-ID') || req.headers?.['x-session-id'];
-    let sessionId = Array.isArray(headersSessionRaw) ? headersSessionRaw[0] : headersSessionRaw;
-    if (typeof sessionId === 'string') {
-      sessionId = sessionId.trim();
-    }
-
     const cookies = parseCookies(req);
-    if (!sessionId) {
-      sessionId = cookies[MASS_SESSION_COOKIE] || '';
-    }
-
-    const validatedSession = validateSessionId(sessionId);
-    if (!validatedSession) {
-      sessionId = randomUUID();
-      if (STREAM_EVENT_DEBUG && cookies[MASS_SESSION_COOKIE]) {
-        console.log(`[SECURITY] Invalid session ID rejected, generating new one`);
-      }
-    } else {
-      sessionId = validatedSession;
-    }
+    const sessionId = resolveStreamSession(req, cookies);
 
     if (!cookies[MASS_SESSION_COOKIE] || cookies[MASS_SESSION_COOKIE] !== sessionId) {
       const cookieParts = [
@@ -269,59 +305,20 @@ router.post('/stream-events', async (req, res) => {
     // Terminal events (END / ERROR) must NEVER create a new record — they can only
     // update an existing one. If there is no cached session and no FM record to close,
     // acknowledge the event and return early without touching FileMaker.
-    if (STREAM_TERMINAL_EVENTS.has(normalizedType) && !hasCachedSession) {
-      const existing = await findStreamRecord(sessionId, normalizedTrackRecordId);
-      if (!existing?.recordId) {
-        if (STREAM_EVENT_DEBUG) {
-          console.info('[MASS] Terminal event with no existing record — skipping', {
-            eventType: normalizedType, sessionId, trackRecordId: normalizedTrackRecordId
-          });
-        }
-        res.json({ ok: true, skipped: true });
-        return;
-      }
-      // Existing record found via FM query — cache it so the update below works correctly.
-      setCachedStreamRecordId(sessionId, normalizedTrackRecordId, existing.recordId);
-    }
+    const shouldContinue = await resolveTerminalRecord(normalizedType, hasCachedSession, sessionId, normalizedTrackRecordId, res);
+    if (!shouldContinue) return;
 
     const forceNewRecord = normalizedType === 'PLAY' && !hasCachedSession;
     const ensureResult = await ensureStreamRecord(sessionId, normalizedTrackRecordId, createFields, { forceNew: forceNewRecord });
     const existingFields = ensureResult.existingFieldData || {};
 
-    const existingPositionValue = existingFields
-      ? existingFields[STREAM_TIME_FIELD] ?? existingFields[STREAM_TIME_FIELD_LEGACY]
-      : null;
-    const existingPosition = normalizeSeconds(existingPositionValue);
-    const deltaFromPosition = Math.max(0, baseFields[STREAM_TIME_FIELD] - existingPosition);
-    if (existingPosition > baseFields[STREAM_TIME_FIELD]) {
-      baseFields[STREAM_TIME_FIELD] = existingPosition;
-    }
-    const existingDuration = normalizeSeconds(existingFields.DurationSec);
-    if (existingDuration && !baseFields.DurationSec) {
-      baseFields.DurationSec = existingDuration;
-    }
-    if (!baseFields.TrackISRC && existingFields.TrackISRC) {
-      baseFields.TrackISRC = existingFields.TrackISRC;
-    }
-
-    const existingTotalPlayed = normalizeSeconds(existingFields.TotalPlayedSec);
-    const effectiveDelta = payloadDelta || deltaFromPosition;
-    baseFields.DeltaSec = effectiveDelta;
-    baseFields.TotalPlayedSec = existingTotalPlayed + effectiveDelta;
-    baseFields.LastEventUTC = timestamp;
-    if (!existingFields.PlayStartUTC && normalizedType === 'PLAY') {
-      baseFields.PlayStartUTC = timestamp;
-    }
-
-    if (normalizedType === 'END' && normalizedDuration && normalizedDuration > baseFields.DurationSec) {
-      baseFields.DurationSec = normalizedDuration;
-    }
+    applyExistingFieldsToBase(baseFields, existingFields, normalizedType, timestamp, payloadDelta, normalizedDuration);
 
     if (STREAM_EVENT_DEBUG) {
       console.info('[MASS] Updating FileMaker record with Token_Number:', baseFields.Token_Number);
     }
 
-    let fmResponse = await fmUpdateRecord(FM_STREAM_EVENTS_LAYOUT, ensureResult.recordId, baseFields);
+    await fmUpdateRecord(FM_STREAM_EVENTS_LAYOUT, ensureResult.recordId, baseFields);
 
     if (STREAM_EVENT_DEBUG) {
       console.info('[MASS] stream event persisted', {

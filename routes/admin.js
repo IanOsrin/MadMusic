@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { searchCache, exploreCache, albumCache, publicPlaylistsCache, trendingCache } from '../cache.js';
+import { searchCache, exploreCache, albumCache, publicPlaylistsCache } from '../cache.js';
 
 const router = Router();
 
@@ -26,6 +26,7 @@ router.get('/cache/stats', (req, res) => {
     };
     res.json(stats);
   } catch (err) {
+    console.error('[MASS] Failed to retrieve cache stats:', err);
     res.status(500).json({ error: 'Failed to retrieve cache stats' });
   }
 });

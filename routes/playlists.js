@@ -113,7 +113,7 @@ router.post('/:playlistId/tracks', async (req, res) => {
 
     const playlists = await loadPlaylists();
     console.log(`[MASS] Add track: email=${email}, playlistId=${playlistId}, totalPlaylists=${playlists.length}`);
-    const index = playlists.findIndex((p) => p && p.id === playlistId && playlistOwnerMatches(p.userId, email));
+    const index = playlists.findIndex((p) => p?.id === playlistId && playlistOwnerMatches(p.userId, email));
     if (index === -1) {
       const ids = playlists.map(p => p?.id).join(',');
       const owners = playlists.map(p => p?.userId).join(',');
@@ -149,6 +149,31 @@ router.post('/:playlistId/tracks', async (req, res) => {
   }
 });
 
+// Processes a list of normalized track payloads against a playlist, returning
+// categorised results. Mutates playlist.tracks and duplicateIndex in place.
+function processBulkTracks(normalizedTracks, playlist, duplicateIndex, timestampBase) {
+  const addedEntries = [];
+  const duplicates   = [];
+  const skipped      = [];
+  for (const trackPayload of normalizedTracks) {
+    if (!trackPayload.name) {
+      skipped.push({ ...summarizeTrackPayload(trackPayload), reason: 'invalid_name' });
+      continue;
+    }
+    const { key, entry: duplicate } = resolveDuplicate(duplicateIndex, trackPayload);
+    if (duplicate) {
+      duplicates.push({ ...summarizeTrackPayload(trackPayload), reason: 'already_exists' });
+      continue;
+    }
+    const addedAt = new Date(timestampBase + addedEntries.length).toISOString();
+    const entry = buildTrackEntry(trackPayload, addedAt);
+    playlist.tracks.push(entry);
+    addedEntries.push(entry);
+    if (key) duplicateIndex.set(key, entry);
+  }
+  return { addedEntries, duplicates, skipped };
+}
+
 router.post('/:playlistId/tracks/bulk', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const user = requireTokenEmail(req, res);
@@ -170,7 +195,7 @@ router.post('/:playlistId/tracks/bulk', async (req, res) => {
 
     const normalizedTracks = rawTracks.map((track) => normalizeTrackPayload(track || {}));
     const playlists = await loadPlaylists();
-    const index = playlists.findIndex((p) => p && p.id === playlistId && playlistOwnerMatches(p.userId, email));
+    const index = playlists.findIndex((p) => p?.id === playlistId && playlistOwnerMatches(p.userId, email));
     if (index === -1) {
       res.status(404).json({ ok: false, error: 'Playlist not found' });
       return;
@@ -180,33 +205,12 @@ router.post('/:playlistId/tracks/bulk', async (req, res) => {
     playlist.tracks = Array.isArray(playlist.tracks) ? playlist.tracks : [];
 
     const duplicateIndex = buildPlaylistDuplicateIndex(playlist);
-
-    const addedEntries = [];
-    const duplicates = [];
-    const skipped = [];
-    const timestampBase = Date.now();
-
-    for (const trackPayload of normalizedTracks) {
-      if (!trackPayload.name) {
-        skipped.push({ ...summarizeTrackPayload(trackPayload), reason: 'invalid_name' });
-        continue;
-      }
-
-      const { key, entry: duplicate } = resolveDuplicate(duplicateIndex, trackPayload);
-      if (duplicate) {
-        duplicates.push({ ...summarizeTrackPayload(trackPayload), reason: 'already_exists' });
-        continue;
-      }
-
-      const addedAt = new Date(timestampBase + addedEntries.length).toISOString();
-      const entry = buildTrackEntry(trackPayload, addedAt);
-      playlist.tracks.push(entry);
-      addedEntries.push(entry);
-      if (key) duplicateIndex.set(key, entry);
-    }
+    const { addedEntries, duplicates, skipped } = processBulkTracks(
+      normalizedTracks, playlist, duplicateIndex, Date.now()
+    );
 
     if (addedEntries.length) {
-      playlist.updatedAt = addedEntries[addedEntries.length - 1].addedAt;
+      playlist.updatedAt = addedEntries.at(-1).addedAt;
       playlists[index] = playlist;
       await savePlaylists(playlists);
     }
@@ -228,6 +232,31 @@ router.post('/:playlistId/tracks/bulk', async (req, res) => {
   }
 });
 
+// Resolves or generates the shareId for a playlist.
+// Returns { shareId, changed } where changed=true when the playlist was mutated.
+function resolveShareId(playlist, existingIds, regenerate) {
+  let shareId = normalizeShareId(playlist.shareId);
+  const needsNewId = regenerate || !shareId || existingIds.has(shareId);
+  if (!needsNewId) {
+    const changed = !playlist.sharedAt;
+    if (changed) playlist.sharedAt = new Date().toISOString();
+    return { shareId, changed };
+  }
+
+  let candidate;
+  let attempts = 0;
+  do {
+    candidate = generateShareId();
+    attempts += 1;
+  } while (existingIds.has(candidate) && attempts < 50);
+
+  if (existingIds.has(candidate)) return { shareId: null, changed: false };
+
+  playlist.shareId = candidate;
+  playlist.sharedAt = new Date().toISOString();
+  return { shareId: candidate, changed: true };
+}
+
 router.post('/:playlistId/share', async (req, res) => {
   const user = requireTokenEmail(req, res);
   if (!user) return;
@@ -244,7 +273,7 @@ router.post('/:playlistId/share', async (req, res) => {
     }
 
     const playlists = await loadPlaylists();
-    const index = playlists.findIndex((p) => p && p.id === playlistId && playlistOwnerMatches(p.userId, email));
+    const index = playlists.findIndex((p) => p?.id === playlistId && playlistOwnerMatches(p.userId, email));
     if (index === -1) {
       res.status(404).json({ ok: false, error: 'Playlist not found' });
       return;
@@ -265,25 +294,12 @@ router.post('/:playlistId/share', async (req, res) => {
       if (existing) existingIds.add(existing);
     });
 
-    shareId = normalizeShareId(playlist.shareId);
-    const needsNewId = regenerate || !shareId || existingIds.has(shareId);
-    if (needsNewId) {
-      let candidate = '';
-      let attempts = 0;
-      do {
-        candidate = generateShareId();
-        attempts += 1;
-      } while (existingIds.has(candidate) && attempts < 50);
-      if (existingIds.has(candidate)) {
-        res.status(500).json({ ok: false, error: 'Unable to generate a unique share link' });
-        return;
-      }
-      shareId = candidate;
-      playlist.shareId = shareId;
-      playlist.sharedAt = new Date().toISOString();
-    } else if (!playlist.sharedAt) {
-      playlist.sharedAt = new Date().toISOString();
+    const resolved = resolveShareId(playlist, existingIds, regenerate);
+    if (!resolved.shareId) {
+      res.status(500).json({ ok: false, error: 'Unable to generate a unique share link' });
+      return;
     }
+    shareId = resolved.shareId;
 
     playlists[index] = playlist;
     await savePlaylists(playlists);
@@ -302,8 +318,8 @@ router.post('/:playlistId/share', async (req, res) => {
         const shareUrl = buildShareUrl(req, fallbackId);
         res.json({ ok: true, shareId: fallbackId, shareUrl, playlist: payload, reused: true, error: 'Existing share link reused' });
         return;
-      } catch (fallbackErr) {
-        console.error('[MASS] Fallback share link serialization failed:', fallbackErr);
+      } catch (error_) {
+        console.error('[MASS] Fallback share link serialization failed:', error_);
       }
     }
     res.status(500).json({ ok: false, error: 'Unable to generate share link', detail });
@@ -319,7 +335,11 @@ router.post('/:playlistId/share/email', async (req, res) => {
   const { recipientEmail, recipientName } = req.body || {};
 
   if (!playlistId) return res.status(400).json({ ok: false, error: 'Playlist ID required' });
-  if (!recipientEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) {
+  const atIdx = recipientEmail ? recipientEmail.indexOf('@') : -1;
+  const dotIdx = recipientEmail ? recipientEmail.lastIndexOf('.') : -1;
+  const validRecipient = atIdx > 0 && atIdx === recipientEmail.lastIndexOf('@')
+    && dotIdx > atIdx + 1 && dotIdx < recipientEmail.length - 1;
+  if (!recipientEmail || recipientEmail.length > 320 || !validRecipient) {
     return res.status(400).json({ ok: false, error: 'Valid recipient email required' });
   }
 
@@ -425,7 +445,7 @@ router.post('/:playlistId/publish-to-filemaker', async (req, res) => {
     }
 
     const playlists = await loadPlaylists();
-    const playlist = playlists.find((p) => p && p.id === playlistId && playlistOwnerMatches(p.userId, email));
+    const playlist = playlists.find((p) => p?.id === playlistId && playlistOwnerMatches(p.userId, email));
 
     if (!playlist) {
       return res.status(404).json({ ok: false, error: 'Playlist not found' });
@@ -491,7 +511,7 @@ router.get('/:playlistId/export', async (req, res) => {
     }
 
     const playlists = await loadPlaylists();
-    const playlist = playlists.find((p) => p && p.id === playlistId && playlistOwnerMatches(p.userId, email));
+    const playlist = playlists.find((p) => p?.id === playlistId && playlistOwnerMatches(p.userId, email));
 
     if (!playlist || !Array.isArray(playlist.tracks)) {
       return res.status(404).json({ ok: false, error: 'Playlist not found' });
@@ -505,13 +525,60 @@ router.get('/:playlistId/export', async (req, res) => {
       return res.json({ ok: true, code: '' });
     }
 
-    const code = Buffer.from(trackIds.join(',')).toString('base64').replace(/=/g, '');
+    const code = Buffer.from(trackIds.join(',')).toString('base64').replaceAll('=', '');
     res.json({ ok: true, code });
   } catch (err) {
     console.error('[MASS] Export playlist failed:', err);
     res.status(500).json({ ok: false, error: 'Failed to export playlist', detail: err?.message });
   }
 });
+
+// Decodes a base64 import code → array of track IDs, or throws on invalid input.
+function decodeImportCode(importCode) {
+  const padded = importCode + '='.repeat((4 - (importCode.length % 4)) % 4);
+  const decoded = Buffer.from(padded, 'base64').toString('utf-8');
+  return decoded.split(',').filter(Boolean);
+}
+
+// Builds a track object from a FileMaker record and a pre-computed timestamp.
+function buildTrackObjectFromRecord(record, trackId, now) {
+  const fields = record.fieldData || {};
+  const trackObj = {
+    trackRecordId: trackId,
+    name:        fields['Track Name']   || fields['Tape Files::Track Name'] || 'Unknown Track',
+    albumTitle:  fields['Album']        || fields['Tape Files::Album']       || '',
+    albumArtist: fields['Album Artist'] || fields['Artist'] || fields['Tape Files::Album Artist'] || '',
+    trackArtist: fields['Track Artist'] || fields['Album Artist'] || '',
+    catalogue:   fields['Catalogue #']  || fields['Catalogue'] || '',
+    addedAt: now
+  };
+  const audioField   = AUDIO_FIELD_CANDIDATES.find(f => fields[f]);
+  const artworkField = ARTWORK_FIELD_CANDIDATES.find(f => fields[f]);
+  if (audioField)   { trackObj.mp3 = fields[audioField]; trackObj.audioField = audioField; }
+  if (artworkField) { trackObj.artwork = fields[artworkField]; trackObj.artworkField = artworkField; }
+  return trackObj;
+}
+
+async function resolveValidTrackIds(importedTrackIds) {
+  const validTrackIds = [];
+  const failedIds = [];
+  for (const trackId of importedTrackIds.slice(0, 100)) {
+    try {
+      const record = await fmGetRecordById(FM_LAYOUT, trackId);
+      if (record) {
+        console.log(`[MASS] Import: ✓ Found track ID: ${trackId}`);
+        validTrackIds.push(trackId);
+      } else {
+        console.log(`[MASS] Import: ✗ Track ID not found: ${trackId}`);
+        failedIds.push(trackId);
+      }
+    } catch (err) {
+      console.error(`[MASS] Import: ✗ Error fetching track ${trackId}:`, err.message);
+      failedIds.push(trackId);
+    }
+  }
+  return { validTrackIds, failedIds };
+}
 
 router.post('/:playlistId/import', async (req, res) => {
   const user = requireTokenEmail(req, res);
@@ -532,9 +599,7 @@ router.post('/:playlistId/import', async (req, res) => {
 
     let importedTrackIds = [];
     try {
-      const padded = importCode + '='.repeat((4 - (importCode.length % 4)) % 4);
-      const decoded = Buffer.from(padded, 'base64').toString('utf-8');
-      importedTrackIds = decoded.split(',').filter(Boolean);
+      importedTrackIds = decodeImportCode(importCode);
     } catch (err) {
       return res.status(400).json({ ok: false, error: 'Invalid import code', detail: err?.message });
     }
@@ -544,23 +609,7 @@ router.post('/:playlistId/import', async (req, res) => {
     }
 
     console.log(`[MASS] Import: Validating ${importedTrackIds.length} track IDs`);
-    const validTrackIds = [];
-    const failedIds = [];
-    for (const trackId of importedTrackIds.slice(0, 100)) {
-      try {
-        const record = await fmGetRecordById(FM_LAYOUT, trackId);
-        if (record) {
-          console.log(`[MASS] Import: ✓ Found track ID: ${trackId}`);
-          validTrackIds.push(trackId);
-        } else {
-          console.log(`[MASS] Import: ✗ Track ID not found: ${trackId}`);
-          failedIds.push(trackId);
-        }
-      } catch (err) {
-        console.error(`[MASS] Import: ✗ Error fetching track ${trackId}:`, err.message);
-        failedIds.push(trackId);
-      }
-    }
+    const { validTrackIds, failedIds } = await resolveValidTrackIds(importedTrackIds);
 
     console.log(`[MASS] Import: Valid IDs: ${validTrackIds.length}, Failed IDs: ${failedIds.length}`);
     if (failedIds.length > 0) {
@@ -589,33 +638,8 @@ router.post('/:playlistId/import', async (req, res) => {
     for (const trackId of validTrackIds) {
       try {
         const record = await fmGetRecordById(FM_LAYOUT, trackId);
-
         if (record) {
-          const fields = record.fieldData || {};
-
-          const trackObj = {
-            trackRecordId: trackId,
-            name: fields['Track Name'] || fields['Tape Files::Track Name'] || 'Unknown Track',
-            albumTitle: fields['Album'] || fields['Tape Files::Album'] || '',
-            albumArtist: fields['Album Artist'] || fields['Artist'] || fields['Tape Files::Album Artist'] || '',
-            trackArtist: fields['Track Artist'] || fields['Album Artist'] || '',
-            catalogue: fields['Catalogue #'] || fields['Catalogue'] || '',
-            addedAt: now
-          };
-
-          const audioField = AUDIO_FIELD_CANDIDATES.find(f => fields[f]);
-          const artworkField = ARTWORK_FIELD_CANDIDATES.find(f => fields[f]);
-
-          if (audioField) {
-            trackObj.mp3 = fields[audioField];
-            trackObj.audioField = audioField;
-          }
-          if (artworkField) {
-            trackObj.artwork = fields[artworkField];
-            trackObj.artworkField = artworkField;
-          }
-
-          newPlaylist.tracks.push(trackObj);
+          newPlaylist.tracks.push(buildTrackObjectFromRecord(record, trackId, now));
         }
       } catch (err) {
         console.error(`[MASS] Failed to fetch track ${trackId}:`, err);
@@ -657,7 +681,7 @@ router.delete('/:playlistId/tracks/:addedAt', async (req, res) => {
     }
 
     const playlists = await loadPlaylists();
-    const playlistIndex = playlists.findIndex((p) => p && p.id === playlistId && playlistOwnerMatches(p.userId, email));
+    const playlistIndex = playlists.findIndex((p) => p?.id === playlistId && playlistOwnerMatches(p.userId, email));
     if (playlistIndex === -1) {
       res.status(404).json({ ok: false, error: 'Playlist not found' });
       return;
@@ -666,7 +690,7 @@ router.delete('/:playlistId/tracks/:addedAt', async (req, res) => {
     const playlist = playlists[playlistIndex];
     playlist.tracks = Array.isArray(playlist.tracks) ? playlist.tracks : [];
 
-    const trackIndex = playlist.tracks.findIndex((t) => t && t.addedAt === addedAt);
+    const trackIndex = playlist.tracks.findIndex((t) => t?.addedAt === addedAt);
     if (trackIndex === -1) {
       res.status(404).json({ ok: false, error: 'Track not found in playlist' });
       return;
@@ -699,7 +723,7 @@ router.delete('/:playlistId', async (req, res) => {
     }
 
     const playlists = await loadPlaylists();
-    const index = playlists.findIndex((p) => p && p.id === playlistId && playlistOwnerMatches(p.userId, email));
+    const index = playlists.findIndex((p) => p?.id === playlistId && playlistOwnerMatches(p.userId, email));
     if (index === -1) {
       res.status(404).json({ ok: false, error: 'Playlist not found' });
       return;

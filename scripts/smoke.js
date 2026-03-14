@@ -56,7 +56,7 @@ async function main() {
     const query = process.env.SMOKE_ARTIST || 'test';
     const body = await requestJson(`/api/search?artist=${encodeURIComponent(query)}&limit=1`, 'artist');
     if (!Array.isArray(body?.items)) {
-      throw new Error('Artist search response missing items array');
+      throw new TypeError('Artist search response missing items array');
     }
     logOk('artist-search', { items: body.items.length });
   });
@@ -77,7 +77,9 @@ async function main() {
   console.log('[smoke] all checks passed');
 }
 
-main().catch(err => {
+try {
+  await main();
+} catch (err) {
   console.error('[smoke] unexpected error', err);
   process.exitCode = 1;
-});
+}
