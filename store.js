@@ -359,29 +359,35 @@ export async function createAccessToken(days, notes, email) {
   };
   if (email && email !== 'unknown') token.email = email;
 
-  // Save to JSON file
-  const tokenData = await loadAccessTokens();
-  tokenData.tokens.push(token);
-  await saveAccessTokens(tokenData);
+  // Write to FileMaker first — FM is the source of truth for token validation.
+  // If FM is unreachable the token still works via JSON fallback, but will not get
+  // session tracking or usage stats until it is manually re-synced to FM.
+  const layout = process.env.FM_TOKENS_LAYOUT || 'API_Access_Tokens';
+  const durationSeconds = days * 24 * 60 * 60;
+  const fmFields = {
+    'Token_Code': code,
+    'Token_Type': 'trial',
+    'Active': 1,
+    'Token_Duration_Hours': String(durationSeconds), // FM field stores seconds despite the name
+    'Notes': token.notes
+  };
+  if (token.email) fmFields['Email'] = token.email;
 
-  // Attempt to create in FileMaker (async, non-blocking)
+  let fmSynced = false;
   try {
-    const layout = process.env.FM_TOKENS_LAYOUT || 'API_Access_Tokens';
-    const durationSeconds = days * 24 * 60 * 60;
-    const fmFields = {
-      'Token_Code': code,
-      'Token_Type': 'trial',
-      'Active': 1,
-      'Token_Duration_Hours': String(durationSeconds), // FM field named Hours but actually expects seconds — leave as-is
-      'Notes': token.notes
-    };
-    if (token.email) fmFields['Email'] = token.email;
     await fmCreateRecord(layout, fmFields);
-    console.log(`[MASS] Payment token ${code} synced to FileMaker`);
+    fmSynced = true;
+    console.log(`[MASS] Token ${code} written to FileMaker`);
   } catch (err) {
-    console.warn(`[MASS] Failed to sync payment token ${code} to FileMaker (JSON fallback active):`, err?.message || err);
+    console.error(`[MASS] FileMaker write failed for token ${code} — JSON fallback will be used for validation:`, err?.message || err);
   }
 
-  console.log(`[MASS] Created access token ${code} (${days} days, expires ${expirationDate.toISOString()})`);
+  // Always cache to JSON for offline / FM-outage resilience.
+  // fmSynced=false flags tokens that exist only in JSON so they can be re-synced later.
+  const tokenData = await loadAccessTokens();
+  tokenData.tokens.push({ ...token, fmSynced });
+  await saveAccessTokens(tokenData);
+
+  console.log(`[MASS] Created access token ${code} (${days} days, expires ${expirationDate.toISOString()}, fmSynced=${fmSynced})`);
   return token;
 }
