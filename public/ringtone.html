@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ringtone Maker</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:            #0d0d12;
+      --surface:       #16161f;
+      --surface2:      #1e1e2a;
+      --border:        #2c2c3e;
+      --accent:        #f5a623;
+      --accent-dim:    rgba(245,166,35,0.14);
+      --text:          #e6e6f0;
+      --muted:         #7a7a96;
+      --danger:        #e05c5c;
+      --success:       #4caf7d;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px 48px;
+    }
+
+    /* ── Page header ─────────────────────────────────────────────────────── */
+    .page-header {
+      width: 100%;
+      max-width: 680px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .page-header a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.15s;
+    }
+    .page-header a:hover { color: var(--text); }
+    .page-header h1 {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+    }
+
+    /* ── Card ────────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px;
+      width: 100%;
+      max-width: 680px;
+    }
+
+    /* ── Track info ──────────────────────────────────────────────────────── */
+    .track-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .artwork-wrap {
+      flex-shrink: 0;
+      width: 68px; height: 68px;
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--surface2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+      border: 1px solid var(--border);
+    }
+    .artwork-wrap img { width: 100%; height: 100%; object-fit: cover; display: none; }
+    .track-meta h2  { font-size: 17px; font-weight: 700; line-height: 1.3; }
+    .track-meta p   { font-size: 14px; color: var(--muted); margin-top: 4px; }
+
+    /* ── Loading state ───────────────────────────────────────────────────── */
+    #loading-panel { text-align: center; padding: 16px 0 24px; }
+    #loading-panel p { font-size: 14px; color: var(--muted); margin-bottom: 14px; }
+    .progress-track {
+      height: 4px; background: var(--border); border-radius: 4px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; background: var(--accent); border-radius: 4px;
+      width: 0%; transition: width 0.25s ease;
+    }
+
+    /* ── Error / success banners ─────────────────────────────────────────── */
+    .banner {
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 14px;
+      text-align: center;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .banner.error   { background: rgba(224,92,92,0.1);  border: 1px solid rgba(224,92,92,0.3);  color: var(--danger); }
+    .banner.success { background: rgba(76,175,125,0.1); border: 1px solid rgba(76,175,125,0.3); color: var(--success); }
+
+    /* ── Editor ──────────────────────────────────────────────────────────── */
+    #editor { display: none; }
+    .section-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted); margin-bottom: 12px;
+    }
+
+    /* Waveform */
+    .waveform-wrap {
+      position: relative;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+    }
+    .waveform-wrap:active { cursor: grabbing; }
+    #waveform { display: block; width: 100%; height: 90px; }
+    #playhead {
+      position: absolute; top: 0; bottom: 0; width: 2px;
+      background: #fff; pointer-events: none; display: none; opacity: 0.7;
+    }
+
+    /* Time row */
+    .time-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 10px; margin-bottom: 8px;
+    }
+    .time-badge { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 36px; }
+    .time-badge.end { text-align: right; }
+    .duration-pill {
+      background: var(--accent); color: #000;
+      font-size: 12px; font-weight: 800; border-radius: 20px; padding: 3px 12px;
+    }
+
+    .hint { font-size: 12px; color: var(--muted); text-align: center; margin-bottom: 20px; }
+
+    /* ── Email input ─────────────────────────────────────────────────────── */
+    .email-row { margin-bottom: 14px; }
+    .email-input {
+      width: 100%;
+      padding: 11px 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .email-input::placeholder { color: var(--muted); }
+    .email-input:focus { border-color: var(--accent); }
+    .email-error {
+      font-size: 12px; color: var(--danger); margin-top: 6px; display: none;
+    }
+
+    /* ── Controls ────────────────────────────────────────────────────────── */
+    .controls { display: flex; gap: 10px; margin-bottom: 4px; }
+    button, .btn-purchase {
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+      padding: 12px 20px; border-radius: 10px; border: none;
+      cursor: pointer; font-size: 14px; font-weight: 700;
+      transition: opacity 0.15s, transform 0.1s; white-space: nowrap;
+    }
+    button:active:not(:disabled), .btn-purchase:active { transform: scale(0.97); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-preview {
+      background: var(--surface2); color: var(--text);
+      border: 1px solid var(--border); flex: 0 0 auto; min-width: 120px;
+    }
+    .btn-preview:hover:not(:disabled) { background: var(--border); }
+
+    .btn-purchase {
+      background: var(--accent); color: #000; flex: 1;
+      text-decoration: none; cursor: pointer; border: none;
+    }
+    .btn-purchase:hover { opacity: 0.88; }
+    .btn-purchase:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+
+    /* ── Paid / auto-download state ──────────────────────────────────────── */
+    #paid-section { display: none; }
+    .paid-status {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 18px;
+    }
+    .paid-status-icon { font-size: 22px; flex-shrink: 0; }
+    #paid-status-text { font-size: 14px; color: var(--text); }
+    .paid-controls { display: flex; gap: 10px; margin-top: 14px; }
+
+    /* Encode progress */
+    #encode-progress { display: none; margin-top: 14px; }
+    #encode-progress p { font-size: 13px; color: var(--muted); margin-bottom: 8px; text-align: center; }
+
+    @media (max-width: 480px) {
+      .card { padding: 20px; }
+      .controls { flex-direction: column; }
+      .btn-preview { min-width: unset; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-header">
+    <a href="/">&larr; Back to app</a>
+    <h1>✂ Ringtone Maker</h1>
+  </div>
+
+  <div class="card">
+
+    <div class="track-header">
+      <div class="artwork-wrap" id="artwork-wrap">
+        <span id="artwork-emoji">🎵</span>
+        <img id="artwork-img" alt="Artwork">
+      </div>
+      <div class="track-meta">
+        <h2 id="track-name">Loading track…</h2>
+        <p id="track-artist"></p>
+      </div>
+    </div>
+
+    <!-- Error / success banners -->
+    <div class="banner error"   id="banner-error"></div>
+    <div class="banner success" id="banner-success"></div>
+
+    <!-- Loading -->
+    <div id="loading-panel">
+      <p id="loading-text">Fetching audio…</p>
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
+
+    <!-- Editor (revealed after decode) -->
+    <div id="editor">
+      <p class="section-label">Select up to 30 seconds</p>
+
+      <div class="waveform-wrap" id="waveform-wrap">
+        <canvas id="waveform"></canvas>
+        <div id="playhead"></div>
+      </div>
+
+      <div class="time-row">
+        <span class="time-badge start" id="time-start">0:00</span>
+        <span class="duration-pill"   id="duration-pill">30s</span>
+        <span class="time-badge end"  id="time-end">0:30</span>
+      </div>
+
+      <p class="hint">Drag the waveform to slide the selection &bull; Click to centre on a spot</p>
+
+      <!-- Purchase section (hidden once paid) -->
+      <div id="purchase-section">
+        <div class="email-row">
+          <input type="email" id="purchase-email" class="email-input"
+                 placeholder="Your email address"
+                 autocomplete="email">
+          <p class="email-error" id="email-error"></p>
+        </div>
+        <div class="controls">
+          <button class="btn-preview" id="btn-preview">
+            <svg width="13" height="14" viewBox="0 0 13 14" fill="currentColor"><polygon points="1,0 13,7 1,14"/></svg>
+            Preview
+          </button>
+          <button class="btn-purchase" id="btn-purchase">
+            ✂ Purchase &amp; Download &mdash; R5
+          </button>
+        </div>
+      </div>
+
+      <!-- Paid / auto-download section (shown after Paystack return) -->
+      <div id="paid-section">
+        <div class="paid-status">
+          <span class="paid-status-icon" id="paid-status-icon">⏳</span>
+          <span id="paid-status-text">Verifying payment…</span>
+        </div>
+        <div class="paid-controls">
+          <button class="btn-preview" id="btn-preview-paid" style="display:none">
+            <svg width="13" height="14" viewBox="0 0 13 14" fill="currentColor"><polygon points="1,0 13,7 1,14"/></svg>
+            Preview
+          </button>
+        </div>
+      </div>
+
+      <!-- Encode progress (shared by both modes) -->
+      <div id="encode-progress">
+        <p id="encode-text">Encoding MP3…</p>
+        <div class="progress-track"><div class="progress-fill" id="encode-fill"></div></div>
+      </div>
+
+    </div><!-- /editor -->
+
+  </div><!-- /card -->
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js"
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    // ── Constants ────────────────────────────────────────────────────────────
+    const MAX_SEL_SECS = 30;
+    const MP3_BITRATE  = 128;
+
+    // ── State ────────────────────────────────────────────────────────────────
+    let audioBuffer   = null;
+    let selStart      = 0;
+    let selDuration   = MAX_SEL_SECS;
+    let previewCtx    = null;
+    let previewSource = null;
+    let isPreviewing  = false;
+    let previewStartAt= 0;
+    let playheadTimer = null;
+
+    // ── DOM refs ─────────────────────────────────────────────────────────────
+    const elLoadPanel     = document.getElementById('loading-panel');
+    const elLoadText      = document.getElementById('loading-text');
+    const elProgress      = document.getElementById('progress-fill');
+    const elEditor        = document.getElementById('editor');
+    const elTrackName     = document.getElementById('track-name');
+    const elTrackArtist   = document.getElementById('track-artist');
+    const elArtworkImg    = document.getElementById('artwork-img');
+    const elArtworkEmoji  = document.getElementById('artwork-emoji');
+    const elCanvas        = document.getElementById('waveform');
+    const elWrap          = document.getElementById('waveform-wrap');
+    const elPlayhead      = document.getElementById('playhead');
+    const elTimeStart     = document.getElementById('time-start');
+    const elTimeEnd       = document.getElementById('time-end');
+    const elDurationPill  = document.getElementById('duration-pill');
+    const elBtnPreview    = document.getElementById('btn-preview');
+    const elBtnPurchase   = document.getElementById('btn-purchase');
+    const elEmailInput    = document.getElementById('purchase-email');
+    const elEmailError    = document.getElementById('email-error');
+    const elPurchaseSection = document.getElementById('purchase-section');
+    const elPaidSection   = document.getElementById('paid-section');
+    const elPaidIcon      = document.getElementById('paid-status-icon');
+    const elPaidText      = document.getElementById('paid-status-text');
+    const elBtnPreviewPaid= document.getElementById('btn-preview-paid');
+    const elEncodePanel   = document.getElementById('encode-progress');
+    const elEncodeText    = document.getElementById('encode-text');
+    const elEncodeFill    = document.getElementById('encode-fill');
+    const elBannerError   = document.getElementById('banner-error');
+    const elBannerSuccess = document.getElementById('banner-success');
+
+    // ── URL params ────────────────────────────────────────────────────────────
+    const params      = new URLSearchParams(location.search);
+    const rawSrc      = params.get('src')     || '';
+    const trackName   = safeDecodeParam(params.get('name'))    || 'Unknown Track';
+    const trackArtist = safeDecodeParam(params.get('artist'))  || '';
+    const artworkSrc  = safeDecodeParam(params.get('artwork')) || '';
+    const paidRef     = params.get('paid')    || '';
+    const errorParam  = params.get('error')   || '';
+    const startParam  = params.get('start');
+    const durParam    = params.get('dur');
+
+    const isPaidMode = !!paidRef;
+
+    function safeDecodeParam(val) {
+      if (!val) return '';
+      try { return decodeURIComponent(val); } catch { return val; }
+    }
+
+    // ── Populate header ───────────────────────────────────────────────────────
+    elTrackName.textContent   = trackName;
+    elTrackArtist.textContent = trackArtist;
+    if (artworkSrc) {
+      elArtworkImg.src = artworkSrc;
+      elArtworkImg.onload = () => {
+        elArtworkImg.style.display = 'block';
+        elArtworkEmoji.style.display = 'none';
+      };
+    }
+
+    // Show inline error if Paystack redirected back with an error
+    if (errorParam) {
+      const msgs = {
+        missing_reference: 'Payment reference missing. Please try again.',
+        payment_failed:    'Payment was not completed. Please try again.',
+        server_error:      'A server error occurred. Please try again.',
+      };
+      showBanner('error', msgs[errorParam] || 'Payment failed. Please try again.');
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function setProgress(pct) {
+      elProgress.style.width = Math.round(pct) + '%';
+    }
+
+    function showBanner(type, msg) {
+      const el = type === 'error' ? elBannerError : elBannerSuccess;
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    function fmtTime(secs) {
+      secs = Math.max(0, secs);
+      const m = Math.floor(secs / 60);
+      const s = Math.floor(secs % 60);
+      return m + ':' + String(s).padStart(2, '0');
+    }
+
+    function normaliseSrc(src) {
+      if (!src) return '';
+      const decoded = safeDecodeParam(src);
+      if (decoded.startsWith('/')) return decoded;
+      if (decoded.startsWith('http')) return '/api/container?u=' + encodeURIComponent(decoded);
+      return decoded;
+    }
+
+    // ── Load & decode audio ───────────────────────────────────────────────────
+    async function loadAudio() {
+      const src = normaliseSrc(rawSrc);
+      if (!src) {
+        elLoadPanel.style.display = 'none';
+        showBanner('error', 'No audio source. Open this page from the main app.');
+        elTrackName.textContent = 'No track selected';
+        return;
+      }
+
+      try {
+        elLoadText.textContent = 'Fetching audio…';
+        setProgress(5);
+
+        const res = await fetch(src);
+        if (!res.ok) throw new Error('Server returned ' + res.status);
+
+        const contentLength = Number(res.headers.get('content-length') || 0);
+        let received = 0;
+        const chunks = [];
+        const reader = res.body.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.length;
+          if (contentLength > 0) setProgress(5 + (received / contentLength) * 55);
+        }
+
+        setProgress(62);
+        elLoadText.textContent = 'Decoding audio…';
+
+        const totalLen = chunks.reduce((n, c) => n + c.length, 0);
+        const merged   = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const chunk of chunks) { merged.set(chunk, offset); offset += chunk.length; }
+
+        const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioBuffer   = await tempCtx.decodeAudioData(merged.buffer);
+        await tempCtx.close();
+        setProgress(100);
+
+        // Apply selection from URL params (set by the callback) or default
+        if (startParam !== null) selStart = Math.max(0, parseFloat(startParam) || 0);
+        selDuration = durParam !== null
+          ? Math.min(MAX_SEL_SECS, Math.max(1, parseFloat(durParam) || MAX_SEL_SECS))
+          : Math.min(MAX_SEL_SECS, audioBuffer.duration);
+        // Clamp start so selection doesn't exceed track end
+        selStart = Math.min(selStart, Math.max(0, audioBuffer.duration - selDuration));
+
+        elLoadPanel.style.display = 'none';
+        elEditor.style.display    = 'block';
+
+        // Show the appropriate action section
+        if (isPaidMode) {
+          elPurchaseSection.style.display = 'none';
+          elPaidSection.style.display     = 'block';
+          elBtnPreviewPaid.style.display  = 'flex';
+        }
+
+        drawWaveform();
+        updateTimeDisplay();
+
+        // In paid mode, auto-verify and download straight away
+        if (isPaidMode) verifyAndDownload();
+
+      } catch (err) {
+        elLoadPanel.style.display = 'none';
+        showBanner('error', 'Could not load audio — ' + err.message);
+        console.error('[Ringtone] Load error:', err);
+      }
+    }
+
+    // ── Payment flow ──────────────────────────────────────────────────────────
+
+    async function verifyAndDownload() {
+      setPaidStatus('⏳', 'Verifying payment…');
+      try {
+        const res  = await fetch('/api/ringtone/verify?ref=' + encodeURIComponent(paidRef));
+        const data = await res.json();
+        if (!data.valid) {
+          setPaidStatus('❌', 'Payment verification failed. Please try again or contact support.');
+          elBtnPreviewPaid.style.display = 'flex';
+          return;
+        }
+        setPaidStatus('⚙️', 'Encoding your ringtone…');
+        await triggerDownload(/* paid mode */ true);
+        setPaidStatus('✅', 'Download started! Your ringtone is ready.');
+        showBanner('success', 'Payment confirmed — enjoy your ringtone!');
+      } catch (err) {
+        setPaidStatus('❌', 'Error: ' + err.message);
+        console.error('[Ringtone] verifyAndDownload error:', err);
+      }
+    }
+
+    function setPaidStatus(icon, text) {
+      elPaidIcon.textContent = icon;
+      elPaidText.textContent = text;
+    }
+
+    elBtnPurchase.addEventListener('click', initiatePurchase);
+
+    async function initiatePurchase() {
+      const email = elEmailInput.value.trim();
+      if (!email || !email.includes('@')) {
+        elEmailError.textContent = 'Please enter a valid email address.';
+        elEmailError.style.display = 'block';
+        elEmailInput.focus();
+        return;
+      }
+      elEmailError.style.display = 'none';
+
+      elBtnPurchase.disabled  = true;
+      elBtnPurchase.textContent = 'Redirecting to payment…';
+
+      try {
+        const res = await fetch('/api/ringtone/initiate', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            src:         rawSrc,
+            name:        trackName,
+            artist:      trackArtist,
+            artwork:     artworkSrc,
+            startSec:    selStart,
+            durationSec: selDuration,
+            email
+          })
+        });
+        const data = await res.json();
+        if (!data.ok || !data.authorization_url) {
+          throw new Error(data.error || 'Payment initialization failed');
+        }
+        window.location.href = data.authorization_url;
+      } catch (err) {
+        elBtnPurchase.disabled = false;
+        elBtnPurchase.innerHTML = '✂ Purchase &amp; Download &mdash; R5';
+        elEmailError.textContent = err.message;
+        elEmailError.style.display = 'block';
+      }
+    }
+
+    // ── Waveform ──────────────────────────────────────────────────────────────
+    let peakCache = null;
+
+    function buildPeaks(numBars) {
+      if (peakCache && peakCache.length === numBars) return peakCache;
+      const data         = audioBuffer.getChannelData(0);
+      const totalSamples = data.length;
+      const samplesPerBar= Math.ceil(totalSamples / numBars);
+      const peaks        = new Float32Array(numBars);
+      let globalMax = 0;
+      for (let i = 0; i < numBars; i++) {
+        let max = 0;
+        const s = i * samplesPerBar;
+        const e = Math.min(s + samplesPerBar, totalSamples);
+        for (let j = s; j < e; j++) {
+          const a = Math.abs(data[j]);
+          if (a > max) max = a;
+        }
+        peaks[i] = max;
+        if (max > globalMax) globalMax = max;
+      }
+      if (globalMax > 0) for (let i = 0; i < numBars; i++) peaks[i] /= globalMax;
+      peakCache = peaks;
+      return peaks;
+    }
+
+    function drawWaveform() {
+      if (!audioBuffer) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const W   = elWrap.clientWidth;
+      const H   = 90;
+      elCanvas.width  = W * dpr;
+      elCanvas.height = H * dpr;
+      elCanvas.style.width  = W + 'px';
+      elCanvas.style.height = H + 'px';
+      const ctx    = elCanvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      const BAR_W  = 2;
+      const GAP_W  = 1;
+      const STEP   = BAR_W + GAP_W;
+      const numBars= Math.floor(W / STEP);
+      const peaks  = buildPeaks(numBars);
+      const mid    = H / 2;
+      const maxH   = mid - 4;
+      const total  = audioBuffer.duration;
+      const selPxS = (selStart / total) * W;
+      const selPxE = ((selStart + selDuration) / total) * W;
+      ctx.fillStyle = 'rgba(245,166,35,0.07)';
+      ctx.fillRect(selPxS, 0, selPxE - selPxS, H);
+      for (let i = 0; i < numBars; i++) {
+        const x     = i * STEP;
+        const barH  = Math.max(2, peaks[i] * maxH);
+        const inSel = x + BAR_W > selPxS && x < selPxE;
+        ctx.fillStyle = inSel ? 'rgba(245,166,35,0.9)' : 'rgba(60,60,90,0.9)';
+        ctx.fillRect(x, mid - barH, BAR_W, barH * 2);
+      }
+      ctx.strokeStyle = 'rgba(245,166,35,0.85)';
+      ctx.lineWidth   = 2;
+      [selPxS, selPxE].forEach(x => {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      });
+      const NUB = 8;
+      ctx.fillStyle = 'rgba(245,166,35,0.95)';
+      [selPxS, selPxE].forEach(x => {
+        ctx.fillRect(x - NUB / 2, 0, NUB, 4);
+        ctx.fillRect(x - NUB / 2, H - 4, NUB, 4);
+      });
+    }
+
+    function updateTimeDisplay() {
+      elTimeStart.textContent    = fmtTime(selStart);
+      elTimeEnd.textContent      = fmtTime(selStart + selDuration);
+      elDurationPill.textContent = Math.round(selDuration) + 's';
+    }
+
+    // ── Drag / click ──────────────────────────────────────────────────────────
+    let dragActive = false, dragOriginX = 0, dragOriginSel = 0;
+
+    function pxToSec(px) { return (px / elWrap.clientWidth) * audioBuffer.duration; }
+    function clampStart(s) { return Math.max(0, Math.min(audioBuffer.duration - selDuration, s)); }
+
+    elWrap.addEventListener('mousedown', e => {
+      if (!audioBuffer || isPaidMode) return;
+      dragActive = true; dragOriginX = e.clientX; dragOriginSel = selStart;
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', e => {
+      if (!dragActive || !audioBuffer) return;
+      selStart = clampStart(dragOriginSel + pxToSec(e.clientX - dragOriginX));
+      drawWaveform(); updateTimeDisplay();
+    });
+    document.addEventListener('mouseup', () => { dragActive = false; });
+
+    elWrap.addEventListener('touchstart', e => {
+      if (!audioBuffer || isPaidMode) return;
+      dragActive = true; dragOriginX = e.touches[0].clientX; dragOriginSel = selStart;
+    }, { passive: true });
+    document.addEventListener('touchmove', e => {
+      if (!dragActive || !audioBuffer) return;
+      selStart = clampStart(dragOriginSel + pxToSec(e.touches[0].clientX - dragOriginX));
+      drawWaveform(); updateTimeDisplay();
+    }, { passive: true });
+    document.addEventListener('touchend', () => { dragActive = false; });
+
+    elWrap.addEventListener('click', e => {
+      if (!audioBuffer || isPaidMode || Math.abs(e.clientX - dragOriginX) > 6) return;
+      const rect  = elWrap.getBoundingClientRect();
+      const click = pxToSec(e.clientX - rect.left);
+      selStart = clampStart(click - selDuration / 2);
+      drawWaveform(); updateTimeDisplay();
+    });
+
+    window.addEventListener('resize', () => { peakCache = null; if (audioBuffer) drawWaveform(); });
+
+    // ── Preview ───────────────────────────────────────────────────────────────
+    function makePreviewHandler(btn) {
+      btn.addEventListener('click', () => { if (isPreviewing) stopPreview(); else startPreview(); });
+    }
+    makePreviewHandler(elBtnPreview);
+    makePreviewHandler(elBtnPreviewPaid);
+
+    function startPreview() {
+      if (!audioBuffer) return;
+      stopPreview();
+      previewCtx    = new (window.AudioContext || window.webkitAudioContext)();
+      previewSource = previewCtx.createBufferSource();
+      const rate  = audioBuffer.sampleRate;
+      const startS= Math.floor(selStart * rate);
+      const numS  = Math.floor(selDuration * rate);
+      const numCh = audioBuffer.numberOfChannels;
+      const slice = previewCtx.createBuffer(numCh, numS, rate);
+      for (let ch = 0; ch < numCh; ch++) {
+        slice.getChannelData(ch).set(
+          audioBuffer.getChannelData(ch).subarray(startS, startS + numS)
+        );
+      }
+      previewSource.buffer = slice;
+      previewSource.connect(previewCtx.destination);
+      previewSource.start(0);
+      isPreviewing   = true;
+      previewStartAt = previewCtx.currentTime;
+      setPreviewBtnState(true);
+      elPlayhead.style.display = 'block';
+      animatePlayhead();
+      previewSource.onended = () => {
+        isPreviewing = false;
+        setPreviewBtnState(false);
+        elPlayhead.style.display = 'none';
+        cancelAnimationFrame(playheadTimer);
+        if (previewCtx) { previewCtx.close(); previewCtx = null; }
+      };
+    }
+
+    function setPreviewBtnState(playing) {
+      const icon  = playing
+        ? '<svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor"><rect width="4" height="11"/><rect x="7" width="4" height="11"/></svg> Stop'
+        : '<svg width="13" height="14" viewBox="0 0 13 14" fill="currentColor"><polygon points="1,0 13,7 1,14"/></svg> Preview';
+      elBtnPreview.innerHTML     = icon;
+      elBtnPreviewPaid.innerHTML = icon;
+    }
+
+    function animatePlayhead() {
+      if (!isPreviewing || !previewCtx) return;
+      const elapsed = previewCtx.currentTime - previewStartAt;
+      const pct     = Math.min(1, elapsed / selDuration);
+      const W       = elWrap.clientWidth;
+      const total   = audioBuffer.duration;
+      const selPxS  = (selStart / total) * W;
+      const selPxE  = ((selStart + selDuration) / total) * W;
+      elPlayhead.style.left = (selPxS + pct * (selPxE - selPxS)) + 'px';
+      playheadTimer = requestAnimationFrame(animatePlayhead);
+    }
+
+    function stopPreview() {
+      if (previewSource) { try { previewSource.stop(); } catch {} previewSource = null; }
+      if (previewCtx)    { previewCtx.close(); previewCtx = null; }
+      isPreviewing = false;
+      cancelAnimationFrame(playheadTimer);
+      elPlayhead.style.display = 'none';
+      setPreviewBtnState(false);
+    }
+
+    // ── MP3 encode + download ─────────────────────────────────────────────────
+    async function triggerDownload(silent) {
+      if (!audioBuffer) return;
+      if (typeof lamejs === 'undefined') {
+        throw new Error('MP3 encoder not loaded — check your internet connection.');
+      }
+      stopPreview();
+      if (!silent) {
+        elBtnPurchase.disabled    = true;
+        elBtnPurchase.textContent = 'Encoding…';
+      }
+      elEncodePanel.style.display = 'block';
+      elEncodeFill.style.width    = '0%';
+      elEncodeText.textContent    = 'Encoding MP3…';
+
+      try {
+        const blob = await encodeToMp3(pct => { elEncodeFill.style.width = pct + '%'; });
+        elEncodeFill.style.width = '100%';
+        elEncodeText.textContent = 'Done!';
+
+        const url    = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        const safe   = trackName.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'ringtone';
+        anchor.href     = url;
+        anchor.download = safe + '_ringtone.mp3';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        setTimeout(() => { elEncodePanel.style.display = 'none'; }, 3000);
+      } catch (err) {
+        elEncodeText.textContent = '⚠ Encoding failed: ' + err.message;
+        elEncodeFill.style.background = 'var(--danger)';
+        if (!silent) {
+          elBtnPurchase.disabled = false;
+          elBtnPurchase.innerHTML = '✂ Purchase &amp; Download &mdash; R5';
+        }
+        throw err;
+      }
+
+      if (!silent) {
+        elBtnPurchase.disabled = false;
+        elBtnPurchase.innerHTML = '✂ Purchase &amp; Download &mdash; R5';
+      }
+    }
+
+    async function encodeToMp3(onProgress) {
+      const rate    = audioBuffer.sampleRate;
+      const numCh   = audioBuffer.numberOfChannels;
+      const startS  = Math.floor(selStart * rate);
+      const numS    = Math.floor(selDuration * rate);
+      const leftF   = audioBuffer.getChannelData(0).subarray(startS, startS + numS);
+      const rightF  = numCh > 1 ? audioBuffer.getChannelData(1).subarray(startS, startS + numS) : leftF;
+
+      function toInt16(f32) {
+        const out = new Int16Array(f32.length);
+        for (let i = 0; i < f32.length; i++) {
+          const s = f32[i] < -1 ? -1 : f32[i] > 1 ? 1 : f32[i];
+          out[i]  = s < 0 ? s * 32768 : s * 32767;
+        }
+        return out;
+      }
+
+      const leftI16  = toInt16(leftF);
+      const rightI16 = numCh > 1 ? toInt16(rightF) : leftI16;
+      const encoder  = new lamejs.Mp3Encoder(numCh > 1 ? 2 : 1, rate, MP3_BITRATE);
+      const parts    = [];
+      const BATCH    = 1152 * 64;
+
+      for (let i = 0; i < leftI16.length; i += BATCH) {
+        const l       = leftI16.subarray(i, i + BATCH);
+        const r       = rightI16.subarray(i, i + BATCH);
+        const encoded = numCh > 1 ? encoder.encodeBuffer(l, r) : encoder.encodeBuffer(l);
+        if (encoded.length > 0) parts.push(new Uint8Array(encoded));
+        onProgress && onProgress(Math.round((i / leftI16.length) * 95));
+        await new Promise(r => setTimeout(r, 0)); // yield to browser
+      }
+      const flushed = encoder.flush();
+      if (flushed.length > 0) parts.push(new Uint8Array(flushed));
+      onProgress && onProgress(100);
+      return new Blob(parts, { type: 'audio/mpeg' });
+    }
+
+    // ── Boot ──────────────────────────────────────────────────────────────────
+    if (!rawSrc) {
+      elTrackName.textContent = 'No track selected';
+      elLoadPanel.style.display = 'none';
+      showBanner('error', 'Open this page from the main app by selecting a track.');
+    } else {
+      loadAudio();
+    }
+
+  })();
+  </script>
+</body>
+</html>

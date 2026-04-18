@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Environment variables — never commit secrets
+.env
+.env.*
+!.env.example
+
+# Data files with user content (never commit — contain live tokens, emails, user data)
+data/playlists.json
+data/users.json
+data/playlist_requests.json
+data/access-tokens.json
+data/library.json
+data/*.lock
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
