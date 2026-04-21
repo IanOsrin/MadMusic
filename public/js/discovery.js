@@ -232,8 +232,8 @@
     const TRENDING_RESULT_LIMIT = 10;
     const TRENDING_FETCH_LIMIT = 40; // Fetch more to ensure 10 valid after filtering
     let randomItems = [];
-    let randomTitleDefault = 'Discover More';
-    let randomSubtitleDefault = 'Find more fascinating picks from our archive';
+    let randomTitleDefault = 'Listen to Songs';
+    let randomSubtitleDefault = "Spin the wheel. Every spin's a different trip through the archive.";
 
     // Global storage for items (so we can reference them by ID in onclick handlers)
     const itemsStore = new Map();
@@ -1695,10 +1695,17 @@
       if (subtitleEl) {
         randomSubtitleDefault = subtitleEl.textContent || randomSubtitleDefault;
       }
-      // Make "Discover More" title clickable to refresh content
+      // Make "Listen to Songs" title clickable to refresh content
       const randomTitle = document.getElementById('randomTitle');
       if (randomTitle) {
         randomTitle.addEventListener('click', () => {
+          const wheel = document.getElementById('wheelIcon');
+          if (wheel) {
+            wheel.classList.remove('spinning');
+            void wheel.offsetWidth;
+            wheel.classList.add('spinning');
+            wheel.addEventListener('animationend', () => wheel.classList.remove('spinning'), { once: true });
+          }
           loadRandom(true);
         });
       }

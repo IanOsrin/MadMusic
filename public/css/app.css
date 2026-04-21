@@ -2698,6 +2698,28 @@
       transform: rotate(180deg);
     }
 
+    /* Roulette wheel icon */
+    .wheel-icon {
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 8px;
+      opacity: 0.75;
+      transition: opacity 0.2s ease;
+      transform-origin: center;
+      transform-box: fill-box;
+    }
+    .clickable-title:hover .wheel-icon {
+      opacity: 1;
+    }
+    @keyframes wheel-spin {
+      0%   { transform: rotate(0deg); }
+      100% { transform: rotate(2160deg); }
+    }
+    .wheel-icon.spinning {
+      animation: wheel-spin 2.2s cubic-bezier(0.15, 0.85, 0.35, 1) forwards;
+    }
+
+
     .section-subtitle {
       font-size: 0.875rem;
       color: var(--text-muted);
