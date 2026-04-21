@@ -229,8 +229,8 @@
       container: '/api/container'
     };
 
-    const TRENDING_RESULT_LIMIT = 5;
-    const TRENDING_FETCH_LIMIT = 25; // Fetch more to ensure 5 valid after filtering
+    const TRENDING_RESULT_LIMIT = 10;
+    const TRENDING_FETCH_LIMIT = 40; // Fetch more to ensure 10 valid after filtering
     let randomItems = [];
     let randomTitleDefault = 'Discover More';
     let randomSubtitleDefault = 'Find more fascinating picks from our archive';

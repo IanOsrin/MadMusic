@@ -163,7 +163,7 @@
       flex-shrink: 0;
     }
     .sidebar-logo img {
-      height: 55px;
+      height: 110px;
       width: auto;
     }
     body.dark-mode .sidebar-logo img {
@@ -2913,10 +2913,19 @@
     /* Trending Now Section */
     /* Trending Now — same Netflix card treatment as Discover More */
     .trending-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
-      gap: 1.5rem;
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      gap: 1.25rem;
+      padding-bottom: 12px;
+      scroll-behavior: smooth;
+      scrollbar-width: thin;
+      scrollbar-color: var(--accent, #e94560) transparent;
     }
+    .trending-grid::-webkit-scrollbar { height: 4px; }
+    .trending-grid::-webkit-scrollbar-thumb { background: var(--accent, #e94560); border-radius: 2px; }
+    .trending-grid .trending-card { flex-shrink: 0; width: 185px; }
 
     .trending-card {
       position: relative;
