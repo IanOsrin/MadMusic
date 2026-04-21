@@ -1799,12 +1799,12 @@
           return `
             <div class="trending-card" data-record-id="${escapeHtml(item.recordId)}">
               <span class="nr-new-badge">New</span>
-              <div class="trending-artwork" onclick="playSong('${escapeHtml(item.recordId)}')">
+              <div class="trending-artwork" style="cursor:pointer" onclick="if(window.showView) window.showView('albums'); var s=document.getElementById('search'); if(s){s.value='${escapeHtml(album)}';} if(window.run) window.run('${escapeHtml(album)}');">
                 ${artworkUrl
                   ? `<img src="${escapeHtml(artworkUrl)}" alt="${escapeHtml(title)}" onerror="this.closest('.trending-card').style.display='none'" />`
                   : '<div class="artwork-placeholder">♪</div>'
                 }
-                <div class="play-overlay"><div class="play-icon">▶</div></div>
+                <div class="play-overlay"><div class="play-icon" style="font-size:20px">⊞</div></div>
               </div>
               <div class="trending-info">
                 <div class="trending-title">${escapeHtml(title)}</div>
@@ -1815,7 +1815,6 @@
                   <button class="track-action-btn card-library-btn" title="Save to library">♡ Save</button>
                 </div>
               </div>
-              <button class="card-album-btn" title="View album" onclick="if(window.showView) window.showView('albums'); var s=document.getElementById('search'); if(s){s.value='${escapeHtml(album)}';} if(window.run) window.run('${escapeHtml(album)}');"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></button>
             </div>
           `;
         }).join('');

@@ -129,18 +129,11 @@
     </div>
     <nav class="sidebar-nav">
       <!-- Home -->
-      <button class="nav-item active" data-view="highlights">
+      <button class="nav-item active" data-view="albums">
         <svg viewBox="0 0 24 24" fill="currentColor">
           <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
         </svg>
         Home
-      </button>
-
-      <button class="nav-item" data-view="albums">
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 10.9c-.61 0-1.1.49-1.1 1.1s.49 1.1 1.1 1.1c.61 0 1.1-.49 1.1-1.1s-.49-1.1-1.1-1.1zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm2.19 12.19L6 18l3.81-8.19L18 6l-3.81 8.19z"/>
-        </svg>
-        Explore Albums
       </button>
 
       <!-- G100 Section -->
@@ -274,51 +267,6 @@
           </div>
         </section>
 
-        <!-- New Releases Section -->
-        <section class="section" id="newReleasesSection" hidden>
-          <div class="section-header">
-            <div>
-              <h2 class="section-title">New Releases</h2>
-              <p class="section-subtitle">Fresh additions to the archive</p>
-            </div>
-          </div>
-          <div id="newReleasesContainer" class="nr-grid">
-            <div class="loading"><div class="spinner"></div></div>
-          </div>
-        </section>
-
-        <!-- Trending Section -->
-        <section class="section">
-          <div class="section-header">
-            <div>
-              <h2 class="section-title">Trending</h2>
-              <p class="section-subtitle">Most streamed songs this week</p>
-            </div>
-          </div>
-          <div id="trendingContainer" class="trending-grid">
-            <div class="loading">
-              <div class="spinner"></div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Random Selection Section -->
-        <section class="section">
-          <div class="section-header">
-            <div>
-              <h2 class="section-title clickable-title" id="randomTitle" title="Click to refresh">Discover More <span class="refresh-icon">↻</span></h2>
-              <p class="section-subtitle" id="randomSubtitle">Find more fascinating picks from our archive</p>
-            </div>
-            <div class="genre-controls">
-              <button type="button" id="genreShufflePlayBtn" class="genre-shuffle-btn">🔀 Shuffle Play</button>
-            </div>
-          </div>
-          <div id="randomContainer" class="random-grid">
-            <div class="loading">
-              <div class="spinner"></div>
-            </div>
-          </div>
-        </section>
       </div>
   </div>
 
@@ -327,7 +275,7 @@
   <div id="view-albums" class="view-section" hidden>
     <main>
       <!-- Albums Search Bar -->
-      <div class="searchbar" style="padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;">
+      <div class="searchbar" style="padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);position:fixed;top:0;left:var(--sidebar-width);right:0;z-index:200;">
         <div class="search-fields" id="searchFields">
           <input id="searchArtist" type="search" placeholder="Artist" autocomplete="off" />
           <input id="searchAlbum" type="search" placeholder="Album" autocomplete="off" />
@@ -452,10 +400,62 @@
                 <button id="sharedPlaylistCopy" type="button" class="btn small">Copy share link</button>
               </div>
             </section>
-            <!-- Explore Albums Heading -->
-            <div style="padding:16px 4px 8px;">
-              <h2 style="font-size:1.4rem;font-weight:700;color:var(--fg);margin:0 0 4px;">Explore Albums</h2>
+            <!-- New Releases Section -->
+            <section class="section" id="newReleasesSection" hidden>
+              <div class="section-header">
+                <div>
+                  <h2 class="section-title">New Releases</h2>
+                  <p class="section-subtitle">Fresh additions to the archive</p>
+                </div>
+              </div>
+              <div id="newReleasesContainer" class="nr-grid">
+                <div class="loading"><div class="spinner"></div></div>
+              </div>
+            </section>
+
+            <!-- Trending Section -->
+            <section class="section">
+              <div class="section-header">
+                <div>
+                  <h2 class="section-title">Trending</h2>
+                  <p class="section-subtitle">Most streamed songs this week</p>
+                </div>
+              </div>
+              <div id="trendingContainer" class="trending-grid">
+                <div class="loading">
+                  <div class="spinner"></div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Random Selection Section -->
+            <section class="section">
+              <div class="section-header">
+                <div>
+                  <h2 class="section-title clickable-title" id="randomTitle" title="Click to refresh">Discover More <span class="refresh-icon">↻</span></h2>
+                  <p class="section-subtitle" id="randomSubtitle">Find more fascinating picks from our archive</p>
+                </div>
+                <div class="genre-controls">
+                  <button type="button" id="genreShufflePlayBtn" class="genre-shuffle-btn">🔀 Shuffle Play</button>
+                </div>
+              </div>
+              <div id="randomContainer" class="random-grid">
+                <div class="loading">
+                  <div class="spinner"></div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Featured Albums Heading -->
+            <div id="featuredAlbumsHeading" style="padding:16px 4px 8px;">
+              <h2 style="font-size:1.4rem;font-weight:700;color:var(--fg);margin:0 0 4px;">Featured Albums</h2>
               <p style="font-size:0.85rem;color:var(--muted);margin:0;">Browse and search the full archive</p>
+            </div>
+
+            <!-- Search Results Heading (shown when a search is active) -->
+            <div id="searchResultsHeading" style="display:none;padding:16px 4px 8px;">
+              <h2 style="font-size:1.4rem;font-weight:700;color:var(--fg);margin:0 0 4px;">Your Search Results</h2>
+              <p id="searchResultsSubtitle" style="font-size:0.85rem;color:var(--muted);margin:0;"></p>
             </div>
 
             <div id="loadingIndicator" class="loading-indicator">
@@ -1064,10 +1064,10 @@
                 if (typeof window.MADShowToast === 'function') window.MADShowToast(`"${playlistName}" deleted`);
                 // Go back to home
                 document.querySelectorAll('.view-section').forEach(v => v.hidden = true);
-                const homeView = document.getElementById('view-highlights');
+                const homeView = document.getElementById('view-albums');
                 if (homeView) homeView.hidden = false;
                 document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-                const homeNav = document.querySelector('.nav-item[data-view="highlights"]');
+                const homeNav = document.querySelector('.nav-item[data-view="albums"]');
                 if (homeNav) homeNav.classList.add('active');
                 if (typeof window.loadMyPlaylists === 'function') window.loadMyPlaylists();
               }
@@ -1080,10 +1080,10 @@
         if (backBtn) {
           backBtn.onclick = () => {
             document.querySelectorAll('.view-section').forEach(v => v.hidden = true);
-            const homeView = document.getElementById('view-highlights');
+            const homeView = document.getElementById('view-albums');
             if (homeView) homeView.hidden = false;
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            const homeNav = document.querySelector('.nav-item[data-view="highlights"]');
+            const homeNav = document.querySelector('.nav-item[data-view="albums"]');
             if (homeNav) homeNav.classList.add('active');
           };
         }
@@ -4333,19 +4333,34 @@
       });
       try { localStorage.setItem('mass_last_view', name); } catch(e) {}
       if (libraryLoaders[name]) libraryLoaders[name]();
+
+      // When switching to albums view, reload featured albums if grid is empty
+      if (name === 'albums') {
+        var albumGrid = document.getElementById('albums');
+        if (albumGrid && albumGrid.children.length === 0 && typeof window.loadFeaturedAlbums === 'function') {
+          window.loadFeaturedAlbums();
+        }
+      }
     }
 
-    // Restore last view or default to highlights
-    var lastView = 'highlights';
-    try { lastView = localStorage.getItem('mass_last_view') || 'highlights'; } catch(e) {}
-    // Don't restore library views on load — go to highlights
-    if (libraryLoaders[lastView]) lastView = 'highlights';
+    // Restore last view or default to albums
+    var lastView = 'albums';
+    try { lastView = localStorage.getItem('mass_last_view') || 'albums'; } catch(e) {}
+    // Don't restore library views on load — go to albums
+    if (libraryLoaders[lastView]) lastView = 'albums';
     showView(lastView);
 
     document.querySelectorAll('.nav-item[data-view]').forEach(function(item) {
       item.addEventListener('click', function() {
         var v = item.getAttribute('data-view');
-        showView(v);
+        var currentlyOnView = !document.getElementById('view-' + v).hidden;
+        if (currentlyOnView && v === 'albums') {
+          // Already on home — act like Clear
+          var clearBtn = document.getElementById('clear');
+          if (clearBtn) clearBtn.click();
+        } else {
+          showView(v);
+        }
       });
     });
 
@@ -4365,6 +4380,55 @@
   })();
   </script>
 
+  <!-- Search Results Heading toggle -->
+  <script>
+  (function() {
+    var SEARCH_MODES = ['search', 'genre', 'artist', 'explore'];
+    var albumsEl      = document.getElementById('albums');
+    var featuredHeading   = document.getElementById('featuredAlbumsHeading');
+    var searchHeading     = document.getElementById('searchResultsHeading');
+    var searchSubtitle    = document.getElementById('searchResultsSubtitle');
+    var newReleasesSection = document.getElementById('newReleasesSection');
+    var trendingSection   = document.querySelector('#trendingContainer')?.closest('section.section');
+    var discoverSection   = document.querySelector('#randomContainer')?.closest('section.section');
+
+    function updateHeadings() {
+      var mode = albumsEl ? albumsEl.getAttribute('data-mode') : null;
+      var isSearch = SEARCH_MODES.indexOf(mode) !== -1;
+
+      // Show/hide discovery sections
+      if (trendingSection)    trendingSection.style.display   = isSearch ? 'none' : '';
+      if (discoverSection)    discoverSection.style.display   = isSearch ? 'none' : '';
+      if (newReleasesSection) newReleasesSection.style.display = isSearch ? 'none' : '';
+
+      // Show/hide headings
+      if (featuredHeading) featuredHeading.style.display = isSearch ? 'none' : '';
+      if (searchHeading)   searchHeading.style.display   = isSearch ? ''     : 'none';
+
+      if (isSearch && searchSubtitle) {
+        var artist = (document.getElementById('searchArtist') || {}).value || '';
+        var album  = (document.getElementById('searchAlbum')  || {}).value || '';
+        var track  = (document.getElementById('searchTrack')  || {}).value || '';
+        var decade = (document.getElementById('searchDecade') || {}).value || '';
+        var genre  = (document.getElementById('searchGenre')  || {}).value || '';
+        var parts  = [];
+        if (artist) parts.push('Artist: ' + artist);
+        if (album)  parts.push('Album: '  + album);
+        if (track)  parts.push('Track: '  + track);
+        if (decade) parts.push(decade);
+        if (genre)  parts.push(genre);
+        searchSubtitle.textContent = parts.length ? parts.join(' · ') : '';
+      }
+    }
+
+    if (albumsEl) {
+      new MutationObserver(updateHeadings).observe(albumsEl, { attributes: true, attributeFilter: ['data-mode'] });
+    }
+    // Also run on clear button click
+    var clearBtn = document.getElementById('clear');
+    if (clearBtn) clearBtn.addEventListener('click', function() { setTimeout(updateHeadings, 50); });
+  })();
+  </script>
 
   <!-- Profile dropdown toggle -->
   <script>

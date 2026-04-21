@@ -404,6 +404,11 @@
       padding-bottom: var(--player-height);
     }
 
+    /* Fixed search bar in albums view — content must clear it */
+    #view-albums > main {
+      padding-top: 61px;
+    }
+
     /* New Navigation Section Styles */
     .nav-section-header {
       display: flex;
@@ -1683,6 +1688,42 @@
     }
     .albums{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,185px));gap:1.5rem;justify-content:start;}
     .albums .card{width:185px;height:185px;aspect-ratio:1/1;}
+
+    /* All browse modes — horizontal infinite scroll, no pagination */
+    .albums[data-mode="explore"],
+    .albums[data-mode="genre"],
+    .albums[data-mode="search"],
+    .albums[data-mode="landing"],
+    .albums[data-mode="featured"] {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: visible;
+      gap: 1.25rem;
+      padding-bottom: 12px;
+      scroll-behavior: smooth;
+      scrollbar-width: thin;
+      scrollbar-color: var(--accent, #e94560) transparent;
+    }
+    .albums[data-mode="explore"]::-webkit-scrollbar,
+    .albums[data-mode="genre"]::-webkit-scrollbar,
+    .albums[data-mode="search"]::-webkit-scrollbar,
+    .albums[data-mode="landing"]::-webkit-scrollbar,
+    .albums[data-mode="featured"]::-webkit-scrollbar { height: 4px; }
+    .albums[data-mode="explore"]::-webkit-scrollbar-thumb,
+    .albums[data-mode="genre"]::-webkit-scrollbar-thumb,
+    .albums[data-mode="search"]::-webkit-scrollbar-thumb,
+    .albums[data-mode="landing"]::-webkit-scrollbar-thumb,
+    .albums[data-mode="featured"]::-webkit-scrollbar-thumb { background: var(--accent, #e94560); border-radius: 2px; }
+    .albums[data-mode="explore"] .card,
+    .albums[data-mode="genre"] .card,
+    .albums[data-mode="search"] .card,
+    .albums[data-mode="landing"] .card,
+    .albums[data-mode="featured"] .card { flex-shrink: 0; width: 185px; height: 185px; }
+
+    /* Hide prev/next pager — Load More handles fetching */
+    #pager { display: none !important; }
     .albums.single-album{display:flex;flex-direction:column;align-items:center;gap:24px;}
 
     /* ── Netflix-style card overlay ─────────────────────────────────── */
@@ -1701,16 +1742,13 @@
     .card::before{display:none;}
 
     /* Expand button */
-    .card-expand-btn{position:absolute;top:10px;right:10px;z-index:6;width:30px;height:30px;border-radius:50%;background:rgba(139,92,246,0.85);border:none;color:#fff;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity 0.2s ease,transform 0.2s ease;box-shadow:0 2px 8px rgba(139,92,246,0.4);opacity:0;}
-    .card:hover .card-expand-btn{opacity:1;}
-    .card-expand-btn:hover{transform:scale(1.1);}
-    .card-album-icon-btn{position:absolute;bottom:10px;right:10px;z-index:6;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,0.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:none;color:rgba(255,255,255,0.9);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity 0.2s ease,transform 0.2s ease,background 0.2s ease;box-shadow:0 2px 8px rgba(0,0,0,0.3);opacity:0;}
-    .card:hover .card-album-icon-btn{opacity:1;}
-    .card-album-icon-btn:hover{background:rgba(139,92,246,0.9)!important;transform:scale(1.12);box-shadow:0 4px 14px rgba(139,92,246,0.45);}
+    .card-expand-btn{ display: none !important; }
+    .card-album-icon-btn{ display: none !important; }
 
     /* Text overlay — hidden until hover */
     .heading{position:absolute;bottom:0;left:0;right:0;z-index:4;padding:2.5rem 0.75rem 2.8rem;background:linear-gradient(transparent,rgba(0,0,0,0.88));display:flex;flex-direction:column;gap:0;opacity:0;transform:translateY(6px);transition:opacity 0.25s ease,transform 0.25s ease;pointer-events:none;}
-    .card:hover .heading{opacity:1;transform:translateY(0);pointer-events:auto;}
+    .card:hover .heading{opacity:1;transform:translateY(0);pointer-events:none;}
+    .card:hover .heading h3,.card:hover .heading .card-artist{pointer-events:auto;}
     .card h3{margin:0;font-size:0.875rem;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:left;cursor:pointer;text-shadow:0 1px 4px rgba(0,0,0,0.5);}
     .card h3:hover{text-decoration:underline;}
     .card-artist{color:rgba(255,255,255,0.8);font-size:0.775rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:left;cursor:pointer;margin-top:0.2rem;}
@@ -3044,10 +3082,20 @@
 
     /* ── New Releases grid ── */
     .nr-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
-      gap: 1.5rem;
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: visible;
+      gap: 1.25rem;
+      padding-bottom: 12px;
+      scroll-behavior: smooth;
+      scrollbar-width: thin;
+      scrollbar-color: var(--accent, #e94560) transparent;
     }
+    .nr-grid::-webkit-scrollbar { height: 4px; }
+    .nr-grid::-webkit-scrollbar-thumb { background: var(--accent, #e94560); border-radius: 2px; }
+    .nr-grid .trending-card { flex-shrink: 0; width: 185px; }
 
     .nr-new-badge {
       position: absolute;
@@ -3229,10 +3277,20 @@
 
     /* Random Selection Grid */
     .random-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
-      gap: 1.5rem;
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: visible;
+      gap: 1.25rem;
+      padding-bottom: 12px;
+      scroll-behavior: smooth;
+      scrollbar-width: thin;
+      scrollbar-color: var(--accent, #e94560) transparent;
     }
+    .random-grid::-webkit-scrollbar { height: 4px; }
+    .random-grid::-webkit-scrollbar-thumb { background: var(--accent, #e94560); border-radius: 2px; }
+    .random-grid .random-card { flex-shrink: 0; width: 185px; }
 
     /* ── Horizontal Scroll (G100 + other sections) ───────────────────────── */
     .horizontal-scroll-wrapper {
@@ -3517,7 +3575,7 @@
       }
 
       .random-grid {
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 1rem;
       }
     }
 
@@ -3582,7 +3640,6 @@
       }
 
       .random-grid {
-        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
         gap: 1rem;
       }
 

@@ -67,7 +67,7 @@ router.get('/search', async (req, res) => {
     }
 
     const SEARCH_FIELDS_BASE = ['Album Artist', 'Album Title', 'Track Name'];
-    const SEARCH_FIELDS_OPTIONAL = ['Year of Release', 'Local Genre', 'Language Code', 'Track Artist'];
+    const SEARCH_FIELDS_OPTIONAL = ['Year of Release', 'Local Genre', 'Language Code'];
     const SEARCH_FIELDS_DEFAULT = [...SEARCH_FIELDS_BASE, ...SEARCH_FIELDS_OPTIONAL];
     const GENRE_FIELDS = ['Local Genre', 'Song Files::Local Genre'];
 
@@ -78,7 +78,7 @@ router.get('/search', async (req, res) => {
       }
       const queries = [];
       if (artist) {
-        ['Album Artist', 'Track Artist'].forEach(f => queries.push({ [f]: begins(artist) }));
+        queries.push({ 'Album Artist': begins(artist) });
       }
       if (album) {
         ['Album Title'].forEach(f => queries.push({ [f]: begins(album) }));
