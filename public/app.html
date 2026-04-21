@@ -411,8 +411,12 @@
                   <p class="section-subtitle">Fresh additions to the archive</p>
                 </div>
               </div>
-              <div id="newReleasesContainer" class="nr-grid">
-                <div class="loading"><div class="spinner"></div></div>
+              <div class="horizontal-scroll-wrapper">
+                <button class="scroll-arrow scroll-arrow-left" data-target="newReleasesContainer" aria-label="Scroll left"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                <div id="newReleasesContainer" class="nr-grid horizontal-scroll-container">
+                  <div class="loading"><div class="spinner"></div></div>
+                </div>
+                <button class="scroll-arrow scroll-arrow-right visible" data-target="newReleasesContainer" aria-label="Scroll right"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
               </div>
             </section>
 
@@ -424,10 +428,12 @@
                   <p class="section-subtitle">Most streamed songs this week</p>
                 </div>
               </div>
-              <div id="trendingContainer" class="trending-grid">
-                <div class="loading">
-                  <div class="spinner"></div>
+              <div class="horizontal-scroll-wrapper">
+                <button class="scroll-arrow scroll-arrow-left" data-target="trendingContainer" aria-label="Scroll left"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                <div id="trendingContainer" class="trending-grid horizontal-scroll-container">
+                  <div class="loading"><div class="spinner"></div></div>
                 </div>
+                <button class="scroll-arrow scroll-arrow-right visible" data-target="trendingContainer" aria-label="Scroll right"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
               </div>
             </section>
 
@@ -462,10 +468,14 @@
                   <button type="button" id="genreShufflePlayBtn" class="genre-shuffle-btn">🔀 Shuffle Play</button>
                 </div>
               </div>
-              <div id="randomContainer" class="random-grid">
-                <div class="loading">
-                  <div class="spinner"></div>
+              <div class="horizontal-scroll-wrapper">
+                <button class="scroll-arrow scroll-arrow-left" data-target="randomContainer" aria-label="Scroll left"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                <div id="randomContainer" class="random-grid horizontal-scroll-container">
+                  <div class="loading">
+                    <div class="spinner"></div>
+                  </div>
                 </div>
+                <button class="scroll-arrow scroll-arrow-right visible" data-target="randomContainer" aria-label="Scroll right"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
               </div>
             </section>
 
@@ -486,7 +496,11 @@
               <div class="loading-spinner"></div>
               <div class="loading-text">Loading albums...</div>
             </div>
-            <div id="albums" class="albums"></div>
+            <div class="horizontal-scroll-wrapper">
+              <button class="scroll-arrow scroll-arrow-left" data-target="albums" aria-label="Scroll left"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+              <div id="albums" class="albums horizontal-scroll-container"></div>
+              <button class="scroll-arrow scroll-arrow-right visible" data-target="albums" aria-label="Scroll right"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+            </div>
             <div id="pager" class="pager" hidden>
               <button id="prev">◀ Prev</button>
               <span id="pageInfo" class="badge">Page 1</span>
@@ -4912,6 +4926,13 @@
       updateArrows(c);
       mo.observe(c, { childList: true, subtree: false });
     });
+
+    // Also update albums chevrons when data-mode changes (grid ↔ scroll)
+    var albumsEl = document.getElementById('albums');
+    if (albumsEl) {
+      new MutationObserver(function () { updateArrows(albumsEl); })
+        .observe(albumsEl, { attributes: true, attributeFilter: ['data-mode'] });
+    }
   })();
   </script>
 
