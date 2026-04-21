@@ -1114,7 +1114,7 @@
         return `
           <div class="trending-card">
             <div class="trending-rank">#${index + 1}</div>
-            <div class="trending-artwork" onclick="playSong('${escapeHtml(item.recordId)}')">
+            <div class="trending-artwork" style="cursor:pointer" onclick="if(window.openAlbumDirect) window.openAlbumDirect('${escapeHtml(album)}','${escapeHtml(artist)}');">
               ${artworkUrl
                 ? `<img src="${escapeHtml(artworkUrl)}" alt="${escapeHtml(title)}" onerror="this.closest('.trending-card').style.display='none'" />`
                 : '<div class="artwork-placeholder">♪</div>'
@@ -1130,7 +1130,7 @@
             </div>
             <button class="trending-play-btn" onclick="playSong('${escapeHtml(item.recordId)}')">▶</button>
             <a href="${escapeHtml(jukeboxUrl)}" class="trending-album-btn" title="View album in Jukebox">💿</a>
-            <button class="card-album-btn" title="View album" onclick="if(window.showView) window.showView('albums'); var s=document.getElementById('search'); if(s){s.value='${escapeHtml(album)}';} if(window.run) window.run('${escapeHtml(album)}');"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <button class="card-album-btn" title="View album" onclick="if(window.openAlbumDirect) window.openAlbumDirect('${escapeHtml(album)}','${escapeHtml(artist)}');"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></button>
           </div>
         `;
       }).join('');
@@ -1290,7 +1290,7 @@
 
         return `
           <div class="random-card">
-            <div class="random-artwork">
+            <div class="random-artwork" style="cursor:pointer" onclick="if(window.openAlbumDirect) window.openAlbumDirect('${escapeHtml(album)}','${escapeHtml(artist)}');">
               ${artwork
                 ? `<img src="${escapeHtml(artwork)}" alt="${escapeHtml(album)}" onerror="this.closest('.random-card').style.display='none'" />`
                 : '<div class="artwork-placeholder">♪</div>'
@@ -1799,7 +1799,7 @@
           return `
             <div class="trending-card" data-record-id="${escapeHtml(item.recordId)}">
               <span class="nr-new-badge">New</span>
-              <div class="trending-artwork" style="cursor:pointer" onclick="if(window.showView) window.showView('albums'); var s=document.getElementById('search'); if(s){s.value='${escapeHtml(album)}';} if(window.run) window.run('${escapeHtml(album)}');">
+              <div class="trending-artwork" style="cursor:pointer" onclick="if(window.openAlbumDirect) window.openAlbumDirect('${escapeHtml(album)}','${escapeHtml(artist)}');">
                 ${artworkUrl
                   ? `<img src="${escapeHtml(artworkUrl)}" alt="${escapeHtml(title)}" onerror="this.closest('.trending-card').style.display='none'" />`
                   : '<div class="artwork-placeholder">♪</div>'
