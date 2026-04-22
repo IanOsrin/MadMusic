@@ -215,7 +215,8 @@ app.use('/api/', async (req, res, next) => {
     '/telkom/subscription', '/telkom/billing',
     '/download/',
     '/ringtone/',
-    '/audio-proxy'
+    '/audio-proxy',
+    '/audio-lab/replicate'
   ];
 
   if (skipPaths.some(path => req.path === path || req.path.startsWith(path))) {
@@ -404,6 +405,47 @@ app.get('/api/audio-proxy', async (req, res) => {
       abort(err) { res.destroy(err); }
     }));
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Replicate proxy ── forwards requests to api.replicate.com server-side ──────
+// The browser passes its Replicate API key in X-Replicate-Key header.
+// We forward to Replicate so the browser never hits api.replicate.com directly
+// (avoids CSP / CORS issues). No key is stored on this server.
+app.post('/api/audio-lab/replicate/predictions', async (req, res) => {
+  const replicateKey = req.headers['x-replicate-key'] || process.env.REPLICATE_API_KEY;
+  if (!replicateKey) return res.status(400).json({ error: 'No Replicate API key provided' });
+
+  try {
+    const upstream = await fetch('https://api.replicate.com/v1/predictions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${replicateKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(req.body)
+    });
+    const data = await upstream.json();
+    res.status(upstream.status).json(data);
+  } catch (err) {
+    console.error('[Replicate] Proxy error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/audio-lab/replicate/predictions/:id', async (req, res) => {
+  const replicateKey = req.headers['x-replicate-key'] || process.env.REPLICATE_API_KEY;
+  if (!replicateKey) return res.status(400).json({ error: 'No Replicate API key provided' });
+
+  try {
+    const upstream = await fetch(`https://api.replicate.com/v1/predictions/${req.params.id}`, {
+      headers: { 'Authorization': `Token ${replicateKey}` }
+    });
+    const data = await upstream.json();
+    res.status(upstream.status).json(data);
+  } catch (err) {
+    console.error('[Replicate] Poll error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
