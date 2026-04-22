@@ -98,7 +98,7 @@ app.use((req, res, next) => {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",  // googleapis for Google Fonts CSS
       "img-src 'self' https: data: blob:",    // https: for S3 artwork URLs; blob: for canvas; data: for inline
       "media-src 'self' https: blob:",       // https: for direct S3 audio URLs; blob: for streamed audio
-      "connect-src 'self'",
+      "connect-src 'self' http://localhost:8765",  // localhost:8765 for Demucs AI server
       "font-src 'self' https:",              // https: for Google Fonts (fonts.gstatic.com)
       "frame-src 'none'",
       "object-src 'none'",
@@ -351,6 +351,7 @@ app.get('/mobile', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mobile.htm
 app.get('/m', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mobile.html')));
 app.get('/library', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html'))); // library.html never existed — unified app handles this view
 app.get('/ringtone', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'ringtone.html')));
+app.get('/audio-lab', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'audio-lab.html')));
 
 // ========= STARTUP =========
 const PORT = process.env.PORT || 3000;
