@@ -2656,17 +2656,41 @@ async function runAiSplitCloud(out) {
 
   if (result.status !== 'succeeded') throw new Error('Timed out waiting for Replicate')
 
-  // result.output is an object with stem URLs e.g. { drums: "https://...", bass: "...", ... }
-  const stems = result.output
+  // Normalise output — Replicate may return an object {drums,bass,...} or an array of URLs
+  const raw = result.output
+  console.log('[Replicate] output:', JSON.stringify(raw))
+
+  let stems  // always end up as { name: url }
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    stems = raw
+  } else if (Array.isArray(raw)) {
+    const labels = ['drums', 'bass', 'vocals', 'other']
+    stems = Object.fromEntries(raw.map((url, i) => [labels[i] || `stem${i}`, url]))
+  } else {
+    throw new Error(`Unexpected Replicate output format: ${JSON.stringify(raw)}`)
+  }
+
   out.innerHTML = ''
   const colours = { drums:'#e94560', bass:'#2a6ee9', vocals:'#a855f7', other:'#C9A227' }
   for (const [name, url] of Object.entries(stems)) {
+    if (!url || typeof url !== 'string') continue
     out.innerHTML += `<div style="padding:8px;color:var(--muted);font-size:0.8rem;">⬇ Loading ${name}…</div>`
     // Proxy through our server to avoid CSP/CORS issues with Replicate CDN URLs
     const proxyUrl = '/api/audio-proxy?url=' + encodeURIComponent(url)
     const resp = await fetch(proxyUrl)
+    if (!resp.ok) throw new Error(`Failed to download ${name} stem (HTTP ${resp.status})`)
+    const ct = resp.headers.get('content-type') || ''
+    if (ct.includes('json') || ct.includes('text/html')) {
+      const txt = await resp.text()
+      throw new Error(`Unexpected response for ${name}: ${txt.slice(0, 120)}`)
+    }
     const ab = await resp.arrayBuffer()
-    const decoded = await audioCtx.decodeAudioData(ab)
+    let decoded
+    try {
+      decoded = await audioCtx.decodeAudioData(ab)
+    } catch (e) {
+      throw new Error(`Could not decode ${name} stem (${ct}, ${ab.byteLength} bytes): ${e.message}`)
+    }
     const card = makeStemCard({ label: name, buf: decoded, color: colours[name] || '#8b5cf6', desc: `${name} stem` })
     out.lastChild.replaceWith(card)
   }
