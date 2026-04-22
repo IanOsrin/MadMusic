@@ -303,6 +303,21 @@
           <span id="status" class="status" hidden aria-live="polite" role="status">
             <span class="pulse"></span><span id="statusText">Searching…</span>
           </span>
+
+          <!-- Audio Lab inline widget -->
+          <div id="audioLabWidget" class="audio-lab-widget">
+            <span class="audio-lab-widget-icon">🎛️</span>
+            <span class="audio-lab-widget-text"><strong>Audio Lab</strong></span>
+            <div class="audio-lab-widget-action" id="audioLabWidgetAction">
+              <input id="audioLabWidgetInput" type="text" placeholder="Enter key…" autocomplete="off" />
+              <button id="audioLabWidgetSubmit">Unlock</button>
+              <span id="audioLabWidgetError" class="audio-lab-widget-error"></span>
+            </div>
+            <div class="audio-lab-widget-active" id="audioLabWidgetActive" style="display:none;">
+              <span class="audio-lab-active-badge">✓ Active</span>
+              <button id="audioLabWidgetDeactivate" class="audio-lab-deactivate-btn">✕</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -3513,6 +3528,7 @@
                 <button class="track-action-btn track-add-playlist" data-track-index="${index}">+ Playlist</button>
                 <button class="track-action-btn track-add-library" data-track-index="${index}">♡ Songs</button>
                 ${(track.Download_Price || track.downloadPrice) ? `<button class="track-action-btn track-download-btn" data-track-index="${index}" data-price="${track.Download_Price || track.downloadPrice}">⬇ Download</button>` : ''}
+                ${(track.S3_URL || track.resolvedSrc || track.audioUrl || track.mp3) ? `<button class="track-action-btn track-audio-lab-btn btn-audio-lab" data-track-index="${index}" data-audio-url="${track.S3_URL || track.resolvedSrc || track.audioUrl || track.mp3 || ''}" data-track-name="${encodeURIComponent(track.name || '')}">🎛️ Audio Lab</button>` : ''}
               </div>
               <button class="track-kebab-btn" data-track-index="${index}" title="Track info">⋮</button>
             </div>
@@ -3618,6 +3634,19 @@
                     addLibraryBtn.dataset.libraryId = data.song.id;
                     addLibraryBtn.textContent = '♥ Saved';
                   }
+                }
+              });
+            }
+
+            // 🎛️ Audio Lab button
+            const audioLabBtn = item.querySelector('.track-audio-lab-btn');
+            if (audioLabBtn) {
+              audioLabBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const audioUrl = audioLabBtn.dataset.audioUrl;
+                const trackName = audioLabBtn.dataset.trackName;
+                if (audioUrl && typeof window.openAudioLabGated === 'function') {
+                  window.openAudioLabGated(audioUrl, trackName);
                 }
               });
             }
@@ -4853,6 +4882,7 @@
             if (data.ok) {
               localStorage.setItem('mass_access_token', token);
               localStorage.setItem('mass_session_id',   sessionId);
+              window.massAudioLabEnabled = data.audioLabEnabled || false;
               window.massAccessReady = true;
               window.dispatchEvent(new Event('mass:access-ready'));
               gate.classList.add('hidden');
@@ -4974,6 +5004,75 @@
       });
   })();
   </script>
+
+<script>
+// ── Audio Lab home widget ─────────────────────────────────────────────────────
+(function () {
+  const widgetAction     = document.getElementById('audioLabWidgetAction');
+  const widgetActive     = document.getElementById('audioLabWidgetActive');
+  const keyInput         = document.getElementById('audioLabWidgetInput');
+  const submitBtn        = document.getElementById('audioLabWidgetSubmit');
+  const errorEl          = document.getElementById('audioLabWidgetError');
+  const deactivateBtn    = document.getElementById('audioLabWidgetDeactivate');
+
+  function setActive(active) {
+    document.body.classList.toggle('audio-lab-active', active);
+    widgetAction.style.display = active ? 'none'  : 'flex';
+    widgetActive.style.display = active ? 'flex'  : 'none';
+    window.audioLabEnabled = active;
+  }
+
+  async function activate(key) {
+    errorEl.textContent   = '';
+    submitBtn.disabled    = true;
+    submitBtn.textContent = 'Checking…';
+    try {
+      const res  = await fetch('/api/audio-lab/validate-key', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setActive(true);
+      } else {
+        errorEl.textContent = 'Invalid key — please try again.';
+        keyInput.select();
+      }
+    } catch (e) {
+      errorEl.textContent = 'Could not reach server. Try again.';
+    } finally {
+      submitBtn.disabled    = false;
+      submitBtn.textContent = 'Unlock';
+    }
+  }
+
+  submitBtn.addEventListener('click', () => {
+    const k = keyInput.value.trim();
+    if (!k) { errorEl.textContent = 'Please enter a key.'; return; }
+    activate(k);
+  });
+  keyInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitBtn.click(); });
+
+  deactivateBtn.addEventListener('click', () => {
+    setActive(false);
+    keyInput.value = '';
+  });
+
+  // Direct open — no gating needed at click time, button only exists when active
+  window.openAudioLabGated = function (audioUrl, trackName) {
+    window.open(`/audio-lab?url=${encodeURIComponent(audioUrl)}&title=${trackName}`, '_blank');
+  };
+
+  // On login, pick up flag from the FM account and auto-activate
+  window.addEventListener('mass:access-ready', () => {
+    if (window.massAudioLabEnabled) setActive(true);
+  });
+
+  // Also handle case where auth fires before this script runs
+  if (window.massAudioLabEnabled) setActive(true);
+})();
+</script>
 
 </body>
 </html>

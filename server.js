@@ -98,7 +98,7 @@ app.use((req, res, next) => {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",  // googleapis for Google Fonts CSS
       "img-src 'self' https: data: blob:",    // https: for S3 artwork URLs; blob: for canvas; data: for inline
       "media-src 'self' https: blob:",       // https: for direct S3 audio URLs; blob: for streamed audio
-      "connect-src 'self'",
+      "connect-src 'self' http://localhost:8765 http://127.0.0.1:8765",
       "font-src 'self' https:",              // https: for Google Fonts (fonts.gstatic.com)
       "frame-src 'none'",
       "object-src 'none'",
@@ -214,7 +214,8 @@ app.use('/api/', async (req, res, next) => {
     '/tokens/resync', '/tokens/unsynced', '/tokens/clear-trials',
     '/telkom/subscription', '/telkom/billing',
     '/download/',
-    '/ringtone/'
+    '/ringtone/',
+    '/audio-proxy'
   ];
 
   if (skipPaths.some(path => req.path === path || req.path.startsWith(path))) {
@@ -256,10 +257,12 @@ app.use('/api/', async (req, res, next) => {
   }
 
   const tokenData = {
-    code: accessToken,
-    type: validation.type,
-    expirationDate: validation.expirationDate,
-    email: validation.email || null
+    code:            accessToken,
+    type:            validation.type,
+    expirationDate:  validation.expirationDate,
+    email:           validation.email || null,
+    audioLabEnabled: validation.audioLabEnabled || false,
+    recordId:        validation.recordId || null
   };
 
   tokenValidationCache.set(cacheKey, { data: tokenData, expiresAt: Date.now() + TOKEN_CACHE_TTL_MS });
@@ -351,6 +354,59 @@ app.get('/mobile', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mobile.htm
 app.get('/m', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mobile.html')));
 app.get('/library', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html'))); // library.html never existed — unified app handles this view
 app.get('/ringtone', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'ringtone.html')));
+app.get('/audio-lab', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'audio-lab.html')));
+
+// ── Audio Lab key validation ──────────────────────────────────────────────────
+// Requires a valid streaming access token so we can link the entitlement to
+// the user's FileMaker record. Once activated, audioLabEnabled comes back
+// automatically on every subsequent /api/access/validate call.
+app.post('/api/audio-lab/validate-key', async (req, res) => {
+  const { key } = req.body || {};
+  const validKey = process.env.AUDIO_LAB_KEY || 'abc123';
+  if (!key) return res.status(400).json({ ok: false, error: 'No key provided' });
+  if (key.trim() !== validKey) return res.status(403).json({ ok: false, error: 'Invalid key' });
+
+  // Write Audio_Lab_Enabled = 1 to the FM token record
+  try {
+    const tokenCode = (req.headers['x-access-token'] || '').trim().toUpperCase();
+    if (tokenCode && req.accessToken?.recordId) {
+      const { fmUpdateRecord } = await import('./fm-client.js');
+      const layout = process.env.FM_TOKENS_LAYOUT || 'API_Access_Tokens';
+      await fmUpdateRecord(layout, req.accessToken.recordId, { Audio_Lab_Enabled: 1 });
+      console.log(`[AudioLab] Enabled for token ${tokenCode.slice(0, 8)}…`);
+    }
+  } catch (err) {
+    // Non-fatal — key is still valid, FM write just failed
+    console.warn('[AudioLab] Could not write to FM:', err.message);
+  }
+
+  return res.json({ ok: true, audioLabEnabled: true });
+});
+
+// ── Audio Lab proxy ── fetches a remote audio URL server-side to bypass CORS ──
+app.get('/api/audio-proxy', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'Missing url param' });
+  try {
+    const target = new URL(url); // throws if invalid
+    // Only allow https: scheme to prevent SSRF against internal services
+    if (target.protocol !== 'https:') return res.status(400).json({ error: 'Only https URLs allowed' });
+    const upstream = await fetch(url);
+    if (!upstream.ok) return res.status(upstream.status).json({ error: `Upstream ${upstream.status}` });
+    const ct = upstream.headers.get('content-type') || 'audio/mpeg';
+    const cl = upstream.headers.get('content-length');
+    res.setHeader('Content-Type', ct);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    if (cl) res.setHeader('Content-Length', cl);
+    upstream.body.pipeTo(new WritableStream({
+      write(chunk) { res.write(chunk); },
+      close() { res.end(); },
+      abort(err) { res.destroy(err); }
+    }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ========= STARTUP =========
 const PORT = process.env.PORT || 3000;

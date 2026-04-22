@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Noise Reduction Lab — Digital Cupboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --amber:       #c47d2a;
+      --amber-dark:  #9a5e12;
+      --amber-dim:   rgba(196,125,42,0.15);
+      --green:       #7db02a;
+      --green-dark:  #5e881f;
+      --red:         #d94040;
+      --white:       #f0e6d2;
+      --bg:          #100c07;
+      --bg-card:     #1c1610;
+      --bg-lift:     #251d14;
+      --border:      #3d2c1a;
+      --muted:       #7a6a55;
+      --gold:        #f0a832;
+    }
+
+    body {
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse at 15% 0%, rgba(180,90,15,0.12) 0%, transparent 55%),
+        radial-gradient(ellipse at 85% 100%, rgba(140,70,10,0.08) 0%, transparent 50%);
+      color: var(--white);
+      font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      padding: 0;
+    }
+
+    header {
+      background: linear-gradient(135deg, #160f07 0%, #2a1c0d 50%, #1e1408 100%);
+      border-bottom: 2px solid var(--gold);
+      box-shadow: 0 2px 20px rgba(180,100,20,0.2);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .logo { font-size: 1.8rem; filter: drop-shadow(0 0 8px rgba(240,168,50,0.5)); }
+    .title { font-size: 1.15rem; font-weight: 700; letter-spacing: 0.3px; }
+    .subtitle { color: var(--muted); font-size: 0.85rem; }
+
+    .container {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 22px;
+    }
+
+    .card h2 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--gold);
+      margin-bottom: 12px;
+    }
+
+    /* File loader */
+    .file-zone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 22px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      background: var(--bg-lift);
+    }
+    .file-zone:hover { border-color: var(--amber); background: var(--amber-dim); }
+    .file-zone.drag { border-color: var(--gold); background: var(--amber-dim); }
+    .file-zone input { display: none; }
+    .file-label { font-weight: 500; color: var(--white); }
+    .file-info { color: var(--muted); font-size: 0.85rem; margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+
+    /* Canvases */
+    canvas { display: block; width: 100%; background: var(--bg); border-radius: 6px; }
+    #waveform { height: 140px; cursor: crosshair; }
+    #spectrum { height: 220px; }
+
+    .hint { font-size: 0.82rem; color: var(--muted); margin-top: 8px; font-style: italic; }
+
+    /* Controls */
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 18px;
+    }
+    .control {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .control label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--white);
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .control label .val {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--gold);
+      font-size: 0.9rem;
+    }
+    .control small {
+      color: var(--muted);
+      font-size: 0.76rem;
+      line-height: 1.4;
+    }
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--border);
+      outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--amber);
+      border: 2px solid var(--gold);
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(240,168,50,0.5);
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--amber); border: 2px solid var(--gold);
+      cursor: pointer;
+    }
+    select {
+      background: var(--bg-lift);
+      color: var(--white);
+      border: 1px solid var(--border);
+      padding: 7px 10px;
+      border-radius: 5px;
+      font-family: inherit;
+    }
+
+    /* Buttons */
+    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    button {
+      background: var(--amber);
+      color: #160f07;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-family: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    button:hover:not(:disabled) { background: var(--gold); transform: translateY(-1px); }
+    button:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+    button.secondary {
+      background: var(--bg-lift);
+      color: var(--white);
+      border: 1px solid var(--border);
+    }
+    button.secondary:hover:not(:disabled) { border-color: var(--amber); color: var(--amber); background: var(--bg-lift); }
+    button.danger { background: var(--red); color: var(--white); }
+    button.success { background: var(--green); color: #0f1808; }
+    button.success:hover:not(:disabled) { background: #96ce3e; }
+
+    /* Progress */
+    .progress {
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--amber), var(--gold));
+      width: 0%;
+      transition: width 0.1s;
+    }
+
+    /* Status */
+    .status {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-left: 12px;
+    }
+    .status.active { color: var(--green); }
+    .status.error { color: var(--red); }
+
+    /* Log */
+    #log {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--muted);
+      background: var(--bg);
+      border-radius: 6px;
+      padding: 10px 14px;
+      max-height: 180px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+    #log .ok { color: var(--green); }
+    #log .warn { color: var(--gold); }
+    #log .err { color: var(--red); }
+
+    .region-info { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--amber); }
+
+    .tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--amber-dim);
+      color: var(--amber);
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">🎛️</div>
+    <div>
+      <div class="title">Noise Reduction Lab</div>
+      <div class="subtitle">Multi-band expander with boost-to-analyse noise profiling · Dolby-A inspired</div>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- 1. Load file -->
+    <div class="card">
+      <h2>1 · Load Audio</h2>
+      <label class="file-zone" id="fileZone">
+        <input type="file" id="fileInput" accept="audio/*">
+        <div class="file-label">Drop an audio file here, or click to browse</div>
+        <div class="file-info" id="fileInfo">WAV, MP3, FLAC, OGG, M4A — any format your browser can decode</div>
+      </label>
+    </div>
+
+    <!-- 2. Waveform & region select -->
+    <div class="card" id="waveCard" style="display:none">
+      <h2>2 · Select a Noise-Only Region</h2>
+      <canvas id="waveform" width="1000" height="140"></canvas>
+      <div class="hint">Click and drag across a quiet section (e.g. room tone, tape hiss, silence between phrases). 2+ seconds recommended.</div>
+      <div style="margin-top: 10px" class="region-info" id="regionInfo">No region selected</div>
+    </div>
+
+    <!-- 3. Parameters -->
+    <div class="card" id="paramCard" style="display:none">
+      <h2>3 · Reduction Parameters</h2>
+      <div class="controls-grid">
+        <div class="control">
+          <label>Analysis boost <span class="val" id="analysisBoostVal">+12 dB</span></label>
+          <input type="range" id="analysisBoost" min="0" max="30" value="12">
+          <small>Amplifies the noise region before FFT — reveals low-level spectral detail that would otherwise hide under quantisation/analysis floor. Scaled back down before matching against signal.</small>
+        </div>
+        <div class="control">
+          <label>Residual floor <span class="val" id="reductionVal">-15 dB</span></label>
+          <input type="range" id="reduction" min="3" max="50" value="15">
+          <small>Minimum gain for noise-dominated bins. <b>Counterintuitive:</b> leaving more residual (smaller values) <em>masks</em> artifacts and sounds cleaner than deeper cuts.</small>
+        </div>
+        <div class="control">
+          <label>Threshold offset <span class="val" id="thresholdVal">+3 dB</span></label>
+          <input type="range" id="threshold" min="-6" max="18" value="3" step="1">
+          <small>Signal has to exceed (noise + this) to pass through untouched. Higher = more aggressive gate.</small>
+        </div>
+        <div class="control">
+          <label>Over-subtraction <span class="val" id="oversubVal">1.5×</span></label>
+          <input type="range" id="oversub" min="10" max="30" value="15">
+          <small>Multiplier on the noise estimate. 1.0 = literal, 1.5–2.0 = typical, higher = more aggressive (more musical-noise risk).</small>
+        </div>
+        <div class="control">
+          <label>FFT size</label>
+          <select id="fftSize">
+            <option value="1024">1024 (≈23 ms window)</option>
+            <option value="2048" selected>2048 (≈46 ms window)</option>
+            <option value="4096">4096 (≈93 ms window)</option>
+            <option value="8192">8192 (≈186 ms window)</option>
+          </select>
+          <small>Bigger window = finer frequency resolution (better for steady hiss) but smears transients. 2048 is a good default.</small>
+        </div>
+        <div class="control">
+          <label>Profile smoothing <span class="val" id="smoothVal">3 bins</span></label>
+          <input type="range" id="smooth" min="0" max="10" value="3">
+          <small>Averages noise profile across neighbouring frequency bins. Reduces musical-noise birdies at the cost of some frequency precision.</small>
+        </div>
+        <div class="control">
+          <label>SNR memory (β) <span class="val" id="betaVal">0.98</span></label>
+          <input type="range" id="beta" min="50" max="99" value="98">
+          <small>Decision-directed prior SNR (Ephraim–Malah): blends current frame with previous-frame signal estimate. Higher = stronger temporal continuity, far less watery sound.</small>
+        </div>
+        <div class="control">
+          <label>Release time <span class="val" id="releaseVal">80 ms</span></label>
+          <input type="range" id="release" min="10" max="300" value="80">
+          <small>How slowly the per-bin gate closes after signal fades. Longer = smoother, no flicker. Attack is fixed fast (5 ms) to preserve transients.</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Run -->
+    <div class="card" id="runCard" style="display:none">
+      <h2>4 · Analyse & Process</h2>
+      <div class="btn-row">
+        <button id="btnAnalyze" disabled>Analyse Noise Region</button>
+        <button id="btnProcess" class="success" disabled>Process Full Track</button>
+        <span class="status" id="runStatus"></span>
+      </div>
+      <div class="progress" style="display:none" id="progressWrap">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+    </div>
+
+    <!-- 5. Noise profile visualisation -->
+    <div class="card" id="specCard" style="display:none">
+      <h2>5 · Measured Noise Profile <span class="tag">boost-compensated</span></h2>
+      <canvas id="spectrum" width="1000" height="220"></canvas>
+      <div class="hint">Log frequency (20 Hz → Nyquist). Amber = measured noise floor after scaling back the analysis boost. Taller region = louder noise at those frequencies.</div>
+    </div>
+
+    <!-- 6. Playback A/B -->
+    <div class="card" id="playCard" style="display:none">
+      <h2>6 · A / B Playback</h2>
+      <div class="btn-row">
+        <button id="btnPlayOrig" disabled>▶ Play Original</button>
+        <button id="btnPlayProc" class="success" disabled>▶ Play Processed</button>
+        <button id="btnStop" class="secondary" disabled>■ Stop</button>
+        <button id="btnToggle" class="secondary" disabled>↔ Toggle A / B (live)</button>
+        <span class="status" id="playStatus"></span>
+      </div>
+      <div class="hint">Toggle A/B seamlessly swaps between original and processed while playing — listen for artifacts like warbling or thinning of transients.</div>
+    </div>
+
+    <!-- 7. Export -->
+    <div class="card" id="exportCard" style="display:none">
+      <h2>7 · Export</h2>
+      <div class="btn-row">
+        <button id="btnDownload" disabled>Download Processed (WAV 16-bit)</button>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="card">
+      <h2>Log</h2>
+      <pre id="log">Ready. Load an audio file to begin.</pre>
+    </div>
+
+  </div>
+
+<script>
+// ═════════════════════════════════════════════════════════════════════════════
+//  Noise Reduction Lab — core logic
+//  STFT-based spectral subtraction / soft expander with boost-to-analyse
+// ═════════════════════════════════════════════════════════════════════════════
+
+const S = {
+  audioBuffer: null,       // original AudioBuffer
+  processedBuffer: null,   // result AudioBuffer
+  noiseProfile: null,      // Float32Array[] per channel — magnitude per FFT bin
+  regionStart: null,       // sample index
+  regionEnd: null,
+  audioCtx: null,
+  currentSource: null,
+  currentBuffer: null,     // which buffer is playing
+  currentStartTime: 0,
+  currentOffset: 0,
+  fftSize: 2048,
+};
+
+// ─── Logging ─────────────────────────────────────────────────────────────────
+const logEl = document.getElementById('log');
+function log(msg, cls = '') {
+  const line = document.createElement('span');
+  if (cls) line.className = cls;
+  line.textContent = msg + '\n';
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function logClear() { logEl.textContent = ''; }
+
+// ─── FFT (radix-2 Cooley-Tukey, in-place, real + imag arrays) ────────────────
+function fft(re, im) {
+  const n = re.length;
+  // bit reversal
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      let t = re[i]; re[i] = re[j]; re[j] = t;
+      t = im[i]; im[i] = im[j]; im[j] = t;
+    }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = -2 * Math.PI / len;
+    const wlRe = Math.cos(ang), wlIm = Math.sin(ang);
+    const half = len >> 1;
+    for (let i = 0; i < n; i += len) {
+      let wRe = 1, wIm = 0;
+      for (let k = 0; k < half; k++) {
+        const uRe = re[i+k], uIm = im[i+k];
+        const vRe = re[i+k+half] * wRe - im[i+k+half] * wIm;
+        const vIm = re[i+k+half] * wIm + im[i+k+half] * wRe;
+        re[i+k]      = uRe + vRe;
+        im[i+k]      = uIm + vIm;
+        re[i+k+half] = uRe - vRe;
+        im[i+k+half] = uIm - vIm;
+        const nRe = wRe * wlRe - wIm * wlIm;
+        wIm = wRe * wlIm + wIm * wlRe;
+        wRe = nRe;
+      }
+    }
+  }
+}
+function ifft(re, im) {
+  const n = re.length;
+  for (let i = 0; i < n; i++) im[i] = -im[i];
+  fft(re, im);
+  for (let i = 0; i < n; i++) {
+    re[i] /= n;
+    im[i] = -im[i] / n;
+  }
+}
+
+// ─── Window function (Hann) ──────────────────────────────────────────────────
+function makeHann(n) {
+  const w = new Float32Array(n);
+  for (let i = 0; i < n; i++) w[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (n - 1)));
+  return w;
+}
+
+// ─── Noise profile from selected region ──────────────────────────────────────
+// Applies an analysis boost, runs STFT on the region, averages magnitude per
+// bin, then scales back down. Boost improves floor precision when source is
+// lossy / limited bit depth.
+function computeNoiseProfile(samples, startIdx, endIdx, fftSize, boostDb, smoothBins) {
+  const boost = Math.pow(10, boostDb / 20);
+  const hop = fftSize / 2;
+  const win = makeHann(fftSize);
+  const numBins = fftSize / 2 + 1;
+  const avg = new Float32Array(numBins);
+  const re = new Float32Array(fftSize);
+  const im = new Float32Array(fftSize);
+  let frames = 0;
+
+  for (let s = startIdx; s + fftSize <= endIdx; s += hop) {
+    for (let i = 0; i < fftSize; i++) {
+      re[i] = samples[s + i] * win[i] * boost;
+      im[i] = 0;
+    }
+    fft(re, im);
+    for (let b = 0; b < numBins; b++) {
+      const mag = Math.sqrt(re[b]*re[b] + im[b]*im[b]);
+      avg[b] += mag;
+    }
+    frames++;
+  }
+  if (frames === 0) return null;
+
+  for (let b = 0; b < numBins; b++) avg[b] = avg[b] / frames / boost;
+
+  // Smooth across bins (moving average) to reduce "musical noise"
+  if (smoothBins > 0) {
+    const smoothed = new Float32Array(numBins);
+    for (let b = 0; b < numBins; b++) {
+      let sum = 0, cnt = 0;
+      for (let k = -smoothBins; k <= smoothBins; k++) {
+        const bb = b + k;
+        if (bb >= 0 && bb < numBins) { sum += avg[bb]; cnt++; }
+      }
+      smoothed[b] = sum / cnt;
+    }
+    return smoothed;
+  }
+  return avg;
+}
+
+// ─── Apply noise reduction to full signal ────────────────────────────────────
+// Improvements vs naive spectral subtraction (all aimed at killing musical noise):
+//   • 75% overlap (hop = N/4) — 4 frames per output sample, heavy temporal smoothing
+//   • Decision-directed a priori SNR (Ephraim & Malah 1984) — temporal memory per bin
+//   • Asymmetric gain smoothing — fast attack (5 ms), user-tunable slow release
+//   • Exposed residual floor — raising it from -30 to -15 dB masks artifacts
+async function processChannel(samples, noiseProfile, fftSize, opts, progressCb) {
+  const { reductionDb, thresholdOffsetDb, oversub, beta, releaseMs, sampleRate } = opts;
+
+  const hop = fftSize / 4;               // 75% overlap
+  const win = makeHann(fftSize);
+  const numBins = fftSize / 2 + 1;
+  const out = new Float32Array(samples.length + fftSize);
+  const re = new Float32Array(fftSize);
+  const im = new Float32Array(fftSize);
+
+  const threshMul = Math.pow(10, thresholdOffsetDb / 20);
+  const minGain   = Math.pow(10, -reductionDb / 20);
+
+  // Per-bin temporal state
+  const priorSigPower = new Float32Array(numBins);   // |S_hat[t-1]|^2  (for DD-SNR)
+  const smoothedGain  = new Float32Array(numBins);
+  for (let b = 0; b < numBins; b++) smoothedGain[b] = 1.0;
+
+  // Convert attack/release times (ms) to per-frame smoothing coefficients
+  const hopMs      = (hop / sampleRate) * 1000;
+  const αAttack    = 1 - Math.exp(-hopMs / 5);           // fixed fast attack (5 ms)
+  const αRelease   = 1 - Math.exp(-hopMs / Math.max(1, releaseMs));
+
+  // COLA normalisation — Hann analysis-only at 75% overlap sums to 2 across frames
+  const colaScale  = 0.5;
+
+  const numFrames = Math.ceil(samples.length / hop);
+  let frameIdx = 0;
+
+  for (let s = 0; s < samples.length; s += hop) {
+    // Window
+    for (let i = 0; i < fftSize; i++) {
+      const idx = s + i;
+      re[i] = (idx < samples.length ? samples[idx] : 0) * win[i];
+      im[i] = 0;
+    }
+    fft(re, im);
+
+    // Per-bin decision-directed Wiener gain + asymmetric temporal smoothing
+    for (let b = 0; b < numBins; b++) {
+      const yRe = re[b], yIm = im[b];
+      const yPow = yRe * yRe + yIm * yIm;
+
+      const noiseMag = noiseProfile[b] * oversub * threshMul;
+      const nPow     = Math.max(noiseMag * noiseMag, 1e-20);
+
+      // Posterior SNR (what this frame alone says)
+      const γ = yPow / nPow;
+      // Maximum-likelihood a priori SNR (naive, frame-local)
+      const ξ_ml = γ > 1 ? γ - 1 : 0;
+      // Decision-directed a priori SNR (temporal memory from previous frame's estimate)
+      const ξ = beta * (priorSigPower[b] / nPow) + (1 - beta) * ξ_ml;
+
+      // Wiener gain from prior SNR  (ξ / (1+ξ) — never exceeds 1, smooth)
+      let gInst = ξ / (1 + ξ);
+      if (gInst < minGain) gInst = minGain;
+      if (gInst > 1) gInst = 1;
+
+      // Asymmetric smoothing — fast when opening up, slow when closing down
+      const α = (gInst > smoothedGain[b]) ? αAttack : αRelease;
+      smoothedGain[b] += α * (gInst - smoothedGain[b]);
+      const g = smoothedGain[b];
+
+      re[b] = yRe * g;
+      im[b] = yIm * g;
+      // Mirror to negative frequencies to preserve real-signal conjugate symmetry
+      if (b > 0 && b < fftSize / 2) {
+        re[fftSize - b] *= g;
+        im[fftSize - b] *= g;
+      }
+
+      // Store clean-signal power estimate for next frame's DD-SNR
+      priorSigPower[b] = (g * g) * yPow;
+    }
+
+    ifft(re, im);
+
+    // Overlap-add with 75% COLA normalisation
+    for (let i = 0; i < fftSize; i++) {
+      if (s + i < out.length) out[s + i] += re[i] * colaScale;
+    }
+
+    frameIdx++;
+    if (frameIdx % 50 === 0) {
+      if (progressCb) progressCb(frameIdx / numFrames);
+      await new Promise(r => setTimeout(r, 0));  // yield to UI
+    }
+  }
+
+  return out.slice(0, samples.length);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  UI wiring
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─── File loading ────────────────────────────────────────────────────────────
+const fileInput = document.getElementById('fileInput');
+const fileZone  = document.getElementById('fileZone');
+const fileInfo  = document.getElementById('fileInfo');
+
+fileZone.addEventListener('click', () => fileInput.click());
+fileZone.addEventListener('dragover', (e) => { e.preventDefault(); fileZone.classList.add('drag'); });
+fileZone.addEventListener('dragleave', () => fileZone.classList.remove('drag'));
+fileZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  fileZone.classList.remove('drag');
+  if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files.length) loadFile(e.target.files[0]);
+});
+
+async function loadFile(file) {
+  log(`Loading ${file.name} (${(file.size/1048576).toFixed(1)} MB)…`);
+  fileInfo.textContent = file.name;
+  try {
+    if (!S.audioCtx) S.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const arr = await file.arrayBuffer();
+    const buf = await S.audioCtx.decodeAudioData(arr);
+    S.audioBuffer = buf;
+    log(`✓ Decoded: ${buf.numberOfChannels}ch · ${buf.sampleRate} Hz · ${buf.duration.toFixed(2)}s`, 'ok');
+    fileInfo.textContent = `${file.name} · ${buf.numberOfChannels}ch · ${buf.sampleRate} Hz · ${buf.duration.toFixed(2)}s`;
+    showCards();
+    drawWaveform();
+    resetRegion();
+    updateButtons();
+  } catch (err) {
+    log('✗ Failed to decode: ' + err.message, 'err');
+  }
+}
+
+function showCards() {
+  ['waveCard', 'paramCard', 'runCard', 'playCard', 'exportCard'].forEach(id => {
+    document.getElementById(id).style.display = '';
+  });
+}
+
+// ─── Waveform drawing + region selection ─────────────────────────────────────
+const wave = document.getElementById('waveform');
+const waveCtx = wave.getContext('2d');
+
+function sizeCanvas(c) {
+  const dpr = window.devicePixelRatio || 1;
+  const r = c.getBoundingClientRect();
+  c.width = Math.floor(r.width * dpr);
+  c.height = Math.floor(r.height * dpr);
+  const ctx = c.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(dpr, dpr);
+  return { w: r.width, h: r.height };
+}
+
+function drawWaveform() {
+  if (!S.audioBuffer) return;
+  const { w, h } = sizeCanvas(wave);
+  waveCtx.fillStyle = '#100c07';
+  waveCtx.fillRect(0, 0, w, h);
+
+  // mix channels to mono for display
+  const ch = S.audioBuffer.numberOfChannels;
+  const len = S.audioBuffer.length;
+  const channels = [];
+  for (let c = 0; c < ch; c++) channels.push(S.audioBuffer.getChannelData(c));
+
+  const spp = len / w;
+  waveCtx.strokeStyle = '#c47d2a';
+  waveCtx.lineWidth = 1;
+  waveCtx.beginPath();
+  for (let x = 0; x < w; x++) {
+    const a = Math.floor(x * spp);
+    const b = Math.floor((x + 1) * spp);
+    let mn = 1, mx = -1;
+    for (let i = a; i < b; i++) {
+      let v = 0;
+      for (let c = 0; c < ch; c++) v += channels[c][i];
+      v /= ch;
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    const y1 = (1 - mx) * h / 2;
+    const y2 = (1 - mn) * h / 2;
+    waveCtx.moveTo(x + 0.5, y1);
+    waveCtx.lineTo(x + 0.5, y2);
+  }
+  waveCtx.stroke();
+
+  // center line
+  waveCtx.strokeStyle = 'rgba(196,125,42,0.2)';
+  waveCtx.beginPath();
+  waveCtx.moveTo(0, h/2);
+  waveCtx.lineTo(w, h/2);
+  waveCtx.stroke();
+
+  // region overlay
+  if (S.regionStart !== null && S.regionEnd !== null) {
+    const x1 = (S.regionStart / len) * w;
+    const x2 = (S.regionEnd / len) * w;
+    waveCtx.fillStyle = 'rgba(240,168,50,0.25)';
+    waveCtx.fillRect(x1, 0, x2 - x1, h);
+    waveCtx.strokeStyle = 'rgba(240,168,50,0.9)';
+    waveCtx.lineWidth = 1;
+    waveCtx.strokeRect(x1 + 0.5, 0.5, x2 - x1, h - 1);
+  }
+}
+
+function resetRegion() {
+  S.regionStart = null;
+  S.regionEnd = null;
+  document.getElementById('regionInfo').textContent = 'No region selected';
+}
+
+// drag-to-select region
+let dragging = false, dragStartX = 0;
+wave.addEventListener('mousedown', (e) => {
+  if (!S.audioBuffer) return;
+  const rect = wave.getBoundingClientRect();
+  dragging = true;
+  dragStartX = e.clientX - rect.left;
+  const frac = dragStartX / rect.width;
+  S.regionStart = Math.floor(frac * S.audioBuffer.length);
+  S.regionEnd   = S.regionStart;
+});
+window.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  const rect = wave.getBoundingClientRect();
+  let x = e.clientX - rect.left;
+  x = Math.max(0, Math.min(rect.width, x));
+  const startFrac = Math.min(dragStartX, x) / rect.width;
+  const endFrac   = Math.max(dragStartX, x) / rect.width;
+  S.regionStart = Math.floor(startFrac * S.audioBuffer.length);
+  S.regionEnd   = Math.floor(endFrac   * S.audioBuffer.length);
+  updateRegionInfo();
+  drawWaveform();
+});
+window.addEventListener('mouseup', () => {
+  if (!dragging) return;
+  dragging = false;
+  updateRegionInfo();
+  updateButtons();
+});
+
+function updateRegionInfo() {
+  if (S.regionStart === null || S.regionEnd === null || S.regionStart === S.regionEnd) {
+    document.getElementById('regionInfo').textContent = 'No region selected';
+    return;
+  }
+  const sr = S.audioBuffer.sampleRate;
+  const dur = (S.regionEnd - S.regionStart) / sr;
+  const t1 = (S.regionStart / sr).toFixed(2);
+  const t2 = (S.regionEnd   / sr).toFixed(2);
+  document.getElementById('regionInfo').textContent =
+    `Region: ${t1}s → ${t2}s  (${dur.toFixed(2)}s, ${(S.regionEnd - S.regionStart).toLocaleString()} samples)`;
+}
+
+// ─── Parameter UI ────────────────────────────────────────────────────────────
+const params = {
+  analysisBoost: { el: document.getElementById('analysisBoost'), val: document.getElementById('analysisBoostVal'), fmt: v => `+${v} dB` },
+  reduction:     { el: document.getElementById('reduction'),     val: document.getElementById('reductionVal'),     fmt: v => `-${v} dB` },
+  threshold:     { el: document.getElementById('threshold'),     val: document.getElementById('thresholdVal'),     fmt: v => `${v>=0?'+':''}${v} dB` },
+  oversub:       { el: document.getElementById('oversub'),       val: document.getElementById('oversubVal'),       fmt: v => `${(v/10).toFixed(1)}×` },
+  smooth:        { el: document.getElementById('smooth'),        val: document.getElementById('smoothVal'),        fmt: v => `${v} bin${v==1?'':'s'}` },
+  beta:          { el: document.getElementById('beta'),          val: document.getElementById('betaVal'),          fmt: v => (v/100).toFixed(2) },
+  release:       { el: document.getElementById('release'),       val: document.getElementById('releaseVal'),       fmt: v => `${v} ms` },
+};
+for (const k in params) {
+  const p = params[k];
+  const update = () => p.val.textContent = p.fmt(+p.el.value);
+  p.el.addEventListener('input', update);
+  update();
+}
+
+// ─── Analyse button ──────────────────────────────────────────────────────────
+document.getElementById('btnAnalyze').addEventListener('click', async () => {
+  if (!S.audioBuffer || S.regionStart === null || S.regionEnd === null) return;
+  if (S.regionEnd - S.regionStart < 512) {
+    log('✗ Region too short — select at least ~0.1 seconds of noise.', 'err');
+    return;
+  }
+  const fftSize = +document.getElementById('fftSize').value;
+  const boostDb = +params.analysisBoost.el.value;
+  const smoothBins = +params.smooth.el.value;
+  S.fftSize = fftSize;
+
+  setStatus('run', 'Analysing noise region…');
+  log(`Analysing noise region · FFT ${fftSize} · boost +${boostDb} dB · smooth ${smoothBins} bins…`);
+  await new Promise(r => setTimeout(r, 30));
+
+  // Compute profile per channel, average down to one
+  const ch = S.audioBuffer.numberOfChannels;
+  const numBins = fftSize / 2 + 1;
+  const combined = new Float32Array(numBins);
+  let okChannels = 0;
+  for (let c = 0; c < ch; c++) {
+    const samples = S.audioBuffer.getChannelData(c);
+    const p = computeNoiseProfile(samples, S.regionStart, S.regionEnd, fftSize, boostDb, smoothBins);
+    if (p) {
+      for (let b = 0; b < numBins; b++) combined[b] += p[b];
+      okChannels++;
+    }
+  }
+  if (okChannels === 0) {
+    log('✗ Could not compute profile — region too short for this FFT size.', 'err');
+    setStatus('run', 'Analysis failed', 'error');
+    return;
+  }
+  for (let b = 0; b < numBins; b++) combined[b] /= okChannels;
+  S.noiseProfile = combined;
+
+  drawSpectrum();
+  setStatus('run', `Profile ready — ${numBins} bins`, 'active');
+  log(`✓ Noise profile computed across ${okChannels} channel(s).`, 'ok');
+  updateButtons();
+});
+
+// ─── Draw noise spectrum (log freq, dB magnitude) ────────────────────────────
+function drawSpectrum() {
+  const canvas = document.getElementById('spectrum');
+  const { w, h } = sizeCanvas(canvas);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#100c07';
+  ctx.fillRect(0, 0, w, h);
+  if (!S.noiseProfile) return;
+
+  const sr = S.audioBuffer.sampleRate;
+  const fftSize = S.fftSize;
+  const binHz = sr / fftSize;
+  const numBins = S.noiseProfile.length;
+  const minF = 20, maxF = sr / 2;
+  const logMin = Math.log10(minF), logMax = Math.log10(maxF);
+  const dbMin = -120, dbMax = 0;
+
+  // gridlines
+  ctx.strokeStyle = 'rgba(61,44,26,0.8)';
+  ctx.fillStyle = '#7a6a55';
+  ctx.font = '10px JetBrains Mono, monospace';
+  ctx.lineWidth = 1;
+  const freqMarks = [50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+  for (const f of freqMarks) {
+    if (f > maxF) continue;
+    const x = ((Math.log10(f) - logMin) / (logMax - logMin)) * w;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+    ctx.fillText(f >= 1000 ? (f/1000) + 'k' : '' + f, x + 3, h - 4);
+  }
+  const dbMarks = [-20, -40, -60, -80, -100];
+  for (const db of dbMarks) {
+    const y = h - ((db - dbMin) / (dbMax - dbMin)) * h;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+    ctx.fillText(db + ' dB', 4, y - 2);
+  }
+
+  // filled curve
+  ctx.beginPath();
+  ctx.moveTo(0, h);
+  let first = true;
+  for (let x = 0; x < w; x++) {
+    const logF = logMin + (x / w) * (logMax - logMin);
+    const f = Math.pow(10, logF);
+    const bin = Math.min(numBins - 1, Math.max(0, Math.round(f / binHz)));
+    const mag = S.noiseProfile[bin];
+    const db = 20 * Math.log10(Math.max(mag, 1e-12));
+    const y = h - ((db - dbMin) / (dbMax - dbMin)) * h;
+    if (first) { ctx.lineTo(x, y); first = false; }
+    else ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w, h);
+  ctx.fillStyle = 'rgba(196,125,42,0.25)';
+  ctx.fill();
+
+  ctx.beginPath();
+  for (let x = 0; x < w; x++) {
+    const logF = logMin + (x / w) * (logMax - logMin);
+    const f = Math.pow(10, logF);
+    const bin = Math.min(numBins - 1, Math.max(0, Math.round(f / binHz)));
+    const mag = S.noiseProfile[bin];
+    const db = 20 * Math.log10(Math.max(mag, 1e-12));
+    const y = h - ((db - dbMin) / (dbMax - dbMin)) * h;
+    if (x === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = '#f0a832';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+// ─── Process full track ──────────────────────────────────────────────────────
+document.getElementById('btnProcess').addEventListener('click', async () => {
+  if (!S.audioBuffer || !S.noiseProfile) return;
+  const fftSize = +document.getElementById('fftSize').value;
+  if (fftSize !== S.fftSize) {
+    log('✗ FFT size changed since analysis — re-analyse the noise region first.', 'err');
+    return;
+  }
+  const reductionDb = +params.reduction.el.value;
+  const thresholdDb = +params.threshold.el.value;
+  const oversub     = +params.oversub.el.value / 10;
+  const beta        = +params.beta.el.value / 100;
+  const releaseMs   = +params.release.el.value;
+
+  setStatus('run', 'Processing…');
+  log(`Processing · FFT ${fftSize} · 75% overlap · floor -${reductionDb} dB · thresh +${thresholdDb} dB · oversub ${oversub}× · β=${beta.toFixed(2)} · release ${releaseMs} ms`);
+  document.getElementById('progressWrap').style.display = '';
+  const bar = document.getElementById('progressBar');
+  bar.style.width = '0%';
+
+  const ch = S.audioBuffer.numberOfChannels;
+  const len = S.audioBuffer.length;
+  const sr = S.audioBuffer.sampleRate;
+  const outBuf = S.audioCtx.createBuffer(ch, len, sr);
+
+  try {
+    for (let c = 0; c < ch; c++) {
+      const samples = S.audioBuffer.getChannelData(c);
+      const result = await processChannel(
+        samples, S.noiseProfile, fftSize,
+        { reductionDb, thresholdOffsetDb: thresholdDb, oversub, beta, releaseMs, sampleRate: sr },
+        (p) => {
+          const overall = (c + p) / ch;
+          bar.style.width = (overall * 100).toFixed(1) + '%';
+        }
+      );
+      outBuf.copyToChannel(result, c);
+      log(`  ✓ channel ${c + 1}/${ch}`, 'ok');
+    }
+    bar.style.width = '100%';
+    S.processedBuffer = outBuf;
+    setStatus('run', 'Done', 'active');
+    log('✓ Processing complete.', 'ok');
+    updateButtons();
+  } catch (err) {
+    log('✗ Processing failed: ' + err.message, 'err');
+    setStatus('run', 'Failed', 'error');
+  }
+});
+
+// ─── Playback ────────────────────────────────────────────────────────────────
+function play(buffer, offsetSec = 0) {
+  stopPlayback();
+  if (!S.audioCtx) return;
+  if (S.audioCtx.state === 'suspended') S.audioCtx.resume();
+  const src = S.audioCtx.createBufferSource();
+  src.buffer = buffer;
+  src.connect(S.audioCtx.destination);
+  src.start(0, offsetSec);
+  S.currentSource = src;
+  S.currentBuffer = buffer;
+  S.currentStartTime = S.audioCtx.currentTime - offsetSec;
+  S.currentOffset = offsetSec;
+  src.onended = () => {
+    if (S.currentSource === src) {
+      S.currentSource = null;
+      setStatus('play', '');
+      updateButtons();
+    }
+  };
+  setStatus('play', buffer === S.audioBuffer ? 'Playing ORIGINAL' : 'Playing PROCESSED', 'active');
+  updateButtons();
+}
+function stopPlayback() {
+  if (S.currentSource) {
+    try { S.currentSource.stop(); } catch (e) {}
+    S.currentSource = null;
+  }
+  setStatus('play', '');
+  updateButtons();
+}
+function togglePlayback() {
+  if (!S.currentSource) return;
+  const elapsed = S.audioCtx.currentTime - S.currentStartTime;
+  const next = S.currentBuffer === S.audioBuffer ? S.processedBuffer : S.audioBuffer;
+  if (!next) return;
+  play(next, elapsed);
+}
+
+document.getElementById('btnPlayOrig').addEventListener('click', () => play(S.audioBuffer));
+document.getElementById('btnPlayProc').addEventListener('click', () => play(S.processedBuffer));
+document.getElementById('btnStop'    ).addEventListener('click', stopPlayback);
+document.getElementById('btnToggle'  ).addEventListener('click', togglePlayback);
+
+// ─── WAV export ──────────────────────────────────────────────────────────────
+function bufferToWav(buffer) {
+  const numCh = buffer.numberOfChannels;
+  const sr    = buffer.sampleRate;
+  const len   = buffer.length;
+  const bps   = 2;  // 16-bit
+  const dataSize = len * numCh * bps;
+  const ab = new ArrayBuffer(44 + dataSize);
+  const v  = new DataView(ab);
+  let p = 0;
+  const s = (str) => { for (let i = 0; i < str.length; i++) v.setUint8(p++, str.charCodeAt(i)); };
+  s('RIFF'); v.setUint32(p, 36 + dataSize, true); p += 4;
+  s('WAVE'); s('fmt '); v.setUint32(p, 16, true); p += 4;
+  v.setUint16(p, 1, true); p += 2;                // PCM
+  v.setUint16(p, numCh, true); p += 2;
+  v.setUint32(p, sr, true); p += 4;
+  v.setUint32(p, sr * numCh * bps, true); p += 4; // byte rate
+  v.setUint16(p, numCh * bps, true); p += 2;      // block align
+  v.setUint16(p, bps * 8, true); p += 2;          // bits
+  s('data'); v.setUint32(p, dataSize, true); p += 4;
+
+  const chans = [];
+  for (let c = 0; c < numCh; c++) chans.push(buffer.getChannelData(c));
+  for (let i = 0; i < len; i++) {
+    for (let c = 0; c < numCh; c++) {
+      let x = Math.max(-1, Math.min(1, chans[c][i]));
+      v.setInt16(p, x < 0 ? x * 0x8000 : x * 0x7fff, true);
+      p += 2;
+    }
+  }
+  return new Blob([ab], { type: 'audio/wav' });
+}
+document.getElementById('btnDownload').addEventListener('click', () => {
+  if (!S.processedBuffer) return;
+  const blob = bufferToWav(S.processedBuffer);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'processed.wav';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  log('✓ Exported processed.wav', 'ok');
+});
+
+// ─── Status + button state ───────────────────────────────────────────────────
+function setStatus(which, text, cls = '') {
+  const el = document.getElementById(which === 'run' ? 'runStatus' : 'playStatus');
+  el.textContent = text;
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+function updateButtons() {
+  const hasFile = !!S.audioBuffer;
+  const hasRegion = hasFile && S.regionStart !== null && S.regionEnd !== null && S.regionEnd > S.regionStart;
+  const hasProfile = !!S.noiseProfile;
+  const hasProcessed = !!S.processedBuffer;
+  const playing = !!S.currentSource;
+  document.getElementById('btnAnalyze').disabled = !hasRegion;
+  document.getElementById('btnProcess').disabled = !hasProfile;
+  document.getElementById('btnPlayOrig').disabled = !hasFile || playing;
+  document.getElementById('btnPlayProc').disabled = !hasProcessed || playing;
+  document.getElementById('btnStop').disabled = !playing;
+  document.getElementById('btnToggle').disabled = !playing || !hasProcessed;
+  document.getElementById('btnDownload').disabled = !hasProcessed;
+  if (hasProfile) document.getElementById('specCard').style.display = '';
+}
+
+// redraw on resize
+window.addEventListener('resize', () => {
+  drawWaveform();
+  if (S.noiseProfile) drawSpectrum();
+});
+
+log('Boot OK. Drop an audio file above to begin.');
+</script>
+</body>
+</html>

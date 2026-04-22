@@ -1791,6 +1791,25 @@
     .btn-error:hover{transform:none !important;box-shadow:0 6px 12px rgba(185,56,58,0.4) !important;}
     .btn-error:disabled{opacity:0.9;box-shadow:none;}
     .btn.info-more{font-size:18px;line-height:1;padding:4px 8px;display:flex;align-items:center;justify-content:center;}
+    /* Audio Lab track button — hidden until body.audio-lab-active */
+    .btn-audio-lab{background:linear-gradient(135deg,#2a1c0d,#3d2a10);color:#c47d2a;border:1px solid #c47d2a;font-size:12px !important;display:none;}
+    .btn-audio-lab:hover{background:#c47d2a !important;color:#fff !important;}
+    body.audio-lab-active .btn-audio-lab{display:inline-flex;}
+
+    /* Audio Lab inline widget — lives in the search bar */
+    .audio-lab-widget{display:flex;align-items:center;gap:5px;margin-left:auto;flex-shrink:0;border-left:1px solid var(--border);padding-left:10px;}
+    .audio-lab-widget-icon{font-size:0.72rem;opacity:0.8;flex-shrink:0;}
+    .audio-lab-widget-text strong{color:#c4a8ff;font-size:0.65rem;font-weight:600;white-space:nowrap;}
+    .audio-lab-widget-action{display:flex;align-items:center;gap:4px;}
+    .audio-lab-widget-action input{background:var(--surface2,#1a1025);border:1px solid #4a3f6b;color:#fff;border-radius:5px;padding:1px 7px;font-size:0.65rem;outline:none;width:100px;height:18px;}
+    .audio-lab-widget-action input:focus{border-color:#8b5cf6;}
+    .audio-lab-widget-action button{background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:5px;padding:1px 8px;font-size:0.65rem;font-weight:600;cursor:pointer;white-space:nowrap;height:18px;}
+    .audio-lab-widget-action button:hover{opacity:0.88;}
+    .audio-lab-widget-error{color:#e05c5c;font-size:0.62rem;white-space:nowrap;}
+    .audio-lab-widget-active{display:flex;align-items:center;gap:5px;}
+    .audio-lab-active-badge{color:#7db02a;font-size:0.62rem;font-weight:600;white-space:nowrap;}
+    .audio-lab-deactivate-btn{background:transparent;border:none;color:#4a3f6b;font-size:0.65rem;cursor:pointer;padding:0;line-height:1;}
+    .audio-lab-deactivate-btn:hover{color:#e05c5c;}
 
     
     .back-row{display:flex;justify-content:center;margin-bottom:12px;}

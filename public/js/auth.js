@@ -85,8 +85,10 @@
         '/api/explore',
         '/api/featured-albums',
         '/api/missing-audio-songs',
-        '/api/payments/',  // payment flow must work before token exists
-        '/api/download/'   // download purchase flow — token-free by design
+        '/api/payments/',    // payment flow must work before token exists
+        '/api/download/',    // download purchase flow — token-free by design
+        '/api/audio-proxy',  // Audio Lab proxy — no auth needed (key is gated separately)
+        '/api/audio-lab/'    // Audio Lab key validation
       ];
 
       const isPublicEndpoint = publicEndpoints.some(endpoint => url.includes(endpoint));
@@ -286,6 +288,9 @@
             localStorage.setItem('mass_token_email', data.email);
           }
 
+          // Pass Audio Lab entitlement to the gate script
+          window.massAudioLabEnabled = data.audioLabEnabled || false;
+
           hideTokenOverlay();
           console.log('[Access Token] Token validated successfully');
 
@@ -293,7 +298,7 @@
           window.massAccessReady = true;
           window.massAccessToken = normalized;
           window.dispatchEvent(new CustomEvent('mass:access-ready', {
-            detail: { token: normalized, email: data.email || null }
+            detail: { token: normalized, email: data.email || null, audioLabEnabled: data.audioLabEnabled || false }
           }));
 
           return true;
