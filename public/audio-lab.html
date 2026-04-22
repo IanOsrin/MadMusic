@@ -326,6 +326,13 @@
     .btn-solo { padding: 3px 9px; font-size: 0.7rem; font-weight: 700; border-radius: 4px; border: 1px solid var(--muted); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px; }
     .btn-solo:hover { border-color: #f59e0b; color: #f59e0b; }
     .btn-solo.on { background: #f59e0b; border-color: #f59e0b; color: #000; }
+    .btn-phase { padding: 3px 9px; font-size: 0.7rem; font-weight: 700; border-radius: 4px; border: 1px solid var(--muted); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px; }
+    .btn-phase:hover { border-color: #06b6d4; color: #06b6d4; }
+    .btn-phase.on { background: #06b6d4; border-color: #06b6d4; color: #000; }
+    .btn-phase-r { padding: 3px 9px; font-size: 0.7rem; font-weight: 700; border-radius: 4px; border: 1px solid var(--muted); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px; }
+    .btn-phase-r:hover:not(:disabled) { border-color: #818cf8; color: #818cf8; }
+    .btn-phase-r.on { background: #818cf8; border-color: #818cf8; color: #000; }
+    .btn-phase-r:disabled { opacity: 0.3; cursor: not-allowed; }
 
     /* Stems transport */
     .stems-transport { display: none; flex-direction: column; gap: 10px; padding: 12px 0 4px; }
@@ -2616,6 +2623,29 @@ async function doExport(start, end) {
   }
 }
 
+// Returns a new AudioBuffer with polarity applied according to st.phaseL / st.phaseR.
+// If both channels are normal (phaseL === 1 && phaseR === 1), returns the original buffer unchanged.
+function applyPhaseToBuffer(buffer, st, isStereo) {
+  const L = st.phaseL || 1
+  const R = isStereo ? (st.phaseR || 1) : L
+  if (L === 1 && R === 1) return buffer  // nothing to do
+
+  const numCh = buffer.numberOfChannels
+  const len   = buffer.length
+  const out   = new AudioBuffer({ numberOfChannels: numCh, length: len, sampleRate: buffer.sampleRate })
+  for (let ch = 0; ch < numCh; ch++) {
+    const gain = (ch === 0) ? L : R
+    const src  = buffer.getChannelData(ch)
+    const dst  = out.getChannelData(ch)
+    if (gain === 1) {
+      dst.set(src)
+    } else {
+      for (let i = 0; i < len; i++) dst[i] = -src[i]
+    }
+  }
+  return out
+}
+
 function encodeWAV(buffer) {
   const numCh = buffer.numberOfChannels, sr = buffer.sampleRate, len = buffer.length
   const blockAlign = numCh * 2, dataSize = len * blockAlign
@@ -3057,6 +3087,8 @@ function makeStemCard({ label, buf, color, desc }) {
     <span class="stem-vol-val">100%</span>
     <button class="btn-mute">M</button>
     <button class="btn-solo">S</button>
+    <button class="btn-phase" title="Invert polarity (both channels)">Ø</button>
+    <button class="btn-phase-r" title="Invert right channel 180° relative to left${isStereo ? '' : ' (mono — no effect)'}"${isStereo ? '' : ' disabled'}>ØR</button>
     <button class="btn-stage">STG</button>
     <span class="stem-loop-dot" title="Looping"></span>`
 
@@ -3096,6 +3128,32 @@ function makeStemCard({ label, buf, color, desc }) {
   const gainNode = audioCtx.createGain()
   gainNode.connect(audioCtx.destination)
 
+  // ── Phase / polarity nodes ─────────────────────────────────────────────────
+  // Chain: src → splitter → phaseGainL/R → merger → gainNode
+  // For mono buffers we fall back to a simple inverting gain on gainNode.
+  const isStereo = buf.numberOfChannels >= 2
+  let phaseInput   // what src connects to
+  let phaseGainL, phaseGainR
+
+  if (isStereo) {
+    const splitter = audioCtx.createChannelSplitter(2)
+    const merger   = audioCtx.createChannelMerger(2)
+    phaseGainL = audioCtx.createGain()
+    phaseGainR = audioCtx.createGain()
+    splitter.connect(phaseGainL, 0)    // L out
+    splitter.connect(phaseGainR, 1)    // R out
+    phaseGainL.connect(merger, 0, 0)   // L → merger ch 0
+    phaseGainR.connect(merger, 0, 1)   // R → merger ch 1
+    merger.connect(gainNode)
+    phaseInput = splitter
+  } else {
+    // Mono — full invert only; ØR has no effect
+    phaseGainL = audioCtx.createGain()
+    phaseGainL.connect(gainNode)
+    phaseGainR = phaseGainL            // same node
+    phaseInput = phaseGainL
+  }
+
   // ── Per-card state ─────────────────────────────────────────────────────────
   const st = {
     src: null, playing: false,
@@ -3106,6 +3164,7 @@ function makeStemCard({ label, buf, color, desc }) {
     animId: null,
     volume: 1, muted: false, soloed: false, externalMute: false,
     staged: false,
+    phaseL: 1, phaseR: 1,   // 1 = normal, -1 = inverted
   }
 
   const spx    = () => buf.length / (canvas.width * st.zoom)
@@ -3164,6 +3223,8 @@ function makeStemCard({ label, buf, color, desc }) {
   const volVal   = mixerStrip.querySelector('.stem-vol-val')
   const muteBtn  = mixerStrip.querySelector('.btn-mute')
   const soloBtn  = mixerStrip.querySelector('.btn-solo')
+  const phaseBtn  = mixerStrip.querySelector('.btn-phase')
+  const phaseRBtn = mixerStrip.querySelector('.btn-phase-r')
   const stageBtn = mixerStrip.querySelector('.btn-stage')
 
   volSl.addEventListener('input', () => {
@@ -3182,6 +3243,30 @@ function makeStemCard({ label, buf, color, desc }) {
     if (st.soloed) notifySolo(ctrl)
     else clearAllSolo()
   })
+
+  // Apply phase gains from st.phaseL / st.phaseR
+  const applyPhase = () => {
+    phaseGainL.gain.setTargetAtTime(st.phaseL, audioCtx.currentTime, 0.005)
+    if (isStereo) phaseGainR.gain.setTargetAtTime(st.phaseR, audioCtx.currentTime, 0.005)
+  }
+
+  phaseBtn.addEventListener('click', () => {
+    st.phaseL = st.phaseL === 1 ? -1 : 1
+    st.phaseR = st.phaseL   // both channels together
+    phaseBtn.classList.toggle('on', st.phaseL === -1)
+    // ØR button reflects actual R state
+    if (phaseRBtn) phaseRBtn.classList.toggle('on', st.phaseR === -1)
+    applyPhase()
+  })
+
+  if (isStereo) {
+    phaseRBtn.addEventListener('click', () => {
+      st.phaseR = st.phaseR === 1 ? -1 : 1
+      phaseRBtn.classList.toggle('on', st.phaseR === -1)
+      applyPhase()
+    })
+  }
+
   stageBtn.addEventListener('click', () => {
     if (!st.region) { alert('Select a region on this stem first, then stage it.'); return }
     st.staged = !st.staged
@@ -3331,7 +3416,7 @@ function makeStemCard({ label, buf, color, desc }) {
   function playStem(from, until, acStartTime) {
     if (!audioCtx) return; stopStem()
     st.src = audioCtx.createBufferSource(); st.src.buffer = buf
-    st.src.connect(gainNode)
+    st.src.connect(phaseInput)
     st.playOffset  = from ?? st.playOffset
     st.playStartAC = acStartTime ?? audioCtx.currentTime
 
@@ -3368,7 +3453,8 @@ function makeStemCard({ label, buf, color, desc }) {
     const s = Math.round(st.region.start * sr), e = Math.round(st.region.end * sr)
     const slice = audioCtx.createBuffer(numCh, e - s, sr)
     for (let ch = 0; ch < numCh; ch++) slice.copyToChannel(buf.getChannelData(ch).slice(s, e), ch)
-    const blob = encodeWAV(slice); const url = URL.createObjectURL(blob)
+    const blob = encodeWAV(applyPhaseToBuffer(slice, st, isStereo))
+    const url = URL.createObjectURL(blob)
     const a = document.createElement('a'); a.href = url
     a.download = `${label.replace(/\s+/g,'-').toLowerCase()}-region.wav`; a.click()
     URL.revokeObjectURL(url)
@@ -3378,7 +3464,8 @@ function makeStemCard({ label, buf, color, desc }) {
     regionBar.classList.remove('visible'); loopBtn.classList.remove('loop-on'); draw()
   })
   head.querySelector('.stem-btn-dl').addEventListener('click', () => {
-    const blob = encodeWAV(buf); const url = URL.createObjectURL(blob)
+    const blob = encodeWAV(applyPhaseToBuffer(buf, st, isStereo))
+    const url = URL.createObjectURL(blob)
     const a = document.createElement('a'); a.href = url
     a.download = `${label.replace(/\s+/g,'-').toLowerCase()}.wav`; a.click()
     URL.revokeObjectURL(url)
