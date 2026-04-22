@@ -342,9 +342,15 @@
     .btn-play-all:hover { opacity: 0.85; }
     .btn-stop-all { background: var(--red-dim); color: var(--red); border: 1px solid var(--red); padding: 8px 16px; border-radius: 7px; cursor: pointer; font-size: 0.82rem; font-weight: 600; transition: all 0.15s; }
     .btn-stop-all:hover { background: var(--red); color: #fff; }
+    .btn-stage-all { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid #f59e0b; padding: 9px 18px; border-radius: 8px; cursor: pointer; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.5px; transition: all 0.2s; }
+    .btn-stage-all:hover:not(:disabled) { background: rgba(245,158,11,0.25); }
+    .btn-stage-all:disabled { opacity: 0.35; cursor: not-allowed; }
     .btn-fire { background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; border: none; padding: 9px 22px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 800; letter-spacing: 0.5px; transition: opacity 0.2s; }
     .btn-fire:hover:not(:disabled) { opacity: 0.85; }
     .btn-fire:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-export-mix { background: rgba(96,165,250,0.12); color: #60a5fa; border: 1px solid #60a5fa; padding: 9px 18px; border-radius: 8px; cursor: pointer; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.5px; transition: all 0.2s; }
+    .btn-export-mix:hover:not(:disabled) { background: rgba(96,165,250,0.25); }
+    .btn-export-mix:disabled { opacity: 0.35; cursor: not-allowed; }
     .stems-transport-hint { font-size: 0.72rem; color: var(--muted); font-style: italic; }
     .bpm-display { display: flex; align-items: center; gap: 6px; margin-left: auto; }
     .bpm-label { font-size: 0.68rem; color: var(--muted); letter-spacing: 1px; }
@@ -990,7 +996,9 @@
       <div class="stems-transport" id="stemsTransport">
         <div class="stems-transport-row">
           <button class="btn-play-all" id="btnPlayAll">▶ Play All from 0</button>
+          <button class="btn-stage-all" id="btnStageAll" disabled>⚑ Stage All</button>
           <button class="btn-fire" id="btnFire" disabled>⚡ Fire Staged</button>
+          <button class="btn-export-mix" id="btnExportMix" disabled>⬇ Export Mix</button>
           <button class="btn-stop-all" id="btnStopAll">⏹ Stop All</button>
           <div class="bpm-display">
             <span class="bpm-label">BPM</span>
@@ -1003,7 +1011,7 @@
         </div>
         <div class="stems-transport-hint">
           <strong style="color:var(--white)">Stage &amp; Fire:</strong>
-          select a region on each stem → click <strong style="color:#f59e0b">STG</strong> to arm it → hit <strong style="color:#f59e0b">⚡ Fire Staged</strong> to launch all armed regions simultaneously in loop ·
+          select a region on each stem → click <strong style="color:#f59e0b">STG</strong> (or <strong style="color:#f59e0b">⚑ Stage All</strong>) to arm → <strong style="color:#f59e0b">⚡ Fire Staged</strong> launches all simultaneously in loop · <strong style="color:#f59e0b">⬇ Export Mix</strong> renders armed regions to a single WAV ·
           <strong style="color:var(--white)">Play All</strong> plays every stem from position 0
         </div>
       </div>
@@ -2866,6 +2874,12 @@ function playAllStems() {
 }
 function stopAllStems() { allStemCards.forEach(c => c.stop()) }
 
+function stageAllStems() {
+  const withRegion = allStemCards.filter(c => c.hasRegion())
+  if (!withRegion.length) return
+  withRegion.forEach(c => c.stageIt())
+}
+
 function fireStagedStems() {
   const staged = allStemCards.filter(c => c.isStaged())
   if (!staged.length) return
@@ -2873,9 +2887,57 @@ function fireStagedStems() {
   staged.forEach(c => c.fireStaged(startAt))
 }
 
+async function exportStagedMix() {
+  const parts = allStemCards.map(c => c.getStagedData()).filter(Boolean)
+  if (!parts.length) return
+
+  const btn = $('btnExportMix')
+  btn.disabled = true; btn.textContent = '⏳ Mixing…'
+
+  try {
+    const sr       = parts[0].buf.sampleRate
+    const maxDur   = Math.max(...parts.map(p => p.region.end - p.region.start))
+    const totalSmp = Math.ceil(maxDur * sr)
+
+    const offCtx = new OfflineAudioContext(2, totalSmp, sr)
+
+    for (const { buf, region, volume, phaseL, phaseR, isStereo } of parts) {
+      // Slice the region out of the source buffer
+      const s = Math.round(region.start * sr)
+      const e = Math.min(Math.round(region.end * sr), buf.length)
+      const numCh = buf.numberOfChannels
+      const slice = new AudioBuffer({ numberOfChannels: numCh, length: e - s, sampleRate: sr })
+      for (let ch = 0; ch < numCh; ch++) slice.copyToChannel(buf.getChannelData(ch).slice(s, e), ch)
+
+      // Apply polarity
+      const phased = applyPhaseToBuffer(slice, { phaseL, phaseR }, isStereo)
+
+      const src  = offCtx.createBufferSource(); src.buffer = phased
+      const gain = offCtx.createGain(); gain.gain.value = volume
+      src.connect(gain); gain.connect(offCtx.destination)
+      src.start(0)
+    }
+
+    const rendered = await offCtx.startRendering()
+    const blob = encodeWAV(rendered)
+    const url  = URL.createObjectURL(blob)
+    const base = ($('fname').textContent || 'mix').replace(/\.[^.]+$/, '')
+    const a = document.createElement('a'); a.href = url
+    a.download = `${base}-staged-mix.wav`; a.click()
+    URL.revokeObjectURL(url)
+  } catch(err) {
+    alert('Mix export failed: ' + err.message)
+  } finally {
+    btn.disabled = false; btn.textContent = '⬇ Export Mix'
+  }
+}
+
 function updateFireBtn() {
-  const anyStaged = allStemCards.some(c => c.isStaged())
-  $('btnFire').disabled = !anyStaged
+  const anyStaged    = allStemCards.some(c => c.isStaged())
+  const anyWithRegion = allStemCards.some(c => c.hasRegion())
+  $('btnFire').disabled      = !anyStaged
+  $('btnExportMix').disabled = !anyStaged
+  $('btnStageAll').disabled  = !anyWithRegion
 }
 
 function notifySolo(soloCard) {
@@ -2886,8 +2948,10 @@ function clearAllSolo() {
 }
 
 $('btnPlayAll').addEventListener('click', playAllStems)
+$('btnStageAll').addEventListener('click', stageAllStems)
 $('btnStopAll').addEventListener('click', stopAllStems)
 $('btnFire').addEventListener('click', fireStagedStems)
+$('btnExportMix').addEventListener('click', exportStagedMix)
 
 // ── BPM detection (onset autocorrelation on mixed-down signal) ────────────────
 function detectBPM(audioBuf) {
@@ -3398,7 +3462,19 @@ function makeStemCard({ label, buf, color, desc }) {
     el:   card,
     playAt:   (from, acTime) => playStem(from, null, acTime),
     stop:     stopStem,
-    isStaged: () => st.staged && st.region != null,
+    hasRegion:  () => st.region != null,
+    isStaged:   () => st.staged && st.region != null,
+    stageIt: () => {
+      if (!st.region) return
+      st.staged = true
+      stageBtn.classList.add('on'); card.classList.add('staged')
+      updateFireBtn()
+    },
+    getStagedData: () => st.staged && st.region ? {
+      buf, region: st.region,
+      volume: st.volume, phaseL: st.phaseL, phaseR: st.phaseR,
+      isStereo, label
+    } : null,
     fireStaged: acTime => {
       if (!st.staged || !st.region) return
       // Force loop on for fired regions
