@@ -513,6 +513,22 @@
   <span class="header-badge">Beta</span>
 </header>
 
+<!-- ##STREAMER_ONLY_START##
+<div id="aiServerBanner" style="display:none;padding:10px 24px;background:#1a1208;border-bottom:1px solid #3d2c1a;">
+  <div style="max-width:1400px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <span id="aiServerDot" style="width:10px;height:10px;border-radius:50%;background:#7a6a55;flex-shrink:0;display:inline-block;"></span>
+    <span id="aiServerMsg" style="font-size:0.82rem;color:#7a6a55;">Checking AI server…</span>
+    <div id="aiServerInstructions" style="display:none;margin-top:6px;width:100%;background:#201508;border:1px solid #3d2c1a;border-radius:8px;padding:12px 16px;">
+      <div style="font-size:0.8rem;font-weight:700;color:#f0a832;margin-bottom:8px;">How to start the AI Stem Server</div>
+      <div id="aiMacInstructions"><div style="font-size:0.78rem;color:#b09070;margin-bottom:6px;"><strong style="color:#e8d8c0;">Mac:</strong> Double-click <code style="background:#111;padding:2px 6px;border-radius:4px;">Start Demucs Server.command</code> in the DigitalCupboardAudio folder.</div></div>
+      <div id="aiWinInstructions"><div style="font-size:0.78rem;color:#b09070;margin-bottom:6px;"><strong style="color:#e8d8c0;">Windows:</strong> Double-click <code style="background:#111;padding:2px 6px;border-radius:4px;">Start Demucs Server.bat</code> in the DigitalCupboardAudio folder.</div></div>
+      <div style="font-size:0.75rem;color:#7a6a55;margin-top:6px;">Keep that window open while using AI Split. First run downloads the Demucs model (~330 MB).</div>
+      <button onclick="checkAiServer()" style="margin-top:10px;padding:5px 14px;background:#3d2c1a;border:1px solid #c47d2a;color:#c47d2a;border-radius:6px;cursor:pointer;font-size:0.78rem;">↻ Check Again</button>
+    </div>
+  </div>
+</div>
+##STREAMER_ONLY_END## -->
+
 <div class="main">
 
   <div class="drop-zone" id="dropZone">
@@ -940,7 +956,7 @@
           <!-- Local option -->
           <div style="flex:1;min-width:200px;">
             <strong style="color:var(--white)">Local (free)</strong>
-            <div style="margin-top:4px;font-size:0.8rem;color:var(--muted)">Run <code>python3 demucs-server.py</code> from your outputs folder, then click Ping.</div>
+            <!-- ##STANDALONE## -->Run <code>python3 demucs-server.py</code> from your outputs folder, then click Ping.<!-- ##STREAMER## -->Run <code>python3 demucs-server.py</code> from the DigitalCupboardAudio folder, then click Ping.<!-- ##END## -->
           </div>
           <!-- Cloud option -->
           <div style="flex:1;min-width:200px;">
@@ -2553,7 +2569,7 @@ function encodeMP3(buffer, kbps) {
 let serverConnected = false
 let replicateKey = null
 const REPLICATE_MODEL = 'cjwbw/demucs:25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953'
-const demucsHost = window.location.hostname || 'localhost'
+/* ##STANDALONE## */const demucsHost = window.location.hostname || 'localhost'/* ##STREAMER## *//* const demucsHost = 'localhost' *//* ##END## */
 setTimeout(checkServerStatus, 800)   // auto-ping on load
 
 document.getElementById('replicateKeySubmit')?.addEventListener('click', () => {

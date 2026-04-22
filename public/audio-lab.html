@@ -513,24 +513,21 @@
   <span class="header-badge">Beta</span>
 </header>
 
-<!-- AI Server Status Banner -->
+
 <div id="aiServerBanner" style="display:none;padding:10px 24px;background:#1a1208;border-bottom:1px solid #3d2c1a;">
   <div style="max-width:1400px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
     <span id="aiServerDot" style="width:10px;height:10px;border-radius:50%;background:#7a6a55;flex-shrink:0;display:inline-block;"></span>
     <span id="aiServerMsg" style="font-size:0.82rem;color:#7a6a55;">Checking AI server…</span>
     <div id="aiServerInstructions" style="display:none;margin-top:6px;width:100%;background:#201508;border:1px solid #3d2c1a;border-radius:8px;padding:12px 16px;">
       <div style="font-size:0.8rem;font-weight:700;color:#f0a832;margin-bottom:8px;">How to start the AI Stem Server</div>
-      <div id="aiMacInstructions">
-        <div style="font-size:0.78rem;color:#b09070;margin-bottom:6px;"><strong style="color:#e8d8c0;">Mac:</strong> Double-click <code style="background:#111;padding:2px 6px;border-radius:4px;">Start Demucs Server.command</code> in the DigitalCupboardAudio folder.</div>
-      </div>
-      <div id="aiWinInstructions">
-        <div style="font-size:0.78rem;color:#b09070;margin-bottom:6px;"><strong style="color:#e8d8c0;">Windows:</strong> Double-click <code style="background:#111;padding:2px 6px;border-radius:4px;">Start Demucs Server.bat</code> in the DigitalCupboardAudio folder.</div>
-      </div>
+      <div id="aiMacInstructions"><div style="font-size:0.78rem;color:#b09070;margin-bottom:6px;"><strong style="color:#e8d8c0;">Mac:</strong> Double-click <code style="background:#111;padding:2px 6px;border-radius:4px;">Start Demucs Server.command</code> in the DigitalCupboardAudio folder.</div></div>
+      <div id="aiWinInstructions"><div style="font-size:0.78rem;color:#b09070;margin-bottom:6px;"><strong style="color:#e8d8c0;">Windows:</strong> Double-click <code style="background:#111;padding:2px 6px;border-radius:4px;">Start Demucs Server.bat</code> in the DigitalCupboardAudio folder.</div></div>
       <div style="font-size:0.75rem;color:#7a6a55;margin-top:6px;">Keep that window open while using AI Split. First run downloads the Demucs model (~330 MB).</div>
       <button onclick="checkAiServer()" style="margin-top:10px;padding:5px 14px;background:#3d2c1a;border:1px solid #c47d2a;color:#c47d2a;border-radius:6px;cursor:pointer;font-size:0.78rem;">↻ Check Again</button>
     </div>
   </div>
 </div>
+
 
 <div class="main">
 
@@ -959,7 +956,7 @@
           <!-- Local option -->
           <div style="flex:1;min-width:200px;">
             <strong style="color:var(--white)">Local (free)</strong>
-            <div style="margin-top:4px;font-size:0.8rem;color:var(--muted)">Run <code>python3 demucs-server.py</code> from the DigitalCupboardAudio folder, then click Ping.</div>
+            Run <code>python3 demucs-server.py</code> from the DigitalCupboardAudio folder, then click Ping.
           </div>
           <!-- Cloud option -->
           <div style="flex:1;min-width:200px;">
@@ -1039,7 +1036,94 @@
 <footer>Digital Cupboard Audio App &nbsp;·&nbsp; Web Audio API · No external dependencies</footer>
 
 <!-- lamejs for MP3 export — loaded normally, optional -->
-<script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js">
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Load from URL (called when opened from the streamer with ?url=...&title=...)
+// ─────────────────────────────────────────────────────────────────────────────
+async function loadFromUrl(url, title) {
+  const dropZone = $('dropZone')
+  dropZone.innerHTML = `
+    <div class="drop-icon">⏳</div>
+    <h2>Loading "${title || 'track'}"…</h2>
+    <p>Fetching audio from the archive</p>`
+
+  try {
+    // Route through server proxy to avoid S3/CDN CORS restrictions
+    const proxyUrl = '/api/audio-proxy?url=' + encodeURIComponent(url)
+    const resp = await fetch(proxyUrl)
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    const blob = await resp.blob()
+    const filename = title ? title + '.mp3' : url.split('/').pop() || 'track.mp3'
+    const file = new File([blob], filename, { type: blob.type || 'audio/mpeg' })
+    await loadFile(file)
+  } catch (err) {
+    dropZone.innerHTML = `
+      <div class="drop-icon">⚠️</div>
+      <h2>Could not load track</h2>
+      <p style="color:#d94040">${err.message}</p>
+      <p>You can still drop or browse a local file below.</p>
+      <button class="btn-browse" id="btnBrowse2">Browse Files</button>`
+    document.getElementById('btnBrowse2')?.addEventListener('click', () => $('fileInput').click())
+    dropZone.classList.remove('hidden')
+    $('editor').classList.remove('visible')
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI Server status check
+// ─────────────────────────────────────────────────────────────────────────────
+async function checkAiServer() {
+  const banner  = document.getElementById('aiServerBanner')
+  const dot     = document.getElementById('aiServerDot')
+  const msg     = document.getElementById('aiServerMsg')
+  const instr   = document.getElementById('aiServerInstructions')
+  banner.style.display = 'block'
+
+  try {
+    const resp = await fetch('http://localhost:8765/ping', { signal: AbortSignal.timeout(2000) })
+    const data = await resp.json()
+    if (data.status === 'ok') {
+      dot.style.background  = '#7db02a'
+      msg.style.color       = '#7db02a'
+      msg.textContent       = '✓ AI Stem Server connected — AI Split is ready'
+      instr.style.display   = 'none'
+      const btn = document.getElementById('btnAiSplit')
+      if (btn) btn.disabled = false
+      return true
+    }
+  } catch (e) {}
+
+  dot.style.background  = '#d94040'
+  msg.style.color       = '#b09070'
+  msg.textContent       = 'AI Stem Server not running — AI Split unavailable'
+  instr.style.display   = 'block'
+
+  const isMac = navigator.platform.toLowerCase().includes('mac') || navigator.userAgent.includes('Mac')
+  document.getElementById('aiMacInstructions').style.display = isMac ? '' : 'none'
+  document.getElementById('aiWinInstructions').style.display = isMac ? 'none' : ''
+  return false
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// On page load — check URL params and AI server
+// ─────────────────────────────────────────────────────────────────────────────
+;(async function init() {
+  await checkAiServer()
+  setInterval(() => { if (!window._aiSplitInProgress) checkAiServer() }, 15000)
+
+  const params = new URLSearchParams(window.location.search)
+  const srcUrl   = params.get('url')
+  const srcTitle = params.get('title')
+  const srcTok   = params.get('tok')
+  if (srcTok) window._massAccessToken = decodeURIComponent(srcTok)
+
+  if (srcUrl) {
+    window._originalAudioUrl = decodeURIComponent(srcUrl)   // kept for Replicate cloud path
+    await loadFromUrl(window._originalAudioUrl, srcTitle ? decodeURIComponent(srcTitle) : '')
+  }
+})()
+</script>
 
 <script>
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2570,8 +2654,21 @@ function encodeMP3(buffer, kbps) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 let serverConnected = false
+let replicateKey = null
+const REPLICATE_MODEL = 'cjwbw/demucs:25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953'
 const demucsHost = 'localhost' // always local — demucs runs on the user's machine
 setTimeout(checkServerStatus, 800)   // auto-ping on load
+
+document.getElementById('replicateKeySubmit')?.addEventListener('click', () => {
+  const key = document.getElementById('replicateKeyInput').value.trim()
+  if (!key.startsWith('r8_')) { alert('Please enter a valid Replicate API key starting with r8_'); return }
+  replicateKey = key
+  serverConnected = true
+  $('setupBox').style.display = 'none'
+  $('serverDot').className = 's-dot ready'
+  $('serverLabel').textContent = 'Cloud (Replicate) — ready'
+  if (audioBuf) $('btnAiSplit').disabled = false
+})
 
 $('btnPing').addEventListener('click', checkServerStatus)
 $('btnAiSplit').addEventListener('click', runAiSplit)
@@ -2598,24 +2695,9 @@ async function checkServerStatus() {
   $('btnAiSplit').disabled = true
 }
 
-// ── Replicate cloud mode ──────────────────────────────────────────────────────
-let replicateKey = null
-const REPLICATE_MODEL = 'cjwbw/demucs:25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953'
-
-document.getElementById('replicateKeySubmit')?.addEventListener('click', () => {
-  const key = document.getElementById('replicateKeyInput').value.trim()
-  if (!key.startsWith('r8_')) {
-    alert('Please enter a valid Replicate API key starting with r8_')
-    return
-  }
-  replicateKey = key
-  serverConnected = true  // treat cloud as connected
-  $('setupBox').style.display = 'none'
-  $('serverDot').className = 's-dot ready'
-  $('serverLabel').textContent = 'Cloud (Replicate) — ready'
-  if (audioBuf) $('btnAiSplit').disabled = false
-})
-
+// ── Replicate cloud split ─────────────────────────────────────────────────────
+// Standalone has no server proxy — calls Replicate API directly from the browser.
+// Audio is encoded as WAV → base64 data URL (no S3 URL available for local files).
 async function runAiSplitCloud(out) {
   if (!replicateKey) throw new Error('No Replicate API key set')
 
@@ -2632,14 +2714,11 @@ async function runAiSplitCloud(out) {
     method: 'POST',
     headers: { ..._authHeaders, 'X-Replicate-Key': replicateKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ version: REPLICATE_MODEL, input: { audio: audioInput, model: 'htdemucs' } })
-  })
   if (!startResp.ok) {
     const err = await startResp.json().catch(() => ({}))
     throw new Error(`Replicate error: ${err.detail || startResp.status}`)
   }
   const pred = await startResp.json()
-
-  out.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:0.82rem;">🤖 Separating stems in the cloud… (1–3 min)</div>`
 
   // Poll for result
   let result, attempts = 0
@@ -2653,7 +2732,6 @@ async function runAiSplitCloud(out) {
     if (result.status === 'failed') throw new Error(result.error || 'Replicate processing failed')
     out.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:0.82rem;">🤖 Processing… (${attempts * 3}s)</div>`
   }
-
   if (result.status !== 'succeeded') throw new Error('Timed out waiting for Replicate')
 
   // Normalise output — Replicate may return an object {drums,bass,...} or an array of URLs
@@ -2685,6 +2763,7 @@ async function runAiSplitCloud(out) {
   }
 
   for (const [name, url] of entries) {
+    if (!url || typeof url !== 'string') continue
     // Proxy through our server to avoid CSP/CORS issues with Replicate CDN URLs
     const proxyUrl = '/api/audio-proxy?url=' + encodeURIComponent(url)
     const resp = await fetch(proxyUrl)
@@ -2704,6 +2783,7 @@ async function runAiSplitCloud(out) {
     const card = makeStemCard({ label: name, buf: decoded, color: colours[name] || '#8b5cf6', desc: `${name} stem` })
     placeholders[name].replaceWith(card)
   }
+
   $('stemsTransport').style.display = ''
 }
 
@@ -2711,7 +2791,6 @@ async function runAiSplit() {
   if (!audioBuf || !serverConnected) return
   const out = $('stemsOutput')
   $('btnAiSplit').disabled = true
-  window._aiSplitInProgress = true
   out.innerHTML = ''
 
   let elapsed = 0, timerID = null
@@ -2725,6 +2804,8 @@ async function runAiSplit() {
   }
 
   try {
+    window._aiSplitInProgress = true
+
     // Cloud path — if local server isn't running but Replicate key is set
     if (replicateKey && !window._localServerConnected) {
       await runAiSplitCloud(out)
@@ -2817,8 +2898,8 @@ async function runAiSplit() {
     </div>`
     setStatus('AI split failed', 'ready')
   } finally {
-    window._aiSplitInProgress = false
     $('btnAiSplit').disabled = !serverConnected || !audioBuf
+    window._aiSplitInProgress = false
     checkServerStatus()
   }
 }
@@ -3976,99 +4057,6 @@ function setStatus(text, type) {
   $('sText').textContent = text
   const d = $('sDot'); d.className = 's-dot'; if (type) d.classList.add(type)
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Load from URL (called when opened from the streamer with ?url=...&title=...)
-// ─────────────────────────────────────────────────────────────────────────────
-async function loadFromUrl(url, title) {
-  const dropZone = $('dropZone')
-  dropZone.innerHTML = `
-    <div class="drop-icon">⏳</div>
-    <h2>Loading "${title || 'track'}"…</h2>
-    <p>Fetching audio from the archive</p>`
-
-  try {
-    // Route through server proxy to avoid S3/CDN CORS restrictions
-    const proxyUrl = '/api/audio-proxy?url=' + encodeURIComponent(url)
-    const resp = await fetch(proxyUrl)
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-    const blob = await resp.blob()
-    const filename = title ? title + '.mp3' : url.split('/').pop() || 'track.mp3'
-    const file = new File([blob], filename, { type: blob.type || 'audio/mpeg' })
-    await loadFile(file)
-  } catch (err) {
-    dropZone.innerHTML = `
-      <div class="drop-icon">⚠️</div>
-      <h2>Could not load track</h2>
-      <p style="color:#d94040">${err.message}</p>
-      <p>You can still drop or browse a local file below.</p>
-      <button class="btn-browse" id="btnBrowse2">Browse Files</button>`
-    document.getElementById('btnBrowse2')?.addEventListener('click', () => $('fileInput').click())
-    dropZone.classList.remove('hidden')
-    $('editor').classList.remove('visible')
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AI Server status check
-// ─────────────────────────────────────────────────────────────────────────────
-async function checkAiServer() {
-  const banner  = document.getElementById('aiServerBanner')
-  const dot     = document.getElementById('aiServerDot')
-  const msg     = document.getElementById('aiServerMsg')
-  const instr   = document.getElementById('aiServerInstructions')
-  banner.style.display = 'block'
-
-  try {
-    const resp = await fetch('http://localhost:8765/ping', { signal: AbortSignal.timeout(2000) })
-    const data = await resp.json()
-    if (data.status === 'ok') {
-      dot.style.background  = '#7db02a'
-      msg.style.color       = '#7db02a'
-      msg.textContent       = '✓ AI Stem Server connected — AI Split is ready'
-      instr.style.display   = 'none'
-      // Enable the AI split button if it exists
-      const btn = document.getElementById('btnAiSplit')
-      if (btn) btn.disabled = false
-      return true
-    }
-  } catch (e) {}
-
-  dot.style.background  = '#d94040'
-  msg.style.color       = '#b09070'
-  msg.textContent       = 'AI Stem Server not running — AI Split unavailable'
-  instr.style.display   = 'block'
-
-  // Show platform-specific instructions
-  const isMac = navigator.platform.toLowerCase().includes('mac') || navigator.userAgent.includes('Mac')
-  document.getElementById('aiMacInstructions').style.display = isMac ? '' : 'none'
-  document.getElementById('aiWinInstructions').style.display = isMac ? 'none' : ''
-  return false
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// On page load — check URL params and AI server
-// ─────────────────────────────────────────────────────────────────────────────
-;(async function init() {
-  // Check AI server status
-  await checkAiServer()
-  // Re-check every 15 seconds — but skip while a split is actively running
-  // to avoid false "not connected" warnings during the long computation
-  setInterval(() => { if (!window._aiSplitInProgress) checkAiServer() }, 15000)
-
-  // Auto-load from URL params if passed from streamer
-  const params = new URLSearchParams(window.location.search)
-  const srcUrl   = params.get('url')
-  const srcTitle = params.get('title')
-  // Access token passed from streamer — stored for use in authenticated API calls
-  const srcTok = params.get('tok')
-  if (srcTok) window._massAccessToken = decodeURIComponent(srcTok)
-
-  if (srcUrl) {
-    window._originalAudioUrl = decodeURIComponent(srcUrl)   // kept for Replicate cloud path
-    await loadFromUrl(window._originalAudioUrl, srcTitle ? decodeURIComponent(srcTitle) : '')
-  }
-})()
 </script>
 
 </body>
