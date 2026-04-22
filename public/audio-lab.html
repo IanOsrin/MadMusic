@@ -2619,32 +2619,24 @@ document.getElementById('replicateKeySubmit')?.addEventListener('click', () => {
 async function runAiSplitCloud(out) {
   if (!replicateKey) throw new Error('No Replicate API key set')
 
-  // Step 1: Upload raw WAV binary to Replicate's file store (avoids 413 from base64 JSON)
-  // encodeWAV returns a Blob — convert to ArrayBuffer so we can read byteLength and send binary
-  const wavBlob = encodeWAV(audioBuf)
-  const wavBuffer = await wavBlob.arrayBuffer()
-  out.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:0.82rem;">⬆ Uploading audio to Replicate… (${Math.round(wavBuffer.byteLength / 1024 / 1024 * 10) / 10} MB)</div>`
+  // Encode as MP3 at 128kbps — a 3-min song becomes ~3MB vs ~30MB WAV,
+  // small enough to send as a base64 data URL inside JSON (avoids Files API).
+  out.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:0.82rem;">🎵 Encoding audio for upload…</div>`
+  await new Promise(r => setTimeout(r, 0)) // let UI update
+  const mp3Blob = encodeMP3(audioBuf, 128)
+  const dataUrl = await new Promise(res => {
+    const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(mp3Blob)
+  })
+  const mb = Math.round(mp3Blob.size / 1024 / 1024 * 10) / 10
+  out.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:0.82rem;">⬆ Sending ${mb} MB to Replicate…</div>`
 
   const _authHeaders = window._massAccessToken ? { 'X-Access-Token': window._massAccessToken } : {}
-  const uploadResp = await fetch('/api/audio-lab/replicate/upload', {
-    method: 'POST',
-    headers: { ..._authHeaders, 'X-Replicate-Key': replicateKey, 'Content-Type': 'audio/wav' },
-    body: wavBuffer
-  })
-  if (!uploadResp.ok) {
-    const err = await uploadResp.json().catch(() => ({}))
-    throw new Error(`Upload failed: ${err.detail || err.error || uploadResp.status}`)
-  }
-  const { fileUrl } = await uploadResp.json()
-  if (!fileUrl) throw new Error('No file URL returned from upload')
 
-  out.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:0.82rem;">⬆ Upload complete — starting stem separation…</div>`
-
-  // Step 2: Start prediction using the hosted file URL
+  // Start prediction — data URL is small enough to send directly as JSON
   const startResp = await fetch('/api/audio-lab/replicate/predictions', {
     method: 'POST',
     headers: { ..._authHeaders, 'X-Replicate-Key': replicateKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ version: REPLICATE_MODEL, input: { audio: fileUrl, model: 'htdemucs' } })
+    body: JSON.stringify({ version: REPLICATE_MODEL, input: { audio: dataUrl, model: 'htdemucs' } })
   })
   if (!startResp.ok) {
     const err = await startResp.json().catch(() => ({}))
