@@ -45,7 +45,7 @@ if not _in_venv():
 
     # ── Install packages into venv ────────────────────────────────────────────
     pip = str(VENV_DIR / ("Scripts/pip.exe" if sys.platform == "win32" else "bin/pip"))
-    pkgs = ["demucs", "soundfile", "scipy"]
+    pkgs = ["demucs", "soundfile", "scipy", "numpy"]
     for pkg in pkgs:
         try:
             subprocess.check_call([pip, "install", "--quiet", pkg])
@@ -78,7 +78,6 @@ ssl._create_default_https_context = ssl._create_unverified_context
 # ── Stem separation ───────────────────────────────────────────────────────────
 def separate(audio_bytes: bytes) -> dict:
     import soundfile as sf
-    import numpy as np
     from demucs.pretrained import get_model
     from demucs.apply import apply_model
 
@@ -164,17 +163,23 @@ def separate(audio_bytes: bytes) -> dict:
     sources = sources * ref.std() + ref.mean()
 
     # ── Encode each stem as WAV → base64 ─────────────────────────────────────
+    import io as _io
     stems = {}
     for i, stem_name in enumerate(model.sources):
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            tmp_out = f.name
+        stem_tensor = sources[i].cpu()   # shape: (channels, samples)
+        wav_buf = _io.BytesIO()
         try:
-            stem_np = sources[i].cpu().numpy().T   # → (samples, channels)
-            sf.write(tmp_out, stem_np, model.samplerate, subtype="PCM_16")
-            with open(tmp_out, "rb") as f:
-                stems[stem_name] = base64.b64encode(f.read()).decode()
-        finally:
-            os.unlink(tmp_out)
+            # torchaudio is always present (demucs dependency) — no numpy needed
+            import torchaudio
+            torchaudio.save(wav_buf, stem_tensor, model.samplerate,
+                            format="wav", bits_per_sample=16)
+        except Exception:
+            # Fallback: soundfile via numpy if torchaudio save fails
+            import numpy as np
+            sf.write(wav_buf, stem_tensor.numpy().T, model.samplerate,
+                     format="WAV", subtype="PCM_16")
+        wav_buf.seek(0)
+        stems[stem_name] = base64.b64encode(wav_buf.read()).decode()
         print(f"  ✓ {stem_name}")
 
     return stems
