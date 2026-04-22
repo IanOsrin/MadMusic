@@ -147,6 +147,9 @@ app.use((req, res, next) => {
 // Capture raw body for Paystack webhook (must be before express.json)
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 
+// Capture raw binary for Replicate file upload (must be before express.json)
+app.use('/api/audio-lab/replicate/upload', express.raw({ type: '*/*', limit: '150mb' }));
+
 app.use(express.json({ limit: '20mb' }));
 
 
@@ -216,7 +219,8 @@ app.use('/api/', async (req, res, next) => {
     '/download/',
     '/ringtone/',
     '/audio-proxy',
-    '/audio-lab/replicate'
+    '/audio-lab/replicate',
+    '/audio-lab/validate-key'
   ];
 
   if (skipPaths.some(path => req.path === path || req.path.startsWith(path))) {
@@ -413,6 +417,38 @@ app.get('/api/audio-proxy', async (req, res) => {
 // The browser passes its Replicate API key in X-Replicate-Key header.
 // We forward to Replicate so the browser never hits api.replicate.com directly
 // (avoids CSP / CORS issues). No key is stored on this server.
+
+// Step 1: Upload raw WAV binary to Replicate's file store, return a hosted URL.
+// Using Replicate Files API avoids sending a huge base64 data URL in JSON.
+app.post('/api/audio-lab/replicate/upload', async (req, res) => {
+  const replicateKey = req.headers['x-replicate-key'] || process.env.REPLICATE_API_KEY;
+  if (!replicateKey) return res.status(400).json({ error: 'No Replicate API key provided' });
+  if (!req.body || !req.body.length) return res.status(400).json({ error: 'No audio data received' });
+
+  try {
+    const upstream = await fetch('https://api.replicate.com/v1/files', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${replicateKey}`,
+        'Content-Type': 'audio/wav',
+        'Content-Disposition': 'attachment; filename="audio.wav"'
+      },
+      body: req.body
+    });
+    const data = await upstream.json();
+    if (!upstream.ok) {
+      console.error('[Replicate] File upload failed:', data);
+      return res.status(upstream.status).json(data);
+    }
+    // Returns { id, url, ... } — the url is what we pass to the prediction
+    res.json({ ok: true, fileUrl: data.urls?.get || data.url });
+  } catch (err) {
+    console.error('[Replicate] Upload error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Step 2: Start a prediction using the hosted file URL (no base64 bloat).
 app.post('/api/audio-lab/replicate/predictions', async (req, res) => {
   const replicateKey = req.headers['x-replicate-key'] || process.env.REPLICATE_API_KEY;
   if (!replicateKey) return res.status(400).json({ error: 'No Replicate API key provided' });
@@ -434,6 +470,7 @@ app.post('/api/audio-lab/replicate/predictions', async (req, res) => {
   }
 });
 
+// Step 3: Poll prediction status.
 app.get('/api/audio-lab/replicate/predictions/:id', async (req, res) => {
   const replicateKey = req.headers['x-replicate-key'] || process.env.REPLICATE_API_KEY;
   if (!replicateKey) return res.status(400).json({ error: 'No Replicate API key provided' });
