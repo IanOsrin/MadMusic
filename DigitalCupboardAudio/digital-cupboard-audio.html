@@ -3064,6 +3064,9 @@ function makeStemCard({ label, buf, color, desc }) {
     card.classList.toggle('collapsed')
   })
 
+  // ── isStereo must be known before the mixer strip HTML is built ──────────
+  const isStereo = buf.numberOfChannels >= 2
+
   // ── Mixer strip ───────────────────────────────────────────────────────────
   const mixerStrip = document.createElement('div')
   mixerStrip.className = 'stem-mixer-strip'
@@ -3117,7 +3120,6 @@ function makeStemCard({ label, buf, color, desc }) {
   // ── Phase / polarity nodes ─────────────────────────────────────────────────
   // Chain: src → splitter → phaseGainL/R → merger → gainNode
   // For mono buffers we fall back to a simple inverting gain on gainNode.
-  const isStereo = buf.numberOfChannels >= 2
   let phaseInput   // what src connects to
   let phaseGainL, phaseGainR
 
