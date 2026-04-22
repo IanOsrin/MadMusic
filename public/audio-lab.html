@@ -2619,24 +2619,19 @@ document.getElementById('replicateKeySubmit')?.addEventListener('click', () => {
 async function runAiSplitCloud(out) {
   if (!replicateKey) throw new Error('No Replicate API key set')
 
-  // Encode as MP3 at 128kbps — a 3-min song becomes ~3MB vs ~30MB WAV,
-  // small enough to send as a base64 data URL inside JSON (avoids Files API).
-  out.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:0.82rem;">🎵 Encoding audio for upload…</div>`
-  await new Promise(r => setTimeout(r, 0)) // let UI update
-  const mp3Blob = encodeMP3(audioBuf, 128)
-  const dataUrl = await new Promise(res => {
-    const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(mp3Blob)
-  })
-  const mb = Math.round(mp3Blob.size / 1024 / 1024 * 10) / 10
-  out.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:0.82rem;">⬆ Sending ${mb} MB to Replicate…</div>`
+  // Pass the original audio URL directly to Replicate — it fetches the MP3 from S3 itself,
+  // no encoding or upload needed on our side.
+  const audioInput = window._originalAudioUrl
+  if (!audioInput) throw new Error('No audio URL available — try reloading the track')
+
+  out.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:0.82rem;">☁️ Sending to Replicate…</div>`
 
   const _authHeaders = window._massAccessToken ? { 'X-Access-Token': window._massAccessToken } : {}
 
-  // Start prediction — data URL is small enough to send directly as JSON
   const startResp = await fetch('/api/audio-lab/replicate/predictions', {
     method: 'POST',
     headers: { ..._authHeaders, 'X-Replicate-Key': replicateKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ version: REPLICATE_MODEL, input: { audio: dataUrl, model: 'htdemucs' } })
+    body: JSON.stringify({ version: REPLICATE_MODEL, input: { audio: audioInput, model: 'htdemucs' } })
   })
   if (!startResp.ok) {
     const err = await startResp.json().catch(() => ({}))
@@ -4036,7 +4031,8 @@ async function checkAiServer() {
   if (srcTok) window._massAccessToken = decodeURIComponent(srcTok)
 
   if (srcUrl) {
-    await loadFromUrl(decodeURIComponent(srcUrl), srcTitle ? decodeURIComponent(srcTitle) : '')
+    window._originalAudioUrl = decodeURIComponent(srcUrl)   // kept for Replicate cloud path
+    await loadFromUrl(window._originalAudioUrl, srcTitle ? decodeURIComponent(srcTitle) : '')
   }
 })()
 </script>
