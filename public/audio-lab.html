@@ -2672,9 +2672,19 @@ async function runAiSplitCloud(out) {
 
   out.innerHTML = ''
   const colours = { drums:'#e94560', bass:'#2a6ee9', vocals:'#a855f7', other:'#C9A227' }
-  for (const [name, url] of Object.entries(stems)) {
-    if (!url || typeof url !== 'string') continue
-    out.innerHTML += `<div style="padding:8px;color:var(--muted);font-size:0.8rem;">⬇ Loading ${name}…</div>`
+  const entries = Object.entries(stems).filter(([, url]) => url && typeof url === 'string')
+
+  // Pre-insert placeholder divs so we can replace them without innerHTML += destroying siblings
+  const placeholders = {}
+  for (const [name] of entries) {
+    const ph = document.createElement('div')
+    ph.style.cssText = 'padding:8px;color:var(--muted);font-size:0.8rem;'
+    ph.textContent = `⬇ Loading ${name}…`
+    out.appendChild(ph)
+    placeholders[name] = ph
+  }
+
+  for (const [name, url] of entries) {
     // Proxy through our server to avoid CSP/CORS issues with Replicate CDN URLs
     const proxyUrl = '/api/audio-proxy?url=' + encodeURIComponent(url)
     const resp = await fetch(proxyUrl)
@@ -2692,7 +2702,7 @@ async function runAiSplitCloud(out) {
       throw new Error(`Could not decode ${name} stem (${ct}, ${ab.byteLength} bytes): ${e.message}`)
     }
     const card = makeStemCard({ label: name, buf: decoded, color: colours[name] || '#8b5cf6', desc: `${name} stem` })
-    out.lastChild.replaceWith(card)
+    placeholders[name].replaceWith(card)
   }
   $('stemsTransport').style.display = ''
 }
