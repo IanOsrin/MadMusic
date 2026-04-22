@@ -2623,9 +2623,10 @@ async function runAiSplitCloud(out) {
   const wavBuffer = encodeWAV(audioBuf)
   out.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:0.82rem;">⬆ Uploading audio to Replicate… (${Math.round(wavBuffer.byteLength / 1024 / 1024 * 10) / 10} MB)</div>`
 
+  const _authHeaders = window._massAccessToken ? { 'X-Access-Token': window._massAccessToken } : {}
   const uploadResp = await fetch('/api/audio-lab/replicate/upload', {
     method: 'POST',
-    headers: { 'X-Replicate-Key': replicateKey, 'Content-Type': 'audio/wav' },
+    headers: { ..._authHeaders, 'X-Replicate-Key': replicateKey, 'Content-Type': 'audio/wav' },
     body: wavBuffer
   })
   if (!uploadResp.ok) {
@@ -2640,7 +2641,7 @@ async function runAiSplitCloud(out) {
   // Step 2: Start prediction using the hosted file URL
   const startResp = await fetch('/api/audio-lab/replicate/predictions', {
     method: 'POST',
-    headers: { 'X-Replicate-Key': replicateKey, 'Content-Type': 'application/json' },
+    headers: { ..._authHeaders, 'X-Replicate-Key': replicateKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ version: REPLICATE_MODEL, input: { audio: fileUrl, model: 'htdemucs' } })
   })
   if (!startResp.ok) {
@@ -2656,7 +2657,7 @@ async function runAiSplitCloud(out) {
   while (attempts++ < 180) {
     await new Promise(r => setTimeout(r, 3000))
     const pollResp = await fetch(`/api/audio-lab/replicate/predictions/${pred.id}`, {
-      headers: { 'X-Replicate-Key': replicateKey }
+      headers: { ..._authHeaders, 'X-Replicate-Key': replicateKey }
     })
     result = await pollResp.json()
     if (result.status === 'succeeded') break
@@ -4034,8 +4035,12 @@ async function checkAiServer() {
 
   // Auto-load from URL params if passed from streamer
   const params = new URLSearchParams(window.location.search)
-  const srcUrl  = params.get('url')
+  const srcUrl   = params.get('url')
   const srcTitle = params.get('title')
+  // Access token passed from streamer — stored for use in authenticated API calls
+  const srcTok = params.get('tok')
+  if (srcTok) window._massAccessToken = decodeURIComponent(srcTok)
+
   if (srcUrl) {
     await loadFromUrl(decodeURIComponent(srcUrl), srcTitle ? decodeURIComponent(srcTitle) : '')
   }

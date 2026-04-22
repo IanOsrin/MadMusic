@@ -5061,7 +5061,8 @@
 
   // Direct open — no gating needed at click time, button only exists when active
   window.openAudioLabGated = function (audioUrl, trackName) {
-    window.open(`/audio-lab?url=${encodeURIComponent(audioUrl)}&title=${trackName}`, '_blank');
+    const tok = localStorage.getItem('mass_access_token') || '';
+    window.open(`/audio-lab?url=${encodeURIComponent(audioUrl)}&title=${trackName}&tok=${encodeURIComponent(tok)}`, '_blank');
   };
 
   // On login, pick up flag from the FM account and auto-activate
