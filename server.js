@@ -392,20 +392,20 @@ app.get('/api/audio-proxy', async (req, res) => {
     const target = new URL(url); // throws if invalid
     // Only allow https: scheme to prevent SSRF against internal services
     if (target.protocol !== 'https:') return res.status(400).json({ error: 'Only https URLs allowed' });
-    const upstream = await fetch(url);
+    const upstream = await fetch(url, { signal: AbortSignal.timeout(30_000) });
     if (!upstream.ok) return res.status(upstream.status).json({ error: `Upstream ${upstream.status}` });
     const ct = upstream.headers.get('content-type') || 'audio/mpeg';
     const cl = upstream.headers.get('content-length');
     res.setHeader('Content-Type', ct);
     res.setHeader('Cache-Control', 'private, max-age=3600');
     if (cl) res.setHeader('Content-Length', cl);
-    upstream.body.pipeTo(new WritableStream({
-      write(chunk) { res.write(chunk); },
-      close() { res.end(); },
-      abort(err) { res.destroy(err); }
-    }));
+    // Buffer the body — MP3s are typically 3–15 MB, well within safe limits.
+    // Avoids WritableStream availability issues across Node.js versions.
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.end(buf);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+    else res.destroy();
   }
 });
 

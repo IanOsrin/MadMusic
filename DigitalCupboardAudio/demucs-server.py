@@ -163,22 +163,33 @@ def separate(audio_bytes: bytes) -> dict:
     sources = sources * ref.std() + ref.mean()
 
     # ── Encode each stem as WAV → base64 ─────────────────────────────────────
-    import io as _io
+    # Pure stdlib + PyTorch — no numpy or soundfile needed here.
+    import io as _io, wave as _wave, struct as _struct
+
+    def _tensor_to_wav(tensor, sr):
+        """Convert (channels, samples) float32 tensor → WAV bytes. No numpy."""
+        if tensor.dim() == 1:
+            tensor = tensor.unsqueeze(0)
+        channels, samples = tensor.shape
+        t16 = (tensor.clamp(-1.0, 1.0) * 32767).to(torch.int16)
+        # Interleave channels: (channels, samples) → (samples, channels) → flat
+        interleaved = t16.T.contiguous().reshape(-1)
+        try:
+            pcm = interleaved.tobytes()          # PyTorch >= 1.10
+        except AttributeError:
+            pcm = _struct.pack(f'<{interleaved.numel()}h', *interleaved.tolist())
+        buf = _io.BytesIO()
+        with _wave.open(buf, 'wb') as wf:
+            wf.setnchannels(channels)
+            wf.setsampwidth(2)   # 16-bit
+            wf.setframerate(sr)
+            wf.writeframes(pcm)
+        buf.seek(0)
+        return buf
+
     stems = {}
     for i, stem_name in enumerate(model.sources):
-        stem_tensor = sources[i].cpu()   # shape: (channels, samples)
-        wav_buf = _io.BytesIO()
-        try:
-            # torchaudio is always present (demucs dependency) — no numpy needed
-            import torchaudio
-            torchaudio.save(wav_buf, stem_tensor, model.samplerate,
-                            format="wav", bits_per_sample=16)
-        except Exception:
-            # Fallback: soundfile via numpy if torchaudio save fails
-            import numpy as np
-            sf.write(wav_buf, stem_tensor.numpy().T, model.samplerate,
-                     format="WAV", subtype="PCM_16")
-        wav_buf.seek(0)
+        wav_buf = _tensor_to_wav(sources[i].cpu(), model.samplerate)
         stems[stem_name] = base64.b64encode(wav_buf.read()).decode()
         print(f"  ✓ {stem_name}")
 

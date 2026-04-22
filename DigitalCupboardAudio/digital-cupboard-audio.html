@@ -65,31 +65,71 @@
     .main { padding: 20px 24px; flex: 1; display: flex; flex-direction: column; gap: 16px; max-width: 1400px; width: 100%; margin: 0 auto; }
 
     .drop-zone {
-      border: 2px dashed rgba(196,125,42,0.5);
+      border: 2px dashed rgba(196,125,42,0.35);
       border-radius: 14px;
-      padding: 60px 40px;
+      padding: 48px 40px 52px;
       text-align: center;
-      cursor: pointer;
       transition: all 0.25s;
       background: linear-gradient(180deg, var(--bg-lift) 0%, var(--bg-card) 100%);
       box-shadow: inset 0 1px 0 rgba(240,168,50,0.05);
     }
-    .drop-zone:hover, .drop-zone.over { border-color: var(--green); background: linear-gradient(180deg, rgba(125,176,42,0.08) 0%, rgba(125,176,42,0.04) 100%); }
+    .drop-zone.over { border-color: var(--green); background: linear-gradient(180deg, rgba(125,176,42,0.08) 0%, rgba(125,176,42,0.04) 100%); }
     .drop-zone.hidden { display: none; }
-    .drop-icon { font-size: 3.5rem; margin-bottom: 16px; filter: drop-shadow(0 0 12px rgba(240,168,50,0.4)); }
-    .drop-zone h2 { font-size: 1.25rem; color: var(--white); margin-bottom: 8px; font-weight: 600; }
-    .drop-zone p { color: var(--muted); font-size: 0.88rem; margin-bottom: 22px; }
-    .btn-browse { background: linear-gradient(135deg, #c47d2a, #9a5e12); color: var(--white); border: none; padding: 11px 30px; border-radius: 8px; cursor: pointer; font-size: 0.88rem; font-weight: 600; transition: opacity 0.2s; box-shadow: 0 2px 8px rgba(150,80,15,0.4); }
+    .drop-zone-title { font-size: 1.3rem; font-weight: 700; color: var(--white); margin-bottom: 6px; letter-spacing: 0.3px; }
+    .drop-zone-sub   { font-size: 0.82rem; color: var(--muted); margin-bottom: 36px; }
+    .drop-zone-cards { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+    .dz-card {
+      flex: 0 1 240px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 30px 24px 26px;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .dz-card:hover { border-color: rgba(196,125,42,0.6); background: var(--bg-lift); }
+    .dz-card-icon { font-size: 2.6rem; line-height: 1; filter: drop-shadow(0 0 10px rgba(240,168,50,0.35)); }
+    .dz-card-label { font-size: 1rem; font-weight: 700; color: var(--white); }
+    .dz-card-hint  { font-size: 0.74rem; color: var(--muted); text-align: center; line-height: 1.5; min-height: 2.4em; }
+    .btn-browse {
+      background: linear-gradient(135deg, #c47d2a, #9a5e12);
+      color: var(--white); border: none; padding: 10px 28px;
+      border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+      transition: opacity 0.2s; box-shadow: 0 2px 8px rgba(150,80,15,0.4); margin-top: 4px;
+    }
     .btn-browse:hover { opacity: 0.85; }
+    .btn-browse-proj {
+      background: transparent; color: var(--blue);
+      border: 1px solid var(--blue); padding: 10px 28px;
+      border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+      transition: all 0.2s; margin-top: 4px;
+    }
+    .btn-browse-proj:hover { background: var(--blue); color: #fff; }
+    .drop-zone-drag-hint { font-size: 0.72rem; color: var(--muted); margin-top: 28px; opacity: 0.7; }
 
     .editor { display: none; flex-direction: column; gap: 14px; }
     .editor.visible { display: flex; }
+
+    /* Accordion section headers */
+    .acc-header { display: flex; align-items: center; gap: 10px; padding: 7px 16px; background: var(--bg-lift); border: 1px solid var(--border); border-top: 1px solid rgba(196,125,42,0.25); border-radius: 10px; cursor: pointer; user-select: none; transition: background 0.15s; }
+    .acc-header:hover { background: rgba(196,125,42,0.07); }
+    .acc-title { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.8px; color: var(--white); flex: 1; }
+    .acc-chevron { font-size: 0.65rem; color: var(--muted); transition: transform 0.2s; }
+    .acc-header.collapsed .acc-chevron { transform: rotate(-90deg); }
+    .acc-body { display: flex; flex-direction: column; gap: 14px; }
+    .acc-body.hidden { display: none; }
+    .acc-meta { font-size: 0.68rem; color: var(--muted); }
 
     .file-bar { background: linear-gradient(180deg, var(--bg-lift) 0%, var(--bg-card) 100%); border: 1px solid var(--border); border-top: 1px solid rgba(196,125,42,0.2); border-radius: 10px; padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
     .file-bar .fname { color: var(--gold); font-weight: 600; font-size: 0.93rem; }
     .file-bar .fmeta { color: var(--muted); font-size: 0.78rem; margin-left: 12px; font-family: 'JetBrains Mono', monospace; }
     .btn-new { background: transparent; color: var(--blue); border: 1px solid var(--blue); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; transition: all 0.2s; }
     .btn-new:hover { background: var(--blue); color: var(--white); }
+    .btn-save-proj { background: rgba(125,176,42,0.1); color: var(--green); border: 1px solid var(--green); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; transition: all 0.2s; }
+    .btn-save-proj:hover:not(:disabled) { background: var(--green); color: #fff; }
+    .btn-save-proj:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-load-proj { background: transparent; color: var(--muted); border: 1px solid var(--muted); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; transition: all 0.2s; }
+    .btn-load-proj:hover { border-color: var(--white); color: var(--white); }
 
     .wave-panel { background: var(--bg-card); border: 1px solid var(--border); border-top: 1px solid rgba(196,125,42,0.25); border-radius: 14px; padding: 16px 20px; box-shadow: inset 0 1px 0 rgba(240,168,50,0.06); }
     .wave-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
@@ -155,6 +195,9 @@
     .btn-t-undo  { background: rgba(100,100,120,0.12); color: var(--muted); border: 1px solid rgba(100,100,120,0.4); font-size: 0.62rem; letter-spacing: 0.5px; width: auto; padding: 0 8px; }
     .btn-t-undo:hover:not(:disabled) { background: rgba(100,100,120,0.35); color: var(--white); }
     .btn-t-undo:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn-t-autotrim { background: rgba(196,125,42,0.1); color: var(--blue); border: 1px solid rgba(196,125,42,0.4); font-size: 0.62rem; letter-spacing: 0.5px; width: auto; padding: 0 8px; }
+    .btn-t-autotrim:hover:not(:disabled) { background: var(--blue); color: var(--white); }
+    .btn-t-autotrim:disabled { opacity: 0.3; cursor: not-allowed; }
 
     .status-bar { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 18px; display: flex; gap: 28px; align-items: center; flex-wrap: wrap; font-family: 'JetBrains Mono', monospace; }
     .s-item { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; }
@@ -262,22 +305,24 @@
     .stems-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; flex-wrap: wrap; gap: 6px; }
     .stems-title { font-size: 0.65rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
     .stem-disclaimer { font-size: 0.72rem; color: var(--muted); font-style: italic; }
-    .stems-output { display: flex; flex-direction: column; gap: 10px; }
+    .stems-output { display: flex; flex-direction: column; gap: 6px; }
+    .stem-acc-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 5px; cursor: pointer; font-size: 0.75rem; padding: 2px 8px; transition: color 0.15s, border-color 0.15s, transform 0.2s; }
+    .stem-acc-btn:hover { color: var(--gold); border-color: var(--gold); }
+    .stem-acc-btn.collapsed { transform: rotate(-90deg); }
+    .stems-body.hidden { display: none !important; }
     .stem-progress-wrap { padding: 12px 0; }
     .stem-prog-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
     .stem-prog-fill { height: 100%; background: linear-gradient(90deg, #8b5cf6, #c47d2a); border-radius: 3px; transition: width 0.3s; }
     .stem-prog-label { font-size: 0.8rem; color: var(--muted); font-style: italic; }
     .stem-card { background: rgba(180,100,20,0.04); border: 1px solid var(--border); border-top: 1px solid rgba(196,125,42,0.12); border-radius: 10px; overflow: hidden; transition: box-shadow 0.15s; }
-    .stem-card-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; gap: 12px; flex-wrap: wrap; cursor: pointer; user-select: none; }
-    .stem-card-head:hover { background: rgba(196,125,42,0.04); }
-    .stem-card-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
-    .stem-card-name { font-size: 0.85rem; font-weight: 700; letter-spacing: 0.5px; }
-    .stem-card-desc { font-size: 0.68rem; color: var(--muted); }
-    .stem-card-btns { display: flex; gap: 6px; }
+    .stem-card-head { display: flex; align-items: center; gap: 6px; padding: 3px 10px; flex-wrap: nowrap; cursor: default; user-select: none; border-bottom: 1px solid var(--border); }
+    .stem-card-head:hover { background: rgba(196,125,42,0.03); }
+    .stem-card-name { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.4px; white-space: nowrap; }
+    .stem-card-sep  { color: var(--border); font-size: 0.7rem; flex-shrink: 0; }
+    .stem-card-btns { display: flex; gap: 4px; flex-shrink: 0; }
     .stem-collapse-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; border-radius: 3px; transition: color 0.15s, transform 0.2s; line-height: 1; flex-shrink: 0; }
     .stem-collapse-btn:hover { color: var(--gold); }
     .stem-card.collapsed .stem-collapse-btn { transform: rotate(-90deg); }
-    .stem-card.collapsed .stem-mixer-strip,
     .stem-card.collapsed .stem-canvas,
     .stem-card.collapsed .stem-region-bar,
     .stem-card.collapsed .stem-zoom-bar { display: none !important; }
@@ -297,7 +342,7 @@
     .setup-box code { background: rgba(196,125,42,0.12); padding: 1px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; color: var(--gold); font-size: 0.8rem; }
 
     /* Stem region bar */
-    .stem-region-bar { display: none; align-items: center; justify-content: space-between; padding: 6px 14px; background: rgba(251,191,36,0.07); border-top: 1px solid rgba(251,191,36,0.25); flex-wrap: wrap; gap: 8px; }
+    .stem-region-bar { display: none; align-items: center; justify-content: space-between; padding: 3px 14px; background: rgba(251,191,36,0.07); border-top: 1px solid rgba(251,191,36,0.25); flex-wrap: wrap; gap: 6px; }
     .stem-region-bar.visible { display: flex; }
     .stem-r-time { font-family: monospace; font-size: 0.76rem; color: #fbbf24; }
     .stem-region-actions { display: flex; gap: 6px; }
@@ -309,13 +354,31 @@
     .stem-btn-dl-region:hover { background: var(--blue); color: #fff; }
     .stem-btn-clear-region { background: var(--red-dim); color: var(--red); border: 1px solid var(--red); }
     .stem-btn-clear-region:hover { background: var(--red); color: #fff; }
-    .stem-zoom-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 3px 14px 5px; border-top: 1px solid var(--border); }
+    .stem-zoom-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 2px 14px 3px; border-top: 1px solid var(--border); }
     .stem-zoom-label { font-size: 0.62rem; color: var(--muted); letter-spacing: 0.5px; }
     .stem-zoom-val { font-size: 0.62rem; color: var(--blue); font-family: monospace; min-width: 36px; text-align: right; }
     .stem-zoom-hint { font-size: 0.6rem; color: var(--muted); font-style: italic; }
 
+    /* Stem FX bar */
+    .stem-fx-bar { display: none; }
+    .stem-fx-section { display: flex; align-items: center; gap: 6px; }
+    .stem-fx-tag { font-size: 0.58rem; font-weight: 800; letter-spacing: 1px; color: var(--muted); min-width: 26px; }
+    .stem-fx-tag.rvb { color: #a78bfa; }
+    .stem-fx-tag.dly { color: #34d399; }
+    .stem-fx-sub { font-size: 0.55rem; color: var(--muted); letter-spacing: 0.5px; white-space: nowrap; }
+    .stem-fx-sl { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; background: var(--border); outline: none; cursor: pointer; }
+    .stem-fx-sl.rv { width: 56px; }
+    .stem-fx-sl.dl { width: 48px; }
+    .stem-fx-sl.rv::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 11px; border-radius: 50%; background: #a78bfa; cursor: pointer; box-shadow: 0 0 4px rgba(167,139,250,0.6); }
+    .stem-fx-sl.dl::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 11px; border-radius: 50%; background: #34d399; cursor: pointer; box-shadow: 0 0 4px rgba(52,211,153,0.6); }
+    .stem-fx-sl.rv::-moz-range-thumb { width: 11px; height: 11px; border-radius: 50%; background: #a78bfa; cursor: pointer; border: none; }
+    .stem-fx-sl.dl::-moz-range-thumb { width: 11px; height: 11px; border-radius: 50%; background: #34d399; cursor: pointer; border: none; }
+    .stem-fx-val { font-size: 0.58rem; font-family: monospace; color: var(--muted); min-width: 24px; text-align: right; }
+    .stem-fx-sep { width: 1px; height: 14px; background: var(--border); flex-shrink: 0; margin: 0 2px; }
+    /* stem-fx-bar is permanently hidden — controls live in head row now */
+
     /* Stem mixer strip */
-    .stem-mixer-strip { display: flex; align-items: center; gap: 10px; padding: 6px 14px; background: rgba(255,255,255,0.015); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .stem-mixer-strip { display: none; }
     .stem-vol-label { font-size: 0.62rem; color: var(--muted); letter-spacing: 0.5px; white-space: nowrap; }
     .stem-vol-sl { flex: 1; min-width: 60px; max-width: 140px; -webkit-appearance: none; height: 4px; border-radius: 2px; background: var(--border); outline: none; cursor: pointer; }
     .stem-vol-sl::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--green); cursor: pointer; }
@@ -326,13 +389,14 @@
     .btn-solo { padding: 3px 9px; font-size: 0.7rem; font-weight: 700; border-radius: 4px; border: 1px solid var(--muted); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px; }
     .btn-solo:hover { border-color: #f59e0b; color: #f59e0b; }
     .btn-solo.on { background: #f59e0b; border-color: #f59e0b; color: #000; }
-    .btn-phase { padding: 3px 9px; font-size: 0.7rem; font-weight: 700; border-radius: 4px; border: 1px solid var(--muted); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px; }
-    .btn-phase:hover { border-color: #06b6d4; color: #06b6d4; }
-    .btn-phase.on { background: #06b6d4; border-color: #06b6d4; color: #000; }
-    .btn-phase-r { padding: 3px 9px; font-size: 0.7rem; font-weight: 700; border-radius: 4px; border: 1px solid var(--muted); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px; }
-    .btn-phase-r:hover:not(:disabled) { border-color: #818cf8; color: #818cf8; }
-    .btn-phase-r.on { background: #818cf8; border-color: #818cf8; color: #000; }
-    .btn-phase-r:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn-phase   { padding: 3px 9px; font-size: 0.72rem; font-weight: 800; border-radius: 4px; border: 1px solid rgba(6,182,212,0.55); background: rgba(6,182,212,0.10); color: #06b6d4; cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px; }
+    .btn-phase:hover  { background: rgba(6,182,212,0.22); border-color: #06b6d4; }
+    .btn-phase.on     { background: #06b6d4; border-color: #06b6d4; color: #000; }
+    .btn-phase-r { padding: 3px 9px; font-size: 0.72rem; font-weight: 800; border-radius: 4px; border: 1px solid rgba(129,140,248,0.55); background: rgba(129,140,248,0.10); color: #818cf8; cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px; }
+    .btn-phase-r:hover:not(:disabled) { background: rgba(129,140,248,0.22); border-color: #818cf8; }
+    .btn-phase-r.on   { background: #818cf8; border-color: #818cf8; color: #000; }
+    .btn-phase-r:disabled { opacity: 0.25; cursor: not-allowed; }
+    .phase-sep { width: 1px; height: 18px; background: var(--border); flex-shrink: 0; }
 
     /* Stems transport */
     .stems-transport { display: none; flex-direction: column; gap: 10px; padding: 12px 0 4px; }
@@ -351,6 +415,47 @@
     .btn-export-mix { background: rgba(96,165,250,0.12); color: #60a5fa; border: 1px solid #60a5fa; padding: 9px 18px; border-radius: 8px; cursor: pointer; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.5px; transition: all 0.2s; }
     .btn-export-mix:hover:not(:disabled) { background: rgba(96,165,250,0.25); }
     .btn-export-mix:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* ── Arrangement lane ── */
+    .arrangement-panel { background: var(--bg-card); border: 1px solid var(--border); border-top: 1px solid rgba(196,125,42,0.2); border-radius: 10px; overflow: hidden; }
+    .arrangement-header { display: flex; align-items: center; justify-content: space-between; padding: 9px 16px; background: var(--bg-lift); border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 8px; }
+    .arrangement-title { font-size: 0.82rem; font-weight: 700; color: var(--white); letter-spacing: 0.5px; }
+    .arrangement-controls { display: flex; gap: 8px; align-items: center; }
+    .btn-arr { padding: 5px 13px; font-size: 0.75rem; font-weight: 600; border-radius: 5px; cursor: pointer; transition: all 0.15s; }
+    .btn-arr-play  { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+    .btn-arr-play:hover  { background: var(--green); color: #fff; }
+    .btn-arr-stop  { background: var(--red-dim); color: var(--red); border: 1px solid var(--red); }
+    .btn-arr-stop:hover  { background: var(--red); color: #fff; }
+    .btn-arr-export { background: var(--blue-dim); color: var(--blue); border: 1px solid var(--blue); }
+    .btn-arr-export:hover { background: var(--blue); color: #fff; }
+    .btn-arr-clear  { background: transparent; color: var(--muted); border: 1px solid var(--muted); }
+    .btn-arr-clear:hover  { border-color: var(--red); color: var(--red); }
+    .btn-arr-rtz { background: transparent; color: var(--muted); border: 1px solid var(--muted); padding: 5px 9px; }
+    .btn-arr-rtz:hover { border-color: var(--blue); color: var(--blue); }
+    .arr-phrase-count { font-size: 0.72rem; color: var(--muted); }
+    .arr-head-display { font-size: 0.72rem; font-family: monospace; color: var(--gold); min-width: 48px; text-align: right; }
+    .arrangement-scroll { overflow-x: auto; overflow-y: hidden; padding: 10px 16px 14px; }
+    .arrangement-inner { position: relative; min-height: 96px; }
+    .arr-ruler { height: 18px; position: relative; margin-bottom: 6px; }
+    .arr-ruler-mark { position: absolute; top: 0; font-size: 0.58rem; color: var(--muted); font-family: monospace; white-space: nowrap; }
+    .arr-ruler-mark::before { content: ''; position: absolute; top: 12px; left: 0; width: 1px; height: 4px; background: var(--muted); }
+    .arr-track { position: relative; height: 64px; background: rgba(255,255,255,0.015); border: 1px solid var(--border); border-radius: 6px; }
+    .arr-cursor { position: absolute; top: -22px; bottom: 0; width: 2px; background: var(--gold); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 0.1s; }
+    .arr-cursor.visible { opacity: 1; }
+    .phrase-block { position: absolute; top: 4px; height: calc(100% - 8px); border-radius: 4px; user-select: none; display: flex; flex-direction: row; align-items: stretch; overflow: hidden; border: 1px solid rgba(255,255,255,0.18); box-sizing: border-box; min-width: 44px; cursor: default; }
+    .phrase-block:hover { filter: brightness(1.12); }
+    .phrase-block.moving { opacity: 0.85; box-shadow: 0 4px 18px rgba(0,0,0,0.55); z-index: 10; }
+    .phrase-handle { width: 8px; flex-shrink: 0; background: rgba(0,0,0,0.28); cursor: ew-resize; display: flex; align-items: center; justify-content: center; transition: background 0.1s; }
+    .phrase-handle:hover { background: rgba(255,255,255,0.22); }
+    .phrase-handle::after { content: '⋮'; font-size: 0.55rem; color: rgba(255,255,255,0.55); line-height: 1; }
+    .phrase-content { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 5px; overflow: hidden; cursor: grab; min-width: 0; }
+    .phrase-content.grabbing { cursor: grabbing; }
+    .phrase-copy-btn { width: 16px; flex-shrink: 0; background: rgba(0,0,0,0.22); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: rgba(255,255,255,0.6); border-left: 1px solid rgba(255,255,255,0.12); transition: background 0.1s; }
+    .phrase-copy-btn:hover { background: rgba(255,255,255,0.18); color: #fff; }
+    .phrase-del-btn  { width: 16px; flex-shrink: 0; background: rgba(0,0,0,0.22); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; color: rgba(255,100,100,0.7); border-left: 1px solid rgba(255,255,255,0.08); transition: background 0.1s; }
+    .phrase-del-btn:hover { background: rgba(217,64,64,0.45); color: #fff; }
+    .phrase-name { font-size: 0.68rem; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .phrase-dur  { font-size: 0.58rem; color: rgba(255,255,255,0.65); white-space: nowrap; }
     .stems-transport-hint { font-size: 0.72rem; color: var(--muted); font-style: italic; }
     .bpm-display { display: flex; align-items: center; gap: 6px; margin-left: auto; }
     .bpm-label { font-size: 0.68rem; color: var(--muted); letter-spacing: 1px; }
@@ -523,7 +628,7 @@
     <h1>Digital Cupboard Audio App</h1>
     <small>Web Audio Editor &nbsp;·&nbsp; v0.3 — Phase · Stage All · Export Mix</small>
   </div>
-  <span class="header-badge">DC Audio v0.3</span>
+  <span class="header-badge">DC Audio v0.4</span>
 </header>
 
 <!-- ##STREAMER_ONLY_START##
@@ -545,11 +650,32 @@
 <div class="main">
 
   <div class="drop-zone" id="dropZone">
-    <div class="drop-icon">🎵</div>
-    <h2>Drop an Audio File Here</h2>
-    <p>WAV · MP3 · FLAC · OGG · AAC · AIFF · M4A · and more</p>
-    <button class="btn-browse" id="btnBrowse">Browse Files</button>
-    <input type="file" id="fileInput" accept="audio/*" style="display:none">
+    <div class="drop-zone-title">DC Audio</div>
+    <div class="drop-zone-sub">What would you like to do?</div>
+
+    <div class="drop-zone-cards">
+
+      <!-- New project from audio file -->
+      <div class="dz-card">
+        <div class="dz-card-icon">🎵</div>
+        <div class="dz-card-label">New Project</div>
+        <div class="dz-card-hint">WAV · MP3 · FLAC · AIFF<br>OGG · AAC · M4A · and more</div>
+        <button class="btn-browse" id="btnBrowse">Browse Files</button>
+        <input type="file" id="fileInput" accept="audio/*" style="display:none">
+      </div>
+
+      <!-- Load saved project -->
+      <div class="dz-card">
+        <div class="dz-card-icon">📂</div>
+        <div class="dz-card-label">Load Project</div>
+        <div class="dz-card-hint">Resume a previously saved<br>.dcproject file</div>
+        <button class="btn-browse-proj" id="btnBrowseProj">Open Project</button>
+        <input type="file" id="startupProjectInput" accept=".dcproject" style="display:none">
+      </div>
+
+    </div>
+
+    <div class="drop-zone-drag-hint">or drop an audio file anywhere to start a new project</div>
   </div>
 
   <div class="editor" id="editor">
@@ -559,8 +685,21 @@
         <span class="fname" id="fname">—</span>
         <span class="fmeta" id="fmeta"></span>
       </div>
-      <button class="btn-new" id="btnNew">↩ Load New File</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn-save-proj" id="btnSaveProject" disabled title="Save all stems, regions and settings to a .dcproject file">💾 Save Project</button>
+        <button class="btn-load-proj" id="btnLoadProject" title="Load a previously saved .dcproject file">📂 Load Project</button>
+        <input type="file" id="projectFileInput" accept=".dcproject" style="display:none">
+        <button class="btn-new" id="btnNew">↩ Load New File</button>
+      </div>
     </div>
+
+    <!-- ── Master section accordion ── -->
+    <div class="acc-header" id="masterAccHeader">
+      <span class="acc-chevron">▾</span>
+      <span class="acc-title">🎚 Master</span>
+      <span class="acc-meta" id="masterAccMeta"></span>
+    </div>
+    <div class="acc-body" id="masterAccBody">
 
     <div class="wave-panel">
       <div class="wave-header">
@@ -619,8 +758,9 @@
         <button class="btn-t btn-sm btn-nav" id="btnFwd"     data-tip="Forward 5s">⏩</button>
         <button class="btn-t btn-sm btn-nav" id="btnToEnd"   data-tip="Go to End">⏭</button>
         <div class="t-divider"></div>
-        <button class="btn-t btn-t-paste" id="btnPaste" disabled data-tip="Paste at playhead">⎘ Paste</button>
-        <button class="btn-t btn-t-undo"  id="btnUndo"  disabled data-tip="Undo">↩ Undo</button>
+        <button class="btn-t btn-t-paste"     id="btnPaste"     disabled data-tip="Paste at playhead">⎘ Paste</button>
+        <button class="btn-t btn-t-undo"      id="btnUndo"      disabled data-tip="Undo">↩ Undo</button>
+        <button class="btn-t btn-t-autotrim"  id="btnAutoTrim"  disabled data-tip="Remove silence from start">⇥ Trim</button>
       </div>
 
       <!-- Export -->
@@ -948,9 +1088,12 @@
 
     </div><!-- /proc-grid -->
 
+    </div><!-- /masterAccBody -->
+
     <!-- AI Stem Splitting — Demucs -->
     <div class="stems-panel">
-      <div class="stems-header">
+      <!-- Setup header: visible until stems are created -->
+      <div class="stems-header" id="stemsSetupHeader">
         <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
           <div class="stems-title">🤖 AI Stem Splitting</div>
           <div class="stem-disclaimer">Demucs HTDemucs · 4-stem AI · requires local server</div>
@@ -964,6 +1107,13 @@
           <button class="btn-ai-split" id="btnAiSplit" disabled>🤖 AI Split</button>
         </div>
       </div>
+      <!-- Stems accordion header: hidden until stems exist, replaces setup header -->
+      <div class="acc-header" id="stemsAccHeader" style="display:none">
+        <span class="acc-chevron">▾</span>
+        <span class="acc-title">🎛 Stems</span>
+        <span class="acc-meta" id="stemsAccMeta"></span>
+      </div>
+      <div class="stems-body" id="stemsBody">
       <div id="setupBox" class="setup-box">
         <div style="display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap;">
           <!-- Local option -->
@@ -1013,6 +1163,31 @@
           <strong style="color:var(--white)">Stage &amp; Fire:</strong>
           select a region on each stem → click <strong style="color:#f59e0b">STG</strong> (or <strong style="color:#f59e0b">⚑ Stage All</strong>) to arm → <strong style="color:#f59e0b">⚡ Fire Staged</strong> launches all simultaneously in loop · <strong style="color:#f59e0b">⬇ Export Mix</strong> renders armed regions to a single WAV ·
           <strong style="color:var(--white)">Play All</strong> plays every stem from position 0
+        </div>
+      </div>
+      </div><!-- /stemsBody -->
+    </div>
+
+    <!-- Arrangement lane — hidden until first phrase is added -->
+    <div class="arrangement-panel" id="arrangementPanel" style="display:none">
+      <div class="arrangement-header">
+        <span class="arrangement-title">📐 Arrangement</span>
+        <div class="arrangement-controls">
+          <span class="arr-phrase-count" id="arrPhraseCount"></span>
+          <span class="arr-head-display" id="arrHeadDisplay">Bar 1</span>
+          <button class="btn-arr btn-arr-rtz"    id="btnArrRtz"    title="Return to start">⏮</button>
+          <button class="btn-arr btn-arr-play"   id="btnArrPlay">▶ Play</button>
+          <button class="btn-arr btn-arr-stop"   id="btnArrStop">⏹ Stop</button>
+          <button class="btn-arr btn-arr-export" id="btnArrExport">⬇ Export</button>
+          <button class="btn-arr btn-arr-clear"  id="btnArrClear">✕ Clear</button>
+        </div>
+      </div>
+      <div class="arrangement-scroll" id="arrangementScroll">
+        <div class="arrangement-inner" id="arrangementInner">
+          <div class="arr-ruler" id="arrRuler"></div>
+          <div class="arr-track" id="arrTrack">
+            <div class="arr-cursor" id="arrCursor"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1331,9 +1506,9 @@ function drawWaveform() {
   if (region) {
     const rS = (region.start * audioBuf.sampleRate - scrollSamp) / samplesPerPixel
     const rE = (region.end   * audioBuf.sampleRate - scrollSamp) / samplesPerPixel
-    ctx.fillStyle = 'rgba(240,168,50,0.15)'
+    ctx.fillStyle = 'rgba(240,168,50,0.35)'
     ctx.fillRect(rS, 0, rE - rS, H)
-    ctx.fillStyle = 'rgba(240,168,50,0.9)'
+    ctx.fillStyle = 'rgba(240,168,50,0.95)'
     ctx.fillRect(rS, 0, 2, H)
     ctx.fillRect(rE - 2, 0, 2, H)
   }
@@ -1965,7 +2140,13 @@ async function loadFile(file) {
     $('btnExportRange').disabled = true; $('btnPlay').textContent = '▶'
     $('btnAiSplit').disabled = true; $('stemsOutput').innerHTML = ''
     $('stemsTransport').classList.remove('visible'); allStemCards = []
+    // Reset stems panel to setup state
+    $('stemsSetupHeader').style.display = ''
+    $('stemsAccHeader').style.display   = 'none'
+    $('stemsAccMeta').textContent = ''
     if (serverConnected) $('btnAiSplit').disabled = false
+    $('btnAutoTrim').disabled = false
+    updateSaveBtn()
     setStatus('Ready', 'ready')
 
     // Size canvas to its rendered width
@@ -2059,6 +2240,7 @@ $('waveCanvas').addEventListener('mousemove', e => {
 
 $('waveCanvas').addEventListener('mousedown', e => {
   if (!audioBuf) return
+  if (e.button === 1 || (e.button === 0 && e.altKey)) return  // pan — handled separately
   const rect = $('waveCanvas').getBoundingClientRect()
   const x = (e.clientX - rect.left) * ($('waveCanvas').width / rect.width)
   const t = canvasXToTime(x)
@@ -2140,6 +2322,29 @@ $('btnToStart').addEventListener('click', () => seek(0))
 $('btnToEnd').addEventListener('click',   () => audioBuf && seek(audioBuf.duration))
 $('btnBack').addEventListener('click', () => audioBuf && seek(getCurrentTime() - 5))
 $('btnFwd').addEventListener('click',  () => audioBuf && seek(getCurrentTime() + 5))
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Global spacebar = play / pause  (respects which context is active)
+// ─────────────────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space') return
+  // Don't fire when typing in an input, textarea, select or contenteditable
+  const tag = document.activeElement?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+  if (document.activeElement?.isContentEditable) return
+  e.preventDefault()
+
+  // If the arrangement panel is visible and has phrases → toggle arrangement
+  const arrPanel = $('arrangementPanel')
+  if (arrPanel && arrPanel.style.display !== 'none' && arrangementPhrases.length) {
+    arrAnimId ? stopArrangement() : playArrangement()
+    return
+  }
+
+  // Otherwise toggle the main waveform player
+  if (!audioBuf) return
+  isPlaying ? doPause() : doPlay()
+})
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Region controls
@@ -2262,6 +2467,70 @@ $('btnUndo').addEventListener('click', () => {
   runBPMDetect(audioBuf)
 })
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Auto Trim — remove silence from the start of the waveform
+// ─────────────────────────────────────────────────────────────────────────────
+function autoTrimStart() {
+  if (!audioBuf) return
+
+  // -50 dB threshold — anything quieter than this is considered silence
+  const THRESHOLD = 0.00316
+
+  // Find the first sample (across all channels) that exceeds the threshold
+  const numCh   = audioBuf.numberOfChannels
+  const numSamp = audioBuf.length
+  let trimSample = 0
+
+  outer:
+  for (let s = 0; s < numSamp; s++) {
+    for (let ch = 0; ch < numCh; ch++) {
+      if (Math.abs(audioBuf.getChannelData(ch)[s]) >= THRESHOLD) {
+        trimSample = s
+        break outer
+      }
+    }
+  }
+
+  if (trimSample === 0) {
+    // Nothing to trim
+    $('btnAutoTrim').textContent = '✓ Trim'
+    setTimeout(() => { $('btnAutoTrim').textContent = '⇥ Trim' }, 1200)
+    return
+  }
+
+  pushUndo('Auto Trim')
+
+  // Build a new AudioBuffer without the leading silence
+  const newLen = numSamp - trimSample
+  const newBuf = audioCtx.createBuffer(numCh, newLen, audioBuf.sampleRate)
+  for (let ch = 0; ch < numCh; ch++) {
+    newBuf.getChannelData(ch).set(audioBuf.getChannelData(ch).subarray(trimSample))
+  }
+
+  // Apply and reset playback position
+  audioBuf = newBuf
+  doStop()
+  playOffset = 0; scrollSamp = 0
+
+  // Shift existing region to match if it falls within the new buffer
+  if (region) {
+    const trimSec = trimSample / audioBuf.sampleRate
+    const newStart = Math.max(0, region.start - trimSec)
+    const newEnd   = Math.max(0, region.end   - trimSec)
+    region = newEnd - newStart > 0.01 ? { start: newStart, end: newEnd } : null
+    if (region) updateRegionBar(); else $('regionBar').classList.remove('visible')
+  }
+
+  $('tTotal').textContent = fmt(audioBuf.duration)
+  drawWaveform()
+  updateSaveBtn()
+
+  const trimmedMs = Math.round((trimSample / audioBuf.sampleRate) * 1000)
+  $('btnAutoTrim').dataset.tip = `Remove silence from start (trimmed ${trimmedMs} ms last time)`
+}
+
+$('btnAutoTrim').addEventListener('click', autoTrimStart)
+
 function updateRegionBar() {
   if (!region) return
   $('rIn').textContent  = fmt(region.start)
@@ -2273,18 +2542,64 @@ function updateRegionBar() {
 // Volume + Zoom
 // ─────────────────────────────────────────────────────────────────────────────
 $('volSlider').addEventListener('input', e => { if (masterGain) masterGain.gain.value = Number(e.target.value) })
-$('zoomSlider').addEventListener('input', e => {
+
+// Helper: apply zoom change keeping the sample under mouseX pinned
+function _applyMainZoom(newZoom, pivotSample) {
   if (!audioBuf) return
-  const oldZoom = zoom
-  zoom = Number(e.target.value)
-  // Keep cursor centred on zoom
-  const curSample = getCurrentTime() * audioBuf.sampleRate
   const canvas = $('waveCanvas')
   const W = canvas.width
+  zoom = Math.max(1, Math.min(newZoom, 100))
   const newSPP = audioBuf.length / (W * zoom)
-  scrollSamp = Math.max(0, curSample - W * newSPP * 0.5)
+  scrollSamp = Math.max(0, (pivotSample != null ? pivotSample : getCurrentTime() * audioBuf.sampleRate) - W * newSPP * 0.5)
+  $('zoomSlider').value = zoom
   drawWaveform()
+}
+
+$('zoomSlider').addEventListener('input', e => {
+  if (!audioBuf) return
+  const curSample = getCurrentTime() * audioBuf.sampleRate
+  _applyMainZoom(Number(e.target.value), curSample)
 })
+
+// Wheel on waveCanvas: zoom centred on cursor
+$('waveCanvas').addEventListener('wheel', e => {
+  if (!audioBuf) return
+  e.preventDefault()
+  const canvas = $('waveCanvas')
+  const rect   = canvas.getBoundingClientRect()
+  const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width)
+  const spp    = audioBuf.length / (canvas.width * zoom)
+  const pivotSample = scrollSamp + mouseX * spp
+  _applyMainZoom(zoom * (e.deltaY < 0 ? 1.05 : 1 / 1.05), pivotSample)
+}, { passive: false })
+
+// Middle-click or Alt+drag on waveCanvas: pan left/right
+;(function bindMainCanvasPan() {
+  let panActive = false, panStartX = 0, panStartScroll = 0, panSPP = 1
+  const canvas = $('waveCanvas')
+  canvas.addEventListener('mousedown', e => {
+    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+      if (!audioBuf) return
+      panActive      = true
+      panStartX      = e.clientX
+      panStartScroll = scrollSamp
+      panSPP         = audioBuf.length / (canvas.width * zoom)
+      canvas.style.cursor = 'grabbing'
+      e.preventDefault()  // stops middle-click scroll / alt drag-select
+    }
+  })
+  // Prevent browser's middle-click autoscroll indicator
+  canvas.addEventListener('auxclick', e => { if (e.button === 1) e.preventDefault() })
+  window.addEventListener('mousemove', e => {
+    if (!panActive) return
+    const dx = e.clientX - panStartX
+    scrollSamp = Math.max(0, Math.min(panStartScroll - dx * panSPP, audioBuf.length - canvas.width * panSPP))
+    drawWaveform()
+  })
+  window.addEventListener('mouseup', e => {
+    if (panActive) { panActive = false; canvas.style.cursor = '' }
+  })
+})()
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EQ controls + Pot initialisation
@@ -2445,6 +2760,28 @@ function stopRecord() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Reset / Load new file
 // ─────────────────────────────────────────────────────────────────────────────
+// ── Accordion: Master section ─────────────────────────────────────────────────
+$('masterAccHeader').addEventListener('click', () => {
+  const hdr  = $('masterAccHeader')
+  const body = $('masterAccBody')
+  const collapsed = hdr.classList.toggle('collapsed')
+  body.classList.toggle('hidden', collapsed)
+})
+
+// ── Accordion: Stems section ──────────────────────────────────────────────────
+$('stemsAccHeader').addEventListener('click', () => {
+  const hdr  = $('stemsAccHeader')
+  const body = $('stemsBody')
+  const collapsed = hdr.classList.toggle('collapsed')
+  body.classList.toggle('hidden', collapsed)
+})
+
+// Called when stems are first created — swap setup bar for accordion header
+function showStemsAccBtn() {
+  $('stemsSetupHeader').style.display = 'none'
+  $('stemsAccHeader').style.display   = ''
+}
+
 $('btnNew').addEventListener('click', () => {
   isPlaying = false
   if (srcNode) { try { srcNode.stop() } catch(e) {} srcNode = null }
@@ -2529,10 +2866,8 @@ async function doExport(start, end) {
     const base   = ($('fname').textContent || 'export').replace(/\.[^.]+$/, '')
     const suffix = (start > 0 || end < audioBuf.duration) ? `_${fmtET(start)}-${fmtET(end)}` : ''
     const fname  = `${base}${suffix}.${ext}`
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = fname; a.click()
-    URL.revokeObjectURL(url)
-    showStatus('✓ Saved as ' + fname)
+    const saved = await saveFileAs(blob, fname, ext === 'wav' ? 'audio/wav' : 'audio/mpeg', `.${ext}`)
+    if (saved) showStatus('✓ Saved as ' + saved)
     setTimeout(() => { statusEl.style.display = 'none' }, 3500)
   } catch(err) {
     console.error('Export error:', err)
@@ -2542,6 +2877,33 @@ async function doExport(start, end) {
     $('btnExportFile').disabled = false
     if (region) $('btnExportRange').disabled = false
   }
+}
+
+// ── Save-As helper (File System Access API with <a> fallback) ─────────────────
+// mimeType examples: 'audio/wav', 'application/json'
+// ext examples:      '.wav', '.dcproject'
+async function saveFileAs(blob, suggestedName, mimeType, ext) {
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName,
+        types: [{ description: suggestedName, accept: { [mimeType]: [ext] } }],
+        startIn: 'downloads'
+      })
+      const writable = await handle.createWritable()
+      await writable.write(blob)
+      await writable.close()
+      return handle.name   // actual filename chosen
+    } catch (e) {
+      if (e.name === 'AbortError') return null   // user cancelled — no fallback
+      // Any other error: fall through to <a> download
+    }
+  }
+  // Fallback
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = suggestedName; a.click()
+  URL.revokeObjectURL(url)
+  return suggestedName
 }
 
 // Returns a new AudioBuffer with polarity applied according to st.phaseL / st.phaseR.
@@ -2746,7 +3108,10 @@ async function runAiSplitCloud(out) {
   }
 
   $('stemsTransport').classList.add('visible')
-  if (allStemCards.length) runBPMDetect(audioBuf)
+  if (allStemCards.length) {
+    $('stemsAccMeta').textContent = allStemCards.length + ' stems'
+    showStemsAccBtn(); runBPMDetect(audioBuf); updateSaveBtn()
+  }
   setStatus('AI stems ready', 'ready')
 }
 
@@ -2844,7 +3209,10 @@ async function runAiSplit() {
     }
 
     $('stemsTransport').classList.add('visible')
-    if (allStemCards.length) runBPMDetect(audioBuf)
+    if (allStemCards.length) {
+      $('stemsAccMeta').textContent = allStemCards.length + ' stems'
+      showStemsAccBtn(); runBPMDetect(audioBuf); updateSaveBtn()
+    }
     setStatus('AI stems ready', 'ready')
 
   } catch(err) {
@@ -2913,18 +3281,23 @@ async function exportStagedMix() {
       const phased = applyPhaseToBuffer(slice, { phaseL, phaseR }, isStereo)
 
       const src  = offCtx.createBufferSource(); src.buffer = phased
+      // Loop shorter regions to fill the full mix duration — matches Fire Staged behaviour
+      src.loop = true
+      src.loopStart = 0
+      src.loopEnd   = phased.duration
       const gain = offCtx.createGain(); gain.gain.value = volume
       src.connect(gain); gain.connect(offCtx.destination)
       src.start(0)
+      src.stop(maxDur)
     }
 
     const rendered = await offCtx.startRendering()
     const blob = encodeWAV(rendered)
-    const url  = URL.createObjectURL(blob)
     const base = ($('fname').textContent || 'mix').replace(/\.[^.]+$/, '')
-    const a = document.createElement('a'); a.href = url
-    a.download = `${base}-staged-mix.wav`; a.click()
-    URL.revokeObjectURL(url)
+    const phraseNum = arrangementPhrases.length + 1
+    await saveFileAs(blob, `${base}-phrase${phraseNum}.wav`, 'audio/wav', '.wav')
+    // Add to arrangement lane
+    addArrangementPhrase(rendered, `Phrase ${phraseNum}`)
   } catch(err) {
     alert('Mix export failed: ' + err.message)
   } finally {
@@ -2952,6 +3325,596 @@ $('btnStageAll').addEventListener('click', stageAllStems)
 $('btnStopAll').addEventListener('click', stopAllStems)
 $('btnFire').addEventListener('click', fireStagedStems)
 $('btnExportMix').addEventListener('click', exportStagedMix)
+$('btnSaveProject').addEventListener('click', saveProject)
+// Both the startup card and the file-bar button open the same project loader
+const _triggerProjectPicker = () => {
+  // Prefer the startup input if the drop-zone is visible, else use the file-bar one
+  const startupInput = $('startupProjectInput')
+  if (startupInput) { startupInput.click(); return }
+  $('projectFileInput').click()
+}
+$('btnBrowseProj').addEventListener('click', () => $('startupProjectInput').click())
+$('startupProjectInput').addEventListener('change', e => {
+  if (!e.target.files[0]) return
+  const reader = new FileReader()
+  reader.onload = ev => loadProject(ev.target.result)
+  reader.readAsText(e.target.files[0])
+  e.target.value = ''
+})
+$('btnLoadProject').addEventListener('click', () => $('projectFileInput').click())
+$('projectFileInput').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return
+  const reader = new FileReader()
+  reader.onload = ev => loadProject(ev.target.result)
+  reader.readAsText(file)
+  e.target.value = ''   // allow re-loading same file
+})
+
+// ── Project save / load ───────────────────────────────────────────────────────
+
+function _restoreInput(id, value) {
+  const el = $(id); if (!el) return
+  el.value = value
+  el.dispatchEvent(new Event('input'))
+  allPots.find(p => p.input === el)?.render()
+}
+
+async function saveProject() {
+  const btn = $('btnSaveProject')
+  btn.disabled = true; btn.textContent = '⏳ Encoding audio…'
+  try {
+    // Encode main audio buffer
+    const mainWavBlob = encodeWAV(audioBuf)
+    const mainAudioBase64 = await new Promise(res => {
+      const r = new FileReader()
+      r.onload = () => res(r.result.split(',')[1])
+      r.readAsDataURL(mainWavBlob)
+    })
+
+    btn.textContent = '⏳ Encoding stems…'
+    const eq = [0,1,2,3].map(i => ({
+      f: $(`eq${i}f`).value, g: $(`eq${i}g`).value, q: $(`eq${i}q`).value
+    }))
+    const stemData = await Promise.all(allStemCards.map(c => c.getProjectData()))
+
+    btn.textContent = '⏳ Writing file…'
+    const project = {
+      version: '1',
+      savedAt: new Date().toISOString(),
+      filename: $('fname').textContent,
+      audioBase64: mainAudioBase64,
+      masterVol: $('volSlider').value,
+      region: region ? { start: region.start, end: region.end } : null,
+      bpm: detectedBPM, beatGridOn, snapOn, beatOffset,
+      eqBypassed, compBypassed,
+      eq,
+      comp: {
+        thresh:  $('cThresh').value,
+        ratio:   $('cRatio').value,
+        attack:  $('cAttack').value,
+        release: $('cRelease').value,
+      },
+      stems: stemData
+    }
+    const blob = new Blob([JSON.stringify(project)], { type: 'application/json' })
+    const base = ($('fname').textContent || 'project').replace(/\.[^.]+$/, '')
+    await saveFileAs(blob, `${base}.dcproject`, 'application/json', '.dcproject')
+  } catch(err) {
+    alert('Save failed: ' + err.message); console.error(err)
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Save Project'
+    updateSaveBtn()
+  }
+}
+
+async function loadProject(json) {
+  const p = JSON.parse(json)
+  if (p.version !== '1') { alert('Unsupported project version'); return }
+  const btn = $('btnLoadProject')
+  btn.disabled = true; btn.textContent = '⏳ Loading audio…'
+  try {
+    // Decode main audio buffer
+    if (!p.audioBase64) throw new Error('Project has no audio data — please re-save the project.')
+    const mainBytes = Uint8Array.from(atob(p.audioBase64), c => c.charCodeAt(0))
+    const tmpCtx = new AudioContext()
+    audioBuf = await tmpCtx.decodeAudioData(mainBytes.buffer.slice(0))
+    await tmpCtx.close()
+
+    // Init audio graph with correct sample rate
+    initGraph(audioBuf.sampleRate)
+
+    // Show editor
+    $('dropZone').classList.add('hidden'); $('editor').classList.add('visible')
+    $('fname').textContent = p.filename || 'Untitled project'
+    $('fmeta').textContent = fmt(audioBuf.duration) + '  ·  ' +
+      (audioBuf.sampleRate / 1000).toFixed(1) + ' kHz  ·  ' +
+      (audioBuf.numberOfChannels === 1 ? 'Mono' : 'Stereo')
+    $('tTotal').textContent    = fmt(audioBuf.duration)
+    $('tCurrent').textContent  = fmt(0)
+    $('sSR').textContent       = audioBuf.sampleRate.toLocaleString() + ' Hz'
+    $('sCh').textContent       = audioBuf.numberOfChannels === 1 ? 'Mono' :
+                                  audioBuf.numberOfChannels === 2 ? 'Stereo' :
+                                  audioBuf.numberOfChannels + ' ch'
+
+    // Reset playback state
+    isPlaying = false; playOffset = 0; scrollSamp = 0; zoom = 1
+    looping = false
+    $('zoomSlider').value = 1
+    $('regionBar').classList.remove('visible'); $('btnLoop').classList.remove('on')
+    $('btnExportRange').disabled = true; $('btnPlay').textContent = '▶'
+    $('btnAutoTrim').disabled = false
+
+    // Reset stems panel to setup state
+    allStemCards.forEach(c => { try { c.stop() } catch(e){} })
+    allStemCards = []; $('stemsOutput').innerHTML = ''; $('stemsTransport').classList.remove('visible')
+    $('stemsSetupHeader').style.display = ''
+    $('stemsAccHeader').style.display   = 'none'
+    $('stemsAccMeta').textContent = ''
+    if (serverConnected) $('btnAiSplit').disabled = false
+    else $('btnAiSplit').disabled = true
+
+    btn.textContent = '⏳ Loading…'
+
+    // Master volume
+    if (p.masterVol !== undefined) _restoreInput('volSlider', p.masterVol)
+
+    // EQ
+    if (p.eq) p.eq.forEach((b, i) => { _restoreInput(`eq${i}f`, b.f); _restoreInput(`eq${i}g`, b.g); _restoreInput(`eq${i}q`, b.q) })
+
+    // Compressor
+    if (p.comp) {
+      _restoreInput('cThresh',  p.comp.thresh)
+      _restoreInput('cRatio',   p.comp.ratio)
+      _restoreInput('cAttack',  p.comp.attack)
+      _restoreInput('cRelease', p.comp.release)
+    }
+
+    // Bypass toggles
+    if (p.eqBypassed   && !eqBypassed)   $('eqBypass').click()
+    if (p.compBypassed && !compBypassed)  $('compBypass').click()
+
+    // BPM + grid
+    if (p.bpm) setBPM(p.bpm, 'loaded')
+    beatGridOn = !!p.beatGridOn; snapOn = !!p.snapOn; beatOffset = p.beatOffset || 0
+    $('btnGrid').classList.toggle('on', beatGridOn)
+    $('btnSnap').classList.toggle('on', snapOn)
+
+    // Main region
+    region = p.region || null
+
+    // Stems
+    const colorMap = { drums:'#ef4444', bass:'#3b82f6', vocals:'#22c55e', other:'#8b5cf6', guitar:'#f59e0b', piano:'#06b6d4' }
+    for (const sd of (p.stems || [])) {
+      const bytes = Uint8Array.from(atob(sd.audioBase64), c => c.charCodeAt(0))
+      const tmpCtx = new AudioContext()
+      const buf = await tmpCtx.decodeAudioData(bytes.buffer.slice(0))
+      tmpCtx.close()
+      const { el, ...ctrl } = makeStemCard({
+        label: sd.label, buf,
+        color: sd.color || colorMap[sd.label?.toLowerCase()] || '#8b5cf6',
+        desc:  sd.desc  || 'Loaded from project'
+      })
+      $('stemsOutput').appendChild(el)
+      allStemCards.push(ctrl)
+      ctrl.restoreState(sd)
+    }
+    if (allStemCards.length) {
+      $('stemsTransport').classList.add('visible')
+      $('stemsAccMeta').textContent = allStemCards.length + ' stems'
+      showStemsAccBtn(); updateFireBtn()
+    }
+    updateSaveBtn()
+    setStatus('Project loaded', 'ready')
+    requestAnimationFrame(() => {
+      const canvas = $('waveCanvas')
+      canvas.width = canvas.offsetWidth || 800
+      drawWaveform()
+    })
+  } catch(err) {
+    alert('Load failed: ' + err.message); console.error(err)
+  } finally {
+    btn.disabled = false; btn.textContent = '📂 Load Project'
+  }
+}
+
+function updateSaveBtn() {
+  $('btnSaveProject').disabled = !audioBuf
+  $('btnAutoTrim').disabled    = !audioBuf
+}
+
+// ── Arrangement lane ──────────────────────────────────────────────────────────
+const PHRASE_COLORS   = ['#3b82f6','#22c55e','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#f97316','#ec4899','#a3e635','#fb7185']
+let arrPxPerSec        = 20   // pixels per second of audio (mutable for zoom)
+let arrangementPhrases = []   // [{ id, label, buf, startSec, durationSec, bufStartSec, color }]
+let arrPlaySrcs        = []   // AudioBufferSourceNodes currently playing
+let arrAnimId          = null
+let arrHeadSec         = 0    // playhead/cursor position in seconds
+
+function arrBarDur() {
+  // Duration of one bar in seconds (4/4). Falls back to 2 sec if no BPM.
+  return detectedBPM > 0 ? (60 / detectedBPM) * 4 : 2
+}
+
+function arrSnapToBar(sec) {
+  const b = arrBarDur()
+  return Math.max(0, Math.round(sec / b) * b)
+}
+
+function arrFmtTime(sec) {
+  if (detectedBPM > 0) {
+    const bar = Math.round(sec / arrBarDur()) + 1
+    return `Bar ${bar}`
+  }
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60)
+  return `${m}:${s.toString().padStart(2,'0')}`
+}
+
+function addArrangementPhrase(buf, label) {
+  const last  = arrangementPhrases[arrangementPhrases.length - 1]
+  const start = last ? last.startSec + last.durationSec : 0
+  const color = PHRASE_COLORS[arrangementPhrases.length % PHRASE_COLORS.length]
+  arrangementPhrases.push({ id: Date.now(), label, buf, startSec: start, durationSec: buf.duration, bufStartSec: 0, color })
+  renderArrangement()
+  $('arrangementPanel').style.display = ''
+}
+
+function renderArrangement() {
+  const track  = $('arrTrack')
+  const ruler  = $('arrRuler')
+
+  // Total duration
+  const totalSec = arrangementPhrases.reduce((mx, p) => Math.max(mx, p.startSec + p.durationSec), 0)
+  const trackW   = Math.max(totalSec * arrPxPerSec + 180, 600)
+
+  $('arrangementInner').style.width = trackW + 'px'
+  track.style.width  = trackW + 'px'
+  ruler.style.width  = trackW + 'px'
+
+  // Rebuild ruler marks
+  ruler.innerHTML = ''
+  const markInterval = detectedBPM > 0 ? arrBarDur() : 5  // every bar or every 5 sec
+  for (let t = 0; t <= totalSec + markInterval; t += markInterval) {
+    const mk = document.createElement('div')
+    mk.className = 'arr-ruler-mark'
+    mk.style.left = (t * arrPxPerSec) + 'px'
+    mk.textContent = arrFmtTime(t)
+    ruler.appendChild(mk)
+  }
+
+  // Remove old phrase blocks (keep cursor)
+  Array.from(track.querySelectorAll('.phrase-block')).forEach(el => el.remove())
+
+  arrangementPhrases.forEach(phrase => {
+    const block = document.createElement('div')
+    block.className = 'phrase-block'
+    block.dataset.id = phrase.id
+    block.style.left       = (phrase.startSec   * arrPxPerSec) + 'px'
+    block.style.width      = (phrase.durationSec * arrPxPerSec) + 'px'
+    block.style.background = phrase.color
+
+    const durLabel = `${arrFmtTime(phrase.startSec)} · ${phrase.durationSec.toFixed(1)}s`
+    block.innerHTML = `
+      <div class="phrase-handle phrase-handle-l" title="Drag to trim start"></div>
+      <div class="phrase-content">
+        <span class="phrase-name">${phrase.label}</span>
+        <span class="phrase-dur">${durLabel}</span>
+      </div>
+      <div class="phrase-copy-btn" title="Duplicate phrase">⊕</div>
+      <div class="phrase-del-btn"  title="Delete phrase">✕</div>
+      <div class="phrase-handle phrase-handle-r" title="Drag to trim end"></div>`
+
+    track.appendChild(block)
+    _bindPhraseDrag(block, phrase)
+  })
+
+  // Pin cursor to arrHeadSec and keep it visible when there's content
+  const cursor = $('arrCursor')
+  cursor.style.left = (arrHeadSec * arrPxPerSec) + 'px'
+  if (arrangementPhrases.length) cursor.classList.add('visible')
+
+  // Update count + time display
+  $('arrPhraseCount').textContent = arrangementPhrases.length
+    ? `${arrangementPhrases.length} phrase${arrangementPhrases.length > 1 ? 's' : ''}`
+    : ''
+  _updateArrHeadDisplay()
+}
+
+function _updateArrHeadDisplay() {
+  const el = $('arrHeadDisplay')
+  if (!el) return
+  el.textContent = arrFmtTime(arrHeadSec)
+}
+
+function setArrHead(sec) {
+  arrHeadSec = Math.max(0, sec)
+  // If not playing, just move the cursor
+  if (!arrAnimId) {
+    const cursor = $('arrCursor')
+    cursor.style.left = (arrHeadSec * arrPxPerSec) + 'px'
+    cursor.classList.add('visible')
+    _updateArrHeadDisplay()
+    // Scroll arrangement so cursor is in view
+    const scroll = $('arrangementScroll')
+    const cx = arrHeadSec * arrPxPerSec
+    if (cx < scroll.scrollLeft + 20 || cx > scroll.scrollLeft + scroll.clientWidth - 60) {
+      scroll.scrollLeft = Math.max(0, cx - scroll.clientWidth * 0.3)
+    }
+  }
+}
+
+function _bindPhraseDrag(block, phrase) {
+  // ── Shared drag state ────────────────────────────────────────────────────────
+  let dragMode  = null   // 'move' | 'trim-l' | 'trim-r'
+  let startX    = 0
+  let snapMove  = 0      // captured phrase.startSec at drag start
+  let snapDur   = 0      // captured phrase.durationSec at drag start
+  let snapBufSt = 0      // captured phrase.bufStartSec at drag start
+
+  const content  = block.querySelector('.phrase-content')
+  const handleL  = block.querySelector('.phrase-handle-l')
+  const handleR  = block.querySelector('.phrase-handle-r')
+  const copyBtn  = block.querySelector('.phrase-copy-btn')
+  const delBtn   = block.querySelector('.phrase-del-btn')
+  const durEl    = block.querySelector('.phrase-dur')
+
+  // ── Mouse-down for each zone ─────────────────────────────────────────────────
+  const startDrag = (mode, e) => {
+    dragMode  = mode
+    startX    = e.clientX
+    snapMove  = phrase.startSec
+    snapDur   = phrase.durationSec
+    snapBufSt = phrase.bufStartSec ?? 0
+    if (mode === 'move') { content.classList.add('grabbing'); block.classList.add('moving') }
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  handleL.addEventListener('mousedown',  e => startDrag('trim-l', e))
+  handleR.addEventListener('mousedown',  e => startDrag('trim-r', e))
+  content.addEventListener('mousedown',  e => startDrag('move',   e))
+
+  // ── Delete button ─────────────────────────────────────────────────────────────
+  delBtn.addEventListener('click', e => {
+    e.stopPropagation()
+    const idx = arrangementPhrases.indexOf(phrase)
+    if (idx !== -1) arrangementPhrases.splice(idx, 1)
+    if (!arrangementPhrases.length) {
+      stopArrangement(); arrHeadSec = 0
+      renderArrangement(); $('arrangementPanel').style.display = 'none'
+    } else {
+      renderArrangement()
+    }
+  })
+
+  // ── Copy button ───────────────────────────────────────────────────────────────
+  copyBtn.addEventListener('click', e => {
+    e.stopPropagation()
+    const last  = arrangementPhrases[arrangementPhrases.length - 1]
+    const start = last ? last.startSec + last.durationSec : 0
+    const copy  = Object.assign({}, phrase, {
+      id:         Date.now(),
+      startSec:   start,
+      label:      phrase.label + '′',
+    })
+    arrangementPhrases.push(copy)
+    renderArrangement()
+  })
+
+  // ── Mouse-move / up ──────────────────────────────────────────────────────────
+  const onMove = e => {
+    if (!dragMode) return
+    const dx  = e.clientX - startX
+    const dSec = dx / arrPxPerSec
+
+    if (dragMode === 'move') {
+      phrase.startSec = Math.max(0, snapMove + dSec)
+      block.style.left = (phrase.startSec * arrPxPerSec) + 'px'
+      durEl.textContent = `${arrFmtTime(phrase.startSec)} · ${phrase.durationSec.toFixed(1)}s`
+
+    } else if (dragMode === 'trim-l') {
+      // Left handle: push startSec forward (trim buffer start), shrink width
+      const maxTrim = snapDur - 0.1   // leave at least 0.1 s
+      const trim = Math.max(-snapBufSt, Math.min(dSec, maxTrim))
+      phrase.startSec   = Math.max(0, snapMove  + trim)
+      phrase.bufStartSec = Math.max(0, snapBufSt + trim)
+      phrase.durationSec = snapDur - trim
+      block.style.left  = (phrase.startSec    * arrPxPerSec) + 'px'
+      block.style.width = (phrase.durationSec * arrPxPerSec) + 'px'
+      durEl.textContent = `${arrFmtTime(phrase.startSec)} · ${phrase.durationSec.toFixed(1)}s`
+
+    } else if (dragMode === 'trim-r') {
+      // Right handle: change duration only
+      const maxDur  = (phrase.buf ? phrase.buf.duration - (phrase.bufStartSec ?? 0) : snapDur)
+      phrase.durationSec = Math.max(0.1, Math.min(snapDur + dSec, maxDur))
+      block.style.width  = (phrase.durationSec * arrPxPerSec) + 'px'
+      durEl.textContent  = `${arrFmtTime(phrase.startSec)} · ${phrase.durationSec.toFixed(1)}s`
+    }
+  }
+
+  const onUp = () => {
+    if (!dragMode) return
+    const mode = dragMode
+    dragMode = null
+    content.classList.remove('grabbing')
+    block.classList.remove('moving')
+
+    if (mode === 'move') {
+      phrase.startSec = arrSnapToBar(phrase.startSec)
+
+    } else if (mode === 'trim-l') {
+      // Snap the left edge (startSec) to the nearest bar
+      const snapped = arrSnapToBar(phrase.startSec)
+      const actualTrim = snapped - snapMove            // +ve = trimmed in, -ve = extended
+      phrase.startSec    = snapped
+      phrase.bufStartSec = Math.max(0, snapBufSt + actualTrim)
+      phrase.durationSec = Math.max(0.1, snapDur - actualTrim)
+
+    } else if (mode === 'trim-r') {
+      // Snap the right edge (startSec + durationSec) to the nearest bar
+      const rawEnd     = phrase.startSec + phrase.durationSec
+      const snappedEnd = arrSnapToBar(rawEnd)
+      const maxDur     = phrase.buf ? phrase.buf.duration - (phrase.bufStartSec ?? 0) : snapDur
+      phrase.durationSec = Math.max(0.1, Math.min(snappedEnd - phrase.startSec, maxDur))
+    }
+
+    renderArrangement()
+  }
+
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup',   onUp)
+}
+
+function playArrangement() {
+  if (!audioCtx) return
+  stopArrangement()
+  const dest = masterGain || audioCtx.destination
+  const base = audioCtx.currentTime + 0.05
+  const head = arrHeadSec
+
+  arrPlaySrcs = []
+  arrangementPhrases.forEach(phrase => {
+    const bufStart0 = phrase.bufStartSec ?? 0
+    const phEnd     = phrase.startSec + phrase.durationSec
+    if (phEnd <= head) return  // entirely before the playhead — skip
+
+    let scheduleAt, bufOffset, durLeft
+    if (phrase.startSec >= head) {
+      // Phrase starts at or after playhead — schedule in the future
+      scheduleAt = base + (phrase.startSec - head)
+      bufOffset  = bufStart0
+      durLeft    = phrase.durationSec
+    } else {
+      // Phrase straddles the playhead — start immediately, mid-buffer
+      const skipped = head - phrase.startSec
+      scheduleAt = base
+      bufOffset  = bufStart0 + skipped
+      durLeft    = phrase.durationSec - skipped
+      if (durLeft <= 0) return
+    }
+    const src = audioCtx.createBufferSource()
+    src.buffer = phrase.buf
+    src.connect(dest)
+    src.start(scheduleAt, bufOffset, durLeft)
+    arrPlaySrcs.push(src)
+  })
+
+  // Animate cursor from arrHeadSec
+  const totalSec = arrangementPhrases.reduce((mx, p) => Math.max(mx, p.startSec + p.durationSec), 0)
+  const cursor   = $('arrCursor'); cursor.classList.add('visible')
+  const animStart = performance.now()
+  const tick = () => {
+    const pos = head + (performance.now() - animStart) / 1000
+    cursor.style.left = (pos * arrPxPerSec) + 'px'
+    _updateArrHeadDisplay()
+    // Auto-scroll to keep cursor visible
+    const scroll = $('arrangementScroll')
+    const cursorPx = pos * arrPxPerSec
+    if (cursorPx > scroll.scrollLeft + scroll.clientWidth - 60) scroll.scrollLeft = cursorPx - 80
+    if (pos <= totalSec) arrAnimId = requestAnimationFrame(tick)
+    else stopArrangement()
+  }
+  arrAnimId = requestAnimationFrame(tick)
+}
+
+function stopArrangement() {
+  arrPlaySrcs.forEach(s => { try { s.stop() } catch(e){} })
+  arrPlaySrcs = []
+  cancelAnimationFrame(arrAnimId); arrAnimId = null
+  // Keep cursor visible at arrHeadSec (don't hide — user needs to see position)
+  const cursor = $('arrCursor')
+  cursor.style.left = (arrHeadSec * arrPxPerSec) + 'px'
+  if (arrangementPhrases.length) cursor.classList.add('visible')
+  _updateArrHeadDisplay()
+}
+
+async function exportArrangement() {
+  if (!arrangementPhrases.length) return
+  const btn = $('btnArrExport')
+  btn.disabled = true; btn.textContent = '⏳ Rendering…'
+  try {
+    const sr       = arrangementPhrases[0].buf.sampleRate
+    const totalSec = arrangementPhrases.reduce((mx, p) => Math.max(mx, p.startSec + p.durationSec), 0)
+    const offCtx   = new OfflineAudioContext(2, Math.ceil(totalSec * sr), sr)
+    arrangementPhrases.forEach(phrase => {
+      const src = offCtx.createBufferSource(); src.buffer = phrase.buf
+      src.connect(offCtx.destination)
+      const bufStart = phrase.bufStartSec ?? 0
+      src.start(phrase.startSec, bufStart, phrase.durationSec)
+    })
+    const rendered = await offCtx.startRendering()
+    const blob = encodeWAV(rendered)
+    const base = ($('fname').textContent || 'arrangement').replace(/\.[^.]+$/, '')
+    await saveFileAs(blob, `${base}-arrangement.wav`, 'audio/wav', '.wav')
+  } catch(err) { alert('Export failed: ' + err.message) }
+  finally { btn.disabled = false; btn.textContent = '⬇ Export' }
+}
+
+$('btnArrPlay').addEventListener('click',   playArrangement)
+$('btnArrStop').addEventListener('click',   stopArrangement)
+$('btnArrExport').addEventListener('click', exportArrangement)
+$('btnArrRtz').addEventListener('click', () => {
+  stopArrangement()
+  arrHeadSec = 0
+  setArrHead(0)
+})
+$('btnArrClear').addEventListener('click',  () => {
+  if (!confirm('Clear all arrangement phrases?')) return
+  stopArrangement()
+  arrHeadSec = 0
+  arrangementPhrases = []
+  renderArrangement()
+  $('arrangementPanel').style.display = 'none'
+})
+
+// ── Arrangement: wheel zoom + ruler click-to-seek + middle/alt-drag pan ───────
+;(function bindArrNavigation() {
+  const scroll = $('arrangementScroll')
+  const ruler  = $('arrRuler')
+
+  // Wheel over the arrangement area: zoom in/out around cursor position
+  scroll.addEventListener('wheel', e => {
+    if (!arrangementPhrases.length) return
+    e.preventDefault()
+    const innerRect  = $('arrangementInner').getBoundingClientRect()
+    const timePivot  = (e.clientX - innerRect.left) / arrPxPerSec   // sec under cursor
+
+    const factor = e.deltaY < 0 ? 1.05 : 1 / 1.05
+    arrPxPerSec  = Math.max(4, Math.min(arrPxPerSec * factor, 200))
+
+    renderArrangement()
+
+    // Keep the time under the cursor pinned after zoom
+    const scrollRect = scroll.getBoundingClientRect()
+    scroll.scrollLeft = Math.max(0, timePivot * arrPxPerSec - (e.clientX - scrollRect.left))
+  }, { passive: false })
+
+  // Click on ruler or track: set playhead position
+  const seekFromEvent = e => {
+    if (e.target.closest('.phrase-block')) return   // ignore clicks on phrase blocks
+    const innerRect = $('arrangementInner').getBoundingClientRect()
+    const timeSec   = (e.clientX - innerRect.left) / arrPxPerSec
+    setArrHead(Math.max(0, timeSec))
+  }
+  ruler.addEventListener('click',         seekFromEvent)
+  $('arrTrack').addEventListener('click', seekFromEvent)
+
+  // Middle-click or Alt+drag → pan the scroll area
+  let panActive = false, panStartX = 0, panStartScroll = 0
+  scroll.addEventListener('mousedown', e => {
+    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+      panActive = true; panStartX = e.clientX; panStartScroll = scroll.scrollLeft
+      scroll.style.cursor = 'grabbing'
+      e.preventDefault()
+    }
+  })
+  window.addEventListener('mousemove', e => {
+    if (!panActive) return
+    scroll.scrollLeft = panStartScroll - (e.clientX - panStartX)
+  })
+  window.addEventListener('mouseup', e => {
+    if (panActive) { panActive = false; scroll.style.cursor = '' }
+  })
+})()
 
 // ── BPM detection (onset autocorrelation on mixed-down signal) ────────────────
 function detectBPM(audioBuf) {
@@ -3037,54 +4000,88 @@ $('btnSnap').addEventListener('click', () => {
   $('btnSnap').classList.toggle('on', snapOn)
 })
 
+// ── Algorithmic reverb impulse response ───────────────────────────────────────
+// Generates a stereo exponential-decay white-noise IR for the convolver.
+// `seconds` controls room size / tail length; decay is fixed to give a natural feel.
+function makeIR(ctx, seconds = 1.8) {
+  const sr  = ctx.sampleRate
+  const len = Math.max(1, Math.floor(sr * seconds))
+  const ir  = ctx.createBuffer(2, len, sr)
+  for (let ch = 0; ch < 2; ch++) {
+    const d = ir.getChannelData(ch)
+    for (let i = 0; i < len; i++) {
+      // Exponential decay envelope × random noise
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5)
+    }
+  }
+  return ir
+}
+
 // ── Stem card UI ──────────────────────────────────────────────────────────────
 function makeStemCard({ label, buf, color, desc }) {
   const card = document.createElement('div')
   card.className = 'stem-card'
   card.style.borderLeft = `3px solid ${color}`
 
-  // ── Header ────────────────────────────────────────────────────────────────
+  // ── isStereo must be known before the head HTML is built ─────────────────
+  const isStereo = buf.numberOfChannels >= 2
+
+  // ── Single combined header row ────────────────────────────────────────────
   const head = document.createElement('div')
   head.className = 'stem-card-head'
   head.innerHTML = `
     <button class="stem-collapse-btn" title="Collapse / expand">▾</button>
-    <div class="stem-card-info">
-      <div class="stem-card-name" style="color:${color}">${label}</div>
-      <div class="stem-card-desc">${desc}</div>
-    </div>
+    <span class="stem-card-name" style="color:${color}">${label}</span>
+    <span class="stem-card-sep">·</span>
+    <span class="stem-vol-label" style="font-size:0.58rem;color:var(--muted);letter-spacing:.5px;white-space:nowrap">VOL</span>
+    <input type="range" class="stem-vol-sl" min="0" max="1.5" step="0.01" value="1" style="width:54px">
+    <span class="stem-vol-val" style="font-size:0.6rem;font-family:monospace;color:var(--white);min-width:28px">100%</span>
+    <span class="stem-card-sep">·</span>
+    <button class="btn-mute">M</button>
+    <button class="btn-solo">S</button>
+    <div class="phase-sep"></div>
+    <button class="btn-phase" title="Invert polarity — both channels">Ø</button>
+    <button class="btn-phase-r" title="Invert right channel only${isStereo ? '' : ' (mono — no effect)'}"${isStereo ? '' : ' disabled'}>ØR</button>
+    <div class="phase-sep"></div>
+    <button class="btn-stage">STG</button>
+    <span class="stem-loop-dot" title="Looping"></span>
+    <span class="stem-card-sep" style="margin-left:auto">·</span>
+    <span style="font-size:0.55rem;color:#a78bfa;font-weight:700;letter-spacing:.8px">RVB</span>
+    <input type="range" class="stem-fx-sl rv fx-rv-wet"  min="0" max="1" step="0.01" value="0" title="Reverb wet" style="width:40px">
+    <span class="stem-fx-val fx-rv-wet-val" style="min-width:20px">0%</span>
+    <span style="font-size:0.55rem;color:#34d399;font-weight:700;letter-spacing:.8px">DLY</span>
+    <input type="range" class="stem-fx-sl dl fx-dl-wet"  min="0" max="0.9" step="0.01" value="0" title="Delay wet" style="width:40px">
+    <span class="stem-fx-val fx-dl-wet-val" style="min-width:20px">0%</span>
+    <span class="stem-card-sep">·</span>
     <div class="stem-card-btns">
-      <button class="stem-btn stem-btn-play">▶ Play</button>
-      <button class="stem-btn stem-btn-dl">⬇ WAV</button>
+      <button class="stem-btn stem-btn-play">▶</button>
+      <button class="stem-btn stem-btn-dl">⬇</button>
     </div>`
 
   // ── Collapse toggle ───────────────────────────────────────────────────────
   head.addEventListener('click', e => {
-    // Don't collapse when clicking the play/download buttons
-    if (e.target.closest('.stem-card-btns')) return
+    if (e.target.closest('.stem-card-btns') || e.target.closest('input') ||
+        e.target.closest('button:not(.stem-collapse-btn)')) return
     card.classList.toggle('collapsed')
   })
 
-  // ── isStereo must be known before the mixer strip HTML is built ──────────
-  const isStereo = buf.numberOfChannels >= 2
+  // ── Hidden inputs for FX params not shown in compact header ─────────────
+  // (rv-size, dl-time, dl-fb still needed for state save/restore)
+  const hiddenFx = document.createElement('div')
+  hiddenFx.style.display = 'none'
+  hiddenFx.innerHTML = `
+    <input class="fx-rv-size" type="range" min="0.3" max="5" step="0.1" value="1.8">
+    <input class="fx-dl-time" type="range" min="0.05" max="1" step="0.01" value="0.25">
+    <input class="fx-dl-fb"   type="range" min="0" max="0.9" step="0.01" value="0.3">`
 
-  // ── Mixer strip ───────────────────────────────────────────────────────────
+  // ── Stub mixer strip (hidden, keeps CSS collapsed rules happy) ────────────
   const mixerStrip = document.createElement('div')
   mixerStrip.className = 'stem-mixer-strip'
-  mixerStrip.innerHTML = `
-    <span class="stem-vol-label">VOL</span>
-    <input type="range" class="stem-vol-sl" min="0" max="1.5" step="0.01" value="1">
-    <span class="stem-vol-val">100%</span>
-    <button class="btn-mute">M</button>
-    <button class="btn-solo">S</button>
-    <button class="btn-phase" title="Invert polarity (both channels)">Ø</button>
-    <button class="btn-phase-r" title="Invert right channel 180° relative to left${isStereo ? '' : ' (mono — no effect)'}"${isStereo ? '' : ' disabled'}>ØR</button>
-    <button class="btn-stage">STG</button>
-    <span class="stem-loop-dot" title="Looping"></span>`
 
   // ── Waveform canvas ───────────────────────────────────────────────────────
   const canvas = document.createElement('canvas')
   canvas.className = 'stem-canvas'
-  canvas.height = 64
+  canvas.height = 32
   canvas.style.cursor = 'crosshair'
 
   // ── Region bar ────────────────────────────────────────────────────────────
@@ -3107,8 +4104,14 @@ function makeStemCard({ label, buf, color, desc }) {
     <span class="stem-zoom-label">ZOOM</span>
     <span class="stem-zoom-val">1×</span>`
 
+  // fxBar stub (hidden — controls are now in head row)
+  const fxBar = document.createElement('div')
+  fxBar.className = 'stem-fx-bar'
+
   card.appendChild(head)
+  card.appendChild(hiddenFx)
   card.appendChild(mixerStrip)
+  card.appendChild(fxBar)
   card.appendChild(canvas)
   card.appendChild(regionBar)
   card.appendChild(zoomBar)
@@ -3142,6 +4145,24 @@ function makeStemCard({ label, buf, color, desc }) {
     phaseInput = phaseGainL
   }
 
+  // ── Reverb (convolver + wet gain) ─────────────────────────────────────────
+  const reverbWetGain = audioCtx.createGain(); reverbWetGain.gain.value = 0
+  const convolver     = audioCtx.createConvolver()
+  convolver.buffer    = makeIR(audioCtx, 1.8)
+  gainNode.connect(convolver)
+  convolver.connect(reverbWetGain)
+  reverbWetGain.connect(audioCtx.destination)
+
+  // ── Delay (delay + feedback loop + wet gain) ───────────────────────────────
+  const delayNode     = audioCtx.createDelay(2.0); delayNode.delayTime.value = 0.25
+  const delayFeedback = audioCtx.createGain();      delayFeedback.gain.value  = 0.3
+  const delayWetGain  = audioCtx.createGain();      delayWetGain.gain.value   = 0
+  gainNode.connect(delayNode)
+  delayNode.connect(delayFeedback)
+  delayFeedback.connect(delayNode)        // feedback loop
+  delayNode.connect(delayWetGain)
+  delayWetGain.connect(audioCtx.destination)
+
   // ── Per-card state ─────────────────────────────────────────────────────────
   const st = {
     src: null, playing: false,
@@ -3152,7 +4173,9 @@ function makeStemCard({ label, buf, color, desc }) {
     animId: null,
     volume: 1, muted: false, soloed: false, externalMute: false,
     staged: false,
-    phaseL: 1, phaseR: 1,   // 1 = normal, -1 = inverted
+    phaseL: 1, phaseR: 1,
+    rvWet: 0, rvSize: 1.8,
+    dlWet: 0, dlTime: 0.25, dlFb: 0.3,
   }
 
   const spx    = () => buf.length / (canvas.width * st.zoom)
@@ -3206,14 +4229,14 @@ function makeStemCard({ label, buf, color, desc }) {
     if (w > 0 && w !== canvas.width) { canvas.width = w; draw() }
   }).observe(canvas)
 
-  // ── Mixer strip controls ───────────────────────────────────────────────────
-  const volSl    = mixerStrip.querySelector('.stem-vol-sl')
-  const volVal   = mixerStrip.querySelector('.stem-vol-val')
-  const muteBtn  = mixerStrip.querySelector('.btn-mute')
-  const soloBtn  = mixerStrip.querySelector('.btn-solo')
-  const phaseBtn  = mixerStrip.querySelector('.btn-phase')
-  const phaseRBtn = mixerStrip.querySelector('.btn-phase-r')
-  const stageBtn = mixerStrip.querySelector('.btn-stage')
+  // ── Controls — all now live in the single head row ────────────────────────
+  const volSl    = head.querySelector('.stem-vol-sl')
+  const volVal   = head.querySelector('.stem-vol-val')
+  const muteBtn  = head.querySelector('.btn-mute')
+  const soloBtn  = head.querySelector('.btn-solo')
+  const phaseBtn  = head.querySelector('.btn-phase')
+  const phaseRBtn = head.querySelector('.btn-phase-r')
+  const stageBtn = head.querySelector('.btn-stage')
 
   volSl.addEventListener('input', () => {
     st.volume = parseFloat(volSl.value)
@@ -3263,13 +4286,45 @@ function makeStemCard({ label, buf, color, desc }) {
     updateFireBtn()
   })
 
+  // ── FX wiring — wet sliders in head, hidden params in hiddenFx ───────────
+  const rvSizeEl   = hiddenFx.querySelector('.fx-rv-size')
+  const rvWetEl    = head.querySelector('.fx-rv-wet')
+  const rvWetValEl = head.querySelector('.fx-rv-wet-val')
+  const dlTimeEl   = hiddenFx.querySelector('.fx-dl-time')
+  const dlFbEl     = hiddenFx.querySelector('.fx-dl-fb')
+  const dlWetEl    = head.querySelector('.fx-dl-wet')
+  const dlWetValEl = head.querySelector('.fx-dl-wet-val')
+
+  rvSizeEl.addEventListener('input', () => {
+    st.rvSize = parseFloat(rvSizeEl.value)
+    convolver.buffer = makeIR(audioCtx, st.rvSize)   // rebuild IR for new size
+  })
+  rvWetEl.addEventListener('input', () => {
+    st.rvWet = parseFloat(rvWetEl.value)
+    reverbWetGain.gain.setTargetAtTime(st.rvWet, audioCtx.currentTime, 0.01)
+    rvWetValEl.textContent = Math.round(st.rvWet * 100) + '%'
+  })
+  dlTimeEl.addEventListener('input', () => {
+    st.dlTime = parseFloat(dlTimeEl.value)
+    delayNode.delayTime.setTargetAtTime(st.dlTime, audioCtx.currentTime, 0.01)
+  })
+  dlFbEl.addEventListener('input', () => {
+    st.dlFb = parseFloat(dlFbEl.value)
+    delayFeedback.gain.setTargetAtTime(st.dlFb, audioCtx.currentTime, 0.01)
+  })
+  dlWetEl.addEventListener('input', () => {
+    st.dlWet = parseFloat(dlWetEl.value)
+    delayWetGain.gain.setTargetAtTime(st.dlWet, audioCtx.currentTime, 0.01)
+    dlWetValEl.textContent = Math.round(st.dlWet * 100) + '%'
+  })
+
   // ── Zoom — scroll wheel + double-click reset ───────────────────────────────
   canvas.addEventListener('wheel', e => {
     e.preventDefault()
     const rect   = canvas.getBoundingClientRect()
     const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width)
     const pivot  = (st.scrollSamp + mouseX * spx()) / buf.sampleRate
-    st.zoom = Math.max(1, Math.min(st.zoom * (e.deltaY < 0 ? 1.35 : 1/1.35), 200))
+    st.zoom = Math.max(1, Math.min(st.zoom * (e.deltaY < 0 ? 1.05 : 1/1.05), 200))
     const nSpx = buf.length / (canvas.width * st.zoom)
     st.scrollSamp = Math.max(0, pivot * buf.sampleRate - mouseX * nSpx)
     updateZoomLabel(); draw()
@@ -3435,28 +4490,22 @@ function makeStemCard({ label, buf, color, desc }) {
     st.looping = !st.looping; loopBtn.classList.toggle('loop-on', st.looping)
     if (st.playing && st.region) playStem(st.region.start, st.region.end)
   })
-  regionBar.querySelector('.stem-btn-dl-region').addEventListener('click', () => {
+  regionBar.querySelector('.stem-btn-dl-region').addEventListener('click', async () => {
     if (!st.region) return
     const sr = buf.sampleRate, numCh = buf.numberOfChannels
     const s = Math.round(st.region.start * sr), e = Math.round(st.region.end * sr)
     const slice = audioCtx.createBuffer(numCh, e - s, sr)
     for (let ch = 0; ch < numCh; ch++) slice.copyToChannel(buf.getChannelData(ch).slice(s, e), ch)
     const blob = encodeWAV(applyPhaseToBuffer(slice, st, isStereo))
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url
-    a.download = `${label.replace(/\s+/g,'-').toLowerCase()}-region.wav`; a.click()
-    URL.revokeObjectURL(url)
+    await saveFileAs(blob, `${label.replace(/\s+/g,'-').toLowerCase()}-region.wav`, 'audio/wav', '.wav')
   })
   regionBar.querySelector('.stem-btn-clear-region').addEventListener('click', () => {
     st.region = null; st.looping = false
     regionBar.classList.remove('visible'); loopBtn.classList.remove('loop-on'); draw()
   })
-  head.querySelector('.stem-btn-dl').addEventListener('click', () => {
+  head.querySelector('.stem-btn-dl').addEventListener('click', async () => {
     const blob = encodeWAV(applyPhaseToBuffer(buf, st, isStereo))
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url
-    a.download = `${label.replace(/\s+/g,'-').toLowerCase()}.wav`; a.click()
-    URL.revokeObjectURL(url)
+    await saveFileAs(blob, `${label.replace(/\s+/g,'-').toLowerCase()}.wav`, 'audio/wav', '.wav')
   })
 
   // ── Public controller (used by global mixer) ───────────────────────────────
@@ -3471,6 +4520,59 @@ function makeStemCard({ label, buf, color, desc }) {
       st.staged = true
       stageBtn.classList.add('on'); card.classList.add('staged')
       updateFireBtn()
+    },
+    // ── Project save/load ───────────────────────────────────────────────────
+    getProjectData: async () => {
+      const wavBlob = encodeWAV(buf)
+      const audioBase64 = await new Promise(res => {
+        const r = new FileReader()
+        r.onload = () => res(r.result.split(',')[1])
+        r.readAsDataURL(wavBlob)
+      })
+      return {
+        label, color, desc,
+        volume: st.volume, muted: st.muted, soloed: st.soloed,
+        phaseL: st.phaseL, phaseR: st.phaseR,
+        staged: st.staged,
+        region: st.region ? { start: st.region.start, end: st.region.end } : null,
+        rvWet: st.rvWet, rvSize: st.rvSize,
+        dlWet: st.dlWet, dlTime: st.dlTime, dlFb: st.dlFb,
+        audioBase64
+      }
+    },
+    restoreState: (s) => {
+      if (s.volume  !== undefined) { st.volume = s.volume; volSl.value = s.volume; volVal.textContent = `${Math.round(s.volume * 100)}%`; applyGain() }
+      if (s.muted)  { st.muted  = true;  muteBtn.classList.add('on');  applyGain() }
+      if (s.soloed) { st.soloed = true;  soloBtn.classList.add('on') }
+      if (s.phaseL !== undefined) {
+        st.phaseL = s.phaseL; st.phaseR = s.phaseR ?? 1
+        phaseBtn.classList.toggle('on', st.phaseL === -1)
+        if (phaseRBtn && isStereo) phaseRBtn.classList.toggle('on', st.phaseR === -1)
+        applyPhase()
+      }
+      if (s.rvWet !== undefined) {
+        st.rvWet = s.rvWet; st.rvSize = s.rvSize ?? 1.8
+        rvSizeEl.value = st.rvSize; rvWetEl.value = st.rvWet
+        rvWetValEl.textContent = Math.round(st.rvWet * 100) + '%'
+        convolver.buffer = makeIR(audioCtx, st.rvSize)
+        reverbWetGain.gain.value = st.rvWet
+      }
+      if (s.dlWet !== undefined) {
+        st.dlWet = s.dlWet; st.dlTime = s.dlTime ?? 0.25; st.dlFb = s.dlFb ?? 0.3
+        dlTimeEl.value = st.dlTime; dlFbEl.value = st.dlFb; dlWetEl.value = st.dlWet
+        dlWetValEl.textContent = Math.round(st.dlWet * 100) + '%'
+        delayNode.delayTime.value = st.dlTime
+        delayFeedback.gain.value  = st.dlFb
+        delayWetGain.gain.value   = st.dlWet
+      }
+      if (s.region) {
+        st.region = { start: s.region.start, end: s.region.end }
+        updateStemRegionBar(); regionBar.classList.add('visible'); draw()
+      }
+      if (s.staged && st.region) {
+        st.staged = true; stageBtn.classList.add('on'); card.classList.add('staged')
+        updateFireBtn()
+      }
     },
     getStagedData: () => st.staged && st.region ? {
       buf, region: st.region,
@@ -3539,8 +4641,8 @@ function drawStemWave(canvas, buf, color, region, cursorTime, zoom=1, scrollSamp
   if (region) {
     const rS = (region.start * buf.sampleRate - scrollSamp) / spp
     const rE = (region.end   * buf.sampleRate - scrollSamp) / spp
-    ctx.fillStyle = 'rgba(251,191,36,0.18)'; ctx.fillRect(rS, 0, rE - rS, H)
-    ctx.fillStyle = 'rgba(251,191,36,0.9)';  ctx.fillRect(rS, 0, 2, H); ctx.fillRect(rE - 2, 0, 2, H)
+    ctx.fillStyle = 'rgba(251,191,36,0.38)'; ctx.fillRect(rS, 0, rE - rS, H)
+    ctx.fillStyle = 'rgba(251,191,36,0.95)'; ctx.fillRect(rS, 0, 2, H); ctx.fillRect(rE - 2, 0, 2, H)
   }
 
   // Playback cursor
