@@ -374,15 +374,6 @@
     .btn-solo { padding: 3px 9px; font-size: 0.7rem; font-weight: 700; border-radius: 4px; border: 1px solid var(--muted); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px; }
     .btn-solo:hover { border-color: #f59e0b; color: #f59e0b; }
     .btn-solo.on { background: #f59e0b; border-color: #f59e0b; color: #000; }
-<<<<<<< Updated upstream
-    .btn-phase { padding: 3px 9px; font-size: 0.7rem; font-weight: 700; border-radius: 4px; border: 1px solid var(--muted); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px; }
-    .btn-phase:hover { border-color: #06b6d4; color: #06b6d4; }
-    .btn-phase.on { background: #06b6d4; border-color: #06b6d4; color: #000; }
-    .btn-phase-r { padding: 3px 9px; font-size: 0.7rem; font-weight: 700; border-radius: 4px; border: 1px solid var(--muted); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px; }
-    .btn-phase-r:hover:not(:disabled) { border-color: #818cf8; color: #818cf8; }
-    .btn-phase-r.on { background: #818cf8; border-color: #818cf8; color: #000; }
-    .btn-phase-r:disabled { opacity: 0.3; cursor: not-allowed; }
-=======
     .btn-phase   { padding: 3px 9px; font-size: 0.72rem; font-weight: 800; border-radius: 4px; border: 1px solid rgba(6,182,212,0.55); background: rgba(6,182,212,0.10); color: #06b6d4; cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px; }
     .btn-phase:hover  { background: rgba(6,182,212,0.22); border-color: #06b6d4; }
     .btn-phase.on     { background: #06b6d4; border-color: #06b6d4; color: #000; }
@@ -399,7 +390,6 @@
     .stem-fx-sl.rv::-moz-range-thumb { width: 11px; height: 11px; border-radius: 50%; background: #a78bfa; cursor: pointer; border: none; }
     .stem-fx-sl.dl::-moz-range-thumb { width: 11px; height: 11px; border-radius: 50%; background: #34d399; cursor: pointer; border: none; }
     .stem-fx-val { font-size: 0.58rem; font-family: monospace; color: var(--muted); min-width: 24px; text-align: right; }
->>>>>>> Stashed changes
 
     /* Stems transport */
     .stems-transport { display: none; flex-direction: column; gap: 10px; padding: 12px 0 4px; }
@@ -3075,10 +3065,7 @@ async function runAiSplitCloud(out) {
     method: 'POST',
     headers: { ..._authHeaders, 'X-Replicate-Key': replicateKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ version: REPLICATE_MODEL, input: { audio: audioInput, model: 'htdemucs' } })
-<<<<<<< Updated upstream
-=======
   })
->>>>>>> Stashed changes
   if (!startResp.ok) {
     const err = await startResp.json().catch(() => ({}))
     throw new Error(`Replicate error: ${err.detail || startResp.status}`)
@@ -3145,13 +3132,6 @@ async function runAiSplitCloud(out) {
     } catch (e) {
       throw new Error(`Could not decode ${name} stem (${ct}, ${ab.byteLength} bytes): ${e.message}`)
     }
-<<<<<<< Updated upstream
-    const card = makeStemCard({ label: name, buf: decoded, color: colours[name] || '#8b5cf6', desc: `${name} stem` })
-    placeholders[name].replaceWith(card)
-  }
-
-  $('stemsTransport').style.display = ''
-=======
     const { el, ...ctrl } = makeStemCard({ label: name, buf: decoded, color: colours[name] || '#8b5cf6', desc: `${name} stem` })
     placeholders[name].replaceWith(el)
     allStemCards.push(ctrl)
@@ -3161,7 +3141,6 @@ async function runAiSplitCloud(out) {
   $('stemsAccMeta').textContent = allStemCards.length + ' stems'
   showStemsAccBtn()
   if (allStemCards.length) runBPMDetect(audioBuf)
->>>>>>> Stashed changes
 }
 
 async function runAiSplit() {
@@ -3528,19 +3507,6 @@ function makeStemCard({ label, buf, color, desc }) {
   // ── Stub mixer strip (hidden, keeps CSS collapsed rules happy) ────────────
   const mixerStrip = document.createElement('div')
   mixerStrip.className = 'stem-mixer-strip'
-<<<<<<< Updated upstream
-  mixerStrip.innerHTML = `
-    <span class="stem-vol-label">VOL</span>
-    <input type="range" class="stem-vol-sl" min="0" max="1.5" step="0.01" value="1">
-    <span class="stem-vol-val">100%</span>
-    <button class="btn-mute">M</button>
-    <button class="btn-solo">S</button>
-    <button class="btn-phase" title="Invert polarity (both channels)">Ø</button>
-    <button class="btn-phase-r" title="Invert right channel 180° relative to left${isStereo ? '' : ' (mono — no effect)'}"${isStereo ? '' : ' disabled'}>ØR</button>
-    <button class="btn-stage">STG</button>
-    <span class="stem-loop-dot" title="Looping"></span>`
-=======
->>>>>>> Stashed changes
 
   // ── Waveform canvas ───────────────────────────────────────────────────────
   const canvas = document.createElement('canvas')
@@ -3587,10 +3553,6 @@ function makeStemCard({ label, buf, color, desc }) {
   // ── Phase / polarity nodes ─────────────────────────────────────────────────
   // Chain: src → splitter → phaseGainL/R → merger → gainNode
   // For mono buffers we fall back to a simple inverting gain on gainNode.
-<<<<<<< Updated upstream
-  const isStereo = buf.numberOfChannels >= 2
-=======
->>>>>>> Stashed changes
   let phaseInput   // what src connects to
   let phaseGainL, phaseGainR
 
@@ -3613,8 +3575,6 @@ function makeStemCard({ label, buf, color, desc }) {
     phaseInput = phaseGainL
   }
 
-<<<<<<< Updated upstream
-=======
   // ── Reverb (convolver + wet gain) ─────────────────────────────────────────
   const reverbWetGain = audioCtx.createGain(); reverbWetGain.gain.value = 0
   const convolver     = audioCtx.createConvolver()
@@ -3633,7 +3593,6 @@ function makeStemCard({ label, buf, color, desc }) {
   delayNode.connect(delayWetGain)
   delayWetGain.connect(audioCtx.destination)
 
->>>>>>> Stashed changes
   // ── Per-card state ─────────────────────────────────────────────────────────
   const st = {
     src: null, playing: false,
@@ -3645,11 +3604,8 @@ function makeStemCard({ label, buf, color, desc }) {
     volume: 1, muted: false, soloed: false, externalMute: false,
     staged: false,
     phaseL: 1, phaseR: 1,   // 1 = normal, -1 = inverted
-<<<<<<< Updated upstream
-=======
     rvWet: 0, rvSize: 1.8,
     dlWet: 0, dlTime: 0.25, dlFb: 0.3,
->>>>>>> Stashed changes
   }
 
   const spx    = () => buf.length / (canvas.width * st.zoom)
@@ -3703,16 +3659,6 @@ function makeStemCard({ label, buf, color, desc }) {
     if (w > 0 && w !== canvas.width) { canvas.width = w; draw() }
   }).observe(canvas)
 
-<<<<<<< Updated upstream
-  // ── Mixer strip controls ───────────────────────────────────────────────────
-  const volSl    = mixerStrip.querySelector('.stem-vol-sl')
-  const volVal   = mixerStrip.querySelector('.stem-vol-val')
-  const muteBtn  = mixerStrip.querySelector('.btn-mute')
-  const soloBtn  = mixerStrip.querySelector('.btn-solo')
-  const phaseBtn  = mixerStrip.querySelector('.btn-phase')
-  const phaseRBtn = mixerStrip.querySelector('.btn-phase-r')
-  const stageBtn = mixerStrip.querySelector('.btn-stage')
-=======
   // ── Controls — all live in the single head row ────────────────────────────
   const volSl    = head.querySelector('.stem-vol-sl')
   const volVal   = head.querySelector('.stem-vol-val')
@@ -3753,7 +3699,6 @@ function makeStemCard({ label, buf, color, desc }) {
     delayWetGain.gain.setTargetAtTime(st.dlWet, audioCtx.currentTime, 0.01)
     dlWetValEl.textContent = Math.round(st.dlWet * 100) + '%'
   })
->>>>>>> Stashed changes
 
   volSl.addEventListener('input', () => {
     st.volume = parseFloat(volSl.value)
