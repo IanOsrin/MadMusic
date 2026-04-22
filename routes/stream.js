@@ -48,7 +48,13 @@ function resolveContainerUpstream(req) {
         if (isPrivateHostname(hostname)) {
           return { error: { status: 403, body: { error: 'forbidden', detail: 'Access to private/internal IPs not allowed' } } };
         }
-        return { upstreamUrl: direct, requiresAuth: !!(FM_HOST && direct.startsWith(FM_HOST)) };
+        // Public S3/CDN URLs — redirect the browser directly instead of proxying.
+        // This eliminates the server round-trip and lets the browser cache the image itself.
+        const isFmUrl = FM_HOST && direct.startsWith(FM_HOST);
+        if (!isFmUrl) {
+          return { redirect: direct };
+        }
+        return { upstreamUrl: direct, requiresAuth: true };
       } catch {
         return { error: { status: 400, body: { error: 'invalid_input', detail: 'Invalid URL format' } } };
       }
@@ -194,6 +200,9 @@ function applyProxyResponseHeaders(res, upstream) {
   const contentType = res.getHeader('Content-Type') || '';
   if (contentType.startsWith('audio/') || contentType.startsWith('video/')) {
     res.setHeader('Cache-Control', 'public, max-age=86400');
+  } else if (contentType.startsWith('image/')) {
+    // FM container images — cache aggressively; artwork almost never changes
+    res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=2592000');
   }
 }
 
@@ -211,6 +220,13 @@ router.get('/container', async (req, res) => {
   if (resolved.error) {
     const { status, body } = resolved.error;
     res.status(status).json(body);
+    return;
+  }
+
+  // Public S3/CDN image — redirect directly; no proxy overhead, browser caches it
+  if (resolved.redirect) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.redirect(302, resolved.redirect);
     return;
   }
 
