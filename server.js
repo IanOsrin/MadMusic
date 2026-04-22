@@ -431,7 +431,8 @@ app.post('/api/audio-lab/replicate/upload', async (req, res) => {
       headers: {
         'Authorization': `Token ${replicateKey}`,
         'Content-Type': 'audio/wav',
-        'Content-Disposition': 'attachment; filename="audio.wav"'
+        'Content-Disposition': 'attachment; filename="audio.wav"',
+        'Content-Length': req.body.length.toString()
       },
       body: req.body
     });

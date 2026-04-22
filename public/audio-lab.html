@@ -2620,7 +2620,9 @@ async function runAiSplitCloud(out) {
   if (!replicateKey) throw new Error('No Replicate API key set')
 
   // Step 1: Upload raw WAV binary to Replicate's file store (avoids 413 from base64 JSON)
-  const wavBuffer = encodeWAV(audioBuf)
+  // encodeWAV returns a Blob — convert to ArrayBuffer so we can read byteLength and send binary
+  const wavBlob = encodeWAV(audioBuf)
+  const wavBuffer = await wavBlob.arrayBuffer()
   out.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:0.82rem;">⬆ Uploading audio to Replicate… (${Math.round(wavBuffer.byteLength / 1024 / 1024 * 10) / 10} MB)</div>`
 
   const _authHeaders = window._massAccessToken ? { 'X-Access-Token': window._massAccessToken } : {}
