@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { randomInt } from 'node:crypto';
 import { fmPost, fmFindRecords } from '../../fm-client.js';
-import { publicPlaylistsCache, albumCache, randomSongsPoolCache } from '../../cache.js';
+import { albumCache, randomSongsPoolCache } from '../../cache.js';
 import { hasValidAudio, hasValidArtwork, resolvePlayableSrc, resolveArtworkSrc } from '../../lib/track.js';
 import {
   FM_LAYOUT,
@@ -12,8 +12,19 @@ import {
 import { fmErrorToHttpStatus } from '../../lib/http.js';
 import { validateQueryString } from '../../lib/validators.js';
 import { resolvePlaylistImage } from '../../lib/playlist.js';
+import { createSwrCache } from '../../lib/swr-cache.js';
+import { createLogger } from '../../lib/logger.js';
+import { parsePositiveInt } from '../../lib/format.js';
 
-const router = Router();
+const router       = Router();
+const log          = createLogger('public-playlists');
+const logRandom    = createLogger('random-songs');
+const logMissing   = createLogger('missing-audio');
+const logAlbum     = createLogger('album');
+
+// Aggressive TTLs with SWR — serve instantly, refresh in background.
+const PUBLIC_PLAYLISTS_LIST_TTL_MS   = parsePositiveInt(process.env.PUBLIC_PLAYLISTS_LIST_TTL_MS,   60 * 60 * 1000); // 60 min
+const PUBLIC_PLAYLISTS_TRACKS_TTL_MS = parsePositiveInt(process.env.PUBLIC_PLAYLISTS_TRACKS_TTL_MS, 30 * 60 * 1000); // 30 min
 
 // Cryptographically safe Fisher-Yates shuffle
 function cryptoShuffle(arr) {
@@ -55,7 +66,7 @@ async function fetchPoolFromFM(genres) {
       const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, { query, limit: 500 });
       const json = await response.json().catch(() => ({}));
       if (response.ok) {
-        console.log(`[RANDOM SONGS] Pool fetch (genre "${field}"): ${json?.response?.data?.length ?? 0} records from FM`);
+        logRandom.debug(`pool fetch (genre "${field}"): ${json?.response?.data?.length ?? 0} records from FM`);
         return { error: false, data: json?.response?.data || [] };
       }
     }
@@ -84,7 +95,7 @@ async function fetchPoolFromFM(genres) {
     const code = json?.messages?.[0]?.code;
     return { error: true, msg, code };
   }
-  console.log(`[RANDOM SONGS] Pool fetch (no genre): ${json?.response?.data?.length ?? 0} records from FM`);
+  logRandom.debug(`pool fetch (no genre): ${json?.response?.data?.length ?? 0} records from FM`);
   return { error: false, data: json?.response?.data || [] };
 }
 
@@ -141,21 +152,21 @@ router.get('/random-songs', async (req, res) => {
     const genres = genreParam.split(',').map(g => g.trim()).filter(Boolean);
 
     const genreStr = genres.length ? ` (genres: ${genres.join(', ')})` : '';
-    console.log(`[RANDOM SONGS] Requesting ${count} songs${genreStr}`);
+    logRandom.debug(`requesting ${count} songs${genreStr}`);
 
     let data = [];
 
     if (genres.length > 0) {
       const genreData = await fetchSongsByGenre(genres, count * 3);
       if (genreData === null) {
-        console.error('[RANDOM SONGS] No valid genre field found on layout');
+        logRandom.error('No valid genre field found on layout');
         return res.status(500).json({ ok: false, error: 'Genre filtering not supported on this layout' });
       }
       data = genreData;
     } else {
       const result = await fetchRandomSongsData(count);
       if (result.error) {
-        console.error(`[RANDOM SONGS] FileMaker error: ${result.msg} (${result.code})`);
+        logRandom.error(`FileMaker error: ${result.msg} (${result.code})`);
         return res.status(500).json({ ok: false, error: result.msg, code: result.code });
       }
       data = result.data;
@@ -200,138 +211,167 @@ router.get('/random-songs', async (req, res) => {
       };
     }).filter(item => item.audioSrc && item.artworkSrc);
 
-    console.log(`[RANDOM SONGS] Returning ${items.length} songs`);
+    logRandom.debug(`returning ${items.length} songs`);
     res.json({ ok: true, items, count: items.length });
   } catch (err) {
-    console.error('[RANDOM SONGS] Error:', err);
+    logRandom.error('Error:', err);
     const detail = err?.message || String(err);
     res.status(500).json({ ok: false, error: 'Failed to fetch random songs', detail });
   }
 });
 
 // ── GET /public-playlists ─────────────────────────────────────────────────────
-router.get('/public-playlists', async (req, res) => {
-  try {
-    const nameParam = (req.query.name || '').toString().trim();
-    const limitParam = Number.parseInt((req.query.limit || '100'), 10);
-    const limit = Number.isFinite(limitParam) ? Math.max(1, Math.min(2000, limitParam)) : 100;
-    const bustCache = req.query.bust === '1' || req.query.bust === 'true';
-    const cacheKey = `public-playlists:${nameParam}:${limit}`;
-    const cached = !bustCache && publicPlaylistsCache.get(cacheKey);
-    if (cached) {
-      console.log(`[CACHE HIT] public-playlists: ${nameParam || 'all'}`);
-      res.setHeader('X-Cache-Hit', 'true');
-      return res.json(cached);
-    }
-    if (bustCache) publicPlaylistsCache.delete(cacheKey);
+// Two code paths, each SWR-wrapped:
+//   - ?name=X      → tracks belonging to that playlist
+//   - (no name)    → list of all playlist names with track counts + images
+// Both return stale-instantly while a fresh fetch refreshes in the background.
 
-    if (nameParam) {
-      const result = await fmFindRecords(
-        FM_LAYOUT,
-        [{ 'PublicPlaylist': `==${nameParam}` }],
-        { limit, offset: 1 }
-      );
-      if (!result.ok) {
-        return res.status(404).json({ ok: false, error: 'Playlist not found or FM error' });
-      }
-      const rawTracks = result.data
-        .filter(r => hasValidAudio(r.fieldData || {}))
-        .map(r => {
-          const f = r.fieldData || {};
-          const audioInfo   = pickFieldValueCaseInsensitive(f, AUDIO_FIELD_CANDIDATES);
-          const artworkInfo = pickFieldValueCaseInsensitive(f, ARTWORK_FIELD_CANDIDATES);
-          const artworkSrc  = resolveArtworkSrc(artworkInfo.value) || artworkInfo.value || '';
-          const orderRaw    = f['PublicPlaylistOrder'];
-          const playlistOrder = (orderRaw !== undefined && orderRaw !== '' && orderRaw !== null)
-            ? Number(orderRaw) : null;
-          return {
-            recordId: r.recordId,
-            trackRecordId: r.recordId,
-            playlistOrder,
-            name: firstNonEmpty(f, ['Track Name', 'Tape Files::Track Name', 'Song Title']) || 'Unknown Track',
-            albumTitle: firstNonEmpty(f, ['Album Title', 'Tape Files::Album Title', 'Album']) || '',
-            albumArtist: firstNonEmpty(f, ['Album Artist', 'Tape Files::Album Artist', 'Artist']) || '',
-            trackArtist: f['Track Artist'] || firstNonEmpty(f, ['Album Artist', 'Tape Files::Album Artist']) || '',
-            mp3: audioInfo.value || '',
-            resolvedSrc: resolvePlayableSrc(audioInfo.value),
-            picture: artworkSrc,
-            artwork:  artworkSrc
-          };
-        });
+async function loadPlaylistTracks(name) {
+  const result = await fmFindRecords(
+    FM_LAYOUT,
+    [{ 'PublicPlaylist': `==${name}` }],
+    { limit: 2000, offset: 1 }
+  );
+  if (!result.ok) {
+    const err = new Error('Playlist not found or FM error');
+    err.statusCode = 404;
+    throw err;
+  }
+  const rawTracks = result.data
+    .filter(r => hasValidAudio(r.fieldData || {}))
+    .map(r => {
+      const f           = r.fieldData || {};
+      const audioInfo   = pickFieldValueCaseInsensitive(f, AUDIO_FIELD_CANDIDATES);
+      const artworkInfo = pickFieldValueCaseInsensitive(f, ARTWORK_FIELD_CANDIDATES);
+      const artworkSrc  = resolveArtworkSrc(artworkInfo.value) || artworkInfo.value || '';
+      const orderRaw    = f['PublicPlaylistOrder'];
+      const playlistOrder = (orderRaw !== undefined && orderRaw !== '' && orderRaw !== null)
+        ? Number(orderRaw) : null;
+      return {
+        recordId:      r.recordId,
+        trackRecordId: r.recordId,
+        playlistOrder,
+        name:        firstNonEmpty(f, ['Track Name', 'Tape Files::Track Name', 'Song Title']) || 'Unknown Track',
+        albumTitle:  firstNonEmpty(f, ['Album Title', 'Tape Files::Album Title', 'Album']) || '',
+        albumArtist: firstNonEmpty(f, ['Album Artist', 'Tape Files::Album Artist', 'Artist']) || '',
+        trackArtist: f['Track Artist'] || firstNonEmpty(f, ['Album Artist', 'Tape Files::Album Artist']) || '',
+        mp3:         audioInfo.value || '',
+        resolvedSrc: resolvePlayableSrc(audioInfo.value),
+        picture:     artworkSrc,
+        artwork:     artworkSrc
+      };
+    });
 
-      // Sort by PublicPlaylistOrder if any track has it set; otherwise keep FM order
-      const hasOrder = rawTracks.some(t => t.playlistOrder !== null && Number.isFinite(t.playlistOrder));
-      const tracks = hasOrder
-        ? rawTracks.slice().sort((a, b) => {
-            const aHas = a.playlistOrder !== null && Number.isFinite(a.playlistOrder);
-            const bHas = b.playlistOrder !== null && Number.isFinite(b.playlistOrder);
-            if (aHas && bHas) return a.playlistOrder - b.playlistOrder;
-            if (aHas) return -1;
-            if (bHas) return 1;
-            return 0;
-          })
-        : rawTracks;
-
-      console.log(`[public-playlists] "${nameParam}" — ${tracks.length} tracks, ordered=${hasOrder}`, tracks.slice(0, 5).map(t => `${t.name}(${t.playlistOrder})`).join(', '));
-      const payload = { ok: true, tracks };
-      publicPlaylistsCache.set(cacheKey, payload);
-      return res.json(payload);
-    }
-
-    const result = await fmFindRecords(
-      FM_LAYOUT,
-      [{ 'PublicPlaylist': '*' }],
-      { limit: 2000, offset: 1 }
-    );
-    if (!result.ok) {
-      return res.status(500).json({ ok: false, error: 'Failed to load public playlists from FileMaker' });
-    }
-
-    const playlistMap = new Map();
-    for (const r of result.data) {
-      const name = (r.fieldData?.PublicPlaylist || '').trim();
-      if (!name) continue;
-      if (!playlistMap.has(name)) {
-        playlistMap.set(name, { name, trackCount: 0, order: null });
-      }
-      const entry = playlistMap.get(name);
-      entry.trackCount += 1;
-      // Scan every record — use first non-empty PublicPlaylistOrder we find
-      if (entry.order === null) {
-        const orderRaw = r.fieldData?.PublicPlaylistOrder;
-        if (orderRaw !== undefined && orderRaw !== '' && orderRaw !== null) {
-          const parsed = Number(orderRaw);
-          if (Number.isFinite(parsed)) entry.order = parsed;
-        }
-      }
-    }
-
-    const allEntries = Array.from(playlistMap.values());
-    const hasAnyOrder = allEntries.some(e => e.order !== null && Number.isFinite(e.order));
-    console.log(`[public-playlists] ${allEntries.length} playlists, hasAnyOrder=${hasAnyOrder}`, allEntries.map(e => `${e.name}:${e.order}`).join(', '));
-
-    const rawPlaylists = allEntries
-      .sort((a, b) => {
-        const aHas = a.order !== null && Number.isFinite(a.order);
-        const bHas = b.order !== null && Number.isFinite(b.order);
-        if (aHas && bHas) return a.order - b.order;
+  const hasOrder = rawTracks.some(t => t.playlistOrder !== null && Number.isFinite(t.playlistOrder));
+  const tracks = hasOrder
+    ? rawTracks.slice().sort((a, b) => {
+        const aHas = a.playlistOrder !== null && Number.isFinite(a.playlistOrder);
+        const bHas = b.playlistOrder !== null && Number.isFinite(b.playlistOrder);
+        if (aHas && bHas) return a.playlistOrder - b.playlistOrder;
         if (aHas) return -1;
         if (bHas) return 1;
-        return 0; // preserve FileMaker insertion order when no order field
+        return 0;
       })
-      .slice(0, limit);
-    const playlists = await Promise.all(
-      rawPlaylists.map(async (pl) => ({
-        ...pl,
-        imageUrl: await resolvePlaylistImage(pl.name) || null
-      }))
-    );
-    const finalPayload = { ok: true, playlists };
-    publicPlaylistsCache.set(cacheKey, finalPayload);
-    res.json(finalPayload);
+    : rawTracks;
+
+  log.debug(`"${name}" → ${tracks.length} tracks, ordered=${hasOrder}`);
+  return { ok: true, tracks };
+}
+
+async function loadPlaylistListPayload() {
+  const result = await fmFindRecords(
+    FM_LAYOUT,
+    [{ 'PublicPlaylist': '*' }],
+    { limit: 2000, offset: 1 }
+  );
+  if (!result.ok) {
+    throw new Error('Failed to load public playlists from FileMaker');
+  }
+
+  const playlistMap = new Map();
+  for (const r of result.data) {
+    const name = (r.fieldData?.PublicPlaylist || '').trim();
+    if (!name) continue;
+    if (!playlistMap.has(name)) {
+      playlistMap.set(name, { name, trackCount: 0, order: null });
+    }
+    const entry = playlistMap.get(name);
+    entry.trackCount += 1;
+    if (entry.order === null) {
+      const orderRaw = r.fieldData?.PublicPlaylistOrder;
+      if (orderRaw !== undefined && orderRaw !== '' && orderRaw !== null) {
+        const parsed = Number(orderRaw);
+        if (Number.isFinite(parsed)) entry.order = parsed;
+      }
+    }
+  }
+
+  const allEntries  = Array.from(playlistMap.values());
+  const rawPlaylists = allEntries
+    .sort((a, b) => {
+      const aHas = a.order !== null && Number.isFinite(a.order);
+      const bHas = b.order !== null && Number.isFinite(b.order);
+      if (aHas && bHas) return a.order - b.order;
+      if (aHas) return -1;
+      if (bHas) return 1;
+      return 0;
+    });
+  const playlists = await Promise.all(
+    rawPlaylists.map(async (pl) => ({
+      ...pl,
+      imageUrl: await resolvePlaylistImage(pl.name) || null
+    }))
+  );
+  log.debug(`${playlists.length} playlists loaded`);
+  return { ok: true, playlists };
+}
+
+const publicPlaylistTracksSwr = createSwrCache({
+  ttlMs: PUBLIC_PLAYLISTS_TRACKS_TTL_MS,
+  max:   200,
+  label: 'public-playlist-tracks',
+  name:  'publicPlaylistTracks',
+  loader: (key) => loadPlaylistTracks(key.slice('tracks:'.length))
+});
+
+const publicPlaylistListSwr = createSwrCache({
+  ttlMs: PUBLIC_PLAYLISTS_LIST_TTL_MS,
+  max:   2,
+  label: 'public-playlist-list',
+  name:  'publicPlaylistList',
+  loader: () => loadPlaylistListPayload()
+});
+
+export const publicPlaylistsWarmer = () => publicPlaylistListSwr.get('list');
+
+router.get('/public-playlists', async (req, res) => {
+  try {
+    const nameParam  = (req.query.name || '').toString().trim();
+    const limitParam = Number.parseInt((req.query.limit || '100'), 10);
+    const limit      = Number.isFinite(limitParam) ? Math.max(1, Math.min(2000, limitParam)) : 100;
+    const bustCache  = req.query.bust === '1' || req.query.bust === 'true';
+
+    if (nameParam) {
+      const key = `tracks:${nameParam}`;
+      if (bustCache) publicPlaylistTracksSwr.cache.delete(key);
+      const { value, state } = await publicPlaylistTracksSwr.get(key);
+      res.setHeader('X-Cache-State', state);
+      return res.json(value);
+    }
+
+    const key = 'list';
+    if (bustCache) publicPlaylistListSwr.cache.delete(key);
+    const { value, state } = await publicPlaylistListSwr.get(key);
+    res.setHeader('X-Cache-State', state);
+    // Apply limit to the list view (tracks view already respects fm limit in the query).
+    if (Array.isArray(value.playlists) && value.playlists.length > limit) {
+      return res.json({ ...value, playlists: value.playlists.slice(0, limit) });
+    }
+    return res.json(value);
   } catch (err) {
-    console.error('[MASS] Public playlists fetch failed:', err);
-    res.status(500).json({ ok: false, error: 'Failed to load public playlists' });
+    const status = err?.statusCode || 500;
+    if (status >= 500) log.error('fetch failed:', err);
+    res.status(status).json({ ok: false, error: err?.message || 'Failed to load public playlists' });
   }
 });
 
@@ -344,7 +384,7 @@ router.get('/missing-audio-songs', async (req, res) => {
     const maxOffset = 10000;
     const randomOffset = randomInt(1, maxOffset + 1);
 
-    console.log(`[missing-audio-songs] Fetching ${fetchLimit} records from offset ${randomOffset}`);
+    logMissing.debug(`fetching ${fetchLimit} records from offset ${randomOffset}`);
 
     const json = await fmFindRecords(FM_LAYOUT, [{ 'Album Title': '*' }], {
       limit: fetchLimit,
@@ -352,14 +392,14 @@ router.get('/missing-audio-songs', async (req, res) => {
     });
 
     const rawData = json?.data || [];
-    console.log(`[missing-audio-songs] Fetched ${rawData.length} total records`);
+    logMissing.debug(`fetched ${rawData.length} total records`);
 
     const missingAudioRecords = rawData.filter(record => {
       const fields = record.fieldData || {};
       return !hasValidAudio(fields);
     });
 
-    console.log(`[missing-audio-songs] Found ${missingAudioRecords.length} songs without audio out of ${rawData.length} total`);
+    logMissing.debug(`found ${missingAudioRecords.length} songs without audio out of ${rawData.length} total`);
 
     const shuffled = cryptoShuffle(missingAudioRecords);
     const selected = shuffled.slice(0, count);
@@ -370,10 +410,10 @@ router.get('/missing-audio-songs', async (req, res) => {
       fields: record.fieldData || {}
     }));
 
-    console.log(`[missing-audio-songs] Returning ${items.length} songs`);
+    logMissing.debug(`returning ${items.length} songs`);
     return res.json({ ok: true, items, total: items.length });
   } catch (err) {
-    console.error('[missing-audio-songs] Error:', err);
+    logMissing.error('Error:', err);
     const detail = err?.message || String(err);
     return res.status(500).json({ error: 'Missing audio songs failed', status: 500, detail });
   }
@@ -403,7 +443,7 @@ router.get('/album', async (req, res) => {
     const cacheKey = `album:${cat}:${title}:${artist}:${limit}`;
     const cached = albumCache.get(cacheKey);
     if (cached) {
-      console.log(`[CACHE HIT] album: ${cacheKey.slice(0, 50)}...`);
+      logAlbum.debug(`cache hit: ${cacheKey.slice(0, 50)}...`);
       res.setHeader('X-Cache-Hit', 'true');
       return res.json(cached);
     }

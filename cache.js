@@ -28,35 +28,10 @@ export const albumCache = new LRUCache({
   updateAgeOnHas: true
 });
 
-export const publicPlaylistsCache = new LRUCache({
-  max: 200, // Increased from 100
-  ttl: 30 * MINUTE_MS, // 30 minutes (increased from 5 minutes)
-  updateAgeOnGet: true,
-  updateAgeOnHas: true
-});
-
-export const trendingCache = new LRUCache({
-  max: 50,
-  ttl: DAY_MS, // refresh trending once per day (24 hours)
-  updateAgeOnGet: false, // Don't reset TTL on access - we want it to refresh daily
-  updateAgeOnHas: false
-});
-
-export const genreCache = new LRUCache({
-  max: 500, // Cache genre searches (each genre combo gets an entry)
-  ttl: 30 * MINUTE_MS, // 30 minutes - genres don't change often
-  updateAgeOnGet: true, // Keep popular genre combos cached
-  updateAgeOnHas: true
-});
-
-// Genre list cache — caches distinct genre values scanned from FM records.
-// Refreshes once per day; use ?refresh=1 on /api/genres to force an early update.
-export const genreListCache = new LRUCache({
-  max: 10,
-  ttl: DAY_MS, // 24 hours
-  updateAgeOnGet: false,
-  updateAgeOnHas: false
-});
+// NOTE: publicPlaylistsCache, trendingCache, genreCache and genreListCache were
+// removed once those endpoints moved to the SWR wrapper (lib/swr-cache.js).
+// Each SWR-wrapped route now owns its own LRU instance and self-registers
+// with the SWR registry so admin tooling can still enumerate it.
 
 // Access token validation cache — avoids a FileMaker round-trip on every API request.
 // Stores { data, expiresAt } so the 5-min freshness and 24h stale-grace checks still work.
@@ -111,5 +86,17 @@ export const containerUrlCache = new LRUCache({
   max: 5000,
   ttl: 30 * MINUTE_MS, // 30 minutes
   updateAgeOnGet: true, // Reset TTL on access to keep hot tracks cached
+  updateAgeOnHas: true
+});
+
+// Track-record cache — maps "layout::recordId" → full FM record { recordId, modId, fieldData }.
+// Shared read-through cache used by trending, my-stats, and any other endpoint that
+// does fmGetRecordById on track records. Eliminates the N+1 pattern where the same
+// hot tracks get re-fetched repeatedly across endpoints.
+// 10-minute TTL keeps metadata reasonably fresh without hammering FM.
+export const trackRecordCache = new LRUCache({
+  max: 5000,
+  ttl: 10 * MINUTE_MS,
+  updateAgeOnGet: true,
   updateAgeOnHas: true
 });

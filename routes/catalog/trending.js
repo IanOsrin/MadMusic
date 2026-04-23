@@ -1,20 +1,34 @@
 // routes/catalog/trending.js — /trending, /my-stats
+//
+// Performance:
+//   - /trending is wrapped in SWR (24h soft TTL): first call warms; every
+//     subsequent call either returns fresh (<24h) or stale-with-background-
+//     refresh, so users never wait on the FM round-trip after warm-up.
+//   - Track-record fan-out (fmGetRecordById batch) is routed through the
+//     shared trackRecordCache, eliminating the N+1 pattern where /trending
+//     and /my-stats re-fetch the same hot tracks that /featured-albums etc.
+//     have already loaded.
+//
 import { Router } from 'express';
-import { fmFindRecords, fmGetRecordById } from '../../fm-client.js';
-import { trendingCache } from '../../cache.js';
+import { fmFindRecords } from '../../fm-client.js';
 import { hasValidAudio, hasValidArtwork } from '../../lib/track.js';
 import { recordIsVisible, FM_LAYOUT, FM_STREAM_EVENTS_LAYOUT } from '../../lib/fm-fields.js';
 import { parsePositiveInt, normalizeRecordId, formatTimestampUTC, toCleanString, normalizeSeconds, parseFileMakerTimestamp } from '../../lib/format.js';
 import { firstNonEmpty } from '../../lib/fm-fields.js';
 import { STREAM_TIME_FIELD } from '../../lib/stream-events.js';
+import { getTrackRecordCached } from '../../lib/track-cache.js';
+import { createSwrCache } from '../../lib/swr-cache.js';
+import { createLogger } from '../../lib/logger.js';
 
 const router = Router();
+const log    = createLogger('trending');
 
 const TRENDING_LOOKBACK_HOURS = parsePositiveInt(process.env.TRENDING_LOOKBACK_HOURS, 168);
-const TRENDING_FETCH_LIMIT    = parsePositiveInt(process.env.TRENDING_FETCH_LIMIT, 400);
-const TRENDING_MAX_LIMIT      = parsePositiveInt(process.env.TRENDING_MAX_LIMIT, 20);
+const TRENDING_FETCH_LIMIT    = parsePositiveInt(process.env.TRENDING_FETCH_LIMIT,    400);
+const TRENDING_MAX_LIMIT      = parsePositiveInt(process.env.TRENDING_MAX_LIMIT,      20);
+const TRENDING_TTL_MS         = parsePositiveInt(process.env.TRENDING_CACHE_TTL_MS,   24 * 60 * 60 * 1000);
 
-// ── Trending helpers ──────────────────────────────────────────────────────────
+// ── Trending helpers ────────────────────────────────────────────────────────
 
 function buildStatsByTrack(data) {
   const statsByTrack = new Map();
@@ -26,7 +40,7 @@ function buildStatsByTrack(data) {
       fields.TotalPlayedSec ?? fields[STREAM_TIME_FIELD] ?? fields.DurationSec ?? fields.DeltaSec ?? 0
     );
     const lastEventTs = parseFileMakerTimestamp(fields.LastEventUTC || fields.TimestampUTC);
-    const sessionId = toCleanString(fields.SessionID || fields['Session ID'] || '');
+    const sessionId   = toCleanString(fields.SessionID || fields['Session ID'] || '');
     if (!statsByTrack.has(trackRecordId)) {
       statsByTrack.set(trackRecordId, { trackRecordId, totalSeconds: 0, playCount: 0, sessionIds: new Set(), lastEvent: 0 });
     }
@@ -41,7 +55,7 @@ function buildStatsByTrack(data) {
 
 function compareTrendingStats(a, b) {
   if (b.totalSeconds !== a.totalSeconds) return b.totalSeconds - a.totalSeconds;
-  if (b.playCount !== a.playCount) return b.playCount - a.playCount;
+  if (b.playCount    !== a.playCount)    return b.playCount    - a.playCount;
   return b.lastEvent - a.lastEvent;
 }
 
@@ -50,17 +64,17 @@ function collectValidResults(fetched, normalizedLimit) {
   for (const { stat, record } of fetched) {
     if (!record) continue;
     const fields = record.fieldData || {};
-    if (!recordIsVisible(fields)) continue;
-    if (!hasValidAudio(fields)) continue;
-    if (!hasValidArtwork(fields)) continue;
+    if (!recordIsVisible(fields))  continue;
+    if (!hasValidAudio(fields))    continue;
+    if (!hasValidArtwork(fields))  continue;
     results.push({
       recordId: record.recordId || stat.trackRecordId,
-      modId: record.modId || '0',
+      modId:    record.modId || '0',
       fields,
       metrics: {
-        plays: stat.playCount,
+        plays:           stat.playCount,
         uniqueListeners: stat.sessionIds.size || 0,
-        lastPlayedAt: stat.lastEvent ? new Date(stat.lastEvent).toISOString() : null
+        lastPlayedAt:    stat.lastEvent ? new Date(stat.lastEvent).toISOString() : null
       }
     });
     if (results.length >= normalizedLimit) break;
@@ -84,7 +98,7 @@ async function collectTrendingStats({ limit, lookbackHours, fetchLimit }) {
 
   if (!findResult.ok) {
     const codeStr = findResult.code ? ` (FM ${findResult.code})` : '';
-    const detail = `${findResult.msg || 'FM error'}${codeStr}`;
+    const detail  = `${findResult.msg || 'FM error'}${codeStr}`;
     throw new Error(`Trending stream query failed: ${detail}`);
   }
 
@@ -93,11 +107,16 @@ async function collectTrendingStats({ limit, lookbackHours, fetchLimit }) {
 
   const sortedStats = Array.from(statsByTrack.values()).sort(compareTrendingStats);
 
+  // Fetch a superset of candidates so that tracks failing visibility/audio/artwork
+  // filters don't leave us short. 3× limit is usually enough.
   const BATCH_MULTIPLIER = 3;
   const candidates = sortedStats.slice(0, normalizedLimit * BATCH_MULTIPLIER);
+
+  // Route through the shared track-record cache so repeat warm-ups and
+  // cross-endpoint overlap don't re-hit FileMaker.
   const fetched = await Promise.all(
     candidates.map((stat) =>
-      fmGetRecordById(FM_LAYOUT, stat.trackRecordId)
+      getTrackRecordCached(FM_LAYOUT, stat.trackRecordId)
         .then((record) => ({ stat, record }))
         .catch(() => ({ stat, record: null }))
     )
@@ -108,7 +127,7 @@ async function collectTrendingStats({ limit, lookbackHours, fetchLimit }) {
 
 async function fetchTrendingTracks(limit = 5) {
   const normalizedLimit = Math.max(1, Math.min(TRENDING_MAX_LIMIT, limit || 5));
-  const baseFetchLimit = Math.min(2000, Math.max(normalizedLimit * 80, TRENDING_FETCH_LIMIT));
+  const baseFetchLimit  = Math.min(2000, Math.max(normalizedLimit * 80, TRENDING_FETCH_LIMIT));
   const attempts = [];
   if (TRENDING_LOOKBACK_HOURS > 0) {
     attempts.push({ lookbackHours: TRENDING_LOOKBACK_HOURS, fetchLimit: baseFetchLimit });
@@ -118,42 +137,58 @@ async function fetchTrendingTracks(limit = 5) {
   for (let i = 0; i < attempts.length; i += 1) {
     const attempt = attempts[i];
     try {
-      const items = await collectTrendingStats({ limit: normalizedLimit, lookbackHours: attempt.lookbackHours, fetchLimit: attempt.fetchLimit });
+      const items = await collectTrendingStats({
+        limit:         normalizedLimit,
+        lookbackHours: attempt.lookbackHours,
+        fetchLimit:    attempt.fetchLimit
+      });
       if (items.length || i === attempts.length - 1) return items.slice(0, normalizedLimit);
     } catch (err) {
       if (i === attempts.length - 1) throw err;
-      console.warn('[TRENDING] Attempt failed (will retry with fallback):', err?.message || err);
+      log.warn('Attempt failed (will retry with fallback):', err?.message || err);
     }
   }
   return [];
 }
 
-// ── GET /trending ─────────────────────────────────────────────────────────────
+// ── SWR cache around /trending ──────────────────────────────────────────────
+// Key includes limit because different callers ask for different top-N sizes.
+const trendingSwr = createSwrCache({
+  ttlMs: TRENDING_TTL_MS,
+  max:   10, // caps the number of distinct limit values we cache
+  label: 'trending',
+  name:  'trending',
+  loader: async (key) => {
+    const limit = Number(key.split(':')[1]) || 5;
+    log.debug(`Loading trending (limit=${limit})`);
+    const items = await fetchTrendingTracks(limit);
+    log.debug(`Loaded ${items.length} trending tracks`);
+    return items;
+  }
+});
+
+export const trendingWarmer = (limit = 20) => trendingSwr.get(`trending:${limit}`);
+
+// ── GET /trending ───────────────────────────────────────────────────────────
 router.get('/trending', async (req, res) => {
   try {
     const limitParam = Number.parseInt(req.query.limit || '5', 10);
-    const limit = Number.isFinite(limitParam) ? Math.max(1, Math.min(TRENDING_MAX_LIMIT, limitParam)) : 5;
-    const cacheKey = `trending:${limit}`;
-    const cached = trendingCache.get(cacheKey);
-    if (cached) {
-      console.log(`[TRENDING] Serving from 24-hour cache (limit=${limit})`);
-      res.setHeader('X-Cache-Hit', 'true');
-      return res.json({ items: cached });
-    }
+    const limit      = Number.isFinite(limitParam) ? Math.max(1, Math.min(TRENDING_MAX_LIMIT, limitParam)) : 5;
+    const refresh    = req.query.refresh === '1';
+    const key        = `trending:${limit}`;
+    if (refresh) trendingSwr.cache.delete(key);
 
-    console.log(`[TRENDING] Cache miss - calculating fresh trending data (limit=${limit})`);
-    const items = await fetchTrendingTracks(limit);
-    trendingCache.set(cacheKey, items);
-    console.log(`[TRENDING] Cached ${items.length} trending tracks for 24 hours`);
+    const { value: items, state } = await trendingSwr.get(key);
+    res.setHeader('X-Cache-State', state);
     res.json({ items });
   } catch (err) {
-    console.error('[TRENDING] Failed to load trending tracks:', err);
+    log.error('Failed to load trending tracks:', err);
     const detail = err?.message || 'Trending lookup failed';
     res.status(500).json({ error: detail || 'Failed to load trending tracks' });
   }
 });
 
-// ── GET /my-stats ─────────────────────────────────────────────────────────────
+// ── GET /my-stats ───────────────────────────────────────────────────────────
 router.get('/my-stats', async (req, res) => {
   try {
     const token = (req.query.token || '').toString().trim().toUpperCase();
@@ -171,7 +206,7 @@ router.get('/my-stats', async (req, res) => {
 
     const byTrack = new Map();
     for (const entry of findResult.data || []) {
-      const f = entry.fieldData || {};
+      const f       = entry.fieldData || {};
       const trackId = normalizeRecordId(f.TrackRecordID || f['Track Record ID'] || '');
       if (!trackId) continue;
       const secs = normalizeSeconds(f.TotalPlayedSec ?? f.DeltaSec ?? 0);
@@ -179,7 +214,7 @@ router.get('/my-stats', async (req, res) => {
         byTrack.set(trackId, { trackId, plays: 0, totalSeconds: 0 });
       }
       const s = byTrack.get(trackId);
-      s.plays += 1;
+      s.plays        += 1;
       s.totalSeconds += secs;
     }
 
@@ -189,18 +224,19 @@ router.get('/my-stats', async (req, res) => {
       .sort((a, b) => b.plays === a.plays ? b.totalSeconds - a.totalSeconds : b.plays - a.plays)
       .slice(0, 10);
 
+    // Cached track lookups — repeat calls for the same user's top tracks hit memory.
     const withDetails = await Promise.all(
       top10.map(async (s) => {
         try {
-          const record = await fmGetRecordById(FM_LAYOUT, s.trackId);
+          const record = await getTrackRecordCached(FM_LAYOUT, s.trackId);
           const f = record?.fieldData || {};
           return {
-            trackId: s.trackId,
-            plays: s.plays,
+            trackId:      s.trackId,
+            plays:        s.plays,
             totalSeconds: s.totalSeconds,
-            name: firstNonEmpty(f, ['Track Name', 'Tape Files::Track Name', 'Song Title']) || 'Unknown Track',
+            name:   firstNonEmpty(f, ['Track Name', 'Tape Files::Track Name', 'Song Title']) || 'Unknown Track',
             artist: f['Album Artist'] || f['Tape Files::Album Artist'] || f['Track Artist'] || 'Unknown Artist',
-            album: f['Album Title'] || f['Tape Files::Album Title'] || ''
+            album:  f['Album Title']  || f['Tape Files::Album Title']  || ''
           };
         } catch {
           return null;

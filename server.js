@@ -302,10 +302,15 @@ async function loadHtml(filename) {
 }
 
 function sendHtml(res, filename) {
-  return loadHtml(filename).then(html => {
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(html);
-  });
+  return loadHtml(filename)
+    .then(html => {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(html);
+    })
+    .catch(err => {
+      console.error(`[MASS] sendHtml failed for ${filename}:`, err.message);
+      if (!res.headersSent) res.status(500).send('Server error loading page');
+    });
 }
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -568,26 +573,42 @@ if (!serverStarted) {
   server.listen(PORT, HOST, () => logServerReady('HTTP/1.1'));
 }
 
-// ── Cache pre-warm (genres + trending) ──────────────────────────────────────
-// Worker 0 pre-warms slow caches at startup so the first real user never
-// waits.  Genres takes ~18 s (59 k FM records across 20 pages); trending
-// takes ~6 s (stream-event query + individual track lookups).
-// Other workers skip — they'll fill their own caches on first real request.
-if (process.env.WORKER_INDEX === '0') {
-  async function prewarm(label, path, delayMs) {
-    await new Promise(r => setTimeout(r, delayMs));
+// ── Cache pre-warm ──────────────────────────────────────────────────────────
+// Each worker has its own in-memory LRU caches, so every worker needs to warm
+// its own. We invoke the in-process SWR warmers directly (no HTTP round-trip)
+// and stagger with jitter so a multi-worker cluster doesn't hammer FileMaker
+// with simultaneous identical queries.
+//
+// SWR guarantees that once a cache entry is warm, subsequent requests (even
+// hours later, when the soft TTL has elapsed) return stale-immediately while
+// the refresh runs in the background. First-request latency ≈ 0 after warm.
+{
+  const { featuredWarmers }         = await import('./routes/catalog/featured.js');
+  const { trendingWarmer }          = await import('./routes/catalog/trending.js');
+  const { genresWarmer }            = await import('./routes/catalog/genres.js');
+  const { publicPlaylistsWarmer }   = await import('./routes/catalog/discovery.js');
+
+  const workerJitter = Math.floor(Math.random() * 2000); // 0–2s per-worker jitter
+
+  async function prewarm(label, fn, baseDelayMs) {
+    await new Promise((r) => setTimeout(r, baseDelayMs + workerJitter));
+    const started = Date.now();
     try {
-      const resp = await fetch(`http://127.0.0.1:${PORT}${path}`);
-      if (resp.ok) console.log(`[MASS] ${label} cache pre-warmed`);
-      else         console.warn(`[MASS] ${label} pre-warm returned ${resp.status}`);
+      await fn();
+      console.log(`[MASS] ${label} cache pre-warmed (${Date.now() - started}ms)`);
     } catch (err) {
-      console.warn(`[MASS] ${label} pre-warm failed:`, err.message);
+      console.warn(`[MASS] ${label} pre-warm failed:`, err?.message || err);
     }
   }
-  // Trending first — it's fast enough and most visible to users
-  prewarm('Trending', '/api/trending?limit=20', 4000);
-  // Genres second — longer scan, less urgent
-  prewarm('Genres',   '/api/genres',             8000);
+
+  // Ordered by user-visibility: the homepage hits featured + trending first,
+  // so warm those before the longer/less-urgent genre scan.
+  prewarm('Featured',         featuredWarmers.featured,    1000);
+  prewarm('Trending',         trendingWarmer,              2000);
+  prewarm('New Releases',     featuredWarmers.newReleases, 3000);
+  prewarm('G100',             featuredWarmers.g100,        4000);
+  prewarm('Public Playlists', publicPlaylistsWarmer,       5000);
+  prewarm('Genres',           genresWarmer,                8000);
 }
 // ────────────────────────────────────────────────────────────────────────────
 

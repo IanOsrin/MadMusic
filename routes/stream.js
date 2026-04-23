@@ -95,6 +95,17 @@ const MIRROR_HEADERS = new Map([
   ['last-modified', 'Last-Modified']
 ]);
 
+// Upstreams whose content is addressed by an immutable, content-hashed key
+// (S3 object keys are effectively immutable for our purposes — artwork/audio
+// bytes don't change under a given key). Anything matching this pattern can
+// be cached by the browser for a year with the `immutable` hint.
+const REGEX_IMMUTABLE_S3 = /^https?:\/\/(?:[^/]*\.)?s3[.-][^/]*\//i;
+
+function isImmutableUpstream(upstreamUrl) {
+  if (!upstreamUrl) return false;
+  return REGEX_IMMUTABLE_S3.test(upstreamUrl);
+}
+
 router.get('/track/:recordId/container', async (req, res) => {
   try {
     const recordId = (req.params?.recordId || '').toString().trim();
@@ -190,7 +201,7 @@ async function fetchWithAuthRetry(upstreamUrl, requiresAuth, headers, signal) {
   return upstream;
 }
 
-function applyProxyResponseHeaders(res, upstream) {
+function applyProxyResponseHeaders(res, upstream, upstreamUrl) {
   res.statusCode = upstream.status;
   for (const [lower, headerName] of MIRROR_HEADERS.entries()) {
     const value = upstream.headers.get(lower);
@@ -198,11 +209,19 @@ function applyProxyResponseHeaders(res, upstream) {
   }
   if (!res.getHeader('Accept-Ranges')) res.setHeader('Accept-Ranges', 'bytes');
   const contentType = res.getHeader('Content-Type') || '';
+  const immutable   = isImmutableUpstream(upstreamUrl);
   if (contentType.startsWith('audio/') || contentType.startsWith('video/')) {
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    // S3-origin audio is content-hashed → cache for a year. FM-origin audio
+    // goes through a FM container URL that can rotate, so keep a modest TTL.
+    res.setHeader('Cache-Control',
+      immutable
+        ? 'public, max-age=31536000, immutable'
+        : 'public, max-age=86400');
   } else if (contentType.startsWith('image/')) {
-    // FM container images — cache aggressively; artwork almost never changes
-    res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=2592000');
+    res.setHeader('Cache-Control',
+      immutable
+        ? 'public, max-age=31536000, immutable'
+        : 'public, max-age=604800, stale-while-revalidate=2592000');
   }
 }
 
@@ -250,7 +269,7 @@ router.get('/container', async (req, res) => {
       return;
     }
 
-    applyProxyResponseHeaders(res, upstream);
+    applyProxyResponseHeaders(res, upstream, upstreamUrl);
     if (!upstream.body) { res.end(); return; }
 
     const { pipeline } = await import('node:stream/promises');

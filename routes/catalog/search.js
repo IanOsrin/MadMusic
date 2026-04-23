@@ -8,8 +8,12 @@ import {
   FM_LAYOUT
 } from '../../lib/fm-fields.js';
 import { fmErrorToHttpStatus } from '../../lib/http.js';
+import { createLogger } from '../../lib/logger.js';
 
 const router = Router();
+const logSearch  = createLogger('search');
+const logExplore = createLogger('explore');
+const logAi      = createLogger('ai-search');
 
 // ── /wake ─────────────────────────────────────────────────────────────────────
 router.get('/wake', async (req, res) => {
@@ -21,7 +25,7 @@ router.get('/wake', async (req, res) => {
       tokenValid: true
     });
   } catch (err) {
-    console.error('[MASS] Wake endpoint error:', err);
+    logSearch.error('Wake endpoint error:', err);
     res.status(500).json({
       status: 'error',
       error: err.message
@@ -61,7 +65,7 @@ router.get('/search', async (req, res) => {
     const cacheKey = `search:v2:${q}:${artist}:${album}:${track}:${genres.sort().join('|')}:${limit}:${uiOff0}`;
     const cached = searchCache.get(cacheKey);
     if (cached) {
-      console.log(`[CACHE HIT] search`);
+      logSearch.debug('cache hit');
       res.setHeader('X-Cache-Hit', 'true');
       return res.json(cached);
     }
@@ -71,25 +75,37 @@ router.get('/search', async (req, res) => {
     const SEARCH_FIELDS_DEFAULT = [...SEARCH_FIELDS_BASE, ...SEARCH_FIELDS_OPTIONAL];
     const GENRE_FIELDS = ['Local Genre', 'Song Files::Local Genre'];
 
+    // Artist can live on either the album header or the individual track.
+    // When a caller sends ?artist=X we need to match both so that cards whose
+    // displayed artist came from "Track Artist" (e.g. New Releases) still
+    // resolve to the right album.
+    const ARTIST_FIELDS = ['Album Artist', 'Track Artist'];
+
     const buildQueries = ({ q, artist, album, track, genre, genres }) => {
       // Genre-only search: build one OR clause per genre × per field candidate
       if (genres.length && !q && !artist && !album && !track) {
         return genres.flatMap(g => GENRE_FIELDS.map(f => ({ [f]: `*${g}*` })));
       }
-      const queries = [];
+      // Structured search — artist/album/track must AND together, not OR.
+      // FileMaker's _find treats each object in the array as an OR clause, so
+      // conditions that must apply together have to live inside ONE object.
+      // To also allow artist to match either "Album Artist" OR "Track Artist",
+      // we emit one AND object per artist field candidate so the final query
+      // reads as:  (Album Artist=X AND …) OR (Track Artist=X AND …)
+      const baseAnd = {};
+      if (album) baseAnd['Album Title'] = begins(album);
+      if (track) baseAnd['Track Name']  = begins(track);
+
       if (artist) {
-        queries.push({ 'Album Artist': begins(artist) });
+        return ARTIST_FIELDS.map(f => ({ ...baseAnd, [f]: begins(artist) }));
       }
-      if (album) {
-        ['Album Title'].forEach(f => queries.push({ [f]: begins(album) }));
+      if (Object.keys(baseAnd).length) {
+        return [baseAnd];
       }
-      if (track) {
-        ['Track Name'].forEach(f => queries.push({ [f]: begins(track) }));
-      }
-      if (q && !artist && !album && !track) {
+      if (q) {
         return SEARCH_FIELDS_DEFAULT.map(f => ({ [f]: begins(q) }));
       }
-      return queries.length ? queries : [{ 'Album Title': '*' }];
+      return [{ 'Album Title': '*' }];
     };
 
     const queries = buildQueries({ q, artist, album, track, genre, genres });
@@ -125,7 +141,7 @@ router.get('/search', async (req, res) => {
         );
       });
       if (rawData.length < before) {
-        console.log(`[GENRE POST-FILTER] FM returned ${before}, kept ${rawData.length} — removed ${before - rawData.length} false positive(s) for genre(s): ${genres.join(', ')}`);
+        logSearch.debug(`genre post-filter: FM returned ${before}, kept ${rawData.length} — removed ${before - rawData.length} false positive(s) for genre(s): ${genres.join(', ')}`);
       }
     }
 
@@ -170,31 +186,51 @@ const YEAR_FIELD_CANDIDATES = [
   'Tape Files::Year',
 ];
 
+// Cache the first year-field candidate that returned data. Same pattern as
+// cachedFeaturedFieldName — turns up-to-8 serial FM round-trips into 1 on the
+// steady-state path. Cleared on first failure so a layout change can recover.
+let cachedYearField = null;
+
+async function tryYearField(field, start, end, limit, offset) {
+  const query   = applyVisibility({ [field]: `${start}..${end}` });
+  const payload = { query: [query], limit: Math.min(500, limit + offset + 1), offset: 1 };
+  try {
+    const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
+    const json     = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (isMissingFieldError(json))          return { ok: false, kind: 'missing' };
+      const code = json?.messages?.[0]?.code;
+      if (String(code) === '401')              return { ok: false, kind: 'empty' };
+      return { ok: false, kind: 'error' };
+    }
+    return { ok: true, data: json?.response?.data || [] };
+  } catch (err) {
+    return { ok: false, kind: 'throw', err };
+  }
+}
+
 async function fetchRecordsForYearRange(start, end, limit, offset) {
-  let rawData = [];
-  console.log(`[explore] Searching ${start}..${end} across candidates: ${YEAR_FIELD_CANDIDATES.join(', ')}`);
+  // Fast path — try the cached working field first.
+  if (cachedYearField) {
+    const result = await tryYearField(cachedYearField, start, end, limit, offset);
+    if (result.ok && result.data.length > 0) return result.data;
+    // Fall through and re-probe — layout may have changed.
+    cachedYearField = null;
+  }
+
   for (const field of YEAR_FIELD_CANDIDATES) {
-    const query = applyVisibility({ [field]: `${start}..${end}` });
-    const payload = { query: [query], limit: Math.min(500, limit + offset + 1), offset: 1 };
-    try {
-      const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
-      const json = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const code = json?.messages?.[0]?.code;
-        const msg  = json?.messages?.[0]?.message || '';
-        if (isMissingFieldError(json)) { console.log(`[explore] field "${field}" → missing (102), skipping`); continue; }
-        if (String(code) === '401') { console.log(`[explore] field "${field}" → no records (401), skipping`); continue; }
-        console.warn(`[explore] field "${field}" → FM error ${response.status} code=${code} msg=${msg}`);
-        continue;
+    const result = await tryYearField(field, start, end, limit, offset);
+    if (result.ok) {
+      if (result.data.length > 0) {
+        cachedYearField = field; // remember for subsequent calls
+        return result.data;
       }
-      rawData = json?.response?.data || [];
-      console.log(`[explore] field "${field}" → ${rawData.length} records ✓`);
-      break;
-    } catch (err) {
-      console.warn(`[explore] field "${field}" threw`, err.message);
+      // Field exists but returned no records for this range — keep trying
+      // other candidates, but this could still legitimately be empty.
+      continue;
     }
   }
-  return rawData;
+  return [];
 }
 
 router.get('/explore', async (req, res) => {
@@ -219,7 +255,7 @@ router.get('/explore', async (req, res) => {
     }
 
     const rawData = await fetchRecordsForYearRange(start, end, limit, offset);
-    console.log(`[explore] Total raw records: ${rawData.length}`);
+    logExplore.debug(`Total raw records: ${rawData.length}`);
 
     const valid = rawData.filter(r => hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
     const total = valid.length;
@@ -236,7 +272,7 @@ router.get('/explore', async (req, res) => {
     exploreCache.set(cacheKey, result);
     res.json(result);
   } catch (err) {
-    console.error('[explore] failed', err);
+    logExplore.error('failed', err);
     res.status(500).json({ error: 'Explore failed', detail: err?.message || String(err) });
   }
 });
@@ -257,15 +293,15 @@ router.get('/ai-search', async (req, res) => {
     const cacheKey = `ai-search:${query}`;
     const cached = searchCache.get(cacheKey);
     if (cached) {
-      console.log(`[CACHE HIT] ai-search: ${query}`);
+      logAi.debug('cache hit:', query);
       res.setHeader('X-Cache-Hit', 'true');
       return res.json(cached);
     }
 
-    console.log(`[AI SEARCH] Query: "${query}"`);
+    logAi.debug(`Query: "${query}"`);
     res.status(501).json({ error: 'AI search not yet implemented in routes' });
   } catch (err) {
-    console.error('[AI SEARCH] Error:', err);
+    logAi.error('Error:', err);
     const detail = err?.message || String(err);
     res.status(500).json({ error: 'AI search failed', status: 500, detail });
   }

@@ -12,15 +12,14 @@ import {
   searchCache,
   exploreCache,
   albumCache,
-  publicPlaylistsCache,
-  trendingCache,
-  genreCache,
   tokenValidationCache,
   streamRecordLRU,
   playlistImageLRU,
   pendingPaymentsCache,
   containerUrlCache,
+  trackRecordCache,
 } from '../cache.js';
+import { listSwrCaches, getSwrCacheByName, flushAllSwrCaches } from '../lib/swr-cache.js';
 import { SERVER_START_TIME } from '../lib/server-start-time.js';
 
 const router = Router();
@@ -54,10 +53,8 @@ const CONTENT_CACHES = {
   search:         searchCache,
   explore:        exploreCache,
   album:          albumCache,
-  publicPlaylists: publicPlaylistsCache,
-  trending:       trendingCache,
-  genre:          genreCache,
   containerUrl:   containerUrlCache,
+  trackRecord:    trackRecordCache,
   playlistImage:  playlistImageLRU,
 };
 
@@ -112,6 +109,7 @@ router.get('/health/detailed', requireAdminKey, async (req, res) => {
   const caches = Object.fromEntries(
     Object.entries(ALL_CACHES).map(([k, c]) => [k, cacheStats(c)])
   );
+  const swrCaches = listSwrCaches();
 
   res.json({
     ok:     fmStatus === 'ok',
@@ -130,6 +128,7 @@ router.get('/health/detailed', requireAdminKey, async (req, res) => {
       ...(fmError ? { error: fmError } : {}),
     },
     caches,
+    swrCaches,
   });
 });
 
@@ -138,7 +137,8 @@ router.get('/cache/stats', (req, res) => {
   try {
     const content   = Object.fromEntries(Object.entries(CONTENT_CACHES).map(([k, c])   => [k, cacheStats(c)]));
     const sensitive = Object.fromEntries(Object.entries(SENSITIVE_CACHES).map(([k, c]) => [k, cacheStats(c)]));
-    res.json({ ok: true, content, sensitive, timestamp: new Date().toISOString() });
+    const swr       = listSwrCaches();
+    res.json({ ok: true, content, sensitive, swr, timestamp: new Date().toISOString() });
   } catch (err) {
     console.error('[admin] Failed to retrieve cache stats:', err);
     res.status(500).json({ ok: false, error: 'Failed to retrieve cache stats' });
@@ -155,27 +155,50 @@ router.get('/cache/stats', (req, res) => {
 // Always returns a summary of what was flushed and the sizes before flush.
 router.post('/cache/flush', requireAdminKey, (req, res) => {
   try {
-    const param = (req.query.cache || 'all').toString().trim().toLowerCase();
-    const names = param === 'all'
-      ? Object.keys(CONTENT_CACHES)           // "all" never touches sensitive caches
-      : param.split(',').map(s => s.trim()).filter(Boolean);
+    const param = (req.query.cache || 'all').toString().trim();
+    // "all" flushes every content cache plus every SWR cache
+    // (sensitive caches are skipped to avoid nuking active sessions / payment replay windows).
+    if (param.toLowerCase() === 'all') {
+      const flushed = [];
+      for (const [name, cache] of Object.entries(CONTENT_CACHES)) {
+        const size = cache.size;
+        cache.clear();
+        flushed.push({ name, cleared: size, kind: 'lru' });
+      }
+      for (const entry of flushAllSwrCaches()) {
+        flushed.push({ ...entry, kind: 'swr' });
+      }
+      const totalCleared = flushed.reduce((sum, f) => sum + f.cleared, 0);
+      console.log(`[admin] Flush all — ${totalCleared} entries cleared across ${flushed.length} cache(s)`);
+      return res.json({ ok: true, flushed, totalCleared, timestamp: new Date().toISOString() });
+    }
 
-    const unknown  = names.filter(n => !ALL_CACHES[n]);
+    const names = param.split(',').map(s => s.trim()).filter(Boolean);
+    const unknown = names.filter(n => !ALL_CACHES[n] && !getSwrCacheByName(n));
     if (unknown.length) {
       return res.status(400).json({
         ok: false,
         error: `Unknown cache name(s): ${unknown.join(', ')}`,
-        valid: Object.keys(ALL_CACHES),
+        validLru: Object.keys(ALL_CACHES),
+        validSwr: listSwrCaches().map(c => c.name),
       });
     }
 
     const flushed = [];
     for (const name of names) {
-      const cache = ALL_CACHES[name];
-      const sizeBefore = cache.size;
-      cache.clear();
-      flushed.push({ name, cleared: sizeBefore });
-      console.log(`[admin] Cache "${name}" flushed (${sizeBefore} entries cleared)`);
+      if (ALL_CACHES[name]) {
+        const cache = ALL_CACHES[name];
+        const sizeBefore = cache.size;
+        cache.clear();
+        flushed.push({ name, cleared: sizeBefore, kind: 'lru' });
+        console.log(`[admin] LRU cache "${name}" flushed (${sizeBefore} entries cleared)`);
+      } else {
+        const entry = getSwrCacheByName(name);
+        const sizeBefore = entry.cache.size;
+        entry.cache.clear();
+        flushed.push({ name, cleared: sizeBefore, kind: 'swr' });
+        console.log(`[admin] SWR cache "${name}" flushed (${sizeBefore} entries cleared)`);
+      }
     }
 
     const totalCleared = flushed.reduce((sum, f) => sum + f.cleared, 0);
