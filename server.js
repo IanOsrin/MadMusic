@@ -191,11 +191,10 @@ app.use((req, res, next) => {
       res.setHeader('Cache-Control', 'private, no-store');
     }
   } else if (req.path === '/' || req.path.endsWith('.html')) {
-    if (process.env.NODE_ENV === 'development') {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-    }
+    // HTML must never be cached — in any environment — so deploys take effect immediately
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
   }
   next();
 });
@@ -276,6 +275,40 @@ app.use('/api/', async (req, res, next) => {
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const REGEX_STATIC_FILES = /\.(jpe?g|png|gif|svg|webp|ico|woff2?|ttf|eot|mp3|mp4|webm)$/i;
 
+// ── Deploy-time cache buster ────────────────────────────────────────────────
+// A unique stamp generated once per server start.  Render restarts on every
+// deploy, so this automatically invalidates all browser-cached JS/CSS without
+// any manual version-bumping.
+const DEPLOY_STAMP = Date.now().toString(36); // e.g. "lzxabcd"
+
+/**
+ * Read an HTML file from disk and replace every `?v=<anything>` query string
+ * on JS/CSS asset references with `?v=<DEPLOY_STAMP>`.
+ * In production the result is cached in memory (one read per boot).
+ * In development the file is read fresh on every request so edits are
+ * visible immediately without restarting the server.
+ */
+const _htmlCache = new Map();
+const DEV_MODE = process.env.NODE_ENV !== 'production';
+async function loadHtml(filename) {
+  if (!DEV_MODE && _htmlCache.has(filename)) return _htmlCache.get(filename);
+  const raw = await fs.readFile(path.join(PUBLIC_DIR, filename), 'utf8');
+  const stamped = raw.replace(
+    /((?:src|href)="\/(?:js|css)\/[^"]+)\?v=[^"&]*/g,
+    `$1?v=${DEPLOY_STAMP}`
+  );
+  if (!DEV_MODE) _htmlCache.set(filename, stamped);
+  return stamped;
+}
+
+function sendHtml(res, filename) {
+  return loadHtml(filename).then(html => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  });
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 app.use(express.static(PUBLIC_DIR, {
   index: false,
   setHeaders: (res, filePath) => {
@@ -284,7 +317,11 @@ app.use(express.static(PUBLIC_DIR, {
     } else if (REGEX_STATIC_FILES.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=604800');
     } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+      // In dev: no caching so edits show immediately.
+      // In production: 1 hour with revalidation (deploy stamp handles busting).
+      res.setHeader('Cache-Control', DEV_MODE
+        ? 'no-store'
+        : 'public, max-age=3600, must-revalidate');
     } else {
       res.setHeader('Cache-Control', 'no-cache');
     }
@@ -344,18 +381,19 @@ app.get('/api/shared-playlists/:shareId', async (req, res) => {
 });
 
 // Static site routes — all primary views served from merged app.html
-app.get('/', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html')));
-app.get('/modern', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html')));
-app.get('/albums', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html')));
-app.get('/classic', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html')));
-app.get('/jukebox', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html')));
+// sendHtml() serves a pre-processed in-memory copy with deploy-stamped asset URLs
+app.get('/',         (_req, res) => sendHtml(res, 'app.html'));
+app.get('/modern',   (_req, res) => sendHtml(res, 'app.html'));
+app.get('/albums',   (_req, res) => sendHtml(res, 'app.html'));
+app.get('/classic',  (_req, res) => sendHtml(res, 'app.html'));
+app.get('/jukebox',  (_req, res) => sendHtml(res, 'app.html'));
+app.get('/library',  (_req, res) => sendHtml(res, 'app.html')); // library.html never existed — unified app handles this view
 // Redirect legacy standalone pages to unified app
-app.get('/home', (_req, res) => res.redirect(301, '/'));
-app.get('/mobile', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mobile.html')));
-app.get('/m', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mobile.html')));
-app.get('/library', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html'))); // library.html never existed — unified app handles this view
-app.get('/ringtone', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'ringtone.html')));
-app.get('/audio-lab', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'audio-lab.html')));
+app.get('/home',     (_req, res) => res.redirect(301, '/'));
+app.get('/mobile',   (_req, res) => sendHtml(res, 'mobile.html'));
+app.get('/m',        (_req, res) => sendHtml(res, 'mobile.html'));
+app.get('/ringtone', (_req, res) => sendHtml(res, 'ringtone.html'));
+app.get('/audio-lab',(_req, res) => sendHtml(res, 'audio-lab.html'));
 
 // ── Audio Lab key validation ──────────────────────────────────────────────────
 // Requires a valid streaming access token so we can link the entitlement to
@@ -529,6 +567,29 @@ if (!serverStarted) {
   server = http.createServer(app);
   server.listen(PORT, HOST, () => logServerReady('HTTP/1.1'));
 }
+
+// ── Cache pre-warm (genres + trending) ──────────────────────────────────────
+// Worker 0 pre-warms slow caches at startup so the first real user never
+// waits.  Genres takes ~18 s (59 k FM records across 20 pages); trending
+// takes ~6 s (stream-event query + individual track lookups).
+// Other workers skip — they'll fill their own caches on first real request.
+if (process.env.WORKER_INDEX === '0') {
+  async function prewarm(label, path, delayMs) {
+    await new Promise(r => setTimeout(r, delayMs));
+    try {
+      const resp = await fetch(`http://127.0.0.1:${PORT}${path}`);
+      if (resp.ok) console.log(`[MASS] ${label} cache pre-warmed`);
+      else         console.warn(`[MASS] ${label} pre-warm returned ${resp.status}`);
+    } catch (err) {
+      console.warn(`[MASS] ${label} pre-warm failed:`, err.message);
+    }
+  }
+  // Trending first — it's fast enough and most visible to users
+  prewarm('Trending', '/api/trending?limit=20', 4000);
+  // Genres second — longer scan, less urgent
+  prewarm('Genres',   '/api/genres',             8000);
+}
+// ────────────────────────────────────────────────────────────────────────────
 
 // ============================================================================
 // GRACEFUL SHUTDOWN HANDLERS

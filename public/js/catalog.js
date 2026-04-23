@@ -432,27 +432,17 @@
         };
       }
 
-      // Allow Enter key to trigger search from any search field
+      // Enter key triggers search from any search field.
+      // No auto-search on input — user must press Search or hit Enter.
       const searchFields = [searchArtistEl, searchAlbumEl, searchTrackEl].filter(Boolean);
 
-      // Debounced search on input (400ms delay to reduce API calls)
-      const debouncedSearch = debounce(() => {
-        if (!searchFieldsEl.hidden && goBtn) {
-          goBtn.click();
-        }
-      }, 400);
-
       searchFields.forEach(field => {
-        // Immediate search on Enter key
         field.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
             goBtn.click();
           }
         });
-
-        // Debounced search as user types
-        field.addEventListener('input', debouncedSearch);
       });
 
       // Set Recommended Playlists to collapsed by default

@@ -8,9 +8,10 @@ if (cluster.isPrimary) {
   console.log(`[CLUSTER] Primary process ${process.pid} is running`);
   console.log(`[CLUSTER] Starting ${MAX_WORKERS} workers (${numCPUs} CPUs available)`);
 
-  // Fork workers
+  // Fork workers with a staggered delay so they don't all hammer FileMaker
+  // at the same instant during startup (avoids FM request queue bursts).
   for (let i = 0; i < MAX_WORKERS; i++) {
-    cluster.fork();
+    setTimeout(() => cluster.fork({ WORKER_INDEX: String(i) }), i * 1500);
   }
 
   cluster.on('exit', (worker, code, signal) => {

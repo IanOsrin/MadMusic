@@ -2171,6 +2171,44 @@
       // Fallback timeout
       setTimeout(() => clearInterval(checkInterval), 2000);
     }
+
+    // ── Search inputs: Enter key + album-view guard ──────────────────────────
+    // 1. When album detail panel is open, pressing Enter in any search field
+    //    does nothing — the user must press the Search button explicitly.
+    // 2. When the panel is closed, Enter in any search field clicks Search
+    //    (convenience shortcut so users don't have to reach for the button).
+    // 3. The browser `search` event (fired by type="search" on Enter/×) is
+    //    suppressed to prevent it from bubbling to unintended handlers.
+    [searchArtistEl, searchAlbumEl, searchTrackEl].forEach(function(el) {
+      if (!el) return;
+      el.addEventListener('keydown', function(e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const playlistView = document.getElementById('playlistView');
+        const panelOpen = playlistView && playlistView.classList.contains('active');
+        if (!panelOpen && goEl) goEl.click();
+      });
+      el.addEventListener('search', function(e) {
+        // Suppress browser-native search event (fired on Enter / × in type="search")
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      });
+    });
+
+    // Close album detail panel when Search is clicked.
+    // Uses document-level delegation (capture phase) so it survives catalog.js
+    // cloning and replacing the Go button after this listener is attached.
+    document.addEventListener('click', function(e) {
+      const btn = e.target.closest('#go');
+      if (!btn) return;
+      const playlistView = document.getElementById('playlistView');
+      if (playlistView && playlistView.classList.contains('active')) {
+        if (typeof window.hideAlbumDetailView === 'function') {
+          window.hideAlbumDetailView();
+        }
+      }
+    }, true); // capture phase — runs before button's own click handlers
+    // ─────────────────────────────────────────────────────────────────────────
   });
   </script>
 
@@ -3443,18 +3481,21 @@
         if (genre) genre.textContent = album.genre || 'MUSIC';
         if (year) year.textContent = album.year || '';
 
-        // Add click handler to artist name for search
+        // Clicking the artist name fills the search field and closes the album
+        // panel, but does NOT auto-fire the search — the user presses Search.
         if (artist && album.artist) {
           artist.style.cursor = 'pointer';
           artist.onclick = () => {
             const searchArtist = document.getElementById('searchArtist');
             const searchFields = document.getElementById('searchFields');
-            const goBtn = document.getElementById('go');
-            if (searchArtist && goBtn) {
+            if (searchArtist) {
               searchArtist.value = album.artist;
               if (searchFields) searchFields.hidden = false;
-              goBtn.click();
             }
+            if (typeof window.hideAlbumDetailView === 'function') {
+              window.hideAlbumDetailView();
+            }
+            if (searchArtist) searchArtist.focus();
           };
         }
 
@@ -4708,12 +4749,12 @@
   </script>
 
   <!-- Modules: Load in dependency order -->
-  <script src="/js/helpers.js"></script>
-  <script src="/js/auth.js"></script>
-  <script src="/js/player.js"></script>
-  <script src="/js/playlists.js"></script>
-  <script src="/js/catalog.js?v=3"></script>
-  <script src="/js/discovery.js?v=2"></script>
+  <script src="/js/helpers.js?v=1"></script>
+  <script src="/js/auth.js?v=1"></script>
+  <script src="/js/player.js?v=1"></script>
+  <script src="/js/playlists.js?v=1"></script>
+  <script src="/js/catalog.js?v=1"></script>
+  <script src="/js/discovery.js?v=1"></script>
 
 
   <!-- ── Share-email modal logic ──────────────────────────────────────── -->

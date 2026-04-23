@@ -2,6 +2,11 @@
   'use strict';
 
   // ---- DISCOVERY FUNCTIONS ----
+
+  // In-memory trending cache — persists for the lifetime of the page session.
+  // Prevents re-fetching the same 24h-server-cached data on every view switch.
+  let _trendingItems   = null;
+  let _trendingFetched = false;
 // Access Token and Payment Handling
     const STORAGE_KEY = 'mass_access_token';
     let accessToken = localStorage.getItem(STORAGE_KEY);
@@ -1358,28 +1363,26 @@
 
     async function loadTrending() {
       const container = document.getElementById('trendingContainer');
-      console.log('[Trending] Starting, container:', container);
-      if (!container) {
-        console.error('[Trending] Container not found!');
+      if (!container) return;
+
+      // Serve from in-memory cache on repeat calls (e.g. switching views)
+      if (_trendingFetched && _trendingItems) {
+        renderTrending(_trendingItems);
         return;
       }
+
       try {
-        const url = `${API.trending}?limit=${TRENDING_FETCH_LIMIT}&_t=${Date.now()}`;
-        console.log('[Trending] About to fetch:', url);
+        // No _t= cache-buster — the server caches trending for 24 h already
+        const url = `${API.trending}?limit=${TRENDING_FETCH_LIMIT}`;
         const response = await apiFetch(url);
-        console.log('[Trending] Response received:', response.status, response.ok);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-        console.log('[Trending] Data received:', data);
         const items = Array.isArray(data?.items) ? data.items : [];
-        console.log('[Trending] Items to render:', items.length);
+        _trendingItems   = items;
+        _trendingFetched = true;
         renderTrending(items);
-        console.log('[Trending] Render complete');
       } catch (error) {
         console.error('[Trending] Failed to load:', error);
-        console.error('[Trending] Error stack:', error.stack);
         container.innerHTML = `
           <div class="empty-state">
             <div class="empty-state-icon">⚠️</div>
