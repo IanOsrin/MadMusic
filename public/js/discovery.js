@@ -993,7 +993,7 @@
           <div class="featured-artwork">
             ${artworkUrl
               ? `<img src="${escapeHtml(artworkUrl)}" alt="${escapeHtml(album)}" onerror="this.closest('.featured-release').style.display='none'" />`
-              : '<div class="artwork-placeholder">♪</div>'
+              : ''
             }
           </div>
           <div class="featured-info">
@@ -1059,7 +1059,7 @@
             <div class="highlight-artwork" onclick="playSong('${escapeHtml(item.recordId)}')">
               ${artworkUrl
                 ? `<img src="${escapeHtml(artworkUrl)}" alt="${escapeHtml(album)}" onerror="this.closest('.highlight-card').style.display='none'" />`
-                : '<div class="artwork-placeholder">♪</div>'
+                : ''
               }
               <div class="play-overlay">
                 <div class="play-icon">▶</div>
@@ -1122,7 +1122,7 @@
             <div class="trending-artwork" style="cursor:pointer" onclick="if(window.openAlbumDirect) window.openAlbumDirect('${escapeHtml(album)}','${escapeHtml(artist)}');">
               ${artworkUrl
                 ? `<img src="${escapeHtml(artworkUrl)}" alt="${escapeHtml(title)}" onerror="this.closest('.trending-card').style.display='none'" />`
-                : '<div class="artwork-placeholder">♪</div>'
+                : ''
               }
               <div class="play-overlay">
                 <div class="play-icon">▶</div>
@@ -1163,7 +1163,7 @@
           <div class="random-artwork">
             ${artworkUrl
               ? `<img src="${escapeHtml(artworkUrl)}" alt="${escapeHtml(album)}" onerror="this.closest('.random-card').style.display='none'" />`
-              : '<div class="artwork-placeholder">♪</div>'
+              : ''
             }
             <div class="play-overlay">
               <div class="play-icon">▶</div>
@@ -1298,7 +1298,7 @@
             <div class="random-artwork" style="cursor:pointer" onclick="if(window.openAlbumDirect) window.openAlbumDirect('${escapeHtml(album)}','${escapeHtml(artist)}');">
               ${artwork
                 ? `<img src="${escapeHtml(artwork)}" alt="${escapeHtml(album)}" onerror="this.closest('.random-card').style.display='none'" />`
-                : '<div class="artwork-placeholder">♪</div>'
+                : ''
               }
               <div class="play-overlay">
                 <div class="play-icon">▶</div>
@@ -1812,7 +1812,7 @@
               <div class="trending-artwork" style="cursor:pointer" onclick="if(window.openAlbumDirect) window.openAlbumDirect('${escapeHtml(album)}','${escapeHtml(artist)}');">
                 ${artworkUrl
                   ? `<img src="${escapeHtml(artworkUrl)}" alt="${escapeHtml(title)}" onerror="this.closest('.trending-card').style.display='none'" />`
-                  : '<div class="artwork-placeholder">♪</div>'
+                  : ''
                 }
                 <div class="play-overlay"><div class="play-icon" style="font-size:20px">⊞</div></div>
               </div>

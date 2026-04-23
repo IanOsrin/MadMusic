@@ -1727,13 +1727,13 @@
     .albums.single-album{display:flex;flex-direction:column;align-items:center;gap:24px;}
 
     /* ── Netflix-style card overlay ─────────────────────────────────── */
-    .card{position:relative;aspect-ratio:1/1;background:#f0f0f0;border:none;border-radius:12px;padding:0;display:flex;flex-direction:column;gap:0;overflow:hidden;transition:transform 0.25s ease,box-shadow 0.25s ease;box-shadow:0 2px 8px rgba(0,0,0,0.12);cursor:pointer;}
+    .card{position:relative;aspect-ratio:1/1;background:transparent;border:none;border-radius:12px;padding:0;display:flex;flex-direction:column;gap:0;overflow:hidden;transition:transform 0.25s ease,box-shadow 0.25s ease;box-shadow:0 2px 8px rgba(0,0,0,0.12);cursor:pointer;}
     .card:hover{transform:translateY(-5px) scale(1.02);box-shadow:0 12px 32px rgba(0,0,0,0.22);}
     .card.pending-audio{opacity:0.8;}
     .card.no-audio{display:none !important;}
 
     /* Cover fills the whole card */
-    .cover-wrap{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:unset;border-radius:0;overflow:hidden;border:none;background:#f0f0f0;margin:0;z-index:1;cursor:pointer;}
+    .cover-wrap{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:unset;border-radius:0;overflow:hidden;border:none;background:transparent;margin:0;z-index:1;cursor:pointer;}
     .cover-wrap img{width:100%;height:100%;object-fit:cover;display:block;transition:transform 0.35s ease;}
     .cover-wrap::after{content:'';position:absolute;inset:0;background:rgba(0,0,0,0);transition:background 0.2s ease;pointer-events:none;}
     .card:hover .cover-wrap img{transform:scale(1.06);}
@@ -2973,7 +2973,7 @@
       border-radius: 12px;
       overflow: hidden;
       cursor: pointer;
-      background: #f0f0f0;
+      background: transparent;
       transition: transform 0.25s ease, box-shadow 0.25s ease;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
     }
@@ -3006,7 +3006,7 @@
       padding-bottom: 100%;
       position: relative;
       overflow: hidden;
-      background: #f0f0f0;
+      background: transparent;
       cursor: pointer;
     }
 
@@ -3390,7 +3390,7 @@
       transition: transform 0.25s ease, box-shadow 0.25s ease;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
       cursor: pointer;
-      background: #f0f0f0;
+      background: transparent;
     }
 
     .random-card:hover {
@@ -3408,7 +3408,7 @@
       padding-bottom: 100%;
       position: relative;
       overflow: hidden;
-      background: #f0f0f0;
+      background: transparent;
       cursor: pointer;
     }
 
@@ -3590,18 +3590,6 @@
       font-size: 4rem;
       margin-bottom: 1rem;
       opacity: 0.5;
-    }
-
-    /* Placeholder for missing images */
-    .artwork-placeholder {
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(135deg, #e5e5ea 0%, #f0f0f5 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-muted);
-      font-size: 3rem;
     }
 
     /* Responsive Design */
