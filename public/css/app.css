@@ -1614,8 +1614,8 @@
     html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:'Open Sans',-apple-system,BlinkMacSystemFont,sans-serif;min-height:100vh;}
     html{background:var(--bg);}
     body{background:var(--bg);}
-    .searchbar{display:flex;align-items:center;gap:8px;flex:1;padding-left:32px;}
-    .search-fields{display:flex;gap:4px;flex:1;}
+    .searchbar{display:flex;align-items:center;gap:8px;flex:1;padding-left:32px;flex-wrap:wrap;row-gap:6px;}
+    .search-fields{display:flex;gap:4px;flex:1 1 auto;flex-wrap:wrap;align-items:center;row-gap:6px;min-width:0;}
     .searchbar input{background:var(--card);color:var(--fg);border:1.5px solid var(--border);border-radius:7px;padding:0.5rem 0.875rem;font-size:0.8rem;height:37px;box-sizing:border-box;outline:none;min-width:90px;font-family:'Open Sans',-apple-system,BlinkMacSystemFont,sans-serif;transition:border-color 0.15s ease,box-shadow 0.15s ease;}
     .searchbar input:focus{border-color:var(--accent) !important;box-shadow:0 0 0 3px rgba(139,92,246,0.18) !important;}
     .searchbar select{padding:0.5rem 0.875rem;border-radius:7px;border:1.5px solid var(--border);background:var(--card);color:var(--muted);font-size:0.8rem;height:37px;box-sizing:border-box;cursor:pointer;min-width:120px;font-family:'Open Sans',-apple-system,BlinkMacSystemFont,sans-serif;outline:none;transition:border-color 0.15s ease,box-shadow 0.15s ease;}
@@ -1835,8 +1835,19 @@
     @media (max-width: 1024px) {
       .header-main{grid-template-columns:1fr;gap:12px;}
       .header-logo-wrap{width:auto;padding-left:12px;} .header-logo{max-height:51px;}
-      .search-fields{grid-template-columns:1fr;}
       .header-actions{justify-content:center;}
+      /* Narrow viewports: let the search row grow vertically rather than clip
+         right-edge items (the Audio Lab widget was disappearing off-screen). */
+      .searchbar input,
+      .searchbar select{min-width:0;}
+      .searchbar input{flex:1 1 120px;}
+      .searchbar select{flex:0 1 140px;}
+    }
+    @media (max-width: 720px) {
+      /* At very narrow widths push Audio Lab to its own row so it's always
+         visible, and drop the dividing left border that only makes sense
+         when it sits inline with the search fields. */
+      .audio-lab-widget{margin-left:0;flex-basis:100%;border-left:none;padding-left:0;padding-top:6px;border-top:1px solid var(--border);}
     }
     .auth-form{display:flex;flex-direction:column;gap:12px;margin-top:12px;}
     .auth-form label{display:flex;flex-direction:column;gap:6px;font-size:14px;}
