@@ -20,6 +20,7 @@ import adminRouter from './routes/admin.js';
 import downloadRouter from './routes/download.js';
 import ringtoneRouter from './routes/ringtone.js';
 import telkomRouter from './routes/telkom.js';
+import ttsRouter from './routes/tts.js';
 
 import { validateAccessToken } from './lib/auth.js';
 import { normalizeShareId } from './lib/format.js';
@@ -359,6 +360,7 @@ app.use('/api/library', libraryRouter);
 app.use('/api', catalogRouter);
 app.use('/api', streamRouter);
 app.use('/api', adminRouter);
+app.use('/api', ttsRouter);
 
 // Shared playlist routes (not under /api/playlists)
 app.get('/api/shared-playlists/:shareId', async (req, res) => {
