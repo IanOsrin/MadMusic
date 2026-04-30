@@ -1,13 +1,15 @@
 import express, { Router } from 'express'
 import multer from 'multer'
 import path from 'path'
-import { readFile, unlink } from 'fs/promises'
+import { readFile, unlink, writeFile } from 'fs/promises'
 import { createReadStream } from 'fs'
 import { mkdirSync } from 'fs'
 import { query } from '../lib/db.js'
 import { adminAuth } from '../lib/admin-auth.js'
 import { extractAudioMeta, detectAudioFormat, generateWarnings } from '../lib/audio-meta.js'
 import { jobQueue } from '../lib/queue.js'
+import { parseDDEXPackage } from '../lib/ddex.js'
+import { parseTrackSheet } from '../lib/excel-ingest.js'
 
 const router = Router()
 
@@ -41,6 +43,42 @@ const upload = multer({
     }
   }
 })
+
+const uploadZip = multer({
+  storage,
+  limits: { fileSize: 512 * 1024 * 1024 },  // 512 MB
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase()
+    const mimes = ['application/zip', 'application/x-zip-compressed', 'application/octet-stream']
+    if (ext === '.zip' || mimes.includes(file.mimetype)) {
+      cb(null, true)
+    } else {
+      cb(new Error(`Expected ZIP file, got: ${file.mimetype}`))
+    }
+  }
+})
+
+const uploadSheet = multer({
+  storage,
+  limits: { fileSize: 32 * 1024 * 1024 },  // 32 MB
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase()
+    if (['.xlsx', '.xls', '.csv'].includes(ext)) {
+      cb(null, true)
+    } else {
+      cb(new Error(`Expected xlsx/xls/csv file, got: ${file.mimetype}`))
+    }
+  }
+})
+
+// ── Temp buffer helper ────────────────────────────────────────────────────────
+
+async function saveTempBuffer(buffer, ext = '.wav') {
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`
+  const filePath = `${UPLOAD_TMP}/${filename}`
+  await writeFile(filePath, buffer)
+  return filePath
+}
 
 // ── GET /api/ingest/invite-required ──────────────────────────────────────────
 
@@ -272,5 +310,219 @@ router.patch('/submissions/:id/reject', adminAuth, async (req, res) => {
     res.status(500).json({ error: err.message })
   }
 })
+
+// ── POST /api/ingest/ddex/preview ─────────────────────────────────────────────
+// Parse DDEX ZIP, return track list — no DB writes.
+
+router.post('/ddex/preview', adminAuth, uploadZip.single('package'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No ZIP file uploaded (field name: package)' })
+  try {
+    const buf = await readFile(req.file.path)
+    await unlink(req.file.path).catch(() => {})
+    const { version, tracks } = await parseDDEXPackage(buf)
+    res.json({
+      ok: true,
+      version,
+      count: tracks.length,
+      tracks: tracks.map(t => ({
+        ref:          t._ref,
+        title:        t.track_title,
+        version_title:t.version_title,
+        artist:       t.artist_name,
+        album:        t.album_title,
+        isrc:         t.isrc,
+        duration_sec: t.duration_sec,
+        genre:        t.genre,
+        year:         t.year,
+        explicit:     t.explicit,
+        has_audio:    !!t.wav_buffer,
+        has_artwork:  !!t.artwork_buffer,
+      }))
+    })
+  } catch (err) {
+    await unlink(req.file?.path).catch(() => {})
+    console.error('[ingest] DDEX preview error:', err)
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// ── POST /api/ingest/ddex ─────────────────────────────────────────────────────
+// Parse DDEX ZIP and create submission records.
+
+router.post('/ddex', adminAuth, uploadZip.single('package'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No ZIP file uploaded (field name: package)' })
+
+  const submissionIds = []
+  const errors = []
+
+  try {
+    const buf = await readFile(req.file.path)
+    await unlink(req.file.path).catch(() => {})
+    const { version, tracks } = await parseDDEXPackage(buf)
+
+    for (const track of tracks) {
+      try {
+        const wavPath     = track.wav_buffer     ? await saveTempBuffer(track.wav_buffer, '.wav')  : null
+        const artworkPath = track.artwork_buffer  ? await saveTempBuffer(track.artwork_buffer, '.jpg') : null
+
+        const notes = JSON.stringify({
+          isrc:        track.isrc,
+          iswc:        track.iswc,
+          subgenre:    track.subgenre,
+          language:    track.language,
+          duration_sec:track.duration_sec,
+          explicit:    track.explicit,
+          territories: track.territories,
+          rights_holder: track.rights_holder,
+          rights_year:   track.rights_year,
+          credits:     track.credits,
+          ddex_version: version,
+        })
+
+        const rows = await query(
+          `INSERT INTO submissions
+             (submitter_name, submitter_email, org,
+              track_title, artist_name, album_title,
+              year, genre, notes,
+              wav_temp_path, artwork_temp_path,
+              status, format_flag, source)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+           RETURNING id`,
+          [
+            track.submitter_name, track.submitter_email, null,
+            track.track_title || 'Untitled', track.artist_name || 'Unknown',
+            track.album_title || null,
+            track.year || null, track.genre || null, notes,
+            wavPath, artworkPath,
+            'received', null, 'ddex'
+          ]
+        )
+        submissionIds.push(rows[0]?.id)
+      } catch (e) {
+        console.error('[ingest] DDEX track insert error:', e.message)
+        errors.push({ title: track.track_title, error: e.message })
+      }
+    }
+
+    res.json({ ok: true, version, count: tracks.length, submissionIds, errors })
+  } catch (err) {
+    await unlink(req.file?.path).catch(() => {})
+    console.error('[ingest] DDEX import error:', err)
+    res.status(500).json({ ok: false, error: err.message, submissionIds, errors })
+  }
+})
+
+// ── POST /api/ingest/excel ────────────────────────────────────────────────────
+// Parse Excel/CSV, return preview with validation — no DB writes.
+
+router.post('/excel', adminAuth, uploadSheet.single('sheet'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No spreadsheet uploaded (field name: sheet)' })
+  try {
+    const buf = await readFile(req.file.path)
+    await unlink(req.file.path).catch(() => {})
+    const result = parseTrackSheet(buf)
+    res.json({ ok: true, ...result })
+  } catch (err) {
+    await unlink(req.file?.path).catch(() => {})
+    console.error('[ingest] Excel parse error:', err)
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// ── POST /api/ingest/excel/confirm ────────────────────────────────────────────
+// Create submission records from pre-parsed + confirmed Excel rows.
+
+router.post('/excel/confirm', adminAuth, express.json(), async (req, res) => {
+  const rows = req.body?.rows
+  if (!Array.isArray(rows) || !rows.length) {
+    return res.status(400).json({ error: 'rows array required' })
+  }
+
+  const submissionIds = []
+  const errors = []
+
+  for (const row of rows) {
+    if (!row.title || !row.artist_name) {
+      errors.push({ row: row._row, error: 'Missing required fields (title, artist)' })
+      continue
+    }
+    try {
+      const notes = [
+        row.notes || null,
+        row.featuring   ? `Feat: ${row.featuring}`   : null,
+        row.composer    ? `Composer: ${row.composer}` : null,
+        row.lyricist    ? `Lyricist: ${row.lyricist}` : null,
+        row.producer    ? `Producer: ${row.producer}` : null,
+        row.publisher   ? `Publisher: ${row.publisher}` : null,
+        row.album_upc   ? `UPC: ${row.album_upc}`    : null,
+        row.pro_name    ? `PRO: ${row.pro_name}`      : null,
+        row.pro_ipi     ? `IPI: ${row.pro_ipi}`       : null,
+      ].filter(Boolean).join('\n') || null
+
+      const dbRows = await query(
+        `INSERT INTO submissions
+           (submitter_name, submitter_email, org,
+            track_title, artist_name, album_title,
+            year, genre, notes,
+            wav_temp_path, artwork_temp_path,
+            status, format_flag, source)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+         RETURNING id`,
+        [
+          'Excel Import', row.submitter_email || 'excel@internal', row.label_name || null,
+          row.title, row.artist_name, row.album_title || null,
+          row.year || null, row.genre || null, notes,
+          null, null,
+          'received', null, 'excel'
+        ]
+      )
+      submissionIds.push(dbRows[0]?.id)
+    } catch (e) {
+      console.error('[ingest] Excel confirm error:', e.message)
+      errors.push({ row: row._row, title: row.title, error: e.message })
+    }
+  }
+
+  res.json({ ok: true, created: submissionIds.length, submissionIds, errors })
+})
+
+// ── POST /api/ingest/submissions/:id/audio ────────────────────────────────────
+// Attach an audio file to an existing (metadata-only) submission.
+
+router.post('/submissions/:id/audio',
+  adminAuth,
+  upload.fields([{ name: 'audio', maxCount: 1 }]),
+  async (req, res) => {
+    const audioFile = req.files?.audio?.[0]
+    if (!audioFile) return res.status(400).json({ error: 'Audio file required (field name: audio)' })
+
+    try {
+      const subs = await query(`SELECT id, status FROM submissions WHERE id = $1`, [req.params.id])
+      if (!subs.length) {
+        await unlink(audioFile.path).catch(() => {})
+        return res.status(404).json({ error: 'Submission not found' })
+      }
+
+      const buffer   = await readFile(audioFile.path)
+      const format   = detectAudioFormat(buffer)
+      const formatFlag = !['wav', 'flac'].includes(format) ? format : null
+
+      await query(
+        `UPDATE submissions SET wav_temp_path = $1, format_flag = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
+        [audioFile.path, formatFlag, req.params.id]
+      ).catch(() =>
+        // updated_at may not exist in older schema — fall back
+        query(`UPDATE submissions SET wav_temp_path = $1, format_flag = $2 WHERE id = $3`,
+          [audioFile.path, formatFlag, req.params.id])
+      )
+
+      res.json({ ok: true, format, formatFlag, submissionId: parseInt(req.params.id, 10) })
+    } catch (err) {
+      await unlink(audioFile.path).catch(() => {})
+      console.error('[ingest] Audio attach error:', err)
+      res.status(500).json({ error: err.message })
+    }
+  }
+)
 
 export default router

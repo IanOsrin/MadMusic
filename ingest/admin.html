@@ -11,20 +11,20 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #1a1208;
-      --bg-card:   #231809;
-      --bg-lift:   #2d2010;
-      --gold:      #d4a843;
-      --gold-dim:  #c47d2a;
-      --gold-glow: rgba(212,168,67,0.15);
-      --text:      #e8d5a3;
-      --muted:     #8a7555;
-      --border:    rgba(196,125,42,0.25);
-      --border-hi: rgba(196,125,42,0.5);
+      --bg:        #ffffff;
+      --bg-card:   #f0f4ff;
+      --bg-lift:   #e4ecf8;
+      --gold:      #1a6fd4;
+      --gold-dim:  #1254a8;
+      --gold-glow: rgba(26,111,212,0.09);
+      --text:      #1a1a2e;
+      --muted:     #6b7280;
+      --border:    rgba(26,111,212,0.18);
+      --border-hi: rgba(26,111,212,0.42);
       --amber:     #f0a832;
-      --green:     #5cb85c;
+      --green:     #2e9e4f;
       --red:       #d9534f;
-      --blue:      #5b9bd5;
+      --blue:      #1a6fd4;
       --radius:    8px;
     }
 
@@ -39,7 +39,7 @@
 
     /* ── Header ────────────────────────────────────────────── */
     .site-header {
-      background: linear-gradient(180deg, #0d0904 0%, var(--bg) 100%);
+      background: linear-gradient(180deg, #dce8f8 0%, var(--bg) 100%);
       border-bottom: 1px solid var(--border);
       padding: 14px 24px;
       display: flex;
@@ -57,7 +57,7 @@
     /* ── Login screen ───────────────────────────────────────── */
     #loginScreen {
       position: fixed; inset: 0;
-      background: rgba(10,7,3,0.97);
+      background: rgba(240,244,255,0.97);
       display: flex; align-items: center; justify-content: center;
       z-index: 100;
     }
@@ -250,6 +250,8 @@
       <button class="tab-btn active" data-tab="submissions" onclick="showTab('submissions')">Submissions</button>
       <button class="tab-btn" data-tab="catalog" onclick="showTab('catalog')">Catalog</button>
       <button class="tab-btn" data-tab="import" onclick="showTab('import')">Import</button>
+      <button class="tab-btn" data-tab="ddex" onclick="showTab('ddex')">DDEX</button>
+      <button class="tab-btn" data-tab="excel" onclick="showTab('excel')">Excel</button>
     </nav>
 
     <!-- ── Submissions tab ──────────────────────────────────── -->
@@ -297,6 +299,72 @@
           <div id="fmPreviewContent"></div>
         </div>
         <div class="import-log" id="fmLog"></div>
+      </div>
+
+    </div>
+
+    <!-- ── DDEX tab ────────────────────────────────────────── -->
+    <div id="tab-ddex" class="tab-panel">
+
+      <div class="import-section">
+        <h3>DDEX Package Import</h3>
+        <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px">Upload a DDEX ZIP containing a NewReleaseMessage XML and audio/artwork files. Preview tracks before importing.</p>
+
+        <div id="ddexDropZone" onclick="$('ddexFileInput').click()"
+          style="border:2px dashed var(--border-hi);border-radius:var(--radius);padding:32px;text-align:center;cursor:pointer;margin-bottom:14px;transition:background 0.15s"
+          ondragover="event.preventDefault();this.style.background='var(--gold-glow)'"
+          ondragleave="this.style.background=''"
+          ondrop="ddexFileDrop(event)">
+          <div style="font-size:1.4rem;margin-bottom:6px">📦</div>
+          <div style="font-size:0.88rem;color:var(--muted)">Drop DDEX ZIP here or <span style="color:var(--gold);text-decoration:underline">click to browse</span></div>
+          <input type="file" id="ddexFileInput" accept=".zip" style="display:none" onchange="ddexFileChosen(this.files[0])">
+        </div>
+
+        <div id="ddexFileLabel" style="font-size:0.82rem;color:var(--muted);margin-bottom:12px"></div>
+
+        <div class="import-actions">
+          <button class="btn btn-ghost" id="ddexPreviewBtn" onclick="runDdexPreview()" disabled>Preview</button>
+          <button class="btn btn-gold"  id="ddexImportBtn"  onclick="runDdexImport()" disabled>Import Selected</button>
+          <span id="ddexVersionBadge" style="font-size:0.76rem;color:var(--muted)"></span>
+        </div>
+
+        <div id="ddexPreviewWrap" class="preview-table-wrap" style="display:none;max-height:480px">
+          <div style="padding:8px 12px;font-size:0.78rem;color:var(--muted)" id="ddexPreviewMeta"></div>
+          <div id="ddexPreviewContent"></div>
+        </div>
+
+        <div class="import-log" id="ddexLog"></div>
+      </div>
+
+    </div>
+
+    <!-- ── Excel tab ────────────────────────────────────────── -->
+    <div id="tab-excel" class="tab-panel">
+
+      <div class="import-section">
+        <h3>Excel / CSV Import</h3>
+        <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px">Upload an .xlsx, .xls, or .csv with one row per track. Column names are matched flexibly. Preview validates before you confirm.</p>
+
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
+          <label class="btn btn-ghost" style="cursor:pointer">
+            Choose File
+            <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="excelFileChosen(this.files[0])">
+          </label>
+          <span id="excelFileLabel" style="font-size:0.82rem;color:var(--muted)">No file selected</span>
+        </div>
+
+        <div id="excelSummary" style="display:none;margin-bottom:12px;font-size:0.82rem"></div>
+
+        <div id="excelPreviewWrap" class="preview-table-wrap" style="display:none;max-height:480px">
+          <div id="excelPreviewContent"></div>
+        </div>
+
+        <div style="margin-top:14px;display:none" id="excelActions">
+          <button class="btn btn-gold" onclick="confirmExcelImport()">Confirm Import</button>
+          <span style="font-size:0.78rem;color:var(--muted);margin-left:10px" id="excelActionLabel"></span>
+        </div>
+
+        <div class="import-log" id="excelLog"></div>
       </div>
 
     </div>
@@ -812,6 +880,247 @@ async function runFmImport() {
   }))
   loadImportMeta()
   showToast(`Import complete — ${data.created} created, ${data.updated} updated`)
+}
+
+// ── DDEX ───────────────────────────────────────────────────────────────────
+let ddexFile    = null
+let ddexPreview = []   // last previewed tracks
+
+function ddexFileDrop(e) {
+  e.preventDefault()
+  $('ddexDropZone').style.background = ''
+  const file = e.dataTransfer.files[0]
+  if (file) ddexFileChosen(file)
+}
+
+function ddexFileChosen(file) {
+  if (!file) return
+  ddexFile    = file
+  ddexPreview = []
+  $('ddexFileLabel').textContent = `Selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`
+  $('ddexPreviewBtn').disabled = false
+  $('ddexImportBtn').disabled  = true
+  $('ddexVersionBadge').textContent = ''
+  $('ddexPreviewWrap').style.display = 'none'
+  $('ddexLog').style.display = 'none'
+}
+
+async function runDdexPreview() {
+  if (!ddexFile) return
+  const btn = $('ddexPreviewBtn')
+  btn.disabled = true; btn.textContent = '⟳ Parsing…'
+
+  const fd = new FormData()
+  fd.append('package', ddexFile)
+
+  try {
+    const res  = await fetch('/api/ingest/ddex/preview', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: fd
+    })
+    const data = await res.json()
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Preview failed')
+
+    ddexPreview = data.tracks || []
+    $('ddexVersionBadge').textContent = `ERN ${data.version}`
+    $('ddexPreviewMeta').textContent = `${data.count} track(s) found in ERN ${data.version} package`
+    renderDdexPreviewTable(ddexPreview)
+    $('ddexPreviewWrap').style.display = 'block'
+    $('ddexImportBtn').disabled = ddexPreview.length === 0
+  } catch (err) {
+    showToast(err.message, 'error')
+  } finally {
+    btn.disabled = false; btn.textContent = 'Preview'
+  }
+}
+
+function renderDdexPreviewTable(tracks) {
+  if (!tracks.length) {
+    $('ddexPreviewContent').innerHTML = '<div style="padding:12px;color:var(--muted)">No tracks parsed.</div>'
+    return
+  }
+  let html = `
+    <table style="font-size:0.78rem">
+      <thead><tr>
+        <th style="width:30px"><input type="checkbox" id="ddexSelectAll" onchange="ddexToggleAll(this.checked)" checked></th>
+        <th>Title</th><th>Artist</th><th>ISRC</th><th>Duration</th><th>Audio</th><th>Artwork</th>
+      </tr></thead><tbody>`
+  tracks.forEach((t, i) => {
+    html += `<tr>
+      <td><input type="checkbox" class="ddex-row-cb" data-idx="${i}" checked></td>
+      <td>${esc(t.title)}${t.version_title ? `<br><small style="color:var(--muted)">${esc(t.version_title)}</small>` : ''}</td>
+      <td>${esc(t.artist)}</td>
+      <td style="font-family:monospace;font-size:0.74rem">${esc(t.isrc || '—')}</td>
+      <td>${fmtDur(t.duration_sec)}</td>
+      <td style="text-align:center">${t.has_audio ? '✓' : '<span style="color:var(--muted)">✗</span>'}</td>
+      <td style="text-align:center">${t.has_artwork ? '✓' : '<span style="color:var(--muted)">✗</span>'}</td>
+    </tr>`
+  })
+  html += '</tbody></table>'
+  $('ddexPreviewContent').innerHTML = html
+}
+
+function ddexToggleAll(checked) {
+  document.querySelectorAll('.ddex-row-cb').forEach(cb => { cb.checked = checked })
+}
+
+async function runDdexImport() {
+  if (!ddexFile) return
+  const selectedIdxs = new Set(
+    [...document.querySelectorAll('.ddex-row-cb:checked')].map(cb => parseInt(cb.dataset.idx))
+  )
+  if (!selectedIdxs.size) { showToast('No tracks selected', 'warning'); return }
+
+  const btn = $('ddexImportBtn')
+  const log = $('ddexLog')
+  btn.disabled = true; btn.textContent = '⟳ Importing…'
+  log.style.display = 'block'
+  log.textContent = `Uploading package and importing ${selectedIdxs.size} track(s)…\n`
+
+  const fd = new FormData()
+  fd.append('package', ddexFile)
+
+  try {
+    const res  = await fetch('/api/ingest/ddex', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: fd
+    })
+    const data = await res.json()
+
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Import failed')
+
+    log.textContent += `Done — ${data.submissionIds.length} submission(s) created.\n`
+    if (data.errors?.length) {
+      log.textContent += `Errors (${data.errors.length}):\n`
+      data.errors.forEach(e => { log.textContent += `  ${e.title}: ${e.error}\n` })
+    }
+    showToast(`DDEX import complete — ${data.submissionIds.length} submissions created`)
+  } catch (err) {
+    log.textContent += `\nError: ${err.message}`
+    showToast(err.message, 'error')
+  } finally {
+    btn.disabled = false; btn.textContent = 'Import Selected'
+  }
+}
+
+// ── Excel ───────────────────────────────────────────────────────────────────
+let excelParsedRows = []
+
+function excelFileChosen(file) {
+  if (!file) return
+  $('excelFileLabel').textContent = `${file.name} (${(file.size / 1024).toFixed(0)} KB)`
+  $('excelLog').style.display = 'none'
+  runExcelPreview(file)
+}
+
+async function runExcelPreview(file) {
+  $('excelSummary').style.display = 'none'
+  $('excelPreviewWrap').style.display = 'none'
+  $('excelActions').style.display = 'none'
+  $('excelFileLabel').textContent += ' — parsing…'
+
+  const fd = new FormData()
+  fd.append('sheet', file)
+
+  try {
+    const res  = await fetch('/api/ingest/excel', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: fd
+    })
+    const data = await res.json()
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Parse failed')
+
+    excelParsedRows = data.rows || []
+    $('excelFileLabel').textContent = $('excelFileLabel').textContent.replace(' — parsing…', '')
+    renderExcelSummary(data)
+    renderExcelTable(data.rows)
+    $('excelPreviewWrap').style.display = 'block'
+    if (data.errors.length === 0 && excelParsedRows.length > 0) {
+      $('excelActions').style.display = 'block'
+      $('excelActionLabel').textContent = `${excelParsedRows.length} row(s) will be imported as metadata-only submissions`
+    }
+  } catch (err) {
+    showToast(err.message, 'error')
+    $('excelFileLabel').textContent = $('excelFileLabel').textContent.replace(' — parsing…', '')
+  }
+}
+
+function renderExcelSummary(data) {
+  const errors   = data.errors   || []
+  const warnings = data.warnings || []
+  const parts = []
+  parts.push(`<strong>${data.rows.length}</strong> row(s) parsed`)
+  if (errors.length)   parts.push(`<span style="color:var(--red)">${errors.length} error(s)</span>`)
+  if (warnings.length) parts.push(`<span style="color:var(--amber)">${warnings.length} warning(s)</span>`)
+
+  let html = `<div>${parts.join(' · ')}</div>`
+  if (errors.length)   html += `<div style="color:var(--red);font-size:0.78rem;margin-top:6px">${errors.map(esc).join('<br>')}</div>`
+  if (warnings.length) html += `<div style="color:var(--amber);font-size:0.78rem;margin-top:4px">${warnings.map(esc).join('<br>')}</div>`
+
+  $('excelSummary').innerHTML = html
+  $('excelSummary').style.display = 'block'
+}
+
+function renderExcelTable(rows) {
+  if (!rows.length) {
+    $('excelPreviewContent').innerHTML = '<div style="padding:12px;color:var(--muted)">No rows found.</div>'
+    return
+  }
+  // Columns to show
+  const cols = ['title','artist_name','album_title','isrc','genre','year','bpm','duration_sec','explicit']
+  const labels = { title:'Title', artist_name:'Artist', album_title:'Album', isrc:'ISRC', genre:'Genre', year:'Year', bpm:'BPM', duration_sec:'Duration', explicit:'Explicit' }
+
+  let html = `<table style="font-size:0.78rem"><thead><tr>`
+  cols.forEach(c => { html += `<th>${labels[c]||c}</th>` })
+  html += `</tr></thead><tbody>`
+
+  rows.forEach(row => {
+    const hasMissing = !row.title || !row.artist_name
+    html += `<tr style="${hasMissing ? 'background:rgba(217,83,79,0.06)' : ''}">`
+    cols.forEach(c => {
+      const val = row[c]
+      const required = c === 'title' || c === 'artist_name'
+      const missing  = required && !val
+      const cellStyle = missing ? 'color:var(--red);font-style:italic' : 'color:var(--text)'
+      const display = c === 'duration_sec' ? fmtDur(val)
+        : c === 'explicit' ? (val ? 'E' : '')
+        : esc(val ?? '')
+      html += `<td style="${cellStyle}">${display || (missing ? 'REQUIRED' : '<span style="color:var(--muted)">—</span>')}</td>`
+    })
+    html += '</tr>'
+  })
+  html += '</tbody></table>'
+  $('excelPreviewContent').innerHTML = html
+}
+
+async function confirmExcelImport() {
+  if (!excelParsedRows.length) return
+  const btn = document.querySelector('#excelActions .btn-gold')
+  const log = $('excelLog')
+  btn.disabled = true; btn.textContent = '⟳ Importing…'
+  log.style.display = 'block'
+  log.textContent = `Creating ${excelParsedRows.length} submission(s)…\n`
+
+  try {
+    const res  = await api('/api/ingest/excel/confirm', 'POST', { rows: excelParsedRows })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Confirm failed')
+
+    log.textContent += `Done — ${data.created} submission(s) created (metadata only, no audio yet).\n`
+    if (data.errors?.length) {
+      log.textContent += `Errors:\n` + data.errors.map(e => `  Row ${e.row}: ${e.error}`).join('\n')
+    }
+    showToast(`Excel import complete — ${data.created} submissions created`)
+    $('excelActions').style.display = 'none'
+  } catch (err) {
+    log.textContent += `\nError: ${err.message}`
+    showToast(err.message, 'error')
+  } finally {
+    btn.disabled = false; btn.textContent = 'Confirm Import'
+  }
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────

@@ -17,15 +17,25 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1032.0",
+    "@aws-sdk/client-s3": "^3.1039.0",
+    "adm-zip": "^0.5.17",
+    "better-sqlite3": "^12.9.0",
+    "bullmq": "^5.76.4",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "express-rate-limit": "^8.2.1",
+    "fluent-ffmpeg": "^2.1.3",
     "lru-cache": "^11.2.2",
+    "multer": "^2.1.1",
+    "music-metadata": "^11.12.3",
     "nodemailer": "^7.0.13",
-    "undici": "^7"
+    "p-queue": "^9.2.0",
+    "pg": "^8.20.0",
+    "undici": "^7",
+    "xlsx": "^0.18.5",
+    "xml2js": "^0.6.2"
   },
   "engines": {
     "node": ">=18"
@@ -39,7 +49,6 @@
   },
   "homepage": "https://github.com/IanOsrin/MASS#readme",
   "devDependencies": {
-    "artillery": "^2.0.30",
-    "xlsx": "^0.18.5"
+    "artillery": "^2.0.30"
   }
 }
