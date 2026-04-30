@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAD Music — Track Submission</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #1a1208;
+      --bg-card:   #231809;
+      --bg-lift:   #2d2010;
+      --gold:      #d4a843;
+      --gold-dim:  #c47d2a;
+      --gold-glow: rgba(212,168,67,0.18);
+      --text:      #e8d5a3;
+      --muted:     #8a7555;
+      --border:    rgba(196,125,42,0.25);
+      --border-hi: rgba(196,125,42,0.5);
+      --amber:     #f0a832;
+      --green:     #5cb85c;
+      --red:       #d9534f;
+      --radius:    10px;
+    }
+
+    html, body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Open Sans', 'Segoe UI', system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    .site-header {
+      background: linear-gradient(180deg, #0d0904 0%, var(--bg) 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .site-header .logo {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .site-header .logo span { color: var(--text); font-weight: 300; }
+    .site-header .badge {
+      margin-left: auto;
+      font-size: 0.68rem;
+      color: var(--gold);
+      border: 1px solid var(--border-hi);
+      padding: 3px 12px;
+      border-radius: 20px;
+      background: var(--gold-glow);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+
+    /* ── Page wrapper ───────────────────────────────────────── */
+    .page { max-width: 760px; margin: 0 auto; padding: 36px 24px 80px; }
+
+    .page-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .page-subtitle {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 32px;
+    }
+
+    /* ── Invite gate overlay ────────────────────────────────── */
+    #inviteGate {
+      position: fixed; inset: 0;
+      background: rgba(10,7,3,0.97);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 999;
+    }
+    .invite-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-hi);
+      border-radius: var(--radius);
+      padding: 40px 36px;
+      width: min(400px, 92vw);
+      text-align: center;
+    }
+    .invite-box h2 { font-size: 1.2rem; color: var(--gold); margin-bottom: 10px; }
+    .invite-box p  { color: var(--muted); font-size: 0.88rem; margin-bottom: 24px; }
+    .invite-box input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 1rem;
+      letter-spacing: 2px;
+      text-align: center;
+      margin-bottom: 14px;
+      outline: none;
+    }
+    .invite-box input:focus { border-color: var(--gold-dim); }
+    .invite-error { color: var(--red); font-size: 0.82rem; margin-bottom: 10px; min-height: 18px; }
+
+    /* ── Cards ──────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 18px;
+    }
+
+    /* ── Drop zone ──────────────────────────────────────────── */
+    #dropZone {
+      border: 2px dashed var(--border-hi);
+      border-radius: var(--radius);
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    #dropZone:hover, #dropZone.drag-over {
+      border-color: var(--gold);
+      background: var(--gold-glow);
+    }
+    #dropZone.has-file {
+      border-style: solid;
+      border-color: var(--border);
+      padding-bottom: 0;
+    }
+    .drop-icon { font-size: 2.4rem; margin-bottom: 12px; opacity: 0.6; }
+    .drop-title { font-size: 1.05rem; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+    .drop-hint  { font-size: 0.82rem; color: var(--muted); margin-bottom: 20px; }
+    #fileInput  { display: none; }
+
+    /* ── File bar (post-drop) ───────────────────────────────── */
+    #fileBar {
+      display: none;
+      background: var(--bg-lift);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin: 14px 0;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    #fileBar.visible { display: flex; }
+    .file-name { color: var(--gold); font-weight: 600; font-size: 0.9rem; }
+    .file-meta { color: var(--muted); font-size: 0.78rem; }
+
+    /* ── Format badge ───────────────────────────────────────── */
+    #formatBadge {
+      display: none;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      margin-left: auto;
+    }
+    #formatBadge.accepted  { background: rgba(92,184,92,0.15);  color: var(--green); border: 1px solid rgba(92,184,92,0.4); }
+    #formatBadge.warning   { background: rgba(240,168,50,0.15); color: var(--amber); border: 1px solid rgba(240,168,50,0.4); }
+
+    /* ── Waveform canvas ────────────────────────────────────── */
+    #waveformWrap {
+      display: none;
+      background: rgba(0,0,0,0.25);
+      border-radius: 8px;
+      padding: 8px 0 4px;
+      margin: 10px 0 6px;
+    }
+    #waveformCanvas {
+      width: 100%;
+      height: 80px;
+      display: block;
+    }
+
+    /* ── Technical spec + warnings ──────────────────────────── */
+    #techSpec {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-family: 'Courier New', monospace;
+      letter-spacing: 0.5px;
+      padding: 0 0 16px;
+    }
+    #warningsList { list-style: none; padding: 0 0 16px; }
+    #warningsList li {
+      color: var(--amber);
+      font-size: 0.82rem;
+      padding: 3px 0;
+    }
+    #warningsList li::before { content: '⚠ '; }
+
+    /* ── Spinner ─────────────────────────────────────────────── */
+    #spinner {
+      display: none;
+      color: var(--muted);
+      font-size: 0.85rem;
+      padding: 10px 0;
+    }
+    .spin { animation: spin 1s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Metadata form ──────────────────────────────────────── */
+    #metaForm { display: none; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px 20px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.full { grid-column: 1 / -1; }
+
+    label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    label .req { color: var(--gold-dim); margin-left: 2px; }
+
+    input[type=text], input[type=email], input[type=number], select, textarea {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 9px 12px;
+      color: var(--text);
+      font-size: 0.9rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--gold-dim); }
+    select option { background: var(--bg-card); }
+    textarea { resize: vertical; min-height: 70px; }
+
+    /* ── Artwork drop zone ──────────────────────────────────── */
+    #artworkZone {
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 0.83rem;
+      color: var(--muted);
+      transition: border-color 0.2s;
+    }
+    #artworkZone:hover { border-color: var(--gold-dim); color: var(--text); }
+    #artworkPreview {
+      display: none;
+      width: 80px;
+      height: 80px;
+      object-fit: cover;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      margin: 0 auto 8px;
+    }
+    #artworkInput { display: none; }
+
+    /* ── Divider ────────────────────────────────────────────── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 24px 0;
+    }
+
+    /* ── Buttons ────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 11px 26px;
+      border-radius: 7px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.15s, background 0.15s;
+      font-family: inherit;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--gold-dim), #9a5e12);
+      color: #fff;
+      width: 100%;
+      padding: 14px;
+      font-size: 0.95rem;
+      letter-spacing: 0.5px;
+      margin-top: 6px;
+    }
+    .btn-primary:hover:not(:disabled) { opacity: 0.88; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-ghost {
+      background: rgba(212,168,67,0.08);
+      color: var(--gold);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: var(--gold-glow); }
+
+    /* ── Error message ──────────────────────────────────────── */
+    #errorMsg {
+      display: none;
+      background: rgba(217,83,79,0.1);
+      border: 1px solid rgba(217,83,79,0.35);
+      border-radius: 6px;
+      color: var(--red);
+      font-size: 0.85rem;
+      padding: 10px 14px;
+      margin-top: 12px;
+    }
+
+    /* ── Confirmation ───────────────────────────────────────── */
+    #confirmation { display: none; }
+    .confirm-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-hi);
+      border-radius: var(--radius);
+      padding: 40px 32px;
+      text-align: center;
+    }
+    .confirm-check { font-size: 3rem; margin-bottom: 16px; color: var(--green); }
+    .confirm-title { font-size: 1.4rem; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+    .confirm-id {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--gold);
+      font-family: 'Courier New', monospace;
+      margin: 16px 0 8px;
+    }
+    .confirm-email { color: var(--muted); font-size: 0.9rem; margin-bottom: 28px; }
+
+    /* ── Responsive ─────────────────────────────────────────── */
+    @media (max-width: 560px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .form-group.full { grid-column: 1; }
+      .site-header { padding: 14px 16px; }
+      .page { padding: 24px 16px 60px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Invite gate ──────────────────────────────────────────────────────── -->
+<div id="inviteGate" style="display:none">
+  <div class="invite-box">
+    <h2>Access Required</h2>
+    <p>Enter your invite token to access the submission portal.</p>
+    <input type="password" id="inviteInput" placeholder="Invite token" autocomplete="off">
+    <div class="invite-error" id="inviteError"></div>
+    <button class="btn btn-primary" onclick="verifyInvite()">Continue</button>
+  </div>
+</div>
+
+<!-- ── Header ───────────────────────────────────────────────────────────── -->
+<header class="site-header">
+  <div class="logo">MAD <span>Music</span></div>
+  <div class="badge">Track Submission</div>
+</header>
+
+<main class="page">
+
+  <h1 class="page-title">Submit a Track</h1>
+  <p class="page-subtitle">Upload your WAV master and we'll take care of the rest.</p>
+
+  <!-- ── Drop zone ──────────────────────────────────────────────────────── -->
+  <div id="dropZone"
+       ondragover="onDragOver(event)"
+       ondragleave="onDragLeave(event)"
+       ondrop="onDrop(event)"
+       onclick="document.getElementById('fileInput').click()">
+
+    <input type="file" id="fileInput" accept=".wav,.flac,.mp3,.aif,.aiff,audio/*"
+           onchange="handleFileInput(event)">
+
+    <div id="dropPrompt">
+      <div class="drop-icon">🎵</div>
+      <div class="drop-title">Drag your WAV here, or click to browse</div>
+      <div class="drop-hint">Accepted: WAV, FLAC (preferred) · MP3 / AIFF accepted with reviewer approval</div>
+      <button class="btn btn-ghost" onclick="event.stopPropagation(); document.getElementById('fileInput').click()">
+        Browse Files
+      </button>
+    </div>
+
+    <div id="spinner"><span class="spin">⟳</span> &nbsp;Reading file metadata…</div>
+
+    <div id="fileBar">
+      <span class="file-name" id="fileName"></span>
+      <span class="file-meta" id="fileSize"></span>
+      <span id="formatBadge"></span>
+    </div>
+
+    <div id="waveformWrap">
+      <canvas id="waveformCanvas"></canvas>
+    </div>
+
+    <div id="techSpec"></div>
+    <ul id="warningsList"></ul>
+
+  </div>
+
+  <!-- ── Metadata form ──────────────────────────────────────────────────── -->
+  <div id="metaForm">
+    <form onsubmit="submitForm(event)">
+
+      <div class="card">
+        <div class="card-title">Track Details</div>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Track Title <span class="req">*</span></label>
+            <input type="text" id="trackTitle" required placeholder="e.g. Midnight Sun">
+          </div>
+          <div class="form-group">
+            <label>Artist Name <span class="req">*</span></label>
+            <input type="text" id="artistName" required placeholder="Primary performer">
+          </div>
+          <div class="form-group">
+            <label>Album / Release</label>
+            <input type="text" id="albumTitle" placeholder="Leave blank for single">
+          </div>
+          <div class="form-group">
+            <label>Genre</label>
+            <input type="text" id="genre" placeholder="e.g. Afrobeats, Jazz, House">
+          </div>
+          <div class="form-group">
+            <label>Year</label>
+            <input type="number" id="year" min="1900" max="2099" placeholder="2024">
+          </div>
+          <div class="form-group">
+            <label>ISRC</label>
+            <input type="text" id="isrc" placeholder="e.g. ZAB251234567" maxlength="12">
+          </div>
+          <div class="form-group">
+            <label>BPM</label>
+            <input type="number" id="bpm" min="1" max="999" placeholder="">
+          </div>
+          <div class="form-group">
+            <label>Key</label>
+            <input type="text" id="keySig" placeholder="e.g. Am, F#">
+          </div>
+          <div class="form-group">
+            <label>Mood</label>
+            <input type="text" id="mood" placeholder="e.g. Melancholic, Uplifting">
+          </div>
+          <div class="form-group">
+            <label>Language</label>
+            <input type="text" id="language" placeholder="e.g. en, zu, yo" value="en" maxlength="5">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Artwork</div>
+        <div id="artworkZone"
+             onclick="document.getElementById('artworkInput').click()"
+             ondragover="artDragOver(event)"
+             ondrop="artDrop(event)">
+          <img id="artworkPreview" src="" alt="Artwork preview">
+          <div id="artworkHint">Drop cover art here, or click to browse<br>
+            <small style="color:var(--muted)">JPEG or PNG · min 500×500px recommended</small>
+          </div>
+        </div>
+        <input type="file" id="artworkInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+               onchange="handleArtwork(event)">
+      </div>
+
+      <div class="card">
+        <div class="card-title">Submission Details</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Your Name <span class="req">*</span></label>
+            <input type="text" id="submitterName" required placeholder="Full name">
+          </div>
+          <div class="form-group">
+            <label>Email Address <span class="req">*</span></label>
+            <input type="email" id="submitterEmail" required placeholder="you@example.com">
+          </div>
+          <div class="form-group full">
+            <label>Organisation / Label</label>
+            <input type="text" id="org" placeholder="Label, distributor, or leave blank">
+          </div>
+          <div class="form-group full">
+            <label>Notes to Reviewer</label>
+            <textarea id="notes" placeholder="Any context, special instructions, or rights information…"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div id="errorMsg"></div>
+
+      <button type="submit" class="btn btn-primary" id="submitBtn">
+        Submit Track
+      </button>
+
+    </form>
+  </div>
+
+  <!-- ── Confirmation ────────────────────────────────────────────────────── -->
+  <div id="confirmation">
+    <div class="confirm-box">
+      <div class="confirm-check">✓</div>
+      <div class="confirm-title">Submission Received</div>
+      <div style="color:var(--muted);font-size:0.88rem;margin-bottom:10px;">Your submission ID is</div>
+      <div class="confirm-id" id="confirmId"></div>
+      <div class="confirm-email">We'll be in touch at <strong id="confirmEmail"></strong></div>
+      <button class="btn btn-ghost" onclick="resetForm()">Submit Another Track</button>
+    </div>
+  </div>
+
+</main>
+
+<script>
+'use strict';
+
+// ── State ──────────────────────────────────────────────────────────────────
+let selectedFile    = null;
+let selectedArtwork = null;
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+function fmtDuration(sec) {
+  if (!sec) return '—';
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+function fmtSize(bytes) {
+  if (bytes > 1e6) return (bytes / 1e6).toFixed(1) + ' MB';
+  return (bytes / 1e3).toFixed(0) + ' KB';
+}
+function prefill(id, val) {
+  if (val && !$(id).value) $(id).value = val;
+}
+
+// ── Invite gate ────────────────────────────────────────────────────────────
+async function checkInvite() {
+  if (sessionStorage.getItem('ingestInviteGranted') === '1') return;
+  try {
+    const r = await fetch('/api/ingest/invite-required');
+    const d = await r.json();
+    if (d.required) $('inviteGate').style.display = 'flex';
+  } catch (_) {}
+}
+
+async function verifyInvite() {
+  const token = $('inviteInput').value.trim();
+  $('inviteError').textContent = '';
+  try {
+    const r = await fetch('/api/ingest/verify-invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    const d = await r.json();
+    if (d.valid) {
+      sessionStorage.setItem('ingestInviteGranted', '1');
+      $('inviteGate').style.display = 'none';
+    } else {
+      $('inviteError').textContent = 'Incorrect token — please try again.';
+    }
+  } catch (_) {
+    $('inviteError').textContent = 'Could not connect — please try again.';
+  }
+}
+$('inviteInput').addEventListener('keydown', e => { if (e.key === 'Enter') verifyInvite(); });
+
+// ── Drag/drop ──────────────────────────────────────────────────────────────
+function onDragOver(e) {
+  e.preventDefault();
+  $('dropZone').classList.add('drag-over');
+}
+function onDragLeave(e) {
+  if (!$('dropZone').contains(e.relatedTarget)) {
+    $('dropZone').classList.remove('drag-over');
+  }
+}
+function onDrop(e) {
+  e.preventDefault();
+  $('dropZone').classList.remove('drag-over');
+  const file = e.dataTransfer?.files?.[0];
+  if (file) handleFile(file);
+}
+function handleFileInput(e) {
+  const file = e.target.files?.[0];
+  if (file) handleFile(file);
+}
+
+// ── Main file handler ──────────────────────────────────────────────────────
+async function handleFile(file) {
+  selectedFile = file;
+  $('dropPrompt').style.display = 'none';
+  $('spinner').style.display = 'block';
+  $('warningsList').innerHTML = '';
+  $('techSpec').textContent = '';
+
+  // Kick off waveform draw in parallel (client-side, no server needed)
+  drawWaveformPreview(file);
+
+  let meta = {}, technical = {}, warnings = [], format = 'unknown', accepted = false;
+  try {
+    const fd = new FormData();
+    fd.append('audio', file);
+    const r = await fetch('/api/ingest/meta-preview', { method: 'POST', body: fd });
+    const d = await r.json();
+    meta = d.meta || {};
+    technical = d.technical || {};
+    warnings = d.warnings || [];
+    format = d.format || 'unknown';
+    accepted = !!d.accepted;
+  } catch (_) {
+    warnings.push('Could not read file metadata — please fill in the form manually.');
+  }
+
+  $('spinner').style.display = 'none';
+
+  // File bar
+  $('fileName').textContent = file.name;
+  $('fileSize').textContent = fmtSize(file.size);
+  const badge = $('formatBadge');
+  badge.textContent = format.toUpperCase() + (accepted ? ' ✓' : ' ⚠');
+  badge.className = accepted ? 'accepted' : 'warning';
+  badge.style.display = 'inline-block';
+  $('fileBar').classList.add('visible');
+  $('dropZone').classList.add('has-file');
+
+  // Technical spec
+  if (technical.sample_rate) {
+    $('techSpec').textContent =
+      `${(technical.sample_rate / 1000).toFixed(1)} kHz · ` +
+      `${technical.bit_depth || '?'}-bit · ` +
+      `${technical.channels === 1 ? 'Mono' : (technical.channels === 2 ? 'Stereo' : `${technical.channels}ch`)} · ` +
+      fmtDuration(technical.duration_sec);
+  }
+
+  // Warnings
+  warnings.forEach(w => {
+    const li = document.createElement('li');
+    li.textContent = w;
+    $('warningsList').appendChild(li);
+  });
+
+  // Pre-fill form
+  prefill('trackTitle', meta.title);
+  prefill('artistName', meta.artist);
+  prefill('albumTitle',  meta.album);
+  prefill('isrc',        meta.isrc);
+  prefill('bpm',         meta.bpm);
+  prefill('keySig',      meta.key_sig);
+  prefill('year',        meta.year);
+  prefill('genre',       meta.genre);
+  if (meta.language) prefill('language', meta.language);
+
+  $('metaForm').style.display = 'block';
+  $('metaForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── Waveform canvas (Web Audio API, client-side) ───────────────────────────
+async function drawWaveformPreview(file) {
+  const canvas = $('waveformCanvas');
+  const wrap   = $('waveformWrap');
+
+  try {
+    const dpr  = window.devicePixelRatio || 1;
+    const W    = canvas.offsetWidth  || 700;
+    const H    = 80;
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    wrap.style.display = 'block';
+
+    const arrayBuffer = await file.arrayBuffer();
+    const audioCtx = new OfflineAudioContext(1, 44100, 44100);
+    let decoded;
+    try {
+      decoded = await audioCtx.decodeAudioData(arrayBuffer);
+    } catch (_) {
+      // decodeAudioData failed (e.g. very large file or unsupported codec)
+      wrap.style.display = 'none';
+      return;
+    }
+
+    const raw    = decoded.getChannelData(0);
+    const points = W;
+    const step   = Math.max(1, Math.floor(raw.length / points));
+    const peaks  = [];
+    let maxVal   = 0;
+
+    for (let i = 0; i < points; i++) {
+      const start = i * step;
+      let sum = 0;
+      for (let j = 0; j < step; j++) {
+        sum += raw[start + j] ** 2;
+      }
+      const rms = Math.sqrt(sum / step);
+      peaks.push(rms);
+      if (rms > maxVal) maxVal = rms;
+    }
+
+    const norm = maxVal > 0 ? 1 / maxVal : 1;
+    const mid  = H / 2;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(0,0,0,0)';
+
+    peaks.forEach((p, i) => {
+      const h = (p * norm) * mid * 0.9;
+      const alpha = 0.55 + p * norm * 0.45;
+
+      ctx.fillStyle = `rgba(212,168,67,${alpha.toFixed(2)})`;
+      // above centre
+      ctx.fillRect(i, mid - h, 1, h);
+      // below centre (mirror)
+      ctx.fillStyle = `rgba(196,125,42,${(alpha * 0.6).toFixed(2)})`;
+      ctx.fillRect(i, mid, 1, h);
+    });
+
+    // Centre line
+    ctx.fillStyle = 'rgba(212,168,67,0.2)';
+    ctx.fillRect(0, mid - 0.5, W, 1);
+
+  } catch (_) {
+    wrap.style.display = 'none';
+  }
+}
+
+// ── Artwork handling ───────────────────────────────────────────────────────
+function artDragOver(e) { e.preventDefault(); $('artworkZone').style.borderColor = 'var(--gold-dim)'; }
+function artDrop(e) {
+  e.preventDefault();
+  $('artworkZone').style.borderColor = '';
+  const file = e.dataTransfer?.files?.[0];
+  if (file && file.type.startsWith('image/')) setArtwork(file);
+}
+function handleArtwork(e) {
+  const file = e.target.files?.[0];
+  if (file) setArtwork(file);
+}
+function setArtwork(file) {
+  selectedArtwork = file;
+  const url = URL.createObjectURL(file);
+  const img = $('artworkPreview');
+  img.src = url;
+  img.style.display = 'block';
+  $('artworkHint').style.display = 'none';
+}
+
+// ── Form submit ────────────────────────────────────────────────────────────
+async function submitForm(e) {
+  e.preventDefault();
+  if (!selectedFile) return;
+
+  const btn = $('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+  $('errorMsg').style.display = 'none';
+
+  const fd = new FormData();
+  fd.append('audio',            selectedFile);
+  if (selectedArtwork) fd.append('artwork', selectedArtwork);
+  fd.append('submitter_name',   $('submitterName').value.trim());
+  fd.append('submitter_email',  $('submitterEmail').value.trim());
+  fd.append('title',            $('trackTitle').value.trim());
+  fd.append('artist',           $('artistName').value.trim());
+  fd.append('album',            $('albumTitle').value.trim());
+  fd.append('genre',            $('genre').value.trim());
+  fd.append('year',             $('year').value.trim());
+  fd.append('org',              $('org').value.trim());
+  fd.append('notes',            $('notes').value.trim());
+  fd.append('isrc',             $('isrc').value.trim());
+  fd.append('bpm',              $('bpm').value.trim());
+  fd.append('mood',             $('mood').value.trim());
+  fd.append('language',         $('language').value.trim());
+
+  try {
+    const res  = await fetch('/api/ingest/submit', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Server error ${res.status}`);
+
+    $('confirmId').textContent    = `#${data.submissionId}`;
+    $('confirmEmail').textContent = $('submitterEmail').value.trim();
+    $('metaForm').style.display   = 'none';
+    $('dropZone').style.display   = 'none';
+    $('confirmation').style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (err) {
+    const msg = $('errorMsg');
+    msg.textContent = err.message;
+    msg.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Submit Track';
+  }
+}
+
+// ── Reset ──────────────────────────────────────────────────────────────────
+function resetForm() {
+  selectedFile = selectedArtwork = null;
+  document.querySelector('form').reset();
+  $('dropZone').style.display = 'block';
+  $('dropZone').className = '';
+  $('dropPrompt').style.display = 'block';
+  $('fileBar').classList.remove('visible');
+  $('waveformWrap').style.display = 'none';
+  $('techSpec').textContent = '';
+  $('warningsList').innerHTML = '';
+  $('formatBadge').style.display = 'none';
+  $('spinner').style.display = 'none';
+  $('metaForm').style.display = 'none';
+  $('confirmation').style.display = 'none';
+  $('artworkPreview').style.display = 'none';
+  $('artworkHint').style.display = 'block';
+  $('artworkInput').value = '';
+  $('fileInput').value = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+checkInvite();
+</script>
+</body>
+</html>

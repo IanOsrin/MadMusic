@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MAD Music — Ingest Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #1a1208;
+      --bg-card:   #231809;
+      --bg-lift:   #2d2010;
+      --gold:      #d4a843;
+      --gold-dim:  #c47d2a;
+      --gold-glow: rgba(212,168,67,0.15);
+      --text:      #e8d5a3;
+      --muted:     #8a7555;
+      --border:    rgba(196,125,42,0.25);
+      --border-hi: rgba(196,125,42,0.5);
+      --amber:     #f0a832;
+      --green:     #5cb85c;
+      --red:       #d9534f;
+      --blue:      #5b9bd5;
+      --radius:    8px;
+    }
+
+    html, body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Open Sans', 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ────────────────────────────────────────────── */
+    .site-header {
+      background: linear-gradient(180deg, #0d0904 0%, var(--bg) 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .logo { font-size: 1.1rem; font-weight: 700; color: var(--gold); letter-spacing: 1px; text-transform: uppercase; }
+    .logo span { color: var(--text); font-weight: 300; }
+    .header-badge { font-size: 0.64rem; color: var(--gold); border: 1px solid var(--border-hi); padding: 2px 10px; border-radius: 20px; background: var(--gold-glow); letter-spacing: 1.5px; text-transform: uppercase; }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    #logoutBtn { background: none; border: 1px solid var(--border); border-radius: 5px; color: var(--muted); padding: 4px 12px; cursor: pointer; font-size: 0.78rem; font-family: inherit; }
+    #logoutBtn:hover { color: var(--text); border-color: var(--border-hi); }
+
+    /* ── Login screen ───────────────────────────────────────── */
+    #loginScreen {
+      position: fixed; inset: 0;
+      background: rgba(10,7,3,0.97);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+    }
+    .login-box {
+      background: var(--bg-card); border: 1px solid var(--border-hi);
+      border-radius: var(--radius); padding: 40px 36px; width: min(380px,92vw); text-align: center;
+    }
+    .login-box h2 { font-size: 1.15rem; color: var(--gold); margin-bottom: 8px; }
+    .login-box p  { color: var(--muted); font-size: 0.85rem; margin-bottom: 22px; }
+    .login-box input {
+      width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 5px;
+      padding: 10px 14px; color: var(--text); font-size: 0.95rem; font-family: monospace;
+      letter-spacing: 2px; text-align: center; margin-bottom: 12px; outline: none;
+    }
+    .login-box input:focus { border-color: var(--gold-dim); }
+    .login-error { color: var(--red); font-size: 0.8rem; min-height: 18px; margin-bottom: 6px; }
+
+    /* ── Layout ─────────────────────────────────────────────── */
+    #dashboard { display: none; }
+    .main { max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
+
+    /* ── Tabs ───────────────────────────────────────────────── */
+    .admin-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+    .tab-btn {
+      background: none; border: none; color: var(--muted); padding: 10px 20px;
+      cursor: pointer; font-size: 0.88rem; font-family: inherit; font-weight: 600;
+      border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Buttons ────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 6px 14px; border-radius: 5px; font-size: 0.82rem;
+      font-weight: 600; cursor: pointer; border: 1px solid transparent;
+      font-family: inherit; transition: opacity 0.15s;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-gold  { background: linear-gradient(135deg,var(--gold-dim),#9a5e12); color:#fff; }
+    .btn-green { background: rgba(92,184,92,0.15); color: var(--green); border-color: rgba(92,184,92,0.3); }
+    .btn-red   { background: rgba(217,83,79,0.12); color: var(--red);   border-color: rgba(217,83,79,0.3); }
+    .btn-ghost { background: var(--gold-glow); color: var(--gold); border-color: var(--border); }
+    .btn:hover:not(:disabled) { opacity: 0.82; }
+
+    /* ── Filter bar ─────────────────────────────────────────── */
+    .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .filter-btn {
+      background: none; border: 1px solid var(--border); color: var(--muted);
+      padding: 4px 12px; border-radius: 20px; cursor: pointer; font-size: 0.78rem;
+      font-family: inherit; transition: all 0.15s;
+    }
+    .filter-btn.active, .filter-btn:hover { border-color: var(--gold-dim); color: var(--gold); background: var(--gold-glow); }
+
+    /* ── Tables ─────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      background: var(--bg-lift); color: var(--muted); font-size: 0.68rem;
+      font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.02); }
+    tbody tr.expanded { background: var(--gold-glow); }
+    tbody td { padding: 9px 12px; font-size: 0.84rem; vertical-align: middle; }
+    .cell-id    { color: var(--muted); font-family: monospace; font-size: 0.76rem; }
+    .cell-title { font-weight: 600; color: var(--text); }
+    .cell-artist { color: var(--muted); font-size: 0.8rem; }
+    .cell-link  { color: var(--gold); cursor: pointer; text-decoration: underline; font-size: 0.78rem; }
+    .cell-link:hover { color: var(--amber); }
+    .clickable-row { cursor: pointer; }
+
+    /* ── Status badges ──────────────────────────────────────── */
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+    }
+    .badge-received   { background: rgba(91,155,213,0.15); color: var(--blue); border: 1px solid rgba(91,155,213,0.3); }
+    .badge-processing { background: rgba(240,168,50,0.15); color: var(--amber); border: 1px solid rgba(240,168,50,0.3); }
+    .badge-awaiting_review { background: rgba(212,168,67,0.15); color: var(--gold); border: 1px solid var(--border-hi); }
+    .badge-approved   { background: rgba(92,184,92,0.15);  color: var(--green); border: 1px solid rgba(92,184,92,0.3); }
+    .badge-rejected   { background: rgba(217,83,79,0.12);  color: var(--red);   border: 1px solid rgba(217,83,79,0.3); }
+    .badge-live       { background: rgba(92,184,92,0.2);   color: var(--green); border: 1px solid rgba(92,184,92,0.4); }
+    .badge-pending    { background: rgba(91,155,213,0.12); color: var(--blue);  border: 1px solid rgba(91,155,213,0.25); }
+    .badge-public     { background: rgba(92,184,92,0.1);   color: var(--green); }
+    .badge-private    { background: rgba(138,117,85,0.1);  color: var(--muted); }
+    .badge-format-flag { background: rgba(240,168,50,0.15); color: var(--amber); border: 1px solid rgba(240,168,50,0.3); }
+
+    /* ── Expand row / detail panel ──────────────────────────── */
+    .detail-row td { padding: 0 !important; background: var(--bg-card) !important; }
+    .detail-panel {
+      padding: 20px 20px 24px;
+      border-top: 1px solid var(--border);
+    }
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px 20px; margin-bottom: 16px; }
+    .detail-field label { font-size: 0.65rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 3px; }
+    .detail-field span  { font-size: 0.88rem; color: var(--text); }
+    .detail-field span.empty { color: var(--muted); font-style: italic; }
+
+    audio { width: 100%; margin: 10px 0; accent-color: var(--gold); }
+
+    .tech-spec { font-family: monospace; font-size: 0.78rem; color: var(--muted); margin: 8px 0 14px; }
+
+    .action-row { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; margin-top: 12px; }
+    .reject-form { display: none; flex-direction: column; gap: 8px; width: 100%; margin-top: 8px; }
+    .reject-form textarea { background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 8px 10px; color: var(--text); font-family: inherit; font-size: 0.85rem; resize: vertical; min-height: 60px; outline: none; }
+    .reject-form textarea:focus { border-color: var(--gold-dim); }
+    .override-form { display: none; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .override-form textarea { background: var(--bg); border: 1px solid rgba(240,168,50,0.4); border-radius: 5px; padding: 8px 10px; color: var(--text); font-family: inherit; font-size: 0.85rem; resize: vertical; min-height: 55px; outline: none; width: 100%; }
+    .override-label { font-size: 0.74rem; color: var(--amber); }
+
+    /* ── Inline track edit ──────────────────────────────────── */
+    .track-detail-row td { padding: 0 !important; background: var(--bg-card) !important; }
+    .track-edit-panel { padding: 18px 20px 20px; border-top: 1px solid var(--border); }
+    .edit-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 16px; margin-bottom: 14px; }
+    .edit-field { display: flex; flex-direction: column; gap: 4px; }
+    .edit-field label { font-size: 0.64rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+    .edit-field input, .edit-field select {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+      padding: 6px 9px; color: var(--text); font-size: 0.85rem; font-family: inherit; outline: none;
+    }
+    .edit-field input:focus, .edit-field select:focus { border-color: var(--gold-dim); }
+    select option { background: var(--bg-card); }
+
+    /* ── Pagination ─────────────────────────────────────────── */
+    .pagination { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 14px; font-size: 0.82rem; color: var(--muted); }
+
+    /* ── Import tab ─────────────────────────────────────────── */
+    .import-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; margin-bottom: 16px; }
+    .import-section h3 { color: var(--gold); font-size: 0.85rem; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 14px; }
+    .import-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .import-meta { font-size: 0.78rem; color: var(--muted); margin-top: 10px; }
+    .import-log { background: #0d0904; border: 1px solid var(--border); border-radius: 5px; padding: 12px; font-family: monospace; font-size: 0.78rem; color: #9a8a6a; max-height: 240px; overflow-y: auto; margin-top: 14px; display: none; white-space: pre-wrap; }
+    .preview-table-wrap { margin-top: 14px; max-height: 320px; overflow-y: auto; display: none; }
+
+    /* ── Empty / loading states ─────────────────────────────── */
+    .empty-state { text-align: center; padding: 48px 20px; color: var(--muted); font-size: 0.9rem; }
+    .loading-state { text-align: center; padding: 32px; color: var(--muted); }
+    .spin { animation: spin 1s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Toast ──────────────────────────────────────────────── */
+    #toastContainer { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 200; }
+    .toast {
+      padding: 10px 18px; border-radius: 6px; font-size: 0.85rem; font-weight: 600;
+      animation: slideIn 0.2s ease; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+    .toast-success { background: rgba(92,184,92,0.9);  color: #fff; }
+    .toast-warning { background: rgba(240,168,50,0.9); color: #0d0904; }
+    .toast-error   { background: rgba(217,83,79,0.9);  color: #fff; }
+    @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+  </style>
+</head>
+<body>
+
+<div id="toastContainer"></div>
+
+<!-- ── Login ──────────────────────────────────────────────────────────────── -->
+<div id="loginScreen">
+  <div class="login-box">
+    <h2>Admin Access</h2>
+    <p>Enter your admin token to continue.</p>
+    <input type="password" id="tokenInput" placeholder="Admin token" autocomplete="current-password">
+    <div class="login-error" id="loginError"></div>
+    <button class="btn btn-gold" style="width:100%;padding:10px" onclick="login()">Sign In</button>
+  </div>
+</div>
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<header class="site-header">
+  <div class="logo">MAD <span>Music</span></div>
+  <div class="header-badge">Admin</div>
+  <div class="header-right">
+    <span id="headerStatus" style="font-size:0.76rem;color:var(--muted)"></span>
+    <button id="logoutBtn" onclick="logout()">Sign Out</button>
+  </div>
+</header>
+
+<!-- ── Dashboard ─────────────────────────────────────────────────────────── -->
+<div id="dashboard">
+  <div class="main">
+
+    <!-- Tabs -->
+    <nav class="admin-tabs">
+      <button class="tab-btn active" data-tab="submissions" onclick="showTab('submissions')">Submissions</button>
+      <button class="tab-btn" data-tab="catalog" onclick="showTab('catalog')">Catalog</button>
+      <button class="tab-btn" data-tab="import" onclick="showTab('import')">Import</button>
+    </nav>
+
+    <!-- ── Submissions tab ──────────────────────────────────── -->
+    <div id="tab-submissions" class="tab-panel active">
+      <div class="filter-bar">
+        <button class="filter-btn active" onclick="filterSubs(this,'')">All</button>
+        <button class="filter-btn" onclick="filterSubs(this,'received')">Received</button>
+        <button class="filter-btn" onclick="filterSubs(this,'processing')">Processing</button>
+        <button class="filter-btn" onclick="filterSubs(this,'awaiting_review')">Awaiting Review</button>
+        <button class="filter-btn" onclick="filterSubs(this,'approved')">Approved</button>
+        <button class="filter-btn" onclick="filterSubs(this,'rejected')">Rejected</button>
+        <button class="btn btn-ghost" style="margin-left:auto;font-size:0.78rem" onclick="loadSubmissions()">↺ Refresh</button>
+      </div>
+      <div id="subsContent"><div class="loading-state"><span class="spin">⟳</span> Loading…</div></div>
+    </div>
+
+    <!-- ── Catalog tab ──────────────────────────────────────── -->
+    <div id="tab-catalog" class="tab-panel">
+      <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+        <select id="catalogStatusFilter" onchange="loadCatalog(0)" style="background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 10px;color:var(--text);font-family:inherit;font-size:0.83rem">
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="live">Live</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        <button class="btn btn-ghost" style="font-size:0.78rem" onclick="loadCatalog(0)">↺ Refresh</button>
+        <span id="catalogCount" style="margin-left:auto;font-size:0.78rem;color:var(--muted)"></span>
+      </div>
+      <div id="catalogContent"><div class="loading-state"><span class="spin">⟳</span> Loading…</div></div>
+      <div class="pagination" id="catalogPagination"></div>
+    </div>
+
+    <!-- ── Import tab ───────────────────────────────────────── -->
+    <div id="tab-import" class="tab-panel">
+
+      <div class="import-section">
+        <h3>FileMaker Catalog Import</h3>
+        <div class="import-actions">
+          <button class="btn btn-ghost" onclick="runFmPreview()">Preview Changes</button>
+          <button class="btn btn-gold"  id="fmRunBtn" onclick="runFmImport()">Run Import</button>
+        </div>
+        <div class="import-meta" id="fmLastRun"></div>
+        <div class="preview-table-wrap" id="fmPreviewWrap">
+          <div id="fmPreviewContent"></div>
+        </div>
+        <div class="import-log" id="fmLog"></div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── State ──────────────────────────────────────────────────────────────────
+let adminToken       = sessionStorage.getItem('admin_token') || ''
+let activeSubStatus  = ''
+let catalogOffset    = 0
+let expandedSubId    = null
+let expandedTrackId  = null
+const CATALOG_LIMIT  = 50
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id)
+
+function fmtDate(s) {
+  if (!s) return '—'
+  return new Date(s).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
+}
+function fmtDur(sec) {
+  if (!sec) return '—'
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60)
+  return `${m}:${String(s).padStart(2,'0')}`
+}
+function esc(s) {
+  if (s == null) return ''
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+function badge(status) {
+  return `<span class="badge badge-${status}">${esc(status)}</span>`
+}
+
+async function api(path, method = 'GET', body = null) {
+  const opts = { method, headers: { Authorization: `Bearer ${adminToken}` } }
+  if (body !== null) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body) }
+  return fetch(path, opts)
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function showToast(msg, type = 'success') {
+  const t = document.createElement('div')
+  t.className = `toast toast-${type}`
+  t.textContent = msg
+  $('toastContainer').appendChild(t)
+  setTimeout(() => t.remove(), 3200)
+}
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+async function checkAuth() {
+  if (!adminToken) { showLogin(); return }
+  const res = await fetch('/api/ingest/submissions?limit=1', {
+    headers: { Authorization: `Bearer ${adminToken}` }
+  })
+  if (res.status === 401) { showLogin(); return }
+  showDashboard()
+}
+
+function showLogin() {
+  $('loginScreen').style.display = 'flex'
+  $('dashboard').style.display = 'none'
+}
+function showDashboard() {
+  $('loginScreen').style.display = 'none'
+  $('dashboard').style.display = 'block'
+  loadSubmissions()
+}
+function login() {
+  adminToken = $('tokenInput').value.trim()
+  if (!adminToken) return
+  $('loginError').textContent = ''
+  sessionStorage.setItem('admin_token', adminToken)
+  checkAuth()
+}
+function logout() {
+  adminToken = ''
+  sessionStorage.removeItem('admin_token')
+  showLogin()
+}
+$('tokenInput').addEventListener('keydown', e => { if (e.key === 'Enter') login() })
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name))
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${name}`))
+  if (name === 'catalog') loadCatalog(0)
+  if (name === 'import')  loadImportMeta()
+}
+
+// ── Submissions ────────────────────────────────────────────────────────────
+function filterSubs(btn, status) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'))
+  btn.classList.add('active')
+  activeSubStatus = status
+  expandedSubId = null
+  loadSubmissions()
+}
+
+async function loadSubmissions() {
+  $('subsContent').innerHTML = '<div class="loading-state"><span class="spin">⟳</span> Loading…</div>'
+  try {
+    const url = `/api/ingest/submissions${activeSubStatus ? `?status=${activeSubStatus}` : ''}`
+    const res  = await api(url)
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Load failed')
+    renderSubsTable(data.submissions || [])
+  } catch (err) {
+    $('subsContent').innerHTML = `<div class="empty-state">Error: ${esc(err.message)}</div>`
+  }
+}
+
+function renderSubsTable(subs) {
+  if (!subs.length) {
+    $('subsContent').innerHTML = '<div class="empty-state">No submissions found.</div>'
+    return
+  }
+  let html = `
+    <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>ID</th><th>Submitted</th><th>Artist</th><th>Title</th>
+        <th>Format</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody>`
+  subs.forEach(s => {
+    const isExp = expandedSubId === s.id
+    html += `
+      <tr class="clickable-row${isExp?' expanded':''}" onclick="toggleSub(${s.id})">
+        <td class="cell-id">#${s.id}</td>
+        <td style="white-space:nowrap;font-size:0.78rem;color:var(--muted)">${fmtDate(s.received_at)}</td>
+        <td class="cell-artist">${esc(s.artist_name)}</td>
+        <td class="cell-title">${esc(s.track_title)}</td>
+        <td>${s.format_flag ? `<span class="badge badge-format-flag">${esc(s.format_flag)} ⚠</span>` : '<span style="color:var(--muted);font-size:0.76rem">WAV</span>'}</td>
+        <td>${badge(s.status)}</td>
+        <td style="font-size:0.76rem;color:var(--muted)">${isExp?'▲':'▼'}</td>
+      </tr>
+      <tr class="detail-row" id="detail-row-${s.id}" style="display:${isExp?'table-row':'none'}">
+        <td colspan="7"><div class="detail-panel" id="detail-panel-${s.id}">
+          <div class="loading-state"><span class="spin">⟳</span></div>
+        </div></td>
+      </tr>`
+  })
+  html += '</tbody></table></div>'
+  $('subsContent').innerHTML = html
+  if (expandedSubId !== null) loadSubDetail(expandedSubId)
+}
+
+async function toggleSub(id) {
+  if (expandedSubId === id) {
+    expandedSubId = null
+  } else {
+    expandedSubId = id
+  }
+  loadSubmissions()
+}
+
+async function loadSubDetail(id) {
+  try {
+    const res  = await api(`/api/ingest/submissions/${id}`)
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error)
+    renderSubDetail(data.submission)
+  } catch (err) {
+    const panel = $(`detail-panel-${id}`)
+    if (panel) panel.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`
+  }
+}
+
+function renderSubDetail(s) {
+  const panel = $(`detail-panel-${s.id}`)
+  if (!panel) return
+
+  const canApprove = ['received','awaiting_review'].includes(s.status)
+  const canReject  = ['received','awaiting_review','processing'].includes(s.status)
+
+  const audioSrc = `/api/ingest/submissions/${s.id}/audio-preview?token=${encodeURIComponent(adminToken)}`
+
+  // Extract technical spec from notes field
+  const techMatch = (s.notes || '').match(/\[Technical: ([^\]]+)\]/)
+  const techStr   = techMatch ? techMatch[1] : null
+
+  panel.innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-field"><label>Submitter</label><span>${esc(s.submitter_name)} &lt;${esc(s.submitter_email)}&gt;</span></div>
+      <div class="detail-field"><label>Organisation</label><span class="${s.org?'':'empty'}">${s.org ? esc(s.org) : 'not provided'}</span></div>
+      <div class="detail-field"><label>Received</label><span>${fmtDate(s.received_at)}</span></div>
+      <div class="detail-field"><label>Track Title</label><span>${esc(s.track_title)}</span></div>
+      <div class="detail-field"><label>Artist</label><span>${esc(s.artist_name)}</span></div>
+      <div class="detail-field"><label>Album</label><span class="${s.album_title?'':'empty'}">${s.album_title ? esc(s.album_title) : 'single'}</span></div>
+      <div class="detail-field"><label>Genre</label><span class="${s.genre?'':'empty'}">${s.genre ? esc(s.genre) : '—'}</span></div>
+      <div class="detail-field"><label>Year</label><span class="${s.year?'':'empty'}">${s.year || '—'}</span></div>
+      <div class="detail-field"><label>Status</label><span>${badge(s.status)}</span></div>
+    </div>
+
+    ${s.notes ? `<div style="font-size:0.8rem;color:var(--muted);margin-bottom:12px;padding:8px 10px;background:rgba(0,0,0,0.2);border-radius:4px">${esc(s.notes.replace(/\[Technical:[^\]]+\]/,'').trim())}</div>` : ''}
+    ${techStr ? `<div class="tech-spec">⚙ ${esc(techStr)}</div>` : ''}
+
+    <audio id="audio-${s.id}" controls preload="none" style="display:block">
+      <source src="${esc(audioSrc)}">
+      Your browser does not support audio playback.
+    </audio>
+    <div style="font-size:0.72rem;color:var(--muted);margin-bottom:10px">Audio file — click play to preview before approving</div>
+
+    ${s.format_flag ? `
+      <div style="background:rgba(240,168,50,0.08);border:1px solid rgba(240,168,50,0.3);border-radius:5px;padding:10px 14px;margin-bottom:14px;font-size:0.84rem;color:var(--amber)">
+        ⚠ Non-standard format: <strong>${esc(s.format_flag)}</strong> — a format override reason is required before approving.
+      </div>
+      <div class="override-form" id="override-${s.id}" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+        <label class="override-label">Format override reason (required):</label>
+        <textarea id="override-reason-${s.id}" placeholder="e.g. Master WAV unavailable — high-quality MP3 approved by label"></textarea>
+      </div>` : ''}
+
+    <div class="action-row" id="actions-${s.id}">
+      ${canApprove ? `<button class="btn btn-green" id="approve-btn-${s.id}" onclick="approve(${s.id})">✓ Approve</button>` : ''}
+      ${canReject  ? `<button class="btn btn-red"   onclick="toggleRejectForm(${s.id})">✗ Reject</button>` : ''}
+      ${s.reviewer_notes ? `<span style="font-size:0.8rem;color:var(--muted)">Reviewer notes: ${esc(s.reviewer_notes)}</span>` : ''}
+    </div>
+
+    <div class="reject-form" id="reject-form-${s.id}">
+      <textarea id="reject-notes-${s.id}" placeholder="Reason for rejection (sent to submitter)…"></textarea>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-red" onclick="reject(${s.id})">Confirm Rejection</button>
+        <button class="btn btn-ghost" onclick="toggleRejectForm(${s.id})">Cancel</button>
+      </div>
+    </div>
+
+    <div id="job-status-${s.id}" style="margin-top:10px;font-size:0.82rem;color:var(--muted)"></div>
+  `
+}
+
+function toggleRejectForm(id) {
+  const form = $(`reject-form-${id}`)
+  form.style.display = form.style.display === 'flex' ? 'none' : 'flex'
+}
+
+async function approve(id) {
+  const btn = $(`approve-btn-${id}`)
+  if (btn) { btn.disabled = true; btn.textContent = '⟳ Queuing…' }
+
+  const overrideEl = $(`override-reason-${id}`)
+  const overrideReason = overrideEl?.value.trim() || null
+
+  const body = overrideReason ? { format_override_reason: overrideReason } : {}
+  const res  = await api(`/api/ingest/submissions/${id}/approve`, 'PATCH', body)
+  const data = await res.json()
+
+  if (!res.ok) {
+    showToast(data.error || 'Approve failed', 'error')
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Approve' }
+    return
+  }
+  showToast('Queued for processing')
+  pollJobStatus(id)
+}
+
+function pollJobStatus(id) {
+  const statusEl = $(`job-status-${id}`)
+  if (statusEl) statusEl.textContent = '⟳ Processing…'
+
+  const interval = setInterval(async () => {
+    try {
+      const res  = await api(`/api/ingest/submissions/${id}`)
+      const data = await res.json()
+      const status = data.submission?.status
+
+      if (statusEl) {
+        statusEl.textContent = status === 'approved'
+          ? '✓ Track is live'
+          : status === 'rejected'
+          ? '✗ Processing failed'
+          : `Status: ${status}`
+      }
+
+      // Refresh the row badge in the table
+      const rowBadge = document.querySelector(`#detail-row-${id}`)?.previousElementSibling?.querySelector('.badge')
+      if (rowBadge) { rowBadge.className = `badge badge-${status}`; rowBadge.textContent = status }
+
+      if (status === 'approved' || status === 'rejected') {
+        clearInterval(interval)
+        showToast(status === 'approved' ? 'Track is live ✓' : 'Processing failed', status === 'approved' ? 'success' : 'error')
+        loadSubmissions()
+      }
+    } catch (_) {}
+  }, 3000)
+}
+
+async function reject(id) {
+  const notes = $(`reject-notes-${id}`)?.value.trim() || null
+  const res   = await api(`/api/ingest/submissions/${id}/reject`, 'PATCH', { notes })
+  if (res.ok) {
+    showToast('Submission rejected')
+    expandedSubId = null
+    loadSubmissions()
+  } else {
+    showToast('Reject failed', 'error')
+  }
+}
+
+// ── Catalog ────────────────────────────────────────────────────────────────
+async function loadCatalog(offset = 0) {
+  catalogOffset = offset
+  expandedTrackId = null
+  $('catalogContent').innerHTML = '<div class="loading-state"><span class="spin">⟳</span> Loading…</div>'
+
+  const status = $('catalogStatusFilter').value
+  const params = new URLSearchParams({ limit: CATALOG_LIMIT, offset })
+  if (status) params.set('status', status)
+
+  try {
+    const res  = await api(`/api/catalog/tracks?${params}`)
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error)
+    renderCatalogTable(data.tracks || [], data.total || 0)
+  } catch (err) {
+    $('catalogContent').innerHTML = `<div class="empty-state">Error: ${esc(err.message)}</div>`
+  }
+}
+
+function renderCatalogTable(tracks, total) {
+  $('catalogCount').textContent = `${total} track${total !== 1 ? 's' : ''}`
+
+  if (!tracks.length) {
+    $('catalogContent').innerHTML = '<div class="empty-state">No tracks found.</div>'
+    $('catalogPagination').innerHTML = ''
+    return
+  }
+
+  let html = `
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th>ID</th><th>Title</th><th>Artist</th><th>Album</th>
+        <th>Status</th><th>Visibility</th><th>ISRC</th><th>Genre</th><th></th>
+      </tr></thead><tbody>`
+
+  tracks.forEach(t => {
+    const isExp = expandedTrackId === t.id
+    html += `
+      <tr class="clickable-row${isExp?' expanded':''}" onclick="toggleTrack(${t.id})">
+        <td class="cell-id">${t.id}</td>
+        <td class="cell-title">${esc(t.title)}${t.version_title ? `<br><small style="color:var(--muted);font-weight:400">${esc(t.version_title)}</small>` : ''}</td>
+        <td class="cell-artist">${esc(t.artist_name||'—')}</td>
+        <td style="font-size:0.8rem;color:var(--muted)">${esc(t.album_title||'—')}</td>
+        <td>${badge(t.status)}</td>
+        <td>${badge(t.visibility||'private')}</td>
+        <td style="font-family:monospace;font-size:0.76rem;color:var(--muted)">${esc(t.isrc||'—')}</td>
+        <td style="font-size:0.8rem;color:var(--muted)">${esc(t.genre||'—')}</td>
+        <td style="font-size:0.76rem;color:var(--muted)">${isExp?'▲':'▼'}</td>
+      </tr>
+      <tr class="track-detail-row" id="track-detail-row-${t.id}" style="display:${isExp?'table-row':'none'}">
+        <td colspan="9"><div class="track-edit-panel" id="track-edit-panel-${t.id}">
+          <div class="loading-state"><span class="spin">⟳</span></div>
+        </div></td>
+      </tr>`
+  })
+
+  html += '</tbody></table></div>'
+  $('catalogContent').innerHTML = html
+
+  // Pagination
+  const totalPages = Math.ceil(total / CATALOG_LIMIT)
+  const currentPage = Math.floor(catalogOffset / CATALOG_LIMIT)
+  let pgHtml = `<span>${currentPage + 1} / ${totalPages}</span>`
+  if (currentPage > 0) pgHtml = `<button class="btn btn-ghost" style="font-size:0.78rem" onclick="loadCatalog(${(currentPage-1)*CATALOG_LIMIT})">← Prev</button>` + pgHtml
+  if (currentPage < totalPages - 1) pgHtml += `<button class="btn btn-ghost" style="font-size:0.78rem" onclick="loadCatalog(${(currentPage+1)*CATALOG_LIMIT})">Next →</button>`
+  $('catalogPagination').innerHTML = pgHtml
+
+  if (expandedTrackId !== null) renderTrackEdit(tracks.find(t => t.id === expandedTrackId))
+}
+
+function toggleTrack(id) {
+  expandedTrackId = (expandedTrackId === id) ? null : id
+  loadCatalog(catalogOffset)
+}
+
+function renderTrackEdit(t) {
+  const panel = $(`track-edit-panel-${t.id}`)
+  if (!panel) return
+
+  panel.innerHTML = `
+    <div class="edit-grid">
+      <div class="edit-field"><label>Title</label><input id="te-title-${t.id}" value="${esc(t.title||'')}"></div>
+      <div class="edit-field"><label>Version / Mix</label><input id="te-version_title-${t.id}" value="${esc(t.version_title||'')}"></div>
+      <div class="edit-field"><label>Genre</label><input id="te-genre-${t.id}" value="${esc(t.genre||'')}"></div>
+      <div class="edit-field"><label>Subgenre</label><input id="te-subgenre-${t.id}" value="${esc(t.subgenre||'')}"></div>
+      <div class="edit-field"><label>Mood</label><input id="te-mood-${t.id}" value="${esc(t.mood||'')}"></div>
+      <div class="edit-field"><label>BPM</label><input type="number" id="te-bpm-${t.id}" value="${t.bpm||''}"></div>
+      <div class="edit-field"><label>Key</label><input id="te-key_sig-${t.id}" value="${esc(t.key_sig||'')}"></div>
+      <div class="edit-field"><label>ISRC</label><input id="te-isrc-${t.id}" value="${esc(t.isrc||'')}"></div>
+      <div class="edit-field"><label>Year</label><input type="number" id="te-year-${t.id}" value="${t.year||''}"></div>
+      <div class="edit-field"><label>Language</label><input id="te-language-${t.id}" value="${esc(t.language||'en')}"></div>
+      <div class="edit-field">
+        <label>Status</label>
+        <select id="te-status-${t.id}">
+          ${['pending','approved','live','rejected'].map(v=>`<option value="${v}"${t.status===v?' selected':''}>${v}</option>`).join('')}
+        </select>
+      </div>
+      <div class="edit-field">
+        <label>Visibility</label>
+        <select id="te-visibility-${t.id}">
+          <option value="private"${(t.visibility||'private')==='private'?' selected':''}>Private</option>
+          <option value="public"${t.visibility==='public'?' selected':''}>Public</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-gold" onclick="saveTrack(${t.id})">Save Changes</button>
+      <button class="btn btn-ghost" onclick="toggleTrack(${t.id})">Cancel</button>
+      ${t.mp3_320_url ? `<a href="${esc(t.mp3_320_url)}" target="_blank" class="btn btn-ghost" style="font-size:0.78rem">▶ Play 320</a>` : ''}
+    </div>
+    <div id="track-save-status-${t.id}" style="font-size:0.78rem;margin-top:8px"></div>
+  `
+}
+
+async function saveTrack(id) {
+  const fields = ['title','version_title','genre','subgenre','mood','bpm','key_sig',
+                  'isrc','year','language','status','visibility']
+  const body = {}
+  fields.forEach(f => {
+    const el = $(`te-${f}-${id}`)
+    if (el) {
+      const v = el.value.trim()
+      if (v !== '') body[f] = el.type === 'number' ? (Number(v) || null) : v
+    }
+  })
+
+  const statusEl = $(`track-save-status-${id}`)
+  if (statusEl) statusEl.textContent = 'Saving…'
+
+  const res = await api(`/api/catalog/tracks/${id}`, 'PATCH', body)
+  if (res.ok) {
+    showToast('Track saved')
+    if (statusEl) statusEl.textContent = '✓ Saved'
+    setTimeout(() => { if (statusEl) statusEl.textContent = '' }, 2000)
+  } else {
+    const d = await res.json()
+    showToast(d.error || 'Save failed', 'error')
+    if (statusEl) statusEl.textContent = '✗ Save failed'
+  }
+}
+
+// ── Import ─────────────────────────────────────────────────────────────────
+function loadImportMeta() {
+  const last = localStorage.getItem('fmLastImport')
+  $('fmLastRun').textContent = last
+    ? `Last import: ${JSON.parse(last).date} — created: ${JSON.parse(last).created}, updated: ${JSON.parse(last).updated}`
+    : 'No import has been run yet.'
+}
+
+async function runFmPreview() {
+  const wrap = $('fmPreviewWrap')
+  const content = $('fmPreviewContent')
+  wrap.style.display = 'block'
+  content.innerHTML = '<div class="loading-state"><span class="spin">⟳</span> Fetching preview…</div>'
+
+  const res  = await api('/api/catalog/import/fm/preview')
+  const data = await res.json()
+
+  if (!res.ok || !data.ok) {
+    content.innerHTML = `<div style="color:var(--red);padding:12px">Error: ${esc(data.error || 'Preview failed')}</div>`
+    return
+  }
+
+  const rows = data.sample || []
+  if (!rows.length) { content.innerHTML = '<div style="padding:12px;color:var(--muted)">No records returned from FM.</div>'; return }
+
+  let html = `
+    <div style="padding:8px 12px;font-size:0.78rem;color:var(--muted)">
+      Showing first ${rows.length} records · ${data.toCreate} to create · ${data.toUpdate} to update
+    </div>
+    <table style="font-size:0.78rem">
+      <thead><tr><th>FM ID</th><th>Title</th><th>Artist</th><th>Genre</th><th>Action</th></tr></thead>
+      <tbody>`
+  rows.forEach(r => {
+    html += `<tr>
+      <td class="cell-id">${esc(r.fmId)}</td>
+      <td>${esc(r.title)}</td><td>${esc(r.artist)}</td><td>${esc(r.genre||'—')}</td>
+      <td>${badge(r.action)}</td>
+    </tr>`
+  })
+  html += '</tbody></table>'
+  content.innerHTML = html
+}
+
+async function runFmImport() {
+  const btn = $('fmRunBtn')
+  const log = $('fmLog')
+  btn.disabled = true; btn.textContent = '⟳ Running…'
+  log.style.display = 'block'; log.textContent = 'Starting FM import…\n'
+
+  const res  = await api('/api/catalog/import/fm', 'POST')
+  const data = await res.json()
+
+  btn.disabled = false; btn.textContent = 'Run Import'
+
+  if (!res.ok || !data.ok) {
+    log.textContent += `\nError: ${data.error || 'Import failed'}`
+    showToast('Import failed', 'error')
+    return
+  }
+
+  log.textContent += `Created: ${data.created}\nUpdated: ${data.updated}\nErrors: ${data.errors?.length || 0}`
+  if (data.errors?.length) {
+    log.textContent += '\n\nErrors:\n' + data.errors.map(e => `  #${e.fmId} ${e.title}: ${e.error}`).join('\n')
+  }
+
+  localStorage.setItem('fmLastImport', JSON.stringify({
+    date: new Date().toLocaleString(), created: data.created, updated: data.updated
+  }))
+  loadImportMeta()
+  showToast(`Import complete — ${data.created} created, ${data.updated} updated`)
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+checkAuth()
+</script>
+</body>
+</html>
