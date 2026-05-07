@@ -30,15 +30,27 @@ const TRENDING_TTL_MS         = parsePositiveInt(process.env.TRENDING_CACHE_TTL_
 
 // ── Trending helpers ────────────────────────────────────────────────────────
 
+// Maximum seconds we'll credit any single stream-event record toward trending.
+// This guards against pre-fix anomaly records (e.g. the 735-hour outlier) that
+// still exist in FileMaker and would otherwise skew the aggregated totals.
+// For records that have DurationSec, we use 105% of that instead — tracks
+// longer than 2 hours (concertos, DJ sets, etc.) are handled correctly.
+const TRENDING_MAX_PER_RECORD_SEC = 7200; // 2-hour ceiling for unknown-duration records
+
 function buildStatsByTrack(data) {
   const statsByTrack = new Map();
   for (const entry of data) {
     const fields = entry?.fieldData || {};
     const trackRecordId = normalizeRecordId(fields.TrackRecordID || fields['Track Record ID'] || '');
     if (!trackRecordId) continue;
-    const totalSeconds = normalizeSeconds(
+    const rawTotalSeconds = normalizeSeconds(
       fields.TotalPlayedSec ?? fields[STREAM_TIME_FIELD] ?? fields.DurationSec ?? fields.DeltaSec ?? 0
     );
+    // Cap each record's contribution so stale anomaly data can't inflate rankings.
+    const durationSec = normalizeSeconds(fields.DurationSec || 0);
+    const totalSeconds = durationSec > 0
+      ? Math.min(rawTotalSeconds, Math.round(durationSec * 1.05))
+      : Math.min(rawTotalSeconds, TRENDING_MAX_PER_RECORD_SEC);
     const lastEventTs = parseFileMakerTimestamp(fields.LastEventUTC || fields.TimestampUTC);
     const sessionId   = toCleanString(fields.SessionID || fields['Session ID'] || '');
     if (!statsByTrack.has(trackRecordId)) {
@@ -235,7 +247,7 @@ router.get('/my-stats', async (req, res) => {
             plays:        s.plays,
             totalSeconds: s.totalSeconds,
             name:   firstNonEmpty(f, ['Track Name', 'Tape Files::Track Name', 'Song Title']) || 'Unknown Track',
-            artist: f['Album Artist'] || f['Tape Files::Album Artist'] || f['Track Artist'] || 'Unknown Artist',
+            artist: firstNonEmpty(f, ['Track Artist', 'Album Artist', 'Tape Files::Album Artist', 'Artist']) || 'Unknown Artist',
             album:  f['Album Title']  || f['Tape Files::Album Title']  || ''
           };
         } catch {

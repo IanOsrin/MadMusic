@@ -27,3 +27,13 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Personal/financial files — must never be committed
+IanOsrin_*.xlsx
+IanOsrin_*.docx
+Possible\ FX.docx

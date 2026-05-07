@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { validateAccessToken, MASS_SESSION_COOKIE, MASS_SESSION_MAX_AGE_SECONDS } from '../lib/auth.js';
 import { parseCookies, getClientIP } from '../lib/http.js';
-import { formatTimestampUTC, toCleanString, normalizeSeconds } from '../lib/format.js';
+import { formatTimestampUTC, toCleanString, normalizeSeconds, parseFileMakerTimestamp } from '../lib/format.js';
 import { validateSessionId } from '../lib/validators.js';
 import {
   STREAM_EVENT_TYPES, STREAM_EVENT_DEBUG, STREAM_TERMINAL_EVENTS,
@@ -11,8 +11,17 @@ import {
 } from '../lib/stream-events.js';
 import { fmUpdateRecord, fmFindRecords } from '../fm-client.js';
 import { tokenValidationCache } from '../cache.js';
-import { FM_STREAM_EVENTS_LAYOUT } from '../lib/fm-fields.js';
+import { FM_STREAM_EVENTS_LAYOUT, FM_LAYOUT, firstNonEmpty } from '../lib/fm-fields.js';
+import { getTrackRecordCached } from '../lib/track-cache.js';
 import { randomUUID } from 'node:crypto';
+
+// ── Sanity caps ───────────────────────────────────────────────────────────────
+// Max seconds we'll ever credit per event. PROGRESS fires every ~30s from the
+// client; anything beyond 5 minutes per event is almost certainly a seek jump,
+// a reconnect after a long pause, or a clock/position bug.
+const MAX_DELTA_PER_EVENT_SEC = 300;
+// Small fraction of DurationSec we allow TotalPlayedSec to exceed (timing jitter).
+const TOTAL_PLAYED_OVERSHOOT_FACTOR = 1.05;
 
 const router = Router();
 
@@ -154,11 +163,58 @@ function applyExistingFieldsToBase(baseFields, existingFields, normalizedType, t
   if (existingDuration && !baseFields.DurationSec) baseFields.DurationSec = existingDuration;
   if (!baseFields.TrackISRC && existingFields.TrackISRC) baseFields.TrackISRC = existingFields.TrackISRC;
 
+  // Carry forward Track Artist / Track Name if not already set on this event
+  if (!baseFields['Track Artist'] && existingFields['Track Artist']) baseFields['Track Artist'] = existingFields['Track Artist'];
+  if (!baseFields['Track Name']   && existingFields['Track Name'])   baseFields['Track Name']   = existingFields['Track Name'];
+
   const existingTotalPlayed = normalizeSeconds(existingFields.TotalPlayedSec);
-  const effectiveDelta = payloadDelta || deltaFromPosition;
-  baseFields.DeltaSec = effectiveDelta;
-  baseFields.TotalPlayedSec = existingTotalPlayed + effectiveDelta;
-  baseFields.LastEventUTC = timestamp;
+
+  // Use client-supplied delta when non-zero; otherwise derive from position advance.
+  // Note: payloadDelta of 0 means "not supplied" (client omitted deltaSec or sent 0).
+  const rawDelta = payloadDelta > 0 ? payloadDelta : deltaFromPosition;
+
+  // ── Wall-clock sanity cap ──────────────────────────────────────────────────
+  // If we have a LastEventUTC from the existing record we can calculate how much
+  // real time has elapsed since the last event. Credit at most that much plus a
+  // 30-second buffer — this catches seek jumps, long pauses, and reconnects.
+  let wallClockCap = MAX_DELTA_PER_EVENT_SEC;
+  const lastEventTs = parseFileMakerTimestamp(existingFields.LastEventUTC);
+  if (lastEventTs > 0) {
+    const elapsedMs   = Date.now() - lastEventTs;
+    const elapsedSec  = Math.max(0, Math.round(elapsedMs / 1000));
+    wallClockCap      = Math.min(MAX_DELTA_PER_EVENT_SEC, elapsedSec + 30);
+  }
+
+  const effectiveDelta = Math.min(rawDelta, wallClockCap);
+
+  // ── TotalPlayedSec cap ────────────────────────────────────────────────────
+  // TotalPlayedSec must never meaningfully exceed the track's actual duration.
+  const effectiveDuration = Math.max(
+    baseFields.DurationSec  || 0,
+    existingDuration         || 0,
+    normalizedDuration       || 0
+  );
+  const rawTotal   = existingTotalPlayed + effectiveDelta;
+  const totalCap   = effectiveDuration > 0 ? Math.round(effectiveDuration * TOTAL_PLAYED_OVERSHOOT_FACTOR) : Infinity;
+  const totalPlayed = effectiveDuration > 0 ? Math.min(rawTotal, totalCap) : rawTotal;
+
+  if (STREAM_EVENT_DEBUG && rawDelta !== effectiveDelta) {
+    console.warn('[MASS] Delta capped', {
+      rawDelta, effectiveDelta, wallClockCap,
+      positionSec: baseFields[STREAM_TIME_FIELD], existingPosition,
+      sessionId: baseFields.SessionID, trackRecordId: baseFields.TrackRecordID
+    });
+  }
+  if (STREAM_EVENT_DEBUG && rawTotal !== totalPlayed) {
+    console.warn('[MASS] TotalPlayedSec capped', {
+      rawTotal, totalPlayed, effectiveDuration,
+      sessionId: baseFields.SessionID, trackRecordId: baseFields.TrackRecordID
+    });
+  }
+
+  baseFields.DeltaSec       = effectiveDelta;
+  baseFields.TotalPlayedSec = totalPlayed;
+  baseFields.LastEventUTC   = timestamp;
   if (!existingFields.PlayStartUTC && normalizedType === 'PLAY') baseFields.PlayStartUTC = timestamp;
   if (normalizedType === 'END' && normalizedDuration && normalizedDuration > baseFields.DurationSec) {
     baseFields.DurationSec = normalizedDuration;
@@ -240,12 +296,34 @@ router.post('/stream-events', async (req, res) => {
       return;
     }
 
-    const normalizedTrackISRC = toCleanString(trackISRC);
+    let normalizedTrackISRC = toCleanString(trackISRC);
     const normalizedPosition = normalizeSeconds(positionSec);
     const normalizedDuration = normalizeSeconds(durationSec);
     const payloadDelta = normalizeSeconds(deltaSec);
     const tokenCode = req.accessToken?.code || '';
     const issuedTo  = req.accessToken?.email || '';
+
+    // Look up track name and artist from the shared track-record cache.
+    // This is almost always a cache hit — the player fetched the track record
+    // to resolve the audio URL before starting playback. The 100ms timeout
+    // ensures we never block event recording on a cold cache miss.
+    // Note: .catch(() => null) on the FM call is essential — if the timeout
+    // wins the race and FM later rejects, we need it caught here, not as an
+    // unhandled rejection that would be logged at the process level.
+    let trackArtist = '';
+    let trackName   = '';
+    try {
+      const trackRecord = await Promise.race([
+        getTrackRecordCached(FM_LAYOUT, normalizedTrackRecordId).catch(() => null),
+        new Promise(resolve => setTimeout(() => resolve(null), 100))
+      ]);
+      const tf = trackRecord?.fieldData || {};
+      trackArtist = firstNonEmpty(tf, ['Track Artist', 'Album Artist', 'Tape Files::Album Artist', 'Artist']) || '';
+      trackName   = firstNonEmpty(tf, ['Track Name', 'Tape Files::Track Name', 'Song Title']) || '';
+      if (!normalizedTrackISRC) {
+        normalizedTrackISRC = firstNonEmpty(tf, ['ISRC', 'Tape Files::ISRC']) || '';
+      }
+    } catch { /* non-fatal — carry-forward from existingFields will fill these in */ }
 
     const baseFields = {
       TimestampUTC: timestamp,
@@ -260,7 +338,9 @@ router.post('/stream-events', async (req, res) => {
       ASN: 'Unknown',
       UserAgent: userAgent,
       Token_Number: tokenCode,
-      Email: issuedTo
+      Email: issuedTo,
+      'Track Artist': trackArtist,
+      'Track Name': trackName
     };
 
     const primaryKey = randomUUID();
@@ -281,7 +361,9 @@ router.post('/stream-events', async (req, res) => {
       PlayStartUTC: normalizedType === 'PLAY' ? timestamp : '',
       LastEventUTC: timestamp,
       Token_Number: tokenCode,
-      Email: issuedTo
+      Email: issuedTo,
+      'Track Artist': trackArtist,
+      'Track Name': trackName
     };
 
     if (STREAM_EVENT_DEBUG) {

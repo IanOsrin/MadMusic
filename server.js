@@ -20,7 +20,10 @@ import adminRouter from './routes/admin.js';
 import downloadRouter from './routes/download.js';
 import ringtoneRouter from './routes/ringtone.js';
 import telkomRouter from './routes/telkom.js';
-import ttsRouter from './routes/tts.js';
+import ttsRouter from './routes/tts.js'
+import ingestRouter from './routes/ingest.js'
+import ingestCatalogRouter from './routes/ingest-catalog.js'
+import { runMigrations } from './lib/db.js';
 
 import { validateAccessToken } from './lib/auth.js';
 import { normalizeShareId } from './lib/format.js';
@@ -99,7 +102,7 @@ app.use((req, res, next) => {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",  // googleapis for Google Fonts CSS
       "img-src 'self' https: data: blob:",    // https: for S3 artwork URLs; blob: for canvas; data: for inline
       "media-src 'self' https: blob:",       // https: for direct S3 audio URLs; blob: for streamed audio
-      "connect-src 'self' http://localhost:8765 http://127.0.0.1:8765",
+      "connect-src 'self' http://localhost:8765 http://127.0.0.1:8765 https://ipwho.is https://open.er-api.com",
       "font-src 'self' https:",              // https: for Google Fonts (fonts.gstatic.com)
       "frame-src 'none'",
       "object-src 'none'",
@@ -216,7 +219,9 @@ app.use('/api/', async (req, res, next) => {
     '/download/',
     '/ringtone/',
     '/audio-proxy',
-    '/audio-lab/'
+    '/audio-lab/',
+    '/ingest/',
+    '/catalog/'
   ];
 
   if (skipPaths.some(path => req.path === path || req.path.startsWith(path))) {
@@ -361,6 +366,13 @@ app.use('/api', catalogRouter);
 app.use('/api', streamRouter);
 app.use('/api', adminRouter);
 app.use('/api', ttsRouter);
+app.use('/api/ingest',   ingestRouter);
+app.use('/api/catalog',  ingestCatalogRouter);
+
+// Ingest portal static files
+app.use('/ingest', express.static(path.join(__dirname, 'ingest')));
+app.get('/ingest', (_req, res) => res.sendFile(path.join(__dirname, 'ingest', 'index.html')));
+app.get('/ingest/admin', (_req, res) => res.sendFile(path.join(__dirname, 'ingest', 'admin.html')));
 
 // Shared playlist routes (not under /api/playlists)
 app.get('/api/shared-playlists/:shareId', async (req, res) => {
@@ -548,6 +560,13 @@ function logServerReady(protocolLabel = 'HTTP/1.1') {
 }
 
 await warmConnections();
+
+try {
+  await runMigrations();
+  console.log('[DB] Migrations complete');
+} catch (err) {
+  console.warn('[DB] Migration failed:', err?.message || err);
+}
 
 let server = null;
 let serverStarted = false;

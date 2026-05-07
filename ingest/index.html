@@ -11,18 +11,18 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #1a1208;
-      --bg-card:   #231809;
-      --bg-lift:   #2d2010;
-      --gold:      #d4a843;
-      --gold-dim:  #c47d2a;
-      --gold-glow: rgba(212,168,67,0.18);
-      --text:      #e8d5a3;
-      --muted:     #8a7555;
-      --border:    rgba(196,125,42,0.25);
-      --border-hi: rgba(196,125,42,0.5);
+      --bg:        #ffffff;
+      --bg-card:   #f0f4ff;
+      --bg-lift:   #e4ecf8;
+      --gold:      #1a6fd4;
+      --gold-dim:  #1254a8;
+      --gold-glow: rgba(26,111,212,0.09);
+      --text:      #1a1a2e;
+      --muted:     #6b7280;
+      --border:    rgba(26,111,212,0.18);
+      --border-hi: rgba(26,111,212,0.42);
       --amber:     #f0a832;
-      --green:     #5cb85c;
+      --green:     #2e9e4f;
       --red:       #d9534f;
       --radius:    10px;
     }
@@ -38,7 +38,7 @@
 
     /* ── Header ─────────────────────────────────────────────── */
     .site-header {
-      background: linear-gradient(180deg, #0d0904 0%, var(--bg) 100%);
+      background: linear-gradient(180deg, #dce8f8 0%, var(--bg) 100%);
       border-bottom: 1px solid var(--border);
       padding: 18px 32px;
       display: flex;
@@ -83,7 +83,7 @@
     /* ── Invite gate overlay ────────────────────────────────── */
     #inviteGate {
       position: fixed; inset: 0;
-      background: rgba(10,7,3,0.97);
+      background: rgba(240,244,255,0.97);
       display: flex; align-items: center; justify-content: center;
       z-index: 999;
     }
@@ -188,7 +188,7 @@
     /* ── Waveform canvas ────────────────────────────────────── */
     #waveformWrap {
       display: none;
-      background: rgba(0,0,0,0.25);
+      background: rgba(26,111,212,0.06);
       border-radius: 8px;
       padding: 8px 0 4px;
       margin: 10px 0 6px;
@@ -355,6 +355,40 @@
     }
     .confirm-email { color: var(--muted); font-size: 0.9rem; margin-bottom: 28px; }
 
+    /* ── Multi-track panel ──────────────────────────────────── */
+    #multiTrackPanel { display: none; }
+    .mt-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+    .mt-title  { font-weight: 700; font-size: 0.95rem; color: var(--text); }
+    .mt-title span { color: var(--gold); }
+    .mt-controls { display: flex; align-items: center; gap: 12px; font-size: 0.82rem; color: var(--muted); }
+    .mt-field  { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 0.82rem; color: var(--text); font-family: inherit; width: 100%; }
+    .mt-field:focus { outline: none; border-color: var(--gold-dim); }
+    .mt-loading { color: var(--muted); font-size: 0.76rem; }
+    .mt-expand-btn { background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); cursor: pointer; font-size: 0.72rem; padding: 2px 7px; font-family: inherit; }
+    .mt-expand-btn:hover { color: var(--gold); border-color: var(--gold-dim); }
+    .mt-detail-row td { padding: 0 !important; }
+    .mt-detail-inner { padding: 12px 16px 16px; background: var(--bg-card); border-top: 1px solid var(--border); }
+    .mt-detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+    .mt-detail-group label { display: block; font-size: 0.65rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+    .mt-detail-group input, .mt-detail-group select { width: 100%; }
+    .mt-batch-bar { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px; }
+    .mt-batch-bar h4 { font-size: 0.68rem; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+    .mt-batch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+    .mt-batch-group { display: flex; flex-direction: column; gap: 4px; }
+    .mt-batch-group label { font-size: 0.65rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+    .mt-batch-row { display: flex; gap: 5px; }
+    .mt-batch-row .mt-field { flex: 1; }
+    .mt-fill-btn { background: var(--gold-glow); border: 1px solid var(--border-hi); border-radius: 4px; color: var(--gold); font-size: 0.7rem; font-weight: 700; cursor: pointer; padding: 0 9px; white-space: nowrap; font-family: inherit; }
+    .mt-fill-btn:hover { background: var(--gold); color: #fff; }
+    .mt-submitter { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 16px; }
+    .mt-submitter h4 { font-size: 0.78rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+    .mt-footer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .progress-bar-wrap { background: var(--bg-lift); border-radius: 4px; height: 6px; width: 100%; margin-bottom: 8px; overflow: hidden; }
+    .progress-bar { background: var(--gold); height: 100%; width: 0; transition: width 0.3s; border-radius: 4px; }
+    #mtProgress { width: 100%; margin-bottom: 10px; }
+    .mt-progress-text { font-size: 0.8rem; color: var(--muted); }
+    tbody tr.mt-done { background: rgba(46,158,79,0.07); }
+
     /* ── Responsive ─────────────────────────────────────────── */
     @media (max-width: 560px) {
       .form-grid { grid-template-columns: 1fr; }
@@ -393,18 +427,26 @@
        ondragover="onDragOver(event)"
        ondragleave="onDragLeave(event)"
        ondrop="onDrop(event)"
-       onclick="document.getElementById('fileInput').click()">
+       onclick="void 0">
 
     <input type="file" id="fileInput" accept=".wav,.flac,.mp3,.aif,.aiff,audio/*"
            onchange="handleFileInput(event)">
+    <input type="file" id="folderInput" webkitdirectory multiple style="display:none"
+           onchange="handleFolderInput(event)">
 
     <div id="dropPrompt">
       <div class="drop-icon">🎵</div>
-      <div class="drop-title">Drag your WAV here, or click to browse</div>
-      <div class="drop-hint">Accepted: WAV, FLAC (preferred) · MP3 / AIFF accepted with reviewer approval</div>
-      <button class="btn btn-ghost" onclick="event.stopPropagation(); document.getElementById('fileInput').click()">
-        Browse Files
-      </button>
+      <div class="drop-title">Drag a file or folder here, or browse below</div>
+      <div class="drop-hint">Accepted: WAV, FLAC (preferred) · MP3 / AIFF with reviewer approval<br>
+        Drop a folder and artwork will be picked up automatically</div>
+      <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:4px">
+        <button class="btn btn-ghost" onclick="event.stopPropagation(); document.getElementById('fileInput').click()">
+          Browse File
+        </button>
+        <button class="btn btn-ghost" onclick="event.stopPropagation(); document.getElementById('folderInput').click()">
+          Browse Folder
+        </button>
+      </div>
     </div>
 
     <div id="spinner"><span class="spin">⟳</span> &nbsp;Reading file metadata…</div>
@@ -422,6 +464,100 @@
     <div id="techSpec"></div>
     <ul id="warningsList"></ul>
 
+  </div>
+
+  <!-- ── Multi-track folder panel ─────────────────────────────────────────── -->
+  <div id="multiTrackPanel">
+    <div class="mt-header">
+      <div class="mt-title">📁 <span id="mtFolderName"></span> &mdash; <span id="mtFileCount"></span> tracks found</div>
+      <div class="mt-controls">
+        <label style="cursor:pointer"><input type="checkbox" id="mtSelectAll" checked onchange="toggleSelectAll(this.checked)"> &nbsp;Select all</label>
+      </div>
+    </div>
+
+    <!-- Batch tools -->
+    <div class="mt-batch-bar">
+      <h4>Batch fill</h4>
+      <div class="mt-batch-grid">
+        <div class="mt-batch-group">
+          <label>Genre</label>
+          <div class="mt-batch-row">
+            <select class="mt-field" id="batchGenre"><option value="">Loading genres…</option></select>
+            <button class="mt-fill-btn" onclick="fillAll('genre','batchGenre')">Fill all</button>
+          </div>
+        </div>
+        <div class="mt-batch-group">
+          <label>Language</label>
+          <div class="mt-batch-row">
+            <select class="mt-field" id="batchLang"></select>
+            <button class="mt-fill-btn" onclick="fillAll('lang','batchLang')">Fill all</button>
+          </div>
+        </div>
+        <div class="mt-batch-group">
+          <label>ISRC — first track</label>
+          <div class="mt-batch-row">
+            <input class="mt-field" id="batchIsrc" placeholder="e.g. ZAAB225 00001" maxlength="12">
+            <button class="mt-fill-btn" onclick="generateIsrcSeq()">Generate ↓</button>
+          </div>
+        </div>
+        <div class="mt-batch-group">
+          <label>Barcode (UPC / EAN) — auto-fills all</label>
+          <div class="mt-batch-row">
+            <input class="mt-field" id="batchBarcode" placeholder="e.g. 602435612345" oninput="fillAll('barcode','batchBarcode')">
+            <button class="mt-fill-btn" onclick="genBarcode()">Generate</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap" style="margin-bottom:20px">
+      <table id="mtTable">
+        <thead>
+          <tr>
+            <th style="width:36px"></th>
+            <th style="width:36px">#</th>
+            <th>File</th>
+            <th>Title</th>
+            <th>Artist</th>
+            <th style="width:80px">Duration</th>
+            <th style="width:70px">Format</th>
+            <th style="width:50px"></th>
+          </tr>
+        </thead>
+        <tbody id="mtBody"></tbody>
+      </table>
+    </div>
+
+    <div class="mt-submitter">
+      <h4>Submitter details (applies to all tracks)</h4>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Your Name *</label>
+          <input type="text" id="mtSubmitterName" class="mt-field" placeholder="Full name">
+        </div>
+        <div class="form-group">
+          <label>Email *</label>
+          <input type="email" id="mtSubmitterEmail" class="mt-field" placeholder="you@example.com">
+        </div>
+        <div class="form-group">
+          <label>Organisation</label>
+          <input type="text" id="mtOrg" class="mt-field" placeholder="Label or distributor">
+        </div>
+      </div>
+    </div>
+
+    <div id="mtErrorMsg" style="color:var(--red);font-size:0.82rem;margin-bottom:10px;min-height:18px"></div>
+    <div id="mtProgress" style="display:none">
+      <div class="progress-bar-wrap"><div class="progress-bar" id="mtProgressBar"></div></div>
+      <div class="mt-progress-text" id="mtProgressText"></div>
+    </div>
+
+    <div class="mt-footer" style="margin-top:12px">
+      <button class="btn btn-primary" id="mtSubmitBtn" onclick="submitAllTracks()">
+        Submit <span id="mtSelectedCount">0</span> selected tracks
+      </button>
+      <button class="btn btn-ghost" onclick="resetToFolderDrop()">← Start over</button>
+    </div>
   </div>
 
   <!-- ── Metadata form ──────────────────────────────────────────────────── -->
@@ -599,15 +735,399 @@ function onDragLeave(e) {
     $('dropZone').classList.remove('drag-over');
   }
 }
-function onDrop(e) {
+async function onDrop(e) {
   e.preventDefault();
   $('dropZone').classList.remove('drag-over');
-  const file = e.dataTransfer?.files?.[0];
-  if (file) handleFile(file);
+  const items = [...(e.dataTransfer?.items || [])];
+  const hasFolder = items.some(i => i.webkitGetAsEntry()?.isDirectory);
+  if (hasFolder || items.length > 1) {
+    const { audioFiles, artworkFile } = await scanFolderItems(items);
+    if (audioFiles.length > 1) {
+      handleFolderTracks(audioFiles, artworkFile);
+    } else if (audioFiles.length === 1) {
+      if (artworkFile) setArtwork(artworkFile);
+      handleFile(audioFiles[0]);
+    }
+  } else {
+    const file = e.dataTransfer?.files?.[0];
+    if (file) handleFile(file);
+  }
 }
 function handleFileInput(e) {
   const file = e.target.files?.[0];
   if (file) handleFile(file);
+}
+async function handleFolderInput(e) {
+  const files  = [...e.target.files];
+  const audioExts = ['.wav','.flac','.mp3','.aif','.aiff'];
+  const imageExts = ['.jpg','.jpeg','.png'];
+  const audioFiles  = files.filter(f => audioExts.includes(extOf(f.name)))
+                           .sort((a,b) => a.name.localeCompare(b.name));
+  const artworkFile = files.find(f => imageExts.includes(extOf(f.name))) || null;
+  if (audioFiles.length > 1) {
+    handleFolderTracks(audioFiles, artworkFile);
+  } else if (audioFiles.length === 1) {
+    if (artworkFile) setArtwork(artworkFile);
+    handleFile(audioFiles[0]);
+  }
+}
+
+// ── Folder scanning helpers ─────────────────────────────────────────────────
+function extOf(name) { return '.' + name.split('.').pop().toLowerCase(); }
+
+function readDirEntries(dirEntry) {
+  return new Promise(resolve => {
+    const reader = dirEntry.createReader();
+    const all = [];
+    function batch() {
+      reader.readEntries(entries => {
+        if (!entries.length) { resolve(all); return; }
+        all.push(...entries); batch();
+      });
+    }
+    batch();
+  });
+}
+function fileFromEntry(entry) {
+  return new Promise(resolve => entry.file(resolve));
+}
+async function scanFolderItems(items) {
+  const audioExts = ['.wav','.flac','.mp3','.aif','.aiff'];
+  const imageExts = ['.jpg','.jpeg','.png'];
+  const audioFiles = [];
+  let artworkFile = null;
+
+  async function processEntry(entry) {
+    if (entry.isFile) {
+      const f = await fileFromEntry(entry);
+      const ext = extOf(f.name);
+      if (audioExts.includes(ext)) audioFiles.push(f);
+      else if (!artworkFile && imageExts.includes(ext)) artworkFile = f;
+    } else if (entry.isDirectory) {
+      const children = await readDirEntries(entry);
+      for (const child of children) await processEntry(child);
+    }
+  }
+
+  for (const item of items) {
+    const entry = item.webkitGetAsEntry?.();
+    if (entry) await processEntry(entry);
+  }
+  audioFiles.sort((a,b) => a.name.localeCompare(b.name));
+  return { audioFiles, artworkFile };
+}
+
+// ── Multi-track folder flow ────────────────────────────────────────────────
+let mtTracks  = [];
+let mtArtwork = null;
+
+function handleFolderTracks(audioFiles, artworkFile) {
+  mtTracks  = audioFiles.map((f, i) => ({ file: f, meta: null, selected: true, index: i }));
+  mtArtwork = artworkFile;
+
+  $('dropPrompt').style.display = 'none';
+  $('dropZone').classList.add('has-file');
+  $('multiTrackPanel').style.display = 'block';
+
+  // Try to get folder name from webkitRelativePath
+  const folderName = audioFiles[0]?.webkitRelativePath?.split('/')[0] || 'Folder';
+  $('mtFolderName').textContent = folderName;
+  $('mtFileCount').textContent  = audioFiles.length;
+
+  // Render rows immediately
+  const tbody = $('mtBody');
+  tbody.innerHTML = '';
+  mtTracks.forEach((t, i) => {
+    const baseName = t.file.name.replace(/\.[^.]+$/, '');
+
+    // Main row
+    const tr = document.createElement('tr');
+    tr.id = `mt-row-${i}`;
+    tr.innerHTML = `
+      <td><input type="checkbox" checked onchange="toggleTrack(${i},this.checked)"></td>
+      <td class="cell-id">${i + 1}</td>
+      <td style="font-size:0.76rem;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.file.name}">${t.file.name}</td>
+      <td><input class="mt-field" id="mt-title-${i}" value="${baseName}"></td>
+      <td><input class="mt-field" id="mt-artist-${i}" value="" placeholder="Artist"></td>
+      <td class="cell-id" id="mt-dur-${i}"><span class="mt-loading">…</span></td>
+      <td id="mt-fmt-${i}"><span class="mt-loading">…</span></td>
+      <td><button class="mt-expand-btn" onclick="toggleMtDetail(${i})">▸ Edit</button></td>`;
+    tbody.appendChild(tr);
+    t.rowEl = tr;
+
+    // Detail row (hidden by default)
+    const dr = document.createElement('tr');
+    dr.id = `mt-detail-${i}`;
+    dr.className = 'mt-detail-row';
+    dr.style.display = 'none';
+    dr.innerHTML = `<td colspan="8">
+      <div class="mt-detail-inner">
+        <div class="mt-detail-grid">
+          <div class="mt-detail-group"><label>Album</label><input class="mt-field" id="mt-album-${i}" placeholder="Album title"></div>
+          <div class="mt-detail-group"><label>Year</label><input class="mt-field" id="mt-year-${i}" type="number" min="1900" max="2099" placeholder="2024"></div>
+          <div class="mt-detail-group"><label>Genre</label><select class="mt-field" id="mt-genre-${i}">${genreOptionsHtml()}</select></div>
+          <div class="mt-detail-group"><label>ISRC</label><input class="mt-field" id="mt-isrc-${i}" placeholder="e.g. ZA-ABC-24-00001" maxlength="12"></div>
+          <div class="mt-detail-group"><label>BPM</label><input class="mt-field" id="mt-bpm-${i}" type="number" min="1" max="999" placeholder=""></div>
+          <div class="mt-detail-group"><label>Key</label><input class="mt-field" id="mt-key-${i}" placeholder="e.g. Am, F#"></div>
+          <div class="mt-detail-group"><label>Language</label><select class="mt-field" id="mt-lang-${i}">${langOptionsHtml('en')}</select></div>
+          <div class="mt-detail-group"><label>Explicit</label>
+            <select class="mt-field" id="mt-explicit-${i}">
+              <option value="">Unknown</option>
+              <option value="false">Clean</option>
+              <option value="true">Explicit</option>
+            </select>
+          </div>
+          <div class="mt-detail-group"><label>Barcode (UPC/EAN)</label><input class="mt-field" id="mt-barcode-${i}" placeholder="e.g. 602435612345"></div>
+        </div>
+        <div style="margin-top:10px">
+          <label style="font-size:0.65rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:3px">Notes to reviewer</label>
+          <input class="mt-field" id="mt-notes-${i}" placeholder="Any context or special instructions">
+        </div>
+      </div>
+    </td>`;
+    tbody.appendChild(dr);
+    t.detailEl = dr;
+
+    // Mark fields as user-edited if they type anything
+    tr.querySelectorAll('.mt-field').forEach(el => el.addEventListener('input', () => el.dataset.edited = '1'));
+    dr.querySelectorAll('.mt-field').forEach(el => el.addEventListener('input', () => el.dataset.edited = '1'));
+  });
+
+  updateSelectedCount();
+
+  // Fetch metadata in background, 3 at a time
+  fetchMetaBatch([...mtTracks], 3);
+}
+
+async function fetchMetaBatch(tracks, concurrency) {
+  const queue = [...tracks];
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    while (queue.length) {
+      const t = queue.shift();
+      await fetchTrackMeta(t);
+    }
+  });
+  await Promise.all(workers);
+}
+
+async function fetchTrackMeta(t) {
+  const i = t.index;
+  try {
+    const fd = new FormData();
+    fd.append('audio', t.file);
+    const r = await fetch('/api/ingest/meta-preview', { method: 'POST', body: fd });
+    const d = await r.json();
+    t.meta = d;
+    const titleEl  = $(`mt-title-${i}`);
+    const artistEl = $(`mt-artist-${i}`);
+    if (d.meta?.title  && titleEl  && !titleEl.dataset.edited)  titleEl.value  = d.meta.title;
+    if (d.meta?.artist && artistEl && !artistEl.dataset.edited) artistEl.value = d.meta.artist;
+
+    // Populate detail fields if not already edited
+    const fill = (id, val) => { const el = $(id); if (el && val != null && val !== '' && !el.dataset.edited) el.value = val; };
+    fill(`mt-album-${i}`,    d.meta?.album);
+    fill(`mt-year-${i}`,     d.meta?.year);
+    fill(`mt-isrc-${i}`,     d.meta?.isrc);
+    fill(`mt-bpm-${i}`,      d.meta?.bpm);
+    fill(`mt-key-${i}`,      d.meta?.key_sig);
+    // Genre — match against loaded options
+    if (d.meta?.genre && !$(`mt-genre-${i}`)?.dataset?.edited) {
+      const g   = d.meta.genre;
+      const sel = $(`mt-genre-${i}`);
+      if (sel) {
+        const match = mtGenres.find(x => x.toLowerCase() === g.toLowerCase());
+        if (match) sel.value = match;
+      }
+    }
+    // Language — match code
+    if (d.meta?.language && !$(`mt-lang-${i}`)?.dataset?.edited) {
+      const el = $(`mt-lang-${i}`);
+      if (el) el.value = d.meta.language.toLowerCase().slice(0,3);
+    }
+
+    const durEl = $(`mt-dur-${i}`);
+    if (durEl) durEl.textContent = d.technical?.duration_sec ? fmtDuration(d.technical.duration_sec) : '—';
+    const fmtEl = $(`mt-fmt-${i}`);
+    if (fmtEl) fmtEl.innerHTML = `<span class="badge ${d.accepted ? 'badge-approved' : 'badge-format-flag'}">${(d.format||'?').toUpperCase()}</span>`;
+  } catch(_) {
+    const durEl = $(`mt-dur-${i}`);
+    if (durEl) durEl.textContent = '—';
+  }
+}
+
+// ── Genre + Language option helpers ────────────────────────────────────────
+let mtGenres = [];
+
+async function loadGenreOptions() {
+  try {
+    const r = await fetch('/api/genres');
+    const d = await r.json();
+    mtGenres = (d.genres || []).filter(Boolean).sort((a,b) => a.localeCompare(b));
+  } catch(_) { mtGenres = []; }
+  // Populate batch bar select
+  const sel = $('batchGenre');
+  if (sel) { sel.innerHTML = genreOptionsHtml(); }
+}
+
+function genreOptionsHtml(selected = '') {
+  const base = `<option value="">— select genre —</option>`;
+  return base + mtGenres.map(g =>
+    `<option value="${g}"${g === selected ? ' selected' : ''}>${g}</option>`
+  ).join('');
+}
+
+function langOptionsHtml(selected = 'en') {
+  const langs = [
+    ['','— select language —'],
+    ['en','English'],['af','Afrikaans'],['zu','Zulu'],['xh','Xhosa'],
+    ['st','Sotho'],['tn','Tswana'],['ts','Tsonga'],['ss','Swati'],
+    ['nr','Ndebele'],['ve','Venda'],['nso','Sepedi'],
+    ['yo','Yoruba'],['ig','Igbo'],['ha','Hausa'],['sw','Swahili'],
+    ['am','Amharic'],['so','Somali'],['rw','Kinyarwanda'],['lg','Luganda'],
+    ['mg','Malagasy'],['ny','Chichewa'],['sn','Shona'],
+    ['ar','Arabic'],['fr','French'],['pt','Portuguese'],['es','Spanish'],
+    ['de','German'],['nl','Dutch'],['it','Italian'],
+    ['hi','Hindi'],['zh','Chinese'],['ja','Japanese'],['ko','Korean'],
+  ];
+  return langs.map(([v,l]) =>
+    `<option value="${v}"${v === selected ? ' selected' : ''}>${l}</option>`
+  ).join('');
+}
+
+// Initialise selects and populate language on page load
+(function initSelectDefaults() {
+  // Language batch select — populated immediately from static list
+  const langSel = $('batchLang');
+  if (langSel) langSel.innerHTML = langOptionsHtml('en');
+  // Genre — fetch from server
+  loadGenreOptions();
+})();
+
+// ── Batch fill helpers ─────────────────────────────────────────────────────
+function fillAll(fieldSuffix, sourceId) {
+  const val = $(sourceId)?.value || '';
+  mtTracks.forEach((t, i) => {
+    const el = $(`mt-${fieldSuffix}-${i}`);
+    if (el) { el.value = val; el.dataset.edited = '1'; }
+  });
+}
+
+function generateIsrcSeq() {
+  const raw = $('batchIsrc').value.trim().replace(/[-\s]/g, '').toUpperCase();
+  if (raw.length !== 12) {
+    alert('Enter a full 12-character ISRC (e.g. ZAAB22500001) to generate the sequence.');
+    return;
+  }
+  const prefix  = raw.slice(0, 7);   // CC + XXX + YY
+  const startNum = parseInt(raw.slice(7), 10);
+  if (isNaN(startNum)) { alert('Could not parse the sequence number from the ISRC.'); return; }
+  mtTracks.forEach((t, i) => {
+    if (!t.selected) return;
+    const el = $(`mt-isrc-${i}`);
+    if (el) { el.value = prefix + String(startNum + i).padStart(5, '0'); el.dataset.edited = '1'; }
+  });
+}
+
+function genBarcode() {
+  // Generate a random 13-digit EAN-13 with valid check digit
+  const digits = Array.from({ length: 12 }, (_, i) => i === 0 ? Math.floor(Math.random() * 9) + 1 : Math.floor(Math.random() * 10));
+  const check  = (10 - (digits.reduce((s, d, i) => s + d * (i % 2 === 0 ? 1 : 3), 0) % 10)) % 10;
+  const barcode = digits.join('') + check;
+  $('batchBarcode').value = barcode;
+  fillAll('barcode', 'batchBarcode');
+}
+
+function toggleMtDetail(i) {
+  const dr  = $(`mt-detail-${i}`);
+  const btn = mtTracks[i].rowEl.querySelector('.mt-expand-btn');
+  const open = dr.style.display === 'none';
+  dr.style.display = open ? '' : 'none';
+  btn.textContent  = open ? '▾ Edit' : '▸ Edit';
+}
+
+function toggleTrack(i, checked) {
+  mtTracks[i].selected = checked;
+  mtTracks[i].rowEl.style.opacity = checked ? '1' : '0.45';
+  updateSelectedCount();
+}
+function toggleSelectAll(checked) {
+  mtTracks.forEach((t, i) => {
+    t.selected = checked;
+    t.rowEl.style.opacity = checked ? '1' : '0.45';
+    t.rowEl.querySelector('input[type=checkbox]').checked = checked;
+  });
+  updateSelectedCount();
+}
+function updateSelectedCount() {
+  $('mtSelectedCount').textContent = mtTracks.filter(t => t.selected).length;
+}
+
+async function submitAllTracks() {
+  const name  = $('mtSubmitterName').value.trim();
+  const email = $('mtSubmitterEmail').value.trim();
+  $('mtErrorMsg').textContent = '';
+  if (!name || !email) { $('mtErrorMsg').textContent = 'Please enter your name and email.'; return; }
+  const selected = mtTracks.filter(t => t.selected);
+  if (!selected.length) { $('mtErrorMsg').textContent = 'No tracks selected.'; return; }
+
+  const btn = $('mtSubmitBtn');
+  btn.disabled = true;
+  $('mtProgress').style.display = 'block';
+
+  let done = 0;
+  const ids = [];
+
+  for (const t of selected) {
+    $('mtProgressText').textContent = `Submitting ${done + 1} of ${selected.length} — ${t.file.name}`;
+    $('mtProgressBar').style.width  = `${(done / selected.length) * 100}%`;
+    try {
+      const fd = new FormData();
+      fd.append('audio',           t.file);
+      if (mtArtwork) fd.append('artwork', mtArtwork);
+      fd.append('submitter_name',  name);
+      fd.append('submitter_email', email);
+      fd.append('org',             $('mtOrg').value.trim());
+      const v = id => $(id)?.value?.trim() || '';
+      const n = t.index;
+      fd.append('title',    v(`mt-title-${n}`) || t.file.name);
+      fd.append('artist',   v(`mt-artist-${n}`));
+      if (v(`mt-album-${n}`))    fd.append('album',    v(`mt-album-${n}`));
+      if (v(`mt-year-${n}`))     fd.append('year',     v(`mt-year-${n}`));
+      if (v(`mt-genre-${n}`))    fd.append('genre',    v(`mt-genre-${n}`));
+      if (v(`mt-isrc-${n}`))     fd.append('isrc',     v(`mt-isrc-${n}`));
+      if (v(`mt-bpm-${n}`))      fd.append('bpm',      v(`mt-bpm-${n}`));
+      if (v(`mt-key-${n}`))      fd.append('key_sig',  v(`mt-key-${n}`));
+      if (v(`mt-lang-${n}`))     fd.append('language', v(`mt-lang-${n}`));
+      if (v(`mt-explicit-${n}`)) fd.append('explicit', v(`mt-explicit-${n}`));
+      if (v(`mt-barcode-${n}`))  fd.append('barcode',  v(`mt-barcode-${n}`));
+      if (v(`mt-notes-${n}`))    fd.append('notes',    v(`mt-notes-${n}`));
+      const r = await fetch('/api/ingest/submit', { method: 'POST', body: fd });
+      const d = await r.json();
+      if (r.ok) { ids.push(d.submissionId); t.rowEl.classList.add('mt-done'); }
+    } catch(_) {}
+    done++;
+  }
+
+  $('mtProgressBar').style.width  = '100%';
+  $('mtProgressText').textContent = `Done — ${ids.length} of ${selected.length} submitted`;
+
+  setTimeout(() => {
+    $('multiTrackPanel').style.display = 'none';
+    $('dropZone').style.display        = 'none';
+    $('confirmation').style.display    = 'block';
+    $('confirmId').textContent    = ids.length === 1 ? `#${ids[0]}` : `${ids.length} tracks`;
+    $('confirmEmail').textContent = email;
+  }, 1400);
+}
+
+function resetToFolderDrop() {
+  mtTracks = []; mtArtwork = null;
+  $('multiTrackPanel').style.display = 'none';
+  $('dropZone').classList.remove('has-file');
+  $('dropZone').style.display   = 'block';
+  $('dropPrompt').style.display = 'block';
+  $('folderInput').value = '';
+  $('fileInput').value   = '';
 }
 
 // ── Main file handler ──────────────────────────────────────────────────────

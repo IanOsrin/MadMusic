@@ -45,9 +45,14 @@
             <div class="plan-name">${plan.label}</div>
             <div class="plan-duration">${plan.days} ${plan.days === 1 ? 'day' : 'days'} of unlimited streaming</div>
           </div>
-          <div class="plan-price">${plan.display}</div>
+          <div class="plan-price" data-zar-cents="${plan.amount}" data-zar-display="${plan.display}">${plan.display}</div>
         </div>
       `).join('');
+
+      // Inject local-currency hints once geolocation + exchange rate are ready
+      if (window.MADCurrency) {
+        window.MADCurrency.ready.then(() => window.MADCurrency.updatePlanPrices());
+      }
 
       // Load subscription plan label/price from server
       fetch('/api/payments/subscription-plan')
