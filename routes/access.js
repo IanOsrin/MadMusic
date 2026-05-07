@@ -23,6 +23,13 @@ const MAX_DELTA_PER_EVENT_SEC = 300;
 // Small fraction of DurationSec we allow TotalPlayedSec to exceed (timing jitter).
 const TOTAL_PLAYED_OVERSHOOT_FACTOR = 1.05;
 
+// In-process accumulator for TotalPlayedSec.
+// The stream-record LRU returns existingFieldData:null on cache hits, so we
+// can't read the accumulated total from FileMaker on every event. This Map
+// shadows TotalPlayedSec locally and is updated after every successful write.
+// Keyed by "sessionId::trackRecordId" — same format as the LRU.
+const streamTotalMap = new Map();
+
 const router = Router();
 
 console.log('[MASS] Registering access token validation endpoint');
@@ -392,7 +399,16 @@ router.post('/stream-events', async (req, res) => {
 
     const forceNewRecord = normalizedType === 'PLAY' && !hasCachedSession;
     const ensureResult = await ensureStreamRecord(sessionId, normalizedTrackRecordId, createFields, { forceNew: forceNewRecord });
-    const existingFields = ensureResult.existingFieldData || {};
+    const existingFields = ensureResult.existingFieldData ? { ...ensureResult.existingFieldData } : {};
+
+    // LRU cache hits return existingFieldData:null so we can't read TotalPlayedSec
+    // from FileMaker. Restore it from the in-process accumulator so the total
+    // keeps growing correctly instead of resetting to just this event's delta.
+    const streamKey = `${sessionId}::${normalizedTrackRecordId}`;
+    if (!ensureResult.existingFieldData && !ensureResult.created) {
+      const cached = streamTotalMap.get(streamKey);
+      if (cached !== undefined) existingFields.TotalPlayedSec = cached;
+    }
 
     applyExistingFieldsToBase(baseFields, existingFields, normalizedType, timestamp, payloadDelta, normalizedDuration);
 
@@ -401,6 +417,9 @@ router.post('/stream-events', async (req, res) => {
     }
 
     await fmUpdateRecord(FM_STREAM_EVENTS_LAYOUT, ensureResult.recordId, baseFields);
+
+    // Keep the in-process accumulator in sync with what we just wrote.
+    streamTotalMap.set(streamKey, baseFields.TotalPlayedSec);
 
     if (STREAM_EVENT_DEBUG) {
       console.info('[MASS] stream event persisted', {
@@ -415,6 +434,7 @@ router.post('/stream-events', async (req, res) => {
 
     if (STREAM_TERMINAL_EVENTS.has(normalizedType)) {
       clearCachedStreamRecordId(sessionId, normalizedTrackRecordId);
+      streamTotalMap.delete(streamKey); // session over — release memory
     } else {
       setCachedStreamRecordId(sessionId, normalizedTrackRecordId, ensureResult.recordId);
     }

@@ -125,6 +125,7 @@
 
     // Playlist View Functionality — flat track list, no album thumbnails
     function showPlaylistView(playlistName, tracks, playlistId) {
+      if (window.MADNav) window.MADNav.push();
       const playlistView = document.getElementById('playlistView');
       const layoutGrid = document.querySelector('.layout-grid');
       const playlistTitle = document.getElementById('playlistViewTitle');

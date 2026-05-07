@@ -914,6 +914,7 @@
         const playlistView = document.getElementById('view-user-playlist');
         if (!playlistView) return;
         playlistView.hidden = false;
+        if (window.MADNav) window.MADNav.push();
 
         // Update nav state
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -1130,12 +1131,16 @@
 
         if (backBtn) {
           backBtn.onclick = () => {
-            document.querySelectorAll('.view-section').forEach(v => v.hidden = true);
-            const homeView = document.getElementById('view-albums');
-            if (homeView) homeView.hidden = false;
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            const homeNav = document.querySelector('.nav-item[data-view="albums"]');
-            if (homeNav) homeNav.classList.add('active');
+            if (window.MADNav) {
+              window.MADNav.goBack();
+            } else {
+              document.querySelectorAll('.view-section').forEach(v => v.hidden = true);
+              const homeView = document.getElementById('view-albums');
+              if (homeView) homeView.hidden = false;
+              document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+              const homeNav = document.querySelector('.nav-item[data-view="albums"]');
+              if (homeNav) homeNav.classList.add('active');
+            }
           };
         }
       };
@@ -2846,7 +2851,7 @@
           const pv = document.getElementById('playlistView');
           if (pv) { pv.classList.remove('active'); pv.style.display = 'none'; }
           const pub = document.getElementById('publicPlaylistView');
-          if (pub) pub.hidden = false;
+          if (pub) { pub.hidden = false; if (window.MADNav) window.MADNav.push(); }
         }, 100);
       };
 
@@ -2854,15 +2859,16 @@
       const closePublicPlaylistBtn = document.getElementById('closePublicPlaylistBtn');
       if (closePublicPlaylistBtn) {
         closePublicPlaylistBtn.addEventListener('click', () => {
-          const view = document.getElementById('publicPlaylistView');
-          if (view) view.hidden = true;
-          // Restore album grid
-          // Restore album grid
-          const albumsEl  = document.getElementById('albums');
-          const loadingEl = document.getElementById('loadingIndicator');
-          if (albumsEl)  albumsEl.hidden  = false;
-          if (loadingEl) loadingEl.hidden = false;
-          // Don't restore #playlistView — user is done with it
+          if (window.MADNav) {
+            window.MADNav.goBack();
+          } else {
+            const view = document.getElementById('publicPlaylistView');
+            if (view) view.hidden = true;
+            const albumsEl  = document.getElementById('albums');
+            const loadingEl = document.getElementById('loadingIndicator');
+            if (albumsEl)  albumsEl.hidden  = false;
+            if (loadingEl) loadingEl.hidden = false;
+          }
         });
       }
 
@@ -3491,6 +3497,7 @@
 
       // New function to show album detail view (two-column layout)
       window.showAlbumDetailView = async function(album, relatedAlbums = []) {
+        if (window.MADNav) window.MADNav.push();
         const playlistView = document.getElementById('playlistView');
         const layoutGrid = document.querySelector('.layout-grid');
         const playlistTitle = document.getElementById('playlistViewTitle');
@@ -3983,7 +3990,11 @@
       const backBtn = document.getElementById('playlistBackBtn');
       if (backBtn) {
         backBtn.addEventListener('click', () => {
-          hideAlbumDetailView();
+          if (window.MADNav) {
+            window.MADNav.goBack();
+          } else {
+            hideAlbumDetailView();
+          }
         });
       }
 
@@ -4912,6 +4923,88 @@
   <script src="/js/catalog.js?v=1"></script>
   <script src="/js/currency.js?v=2"></script>
   <script src="/js/discovery.js?v=2"></script>
+
+  <script>
+  /* ── SPA back-button navigation ──────────────────────────────────────────────
+     Pushes a history entry each time the app navigates to a full-screen view so
+     the browser back button steps through in-app states instead of leaving.
+
+     View entry points call:  window.MADNav.push()
+     Back / close buttons call: window.MADNav.goBack()
+     popstate handler closes whichever view is currently on top.
+  ──────────────────────────────────────────────────────────────────────────── */
+  window.MADNav = (function () {
+    var depth = 0;
+
+    // Stamp the initial entry so our popstate handler can identify its own events.
+    try { history.replaceState({ mad: 0 }, ''); } catch (e) {}
+
+    // Called whenever a navigable view opens. Adds one browser history entry.
+    function push() {
+      depth++;
+      try { history.pushState({ mad: depth }, ''); } catch (e) {}
+    }
+
+    // Called by in-app back/close buttons.
+    // If we own a history entry, let history.back() drive the UI via popstate.
+    // Otherwise fall back to closing the view directly (e.g. page loaded mid-session).
+    function goBack(fallback) {
+      if (depth > 0) {
+        history.back(); // → popstate → _closeTopView()
+      } else if (typeof fallback === 'function') {
+        fallback();
+      }
+    }
+
+    // Restore albums/home view — shared by several close paths.
+    function _showHome() {
+      document.querySelectorAll('.view-section').forEach(function (v) { v.hidden = true; });
+      var homeView = document.getElementById('view-albums');
+      if (homeView) homeView.hidden = false;
+      document.querySelectorAll('.nav-item').forEach(function (n) { n.classList.remove('active'); });
+      var homeNav = document.querySelector('.nav-item[data-view="albums"]');
+      if (homeNav) homeNav.classList.add('active');
+    }
+
+    // Determine which view is topmost and close it.
+    function _closeTopView() {
+      var userPl   = document.getElementById('view-user-playlist');
+      var publicPl = document.getElementById('publicPlaylistView');
+      var albumDtl = document.getElementById('playlistView');
+
+      if (userPl && !userPl.hidden) {
+        // User / shared playlist page → go home
+        _showHome();
+      } else if (publicPl && !publicPl.hidden) {
+        // Featured / recommended playlist panel
+        publicPl.hidden = true;
+        var albumsEl  = document.getElementById('albums');
+        var loadingEl = document.getElementById('loadingIndicator');
+        if (albumsEl)  albumsEl.hidden  = false;
+        if (loadingEl) loadingEl.hidden = false;
+      } else if (albumDtl && albumDtl.classList.contains('active')) {
+        // Album detail or catalog playlist view — distinguish by dataset
+        if (albumDtl.dataset.playlistMode === 'user' && typeof window.hidePlaylistView === 'function') {
+          window.hidePlaylistView();
+        } else if (typeof window.hideAlbumDetailView === 'function') {
+          window.hideAlbumDetailView();
+        } else {
+          albumDtl.classList.remove('active');
+          var grid = document.querySelector('.layout-grid');
+          if (grid) grid.style.display = 'flex';
+        }
+      }
+    }
+
+    window.addEventListener('popstate', function (e) {
+      if (!e.state || !('mad' in e.state)) return; // Not our history entry
+      depth = Math.max(0, depth - 1);
+      _closeTopView();
+    });
+
+    return { push: push, goBack: goBack };
+  })();
+  </script>
 
 
   <!-- ── Share-email modal logic ──────────────────────────────────────── -->
