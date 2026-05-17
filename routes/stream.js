@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { fmGetRecordById, ensureToken, safeFetch, fmLogin } from '../fm-client.js';
 import { validators } from '../lib/validators.js';
 import { AUDIO_FIELD_CANDIDATES, FM_LAYOUT, FM_HOST } from '../lib/fm-fields.js';
-import { containerUrlCache } from '../cache.js';
+import { containerUrlCache, trackRecordCache } from '../cache.js';
 
 const router = Router();
 const REGEX_HTTP_HTTPS = /^https?:\/\//i;
@@ -129,7 +129,20 @@ router.get('/track/:recordId/container', async (req, res) => {
       return;
     }
 
-    const record = await fmGetRecordById(layout, recordId);
+    // Read-through fallback (May-17): featured/trending/g100 pre-warm already
+    // pull full FM records into trackRecordCache. The audio container URL we
+    // need is sitting in that record's fieldData. Reading it from there saves
+    // a fresh fmGetRecordById round-trip — which was the cause of the 1-3 s
+    // delay before the first song of any non-pre-warmed-by-this-endpoint
+    // album/playlist. We still cache the resolved URL into containerUrlCache
+    // so the hot path remains a single LRU lookup.
+    let record = trackRecordCache.get(cacheKey)
+      || trackRecordCache.get(`${FM_LAYOUT}::${recordId}`); // legacy key shape
+
+    if (!record) {
+      record = await fmGetRecordById(layout, recordId);
+    }
+
     if (!record) {
       res.status(404).json({ ok: false, error: 'Record not found' });
       return;
