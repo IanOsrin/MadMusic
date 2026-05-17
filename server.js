@@ -4,6 +4,7 @@ import http from 'node:http';
 import http2 from 'node:http2';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { Readable } from 'node:stream';
 import compression from 'compression';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
@@ -151,7 +152,10 @@ app.use((req, res, next) => {
 // Capture raw body for Paystack webhook (must be before express.json)
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 
-app.use(express.json({ limit: '50mb' }));
+// JSON body limit kept tight to protect 512 MB Render workers from a single
+// oversized payload blowing the heap. Large uploads (XLSX ingest, audio, ZIPs)
+// go through multer / express.raw on their specific routes.
+app.use(express.json({ limit: '2mb' }));
 
 
 // Rate limiting configuration
@@ -420,7 +424,8 @@ app.get('/audio-lab',(_req, res) => sendHtml(res, 'audio-lab.html'));
 // automatically on every subsequent /api/access/validate call.
 app.post('/api/audio-lab/validate-key', async (req, res) => {
   const { key } = req.body || {};
-  const validKey = process.env.AUDIO_LAB_KEY || 'abc123';
+  const validKey = process.env.AUDIO_LAB_KEY;
+  if (!validKey) return res.status(503).json({ ok: false, error: 'Audio Lab not configured' });
   if (!key) return res.status(400).json({ ok: false, error: 'No key provided' });
   if (key.trim() !== validKey) return res.status(403).json({ ok: false, error: 'Invalid key' });
 
@@ -441,14 +446,32 @@ app.post('/api/audio-lab/validate-key', async (req, res) => {
   return res.json({ ok: true, audioLabEnabled: true });
 });
 
+// ── Private-IP patterns used by the audio proxy SSRF guard ───────────────────
+const _AUDIO_PROXY_PRIVATE_IP = [
+  /^10\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^192\.168\./,
+  /^169\.254\./,  // link-local
+  /^::1$/,        // IPv6 loopback
+  /^fe80:/i,      // IPv6 link-local
+  /^fc00:/i       // IPv6 unique-local
+];
+function _audioProxyIsPrivate(hostname) {
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+  return _AUDIO_PROXY_PRIVATE_IP.some(p => p.test(hostname));
+}
+
 // ── Audio Lab proxy ── fetches a remote audio URL server-side to bypass CORS ──
 app.get('/api/audio-proxy', async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'Missing url param' });
   try {
     const target = new URL(url); // throws if invalid
-    // Only allow https: scheme to prevent SSRF against internal services
+    // Block non-https schemes and private/internal IP ranges (SSRF prevention)
     if (target.protocol !== 'https:') return res.status(400).json({ error: 'Only https URLs allowed' });
+    if (_audioProxyIsPrivate(target.hostname)) {
+      return res.status(400).json({ error: 'Private or internal addresses not allowed' });
+    }
     const upstream = await fetch(url, { signal: AbortSignal.timeout(30_000) });
     if (!upstream.ok) return res.status(upstream.status).json({ error: `Upstream ${upstream.status}` });
     const ct = upstream.headers.get('content-type') || 'audio/mpeg';
@@ -456,10 +479,18 @@ app.get('/api/audio-proxy', async (req, res) => {
     res.setHeader('Content-Type', ct);
     res.setHeader('Cache-Control', 'private, max-age=3600');
     if (cl) res.setHeader('Content-Length', cl);
-    // Buffer the body — MP3s are typically 3–15 MB, well within safe limits.
-    // Avoids WritableStream availability issues across Node.js versions.
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    res.end(buf);
+    // Stream the body instead of buffering. Loading whole MP3s (3–15 MB) into
+    // memory per request was a meaningful contributor to OOM kills on the
+    // 512 MB Render tier with multiple concurrent listeners.
+    if (!upstream.body) return res.end();
+    const nodeStream = Readable.fromWeb(upstream.body);
+    nodeStream.on('error', (err) => {
+      console.warn('[audio-proxy] upstream stream error:', err.message);
+      if (!res.headersSent) res.status(502).end();
+      else res.destroy(err);
+    });
+    res.on('close', () => { if (!nodeStream.destroyed) nodeStream.destroy(); });
+    nodeStream.pipe(res);
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message });
     else res.destroy();
@@ -603,7 +634,13 @@ if (!serverStarted) {
 // SWR guarantees that once a cache entry is warm, subsequent requests (even
 // hours later, when the soft TTL has elapsed) return stale-immediately while
 // the refresh runs in the background. First-request latency ≈ 0 after warm.
-{
+//
+// Memory note: each pre-warmed SWR entry costs ~MBs (trending pulls up to 400
+// enriched track records). On the 512 MB Render tier we'd rather pay first-
+// request latency than sit at the memory ceiling forever, so pre-warm is OFF
+// by default and gated on PREWARM_CACHES=true. When more than one worker is
+// running, only worker 0 pre-warms so we don't multiply the cost.
+if (process.env.PREWARM_CACHES === 'true' && (process.env.WORKER_INDEX || '0') === '0') {
   const { featuredWarmers }         = await import('./routes/catalog/featured.js');
   const { trendingWarmer }          = await import('./routes/catalog/trending.js');
   const { genresWarmer }            = await import('./routes/catalog/genres.js');
@@ -630,6 +667,8 @@ if (!serverStarted) {
   prewarm('G100',             featuredWarmers.g100,        4000);
   prewarm('Public Playlists', publicPlaylistsWarmer,       5000);
   prewarm('Genres',           genresWarmer,                8000);
+} else {
+  console.log('[MASS] Cache pre-warm disabled (set PREWARM_CACHES=true to enable). SWR caches will fill on first request.');
 }
 // ────────────────────────────────────────────────────────────────────────────
 

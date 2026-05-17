@@ -45,8 +45,11 @@ export const tokenValidationCache = new LRUCache({
 
 // Stream record cache — maps sessionId+trackRecordId → FileMaker stream record ID.
 // LRU TTL replaces the manual expiresAt field that was previously stored in each entry.
+// Sized for the 512 MB Render tier — 2000 hot session/track pairs covers concurrent
+// listening comfortably, and bigger entries get evicted before they cumulatively
+// push the worker into an OOM kill.
 export const streamRecordLRU = new LRUCache({
-  max: 10000,
+  max: 2000,
   ttl: 30 * MINUTE_MS, // 30 minutes (matches STREAM_RECORD_CACHE_TTL_MS)
   updateAgeOnGet: false,
   updateAgeOnHas: false
@@ -82,8 +85,10 @@ export const randomSongsPoolCache = new LRUCache({
 // Container URL cache — maps "layout::recordId" → { url, field }.
 // Avoids a FileMaker round-trip on every play request for the same track.
 // 30-minute TTL matches the FileMaker session refresh window.
+// Sized for 512 MB Render tier — 2000 hot tracks is plenty of working-set
+// coverage; cold tracks pay a single FM hop.
 export const containerUrlCache = new LRUCache({
-  max: 5000,
+  max: 2000,
   ttl: 30 * MINUTE_MS, // 30 minutes
   updateAgeOnGet: true, // Reset TTL on access to keep hot tracks cached
   updateAgeOnHas: true
@@ -94,8 +99,10 @@ export const containerUrlCache = new LRUCache({
 // does fmGetRecordById on track records. Eliminates the N+1 pattern where the same
 // hot tracks get re-fetched repeatedly across endpoints.
 // 10-minute TTL keeps metadata reasonably fresh without hammering FM.
+// Each entry holds a full FM record object (~5–10 KB); 1500 entries × ~8 KB ≈ 12 MB
+// per worker, which fits comfortably inside the 512 MB Render tier.
 export const trackRecordCache = new LRUCache({
-  max: 5000,
+  max: 1500,
   ttl: 10 * MINUTE_MS,
   updateAgeOnGet: true,
   updateAgeOnHas: true
