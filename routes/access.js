@@ -250,12 +250,30 @@ router.post('/email/confirm', async (req, res) => {
       return res.status(404).json({ ok: false, error: 'Token not found in FileMaker' });
     }
 
-    const fmRecord = findResult.data[0];
-    const existingIssuedTo = (fmRecord.fieldData?.Issued_To || '').trim();
+    const fmRecord  = findResult.data[0];
+    const fieldData = fmRecord.fieldData || {};
+
+    // Some FM token layouts use `Issued_To`, others use `Email` — lib/auth.js
+    // reads from both. Detect which field(s) the record actually has and
+    // write to those, otherwise FM rejects the update with "field not found"
+    // and the user sees a confusing "Could not verify code" error.
+    const hasIssuedTo = Object.prototype.hasOwnProperty.call(fieldData, 'Issued_To');
+    const hasEmail    = Object.prototype.hasOwnProperty.call(fieldData, 'Email');
+
+    if (!hasIssuedTo && !hasEmail) {
+      EMAIL_CLAIM_CODES.delete(tokenCode);
+      console.error('[MASS] /email/confirm: token record has neither Issued_To nor Email field. Available fields:', Object.keys(fieldData));
+      return res.status(500).json({
+        ok: false,
+        error: 'Token record has no email field to write to',
+        detail: 'FM layout missing Issued_To and Email — check FM_TOKENS_LAYOUT schema'
+      });
+    }
 
     // Race-condition guard: if someone else claimed this token between
     // /email/start and /email/confirm, refuse.
-    if (existingIssuedTo && normalizeEmail(existingIssuedTo) !== claim.email) {
+    const existingEmail = ((hasIssuedTo && fieldData.Issued_To) || (hasEmail && fieldData.Email) || '').trim();
+    if (existingEmail && normalizeEmail(existingEmail) !== claim.email) {
       EMAIL_CLAIM_CODES.delete(tokenCode);
       return res.status(409).json({
         ok: false,
@@ -263,7 +281,23 @@ router.post('/email/confirm', async (req, res) => {
       });
     }
 
-    await fmUpdateRecord(layout, fmRecord.recordId, { 'Issued_To': claim.email });
+    const updateFields = {};
+    if (hasIssuedTo) updateFields['Issued_To'] = claim.email;
+    if (hasEmail)    updateFields['Email']     = claim.email;
+
+    try {
+      await fmUpdateRecord(layout, fmRecord.recordId, updateFields);
+    } catch (fmErr) {
+      // Surface the real FM error so we don't get vague "Could not verify code"
+      // when it's actually a schema mismatch, permissions issue, etc.
+      console.error('[MASS] /email/confirm: fmUpdateRecord failed:', fmErr?.message || fmErr, 'fields attempted:', Object.keys(updateFields));
+      EMAIL_CLAIM_CODES.delete(tokenCode);
+      return res.status(502).json({
+        ok: false,
+        error: 'Could not save email to FileMaker',
+        detail: fmErr?.message || String(fmErr)
+      });
+    }
 
     // Bust the in-process token validation cache so the next /validate call
     // re-reads from FM and picks up the new email.
