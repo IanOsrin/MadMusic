@@ -278,6 +278,19 @@
 
         if (response.ok && data.valid) {
           const normalized = token.trim().toUpperCase();
+
+          // If the FM token record has no Issued_To, force the user through
+          // the email-claim modal before any app access. We save the token
+          // locally so the claim endpoints can be called with it, but we do
+          // NOT mark access-ready — the app stays gated.
+          if (data.requiresEmail) {
+            console.log('[Access Token] Token valid but requires email — showing claim modal');
+            localStorage.setItem(STORAGE_KEY, normalized);
+            currentAccessToken = normalized;
+            showEmailClaimModal(normalized);
+            return false; // not "valid for app use" yet
+          }
+
           saveAccessToken(normalized, {
             type: data.type,
             expirationDate: data.expirationDate
@@ -319,6 +332,161 @@
         submitBtn.disabled = false;
         submitBtn.textContent = 'Activate Access';
       }
+    }
+
+    // ── Email claim flow ─────────────────────────────────────────────────
+    // Shown when /validate returns { requiresEmail: true }. The user must
+    // bind a verified email to their token before they can use the app —
+    // otherwise their playlists / saved albums would be stored under the
+    // token code and orphaned the moment an email gets bound later.
+    const emailClaimSection  = document.getElementById('emailClaimSection');
+    const emailClaimStep1    = document.getElementById('emailClaimStep1');
+    const emailClaimStep2    = document.getElementById('emailClaimStep2');
+    const emailClaimInput    = document.getElementById('emailClaimInput');
+    const emailClaimCodeInput = document.getElementById('emailClaimCodeInput');
+    const emailClaimSendBtn  = document.getElementById('emailClaimSendBtn');
+    const emailClaimConfirmBtn = document.getElementById('emailClaimConfirmBtn');
+    const emailClaimAddress  = document.getElementById('emailClaimAddress');
+    const emailClaimResend   = document.getElementById('emailClaimResend');
+    const emailClaimError    = document.getElementById('emailClaimError');
+
+    let _emailClaimToken = null;
+    let _emailClaimEmail = null;
+
+    function showEmailClaimError(msg) {
+      if (!emailClaimError) return;
+      emailClaimError.textContent = msg;
+      emailClaimError.classList.add('show');
+    }
+    function clearEmailClaimError() {
+      if (!emailClaimError) return;
+      emailClaimError.textContent = '';
+      emailClaimError.classList.remove('show');
+    }
+
+    function showEmailClaimModal(token) {
+      _emailClaimToken = token;
+      // Hide the standard sections, show the claim section
+      const tokenSection    = document.getElementById('tokenSection');
+      const purchaseSection = document.getElementById('purchaseSection');
+      if (tokenSection)    tokenSection.classList.remove('active');
+      if (purchaseSection) purchaseSection.classList.add('hidden');
+      if (emailClaimSection) emailClaimSection.hidden = false;
+      if (emailClaimStep1)  emailClaimStep1.hidden = false;
+      if (emailClaimStep2)  emailClaimStep2.hidden = true;
+      clearEmailClaimError();
+      if (emailClaimInput) {
+        emailClaimInput.value = '';
+        setTimeout(() => emailClaimInput.focus(), 50);
+      }
+      overlay.classList.remove('hidden');
+    }
+
+    async function emailClaimSendCode() {
+      clearEmailClaimError();
+      const email = (emailClaimInput?.value || '').trim();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+        showEmailClaimError('Please enter a valid email address');
+        return;
+      }
+      if (!_emailClaimToken) {
+        showEmailClaimError('No token in progress — please start over');
+        return;
+      }
+
+      emailClaimSendBtn.disabled = true;
+      emailClaimSendBtn.textContent = 'Sending…';
+      try {
+        const res = await originalFetch('/api/access/email/start', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ token: _emailClaimToken, email })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          showEmailClaimError(data.error || 'Could not send code');
+          return;
+        }
+        _emailClaimEmail = email;
+        if (emailClaimAddress) emailClaimAddress.textContent = email;
+        if (emailClaimStep1) emailClaimStep1.hidden = true;
+        if (emailClaimStep2) emailClaimStep2.hidden = false;
+        if (emailClaimCodeInput) {
+          emailClaimCodeInput.value = '';
+          setTimeout(() => emailClaimCodeInput.focus(), 50);
+        }
+      } catch (err) {
+        console.error('[EmailClaim] start error:', err);
+        showEmailClaimError('Network error — please try again');
+      } finally {
+        emailClaimSendBtn.disabled = false;
+        emailClaimSendBtn.textContent = 'Send verification code';
+      }
+    }
+
+    async function emailClaimConfirm() {
+      clearEmailClaimError();
+      const code = (emailClaimCodeInput?.value || '').trim();
+      if (!/^\d{6}$/.test(code)) {
+        showEmailClaimError('Enter the 6-digit code from your email');
+        return;
+      }
+
+      emailClaimConfirmBtn.disabled = true;
+      emailClaimConfirmBtn.textContent = 'Verifying…';
+      try {
+        const res = await originalFetch('/api/access/email/confirm', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ token: _emailClaimToken, code })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          let msg = data.error || 'Could not verify code';
+          if (typeof data.attemptsRemaining === 'number') {
+            msg += ` (${data.attemptsRemaining} attempt${data.attemptsRemaining === 1 ? '' : 's'} left)`;
+          }
+          showEmailClaimError(msg);
+          return;
+        }
+        // Email is now bound to the token. Hide the claim UI and re-run the
+        // normal token validation path — this time requiresEmail will be false
+        // and the app will start.
+        if (emailClaimSection) emailClaimSection.hidden = true;
+        await validateToken(_emailClaimToken);
+        _emailClaimToken = null;
+        _emailClaimEmail = null;
+      } catch (err) {
+        console.error('[EmailClaim] confirm error:', err);
+        showEmailClaimError('Network error — please try again');
+      } finally {
+        emailClaimConfirmBtn.disabled = false;
+        emailClaimConfirmBtn.textContent = 'Verify & continue';
+      }
+    }
+
+    if (emailClaimSendBtn)    emailClaimSendBtn.addEventListener('click', emailClaimSendCode);
+    if (emailClaimConfirmBtn) emailClaimConfirmBtn.addEventListener('click', emailClaimConfirm);
+    if (emailClaimInput) {
+      emailClaimInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); emailClaimSendCode(); }
+      });
+    }
+    if (emailClaimCodeInput) {
+      emailClaimCodeInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); emailClaimConfirm(); }
+      });
+    }
+    if (emailClaimResend) {
+      emailClaimResend.addEventListener('click', () => {
+        if (emailClaimStep1) emailClaimStep1.hidden = false;
+        if (emailClaimStep2) emailClaimStep2.hidden = true;
+        clearEmailClaimError();
+        if (emailClaimInput) {
+          emailClaimInput.value = '';
+          setTimeout(() => emailClaimInput.focus(), 50);
+        }
+      });
     }
 
     // Token submit handler — button click in paymentOverlay tokenSection

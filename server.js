@@ -217,7 +217,7 @@ app.use('/api/', async (req, res, next) => {
     '/g100-albums', '/g100-playlists', '/genres',
     '/auth', '/payments/initialize', '/payments/subscribe', '/payments/trial', '/payments/callback',
     '/payments/webhook', '/payments/plans', '/payments/subscription-plan',
-    '/access/stream-events', '/access/logout', '/health',
+    '/access/stream-events', '/access/logout', '/access/email/', '/health',
     '/tokens/resync', '/tokens/unsynced', '/tokens/clear-trials',
     '/telkom/subscription', '/telkom/billing',
     '/download/',

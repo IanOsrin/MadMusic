@@ -13,7 +13,9 @@ import { fmUpdateRecord, fmFindRecords } from '../fm-client.js';
 import { tokenValidationCache } from '../cache.js';
 import { FM_STREAM_EVENTS_LAYOUT, FM_LAYOUT, firstNonEmpty } from '../lib/fm-fields.js';
 import { getTrackRecordCached } from '../lib/track-cache.js';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomInt } from 'node:crypto';
+import { sendEmailClaimCode } from '../lib/email.js';
+import { normalizeEmail } from '../lib/format.js';
 
 // ── Sanity caps ───────────────────────────────────────────────────────────────
 // Max seconds we'll ever credit per event. PROGRESS fires every ~30s from the
@@ -69,6 +71,11 @@ router.post('/validate', async (req, res) => {
       res.json({
         ok: true,
         valid: true,
+        // Tells the frontend to show the email-capture modal before letting
+        // the user into the app. We do this whenever Issued_To is empty in
+        // FM, even for previously-activated tokens — those are exactly the
+        // tokens whose playlist/library writes would otherwise be orphaned.
+        requiresEmail: !result.email,
         type: result.type,
         expirationDate: result.expirationDate,
         email: result.email || null,
@@ -86,6 +93,199 @@ router.post('/validate', async (req, res) => {
   } catch (err) {
     console.error('[MASS] Token validation failed:', err);
     res.status(500).json({ ok: false, valid: false, error: 'Token validation failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Email-claim flow
+//
+// Tokens issued without a pre-assigned email (e.g. trial tokens, bulk-issued
+// tokens shared via WhatsApp, manually-created records) used to let users
+// straight into the app, then have their playlists/library writes fall back to
+// using the token code as the storage key. That orphaned data permanently once
+// any email later got bound to the token.
+//
+// New flow:
+//   1. /validate returns { requiresEmail: true } when FM's Issued_To is empty.
+//   2. Frontend collects an email, calls /email/start { token, email }, which
+//      sends a 6-digit verification code via SMTP.
+//   3. User enters the code, frontend calls /email/confirm { token, code };
+//      on success we write Issued_To to FM and invalidate the token cache so
+//      the next /validate sees the bound email.
+//
+// Codes live in memory only — server restart clears them and the user has to
+// request a fresh code. 10-minute TTL, 5-attempt cap, single active code per
+// token (a new /email/start overwrites the previous code).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const EMAIL_CLAIM_CODES = new Map(); // tokenCodeUpper -> { email, code, expiresAt, attempts }
+const EMAIL_CLAIM_TTL_MS    = 10 * 60 * 1000;
+const EMAIL_CLAIM_MAX_TRIES = 5;
+const EMAIL_REGEX           = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function generateClaimCode() {
+  // 6-digit zero-padded — cryptographically random, not Math.random.
+  return String(randomInt(0, 1_000_000)).padStart(6, '0');
+}
+
+function isPlausibleEmail(value) {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (trimmed.length < 6 || trimmed.length > 254) return false;
+  return EMAIL_REGEX.test(trimmed);
+}
+
+router.post('/email/start', async (req, res) => {
+  try {
+    const { token, email } = req.body || {};
+    if (!token) return res.status(400).json({ ok: false, error: 'Token required' });
+    if (!isPlausibleEmail(email)) {
+      return res.status(400).json({ ok: false, error: 'Please enter a valid email address' });
+    }
+
+    const tokenCode       = String(token).trim().toUpperCase();
+    const normalizedEmail = normalizeEmail(email);
+
+    // Verify the token is real and active before sending any email — otherwise
+    // anyone could spray verification mails from our SMTP using random codes.
+    const validation = await validateAccessToken(tokenCode);
+    if (!validation.valid) {
+      return res.status(401).json({
+        ok: false,
+        error: 'Invalid or expired token',
+        reason: validation.reason
+      });
+    }
+
+    // If the token is already bound to a different email, refuse — the owner
+    // of that email should be the only person able to claim it.
+    if (validation.email && validation.email !== normalizedEmail) {
+      return res.status(409).json({
+        ok: false,
+        error: 'This token is already linked to a different email'
+      });
+    }
+
+    const code = generateClaimCode();
+    EMAIL_CLAIM_CODES.set(tokenCode, {
+      email:     normalizedEmail,
+      code,
+      expiresAt: Date.now() + EMAIL_CLAIM_TTL_MS,
+      attempts:  0
+    });
+
+    try {
+      await sendEmailClaimCode(normalizedEmail, code);
+    } catch (mailErr) {
+      EMAIL_CLAIM_CODES.delete(tokenCode);
+      console.error('[MASS] Could not send claim code:', mailErr?.message || mailErr);
+      return res.status(503).json({
+        ok: false,
+        error: 'Could not send verification email. Please try again or contact support.'
+      });
+    }
+
+    res.json({
+      ok: true,
+      message: 'Verification code sent — check your inbox',
+      expiresInSec: Math.floor(EMAIL_CLAIM_TTL_MS / 1000)
+    });
+  } catch (err) {
+    console.error('[MASS] /email/start failed:', err);
+    res.status(500).json({ ok: false, error: 'Could not start email verification' });
+  }
+});
+
+router.post('/email/confirm', async (req, res) => {
+  try {
+    const { token, code } = req.body || {};
+    if (!token) return res.status(400).json({ ok: false, error: 'Token required' });
+    if (!code)  return res.status(400).json({ ok: false, error: 'Verification code required' });
+
+    const tokenCode     = String(token).trim().toUpperCase();
+    const submittedCode = String(code).trim();
+
+    const claim = EMAIL_CLAIM_CODES.get(tokenCode);
+    if (!claim) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No active verification — request a new code'
+      });
+    }
+
+    if (Date.now() > claim.expiresAt) {
+      EMAIL_CLAIM_CODES.delete(tokenCode);
+      return res.status(400).json({
+        ok: false,
+        error: 'Verification code expired — request a new one'
+      });
+    }
+
+    if (claim.attempts >= EMAIL_CLAIM_MAX_TRIES) {
+      EMAIL_CLAIM_CODES.delete(tokenCode);
+      return res.status(429).json({
+        ok: false,
+        error: 'Too many attempts — request a new code'
+      });
+    }
+    claim.attempts += 1;
+
+    if (submittedCode !== claim.code) {
+      const remaining = EMAIL_CLAIM_MAX_TRIES - claim.attempts;
+      return res.status(400).json({
+        ok: false,
+        error: 'Incorrect code',
+        attemptsRemaining: remaining
+      });
+    }
+
+    // Code accepted — persist the email on the FM token record.
+    const layout = process.env.FM_TOKENS_LAYOUT || 'API_Access_Tokens';
+    const findResult = await fmFindRecords(layout, [
+      { 'Token_Code': `==${tokenCode}` }
+    ], { limit: 1 });
+
+    if (!findResult?.data?.length) {
+      EMAIL_CLAIM_CODES.delete(tokenCode);
+      return res.status(404).json({ ok: false, error: 'Token not found in FileMaker' });
+    }
+
+    const fmRecord = findResult.data[0];
+    const existingIssuedTo = (fmRecord.fieldData?.Issued_To || '').trim();
+
+    // Race-condition guard: if someone else claimed this token between
+    // /email/start and /email/confirm, refuse.
+    if (existingIssuedTo && normalizeEmail(existingIssuedTo) !== claim.email) {
+      EMAIL_CLAIM_CODES.delete(tokenCode);
+      return res.status(409).json({
+        ok: false,
+        error: 'This token was claimed by another email moments ago'
+      });
+    }
+
+    await fmUpdateRecord(layout, fmRecord.recordId, { 'Issued_To': claim.email });
+
+    // Bust the in-process token validation cache so the next /validate call
+    // re-reads from FM and picks up the new email.
+    tokenValidationCache.delete(tokenCode);
+    EMAIL_CLAIM_CODES.delete(tokenCode);
+
+    // Also set the mass.email cookie so existing cookie-based fallbacks pick
+    // it up immediately on this device.
+    const cookieParts = [
+      `mass.email=${encodeURIComponent(claim.email)}`,
+      'Path=/',
+      'Max-Age=31536000',
+      'SameSite=Lax'
+    ];
+    res.setHeader('Set-Cookie', cookieParts.join('; '));
+
+    console.log(`[MASS] Email claim succeeded: ${tokenCode.slice(0, 8)}… -> ${claim.email}`);
+
+    res.json({ ok: true, email: claim.email });
+  } catch (err) {
+    console.error('[MASS] /email/confirm failed:', err);
+    res.status(500).json({ ok: false, error: 'Could not verify code' });
   }
 });
 

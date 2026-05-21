@@ -95,6 +95,59 @@
         </div>
       </div>
 
+      <!-- Email Claim Section — shown when /validate returns requiresEmail:true.
+           User can't reach the app until they bind a verified email to their
+           token. This stops library/playlist writes from being keyed by token
+           code, which used to orphan the data permanently. -->
+      <div class="email-claim-section" id="emailClaimSection" hidden>
+        <h3 style="margin:0 0 6px;">One more step</h3>
+        <p style="color:#888;font-size:13px;margin:0 0 14px;line-height:1.45;">
+          Your token isn't linked to an email yet. Add one so your playlists and
+          saved albums stay with you across devices.
+        </p>
+
+        <!-- Step 1: collect email and send code -->
+        <div id="emailClaimStep1">
+          <input
+            type="email"
+            class="token-input"
+            id="emailClaimInput"
+            placeholder="your@email.com"
+            autocomplete="email"
+            required
+          >
+          <button class="payment-btn" id="emailClaimSendBtn">
+            Send verification code
+          </button>
+        </div>
+
+        <!-- Step 2: enter the code we sent -->
+        <div id="emailClaimStep2" hidden>
+          <p style="color:#aaa;font-size:13px;margin:0 0 10px;">
+            We sent a 6-digit code to <strong id="emailClaimAddress"></strong>.
+            Enter it below. The code expires in 10 minutes.
+          </p>
+          <input
+            type="text"
+            class="token-input"
+            id="emailClaimCodeInput"
+            placeholder="123456"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            maxlength="6"
+            autocomplete="one-time-code"
+          >
+          <button class="payment-btn" id="emailClaimConfirmBtn">
+            Verify &amp; continue
+          </button>
+          <div class="toggle-link" id="emailClaimResend" style="margin-top:10px;">
+            Didn't get the code? Use a different email
+          </div>
+        </div>
+
+        <div class="payment-error" id="emailClaimError" style="margin-top:10px;"></div>
+      </div>
+
       <div class="payment-error" id="paymentError"></div>
     </div>
   </div>
