@@ -22,9 +22,6 @@ import downloadRouter from './routes/download.js';
 import ringtoneRouter from './routes/ringtone.js';
 import telkomRouter from './routes/telkom.js';
 import ttsRouter from './routes/tts.js'
-import ingestRouter from './routes/ingest.js'
-import ingestCatalogRouter from './routes/ingest-catalog.js'
-import { runMigrations } from './lib/db.js';
 
 import { validateAccessToken } from './lib/auth.js';
 import { normalizeShareId } from './lib/format.js';
@@ -224,7 +221,6 @@ app.use('/api/', async (req, res, next) => {
     '/ringtone/',
     '/audio-proxy',
     '/audio-lab/',
-    '/ingest/',
     '/catalog/'
   ];
 
@@ -370,13 +366,6 @@ app.use('/api', catalogRouter);
 app.use('/api', streamRouter);
 app.use('/api', adminRouter);
 app.use('/api', ttsRouter);
-app.use('/api/ingest',   ingestRouter);
-app.use('/api/catalog',  ingestCatalogRouter);
-
-// Ingest portal static files
-app.use('/ingest', express.static(path.join(__dirname, 'ingest')));
-app.get('/ingest', (_req, res) => res.sendFile(path.join(__dirname, 'ingest', 'index.html')));
-app.get('/ingest/admin', (_req, res) => res.sendFile(path.join(__dirname, 'ingest', 'admin.html')));
 
 // Shared playlist routes (not under /api/playlists)
 app.get('/api/shared-playlists/:shareId', async (req, res) => {
@@ -591,13 +580,6 @@ function logServerReady(protocolLabel = 'HTTP/1.1') {
 }
 
 await warmConnections();
-
-try {
-  await runMigrations();
-  console.log('[DB] Migrations complete');
-} catch (err) {
-  console.warn('[DB] Migration failed:', err?.message || err);
-}
 
 let server = null;
 let serverStarted = false;
