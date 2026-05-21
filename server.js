@@ -413,7 +413,10 @@ app.get('/audio-lab',(_req, res) => sendHtml(res, 'audio-lab.html'));
 // automatically on every subsequent /api/access/validate call.
 app.post('/api/audio-lab/validate-key', async (req, res) => {
   const { key } = req.body || {};
-  const validKey = process.env.AUDIO_LAB_KEY;
+  // Beta fallback: 'abc123' unlocks Audio Lab when AUDIO_LAB_KEY is unset, in any
+  // environment (restores the original behaviour). Set AUDIO_LAB_KEY in the host
+  // env later to override with a private key and lock this down for launch.
+  const validKey = process.env.AUDIO_LAB_KEY || 'abc123';
   if (!validKey) return res.status(503).json({ ok: false, error: 'Audio Lab not configured' });
   if (!key) return res.status(400).json({ ok: false, error: 'No key provided' });
   if (key.trim() !== validKey) return res.status(403).json({ ok: false, error: 'Invalid key' });
