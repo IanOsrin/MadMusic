@@ -146,6 +146,10 @@ async function fetchTrendingTracks(limit = 5) {
   }
   attempts.push({ lookbackHours: 0, fetchLimit: Math.min(2000, baseFetchLimit * 2) });
 
+  // Fall back to the no-lookback attempt whenever the first pass is *short*,
+  // not just empty. Otherwise one quiet day could lock the rail to e.g. 1 item
+  // for the full SWR window (24 h). The fallback pulls from the full stream-
+  // events history so the rail self-heals when recent activity is sparse.
   for (let i = 0; i < attempts.length; i += 1) {
     const attempt = attempts[i];
     try {
@@ -154,7 +158,9 @@ async function fetchTrendingTracks(limit = 5) {
         lookbackHours: attempt.lookbackHours,
         fetchLimit:    attempt.fetchLimit
       });
-      if (items.length || i === attempts.length - 1) return items.slice(0, normalizedLimit);
+      const haveEnough = items.length >= normalizedLimit;
+      if (haveEnough || i === attempts.length - 1) return items.slice(0, normalizedLimit);
+      log.warn(`Attempt ${i + 1} returned ${items.length}/${normalizedLimit} items — falling through to next attempt`);
     } catch (err) {
       if (i === attempts.length - 1) throw err;
       log.warn('Attempt failed (will retry with fallback):', err?.message || err);
@@ -162,6 +168,12 @@ async function fetchTrendingTracks(limit = 5) {
   }
   return [];
 }
+
+// Minimum items we'll treat as a "good" trending result worth caching for the
+// full SWR window. Anything thinner gets returned to the caller (so the user
+// sees *something*) but the cache entry is dropped so the next request runs
+// the loader again instead of serving the thin snapshot for 24 h.
+const TRENDING_MIN_USEFUL_RESULTS = 3;
 
 // ── SWR cache around /trending ──────────────────────────────────────────────
 // Key includes limit because different callers ask for different top-N sizes.
@@ -192,6 +204,19 @@ router.get('/trending', async (req, res) => {
 
     const { value: items, state } = await trendingSwr.get(key);
     res.setHeader('X-Cache-State', state);
+
+    // Self-healing guard: if the result is too thin to be useful (e.g. FM
+    // was briefly slow, returned a partial batch, or only one track passed
+    // the visibility/audio/artwork filters), drop the cache entry so the
+    // *next* request triggers a fresh load instead of serving this snapshot
+    // for the full 24 h SWR window. The current caller still gets `items`.
+    const useful = Math.min(TRENDING_MIN_USEFUL_RESULTS, limit);
+    if (items.length < useful) {
+      log.warn(`Thin trending result (${items.length}/${limit}) — invalidating cache so next request retries`);
+      trendingSwr.cache.delete(key);
+      res.setHeader('X-Cache-Invalidated', 'thin-result');
+    }
+
     res.json({ items });
   } catch (err) {
     log.error('Failed to load trending tracks:', err);
