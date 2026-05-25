@@ -1658,8 +1658,8 @@
       </svg>
     </button>
     <!-- Voice selector — populated from /api/tts/voices, hidden until announcements are on -->
-    <select id="upVoiceSelect" title="Announcement voice" aria-label="Announcement voice"
-      style="display:none;background:#1a1208;color:#d4a843;border:1px solid #6b4c1e;border-radius:5px;font-size:0.7rem;padding:2px 4px;max-width:110px;cursor:pointer;">
+    <select id="upVoiceSelect" title="Choose announcement voice" aria-label="Choose announcement voice"
+      style="display:none;background:#1a1208;color:#d4a843;border:1px solid #6b4c1e;border-radius:5px;font-size:0.7rem;padding:2px 6px;max-width:160px;cursor:pointer;">
       <option value="">Loading voices…</option>
     </select>
     <!-- hidden legacy button -->
@@ -3330,13 +3330,20 @@
               _ttsVoicesLoaded = false;
               return;
             }
-            voiceSel.innerHTML = voices.map(function(v) {
-              return '<option value="' + v.id + '">' + v.name + ' (' + v.category + ')</option>';
-            }).join('');
-            // Restore saved selection or fall back to server default
-            var saved = _ttsVoiceId || data['default'] || '';
-            if (saved) voiceSel.value = saved;
-            if (voiceSel.value) _ttsVoiceId = voiceSel.value;
+            var defId = data['default'] || '';
+            // Build the list as real <option> nodes — safe against any odd
+            // characters in voice names, and shows clean names (no category jargon).
+            voiceSel.innerHTML = '';
+            voices.forEach(function(v) {
+              var opt = document.createElement('option');
+              opt.value = v.id;
+              opt.textContent = v.name + (v.id === defId ? ' (default)' : '');
+              voiceSel.appendChild(opt);
+            });
+            // Show the saved pick, else the server default, else the first voice.
+            voiceSel.value = _ttsVoiceId || defId || '';
+            if (!voiceSel.value) voiceSel.value = voices[0].id;   // saved id no longer exists
+            _ttsVoiceId = voiceSel.value;
           })
           .catch(function(e) {
             console.warn('[TTS] Could not load voices:', e);
