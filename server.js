@@ -96,13 +96,13 @@ app.use((req, res, next) => {
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",   // inline scripts used in app.html; cdnjs for ringtone lamejs encoder
+      "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://www.googletagmanager.com",   // inline scripts used in app.html; cdnjs for ringtone lamejs encoder
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",  // googleapis for Google Fonts CSS
       "img-src 'self' https: data: blob:",    // https: for S3 artwork URLs; blob: for canvas; data: for inline
       "media-src 'self' https: blob:",       // https: for direct S3 audio URLs; blob: for streamed audio
-      "connect-src 'self' http://localhost:8765 http://127.0.0.1:8765 https://ipwho.is https://open.er-api.com",
+      "connect-src 'self' http://localhost:8765 http://127.0.0.1:8765 https://ipwho.is https://open.er-api.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com",
       "font-src 'self' https:",              // https: for Google Fonts (fonts.gstatic.com)
-      "frame-src 'none'",
+      "frame-src https://www.googletagmanager.com",   // GTM noscript iframe (ns.html)
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'"
