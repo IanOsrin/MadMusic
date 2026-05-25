@@ -3193,7 +3193,7 @@
     // ── TTS announcement ─────────────────────────────────────────────────────
     // Fetches a "Now playing…" MP3 from the server and plays it before the
     // actual track. Falls back silently if TTS is unavailable or disabled.
-    var _ttsEnabled    = (localStorage.getItem('tts_announce') !== 'false');
+    var _ttsEnabled    = (localStorage.getItem('tts_announce') === 'true');   // opt-in: announcements OFF unless the visitor turned them on
     var _ttsVoiceId    = localStorage.getItem('tts_voice_id') || '';   // '' = server default
     var _ttsVoicesLoaded = false;
     var _ttsInFlight   = null;   // pending announcement Audio object (for abort)
@@ -3323,6 +3323,13 @@
           .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
           .then(function(data) {
             var voices = data.voices || [];
+            if (!voices.length) {
+              // No voices available — hide the selector instead of leaving the
+              // "Loading voices…" placeholder stuck, and allow a retry later.
+              voiceSel.style.display = 'none';
+              _ttsVoicesLoaded = false;
+              return;
+            }
             voiceSel.innerHTML = voices.map(function(v) {
               return '<option value="' + v.id + '">' + v.name + ' (' + v.category + ')</option>';
             }).join('');
@@ -3331,7 +3338,13 @@
             if (saved) voiceSel.value = saved;
             if (voiceSel.value) _ttsVoiceId = voiceSel.value;
           })
-          .catch(function(e) { console.warn('[TTS] Could not load voices:', e); });
+          .catch(function(e) {
+            console.warn('[TTS] Could not load voices:', e);
+            // Hide the selector so it never sits on "Loading voices…" forever;
+            // reset the flag so it retries next time announcements are enabled.
+            voiceSel.style.display = 'none';
+            _ttsVoicesLoaded = false;
+          });
       }
 
       voiceSel.addEventListener('change', function() {
