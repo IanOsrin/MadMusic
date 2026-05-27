@@ -36,6 +36,13 @@ router.get('/wake', async (req, res) => {
 // ── /search ───────────────────────────────────────────────────────────────────
 
 const begins = (s) => (s ? `${s}*` : '');
+// "Contains" match — used for the unified free-text box so a query matches anywhere
+// in the field, not just the start. Each word is wrapped in wildcards and ANDed, so
+// "lucky dube" -> "*lucky* *dube*" (contains both words, any order/position) and a
+// single word "slave" -> "*slave*". Relevance sorting below still ranks begins-with
+// hits ahead of mid-string ones.
+const contains = (s) =>
+  (s ? s.trim().split(/\s+/).filter(Boolean).map(w => `*${w}*`).join(' ') : '');
 
 function normalizeAiValue(value) {
   if (value === undefined || value === null) return '';
@@ -103,7 +110,7 @@ router.get('/search', async (req, res) => {
         return [baseAnd];
       }
       if (q) {
-        return SEARCH_FIELDS_DEFAULT.map(f => ({ [f]: begins(q) }));
+        return SEARCH_FIELDS_DEFAULT.map(f => ({ [f]: contains(q) }));
       }
       return [{ 'Album Title': '*' }];
     };
