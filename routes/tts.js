@@ -60,6 +60,55 @@ router.get('/tts/voices', async (req, res) => {
   }
 });
 
+// ── Announcement phrase pools ─────────────────────────────────────────────────
+// A "mixed bag" of radio-DJ, warm/host, and high-energy cliches. One is chosen at
+// random per announcement so the same track doesn't always get the same intro.
+// {title} / {artist} are interpolated below. The client fetches an announcement
+// once per track (prefetch), so each play gets one random phrase — caching still
+// works because the cache key is the resulting text.
+// To add or remove variations, just edit these arrays.
+const ANNOUNCE_TEMPLATES_BOTH = [
+  // classic radio DJ
+  'Now playing: {title}, by {artist}.',
+  "You're listening to {artist}, with {title}.",
+  'Up next: {title}, by {artist}.',
+  'Coming up, {artist} — {title}.',
+  "Here's {title}, from {artist}.",
+  'On the air now: {title}, by {artist}.',
+  'Spinning {title}, by {artist}.',
+  // warm & friendly
+  "Here's a great one for you — {title}, by {artist}.",
+  "Let's enjoy {title}, from {artist}.",
+  "This one's for you: {title}, by {artist}.",
+  'Sit back for {title}, by {artist}.',
+  // high-energy hype
+  'Turn it up! {title}, by {artist}.',
+  'Check this out — {artist}, with {title}.',
+  "Don't go anywhere — {title}, by {artist}, coming right up.",
+  'Cranking it up now: {title}, by {artist}.'
+];
+const ANNOUNCE_TEMPLATES_TITLE = [
+  'Now playing: {title}.',
+  'Up next: {title}.',
+  "Here's {title}.",
+  'Coming up: {title}.',
+  'Turn it up! {title}.'
+];
+const ANNOUNCE_TEMPLATES_ARTIST = [
+  'Now playing {artist}.',
+  "Here's some {artist}.",
+  'Up next, {artist}.',
+  'Coming up: {artist}.'
+];
+
+function buildAnnounceText(title, artist) {
+  const pool = (title && artist) ? ANNOUNCE_TEMPLATES_BOTH
+             : title             ? ANNOUNCE_TEMPLATES_TITLE
+             :                      ANNOUNCE_TEMPLATES_ARTIST;
+  const tmpl = pool[Math.floor(Math.random() * pool.length)];
+  return tmpl.replace(/\{title\}/g, title).replace(/\{artist\}/g, artist);
+}
+
 // ── GET /api/tts/announce ─────────────────────────────────────────────────────
 router.get('/tts/announce', async (req, res) => {
   if (!ELEVEN_API_KEY) {
@@ -77,11 +126,7 @@ router.get('/tts/announce', async (req, res) => {
     return res.status(400).json({ error: 'title or artist required' });
   }
 
-  const text = title && artist
-    ? `Now playing: ${title}, by ${artist}.`
-    : title
-    ? `Now playing: ${title}.`
-    : `Now playing by ${artist}.`;
+  const text = buildAnnounceText(title, artist);
 
   // Cache key includes voice so different voices don't collide
   const cacheKey = `${voiceId}:${text.toLowerCase()}`;
