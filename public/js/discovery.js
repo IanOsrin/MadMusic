@@ -540,12 +540,16 @@
     // ---- Artist albums prompt ----
     function navigateToArtistAlbums(artist) {
       if (window.showView) window.showView('albums');
+      const searchEl     = document.getElementById('search');
       const searchArtist = document.getElementById('searchArtist');
       const searchAlbum  = document.getElementById('searchAlbum');
+      const searchTrack  = document.getElementById('searchTrack');
       const searchFields = document.getElementById('searchFields');
       const goBtn        = document.getElementById('go');
+      if (searchEl)     searchEl.value     = '';   // unified box blank => clean artist search
       if (searchArtist) searchArtist.value = artist;
       if (searchAlbum)  searchAlbum.value  = '';
+      if (searchTrack)  searchTrack.value  = '';
       if (searchFields) searchFields.hidden = false;
       if (goBtn)        goBtn.click();
     }

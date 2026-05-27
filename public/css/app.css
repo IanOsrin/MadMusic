@@ -2527,6 +2527,152 @@
       animation: spin 1s linear infinite;
     }
 
+    /* ── Unified search component (used across all views) ──────────────────── */
+    .unified-search {
+      position: relative;
+      display: flex;
+      align-items: center;
+      flex: 1 1 320px;
+      min-width: 180px;
+      max-width: 520px;
+    }
+    .unified-search__icon {
+      position: absolute;
+      left: 14px;
+      display: inline-flex;
+      align-items: center;
+      color: var(--text-muted);
+      pointer-events: none;
+      z-index: 1;
+    }
+    /* Single unified box — matches the rounded single-box style used on the
+       Highlights, Library and G100 views so every view looks the same. */
+    .unified-search .search-input {
+      width: 100%;
+      height: 37px;
+      padding: 0 14px 0 40px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 14px;
+    }
+    .unified-search .search-input:focus {
+      border-color: var(--accent) !important;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18) !important;
+    }
+    /* Hide native clear/decoration so our UI stays consistent */
+    .unified-search .search-input::-webkit-search-decoration,
+    .unified-search .search-input::-webkit-search-cancel-button {
+      -webkit-appearance: none;
+    }
+
+    /* Filters toggle button (reveals Genre/Decade) */
+    .filters-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 37px;
+      padding: 0 0.9rem;
+      border: 1.5px solid var(--border);
+      border-radius: 50px;
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+      font-weight: 600;
+      font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: border-color 0.15s ease, color 0.15s ease;
+    }
+    .filters-toggle:hover { border-color: var(--accent); color: var(--accent); }
+    .filters-toggle[aria-expanded="true"],
+    .filters-toggle.has-active-filter {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Filters panel: drops onto its own row inside the flex bar */
+    .filters-panel {
+      flex: 1 1 100%;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .filters-panel[hidden] { display: none; }
+
+    /* ── Hero banner (home page: auto-rotating new releases) ──────────────────── */
+    .hero-banner {
+      position: relative;
+      width: 100%;
+      height: 360px;
+      border-radius: 14px;
+      overflow: hidden;
+      margin: 0 0 1.75rem;
+      background: var(--bg-card);
+    }
+    .hero-banner[hidden] { display: none; }
+    .hero-stage { position: absolute; inset: 0; }
+    .hero-slide {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      opacity: 0;
+      transition: opacity 0.8s ease;
+      cursor: pointer;
+      pointer-events: none;
+    }
+    .hero-slide.is-active { opacity: 1; pointer-events: auto; }
+    .hero-slide::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.12) 50%, rgba(0,0,0,0.32) 100%);
+    }
+    .hero-badge {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 2;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 5px 11px;
+      border-radius: 50px;
+    }
+    .hero-caption {
+      position: absolute;
+      left: 24px;
+      right: 24px;
+      bottom: 22px;
+      z-index: 2;
+      color: #fff;
+    }
+    .hero-artist {
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1.1;
+      text-shadow: 0 2px 14px rgba(0,0,0,0.55);
+    }
+    .hero-album {
+      font-size: 1.05rem;
+      opacity: 0.92;
+      margin-top: 5px;
+      text-shadow: 0 1px 10px rgba(0,0,0,0.55);
+    }
+    @media (max-width: 720px) {
+      .hero-banner { height: 220px; }
+      .hero-artist { font-size: 1.4rem; }
+      .hero-album { font-size: 0.9rem; }
+    }
+
     .view-switcher {
       padding: 0.5rem 1.25rem;
       background: transparent;

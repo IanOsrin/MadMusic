@@ -22,13 +22,18 @@
       const STREAM_PROGRESS_INTERVAL_MS = 30 * 1000; // 30 seconds
       let _playAbortCtrl = null;  // AbortController for per-track event listeners
 
+      // Session id MUST be a UUID — the server only accepts UUIDs and otherwise mints
+      // a fresh one per event, which would create a new tracking record per event
+      // instead of one per play. Regenerate if missing OR if a stale non-UUID value
+      // is left in storage.
+      const _UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       let streamSessionId = null;
       try {
         streamSessionId = localStorage.getItem(STREAM_SESSION_STORAGE_KEY);
       } catch {
         streamSessionId = null;
       }
-      if (!streamSessionId) {
+      if (!streamSessionId || !_UUID_RE.test(streamSessionId)) {
         const fallbackId = (window.crypto && typeof window.crypto.randomUUID === 'function')
           ? window.crypto.randomUUID()
           : Math.random().toString(36).slice(2);
@@ -633,16 +638,46 @@
         if (isShuffleActive) stopShufflePlay(); else startShufflePlay();
       }
 
+      // Shuffle an arbitrary set of items (e.g. an artist's whole catalogue).
+      // `items` are the raw { recordId, fields } objects returned by /api/search.
+      // They're added to itemsStore so playSong() can resolve audio + metadata,
+      // then we reuse the same queue + auto-advance path as every other shuffle.
+      function startShuffleFromItems(items) {
+        const ids = [];
+        (items || []).forEach(function (it) {
+          if (it && it.recordId && hasValidAudio(it)) {
+            itemsStore.set(it.recordId, it);
+            ids.push(it.recordId);
+          }
+        });
+        if (!ids.length) { console.warn('[Shuffle] No playable tracks in catalogue'); return false; }
+
+        shuffleQueue    = _randomise(ids);
+        shuffleQueueIdx = 0;
+        isShuffleActive = true;
+        _updateShuffleBtn();
+
+        console.log('[Shuffle] Catalogue shuffle with', shuffleQueue.length, 'tracks');
+        playSong(shuffleQueue[0]);
+        return true;
+      }
+
       function _updateShuffleBtn() {
         const btn = document.getElementById('genreShufflePlayBtn');
-        if (!btn) return;
-        if (isShuffleActive) {
-          btn.textContent = '⏹ Stop Shuffle';
-          btn.classList.add('active');
-        } else {
-          btn.textContent = '🔀 Shuffle Play';
-          btn.classList.remove('active');
+        if (btn) {
+          if (isShuffleActive) {
+            btn.textContent = '⏹ Stop Shuffle';
+            btn.classList.add('active');
+          } else {
+            btn.textContent = '🔀 Shuffle Play';
+            btn.classList.remove('active');
+          }
         }
+        // Keep any other shuffle toggles (album detail, artist results) in sync.
+        document.querySelectorAll('.js-shuffle-toggle').forEach(function (b) {
+          b.classList.toggle('active', isShuffleActive);
+          b.textContent = isShuffleActive ? '⏹ Stop Shuffle' : (b.dataset.idleLabel || '🔀 Shuffle');
+        });
       }
 
 
@@ -711,6 +746,7 @@
     // Shuffle — all routed through _PLAYER / player bar
     toggleShufflePl,
     startShufflePlay,
+    startShuffleFromItems,
     stopShufflePlay,
     isShuffleActive: () => isShuffleActive
   };
