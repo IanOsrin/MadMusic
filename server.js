@@ -544,6 +544,12 @@ const FM_DB = process.env.FM_DB;
 const FM_USER = process.env.FM_USER;
 const FM_PASS = process.env.FM_PASS;
 
+// Export the configured Express app so tests can drive it via supertest
+// without binding a port. The boot block below is gated on MASS_NO_LISTEN.
+export { app };
+
+if (process.env.MASS_NO_LISTEN !== 'true') {
+
 if (FM_HOST && FM_DB && FM_USER && FM_PASS) {
   try {
     await ensureToken();
@@ -682,3 +688,5 @@ process.on('SIGINT', async () => {
   await closeFmPool();
   process.exit(0);
 });
+
+} // end of if (MASS_NO_LISTEN !== 'true')
