@@ -378,18 +378,28 @@ router.post('/logout', async (req, res) => {
 // Resolve and validate the session ID from the request, or mint a fresh UUID.
 function resolveStreamSession(req, cookies) {
   const headersSessionRaw = req.get?.('X-Session-ID') || req.headers?.['x-session-id'];
-  let sessionId = Array.isArray(headersSessionRaw) ? headersSessionRaw[0] : headersSessionRaw;
-  if (typeof sessionId === 'string') sessionId = sessionId.trim();
-  if (!sessionId) sessionId = cookies[MASS_SESSION_COOKIE] || '';
+  let headerSession = Array.isArray(headersSessionRaw) ? headersSessionRaw[0] : headersSessionRaw;
+  if (typeof headerSession === 'string') headerSession = headerSession.trim();
 
-  const validatedSession = validateSessionId(sessionId);
-  if (!validatedSession) {
-    if (STREAM_EVENT_DEBUG && cookies[MASS_SESSION_COOKIE]) {
-      console.log('[SECURITY] Invalid session ID rejected, generating new one');
-    }
-    return randomUUID();
+  // 1) A valid UUID in the X-Session-ID header wins — that's the client's own
+  //    stable session id for this play.
+  const validHeader = validateSessionId(headerSession);
+  if (validHeader) return validHeader;
+
+  // 2) Otherwise fall back to the session cookie the SERVER issued (and pins via
+  //    Set-Cookie below). This is essential: some clients send a non-UUID
+  //    X-Session-ID. Previously a non-empty-but-invalid header skipped the cookie
+  //    fallback and a brand-new UUID was minted on EVERY event — spawning a new
+  //    record per event instead of accumulating into one record per play.
+  const validCookie = validateSessionId(cookies[MASS_SESSION_COOKIE] || '');
+  if (validCookie) return validCookie;
+
+  // 3) Nothing usable yet — mint one. The handler Set-Cookies it on the response,
+  //    so every subsequent event in this play reuses it → one record per play.
+  if (STREAM_EVENT_DEBUG) {
+    console.log('[stream] No valid session id on request; minting one and pinning via cookie');
   }
-  return validatedSession;
+  return randomUUID();
 }
 
 // Merge existing FileMaker field values into baseFields (mutates baseFields).
