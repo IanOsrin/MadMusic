@@ -12,12 +12,28 @@ import {
   disableSubscriptionToken, findSubscriptionToken,
   findTrialTokenByEmail
 } from '../lib/token-store.js';
-import { pendingPaymentsCache } from '../cache.js';
+import { pendingPaymentsCache, processedWebhookEventsCache } from '../cache.js';
 import { isStrictEmail } from '../lib/validators.js';
+import { SUBSCRIPTION_DAYS_MIN, SUBSCRIPTION_DAYS_MAX } from '../lib/constants.js';
 
 const router = Router();
 
 const pendingPayments = pendingPaymentsCache;
+const processedWebhookEvents = processedWebhookEventsCache;
+
+/**
+ * Clamp a "days" value claimed by an external system (Paystack metadata,
+ * Telkom callback, etc.) to a safe range. Anything outside the bounds is
+ * coerced toward the fallback. Defends against forged or replayed metadata
+ * minting absurdly long tokens.
+ */
+function clampDays(rawDays, fallback = 7) {
+  const n = Number.parseInt(rawDays, 10);
+  if (!Number.isFinite(n)) return fallback;
+  if (n < SUBSCRIPTION_DAYS_MIN) return SUBSCRIPTION_DAYS_MIN;
+  if (n > SUBSCRIPTION_DAYS_MAX) return SUBSCRIPTION_DAYS_MAX;
+  return n;
+}
 
 router.get('/plans', (req, res) => {
   const plans = Object.entries(PAYSTACK_PLANS).map(([key, plan]) => ({
@@ -248,7 +264,7 @@ router.get('/callback', async (req, res) => {
     } else {
       // ── One-time purchase ─────────────────────────────────────────────────
       const planId = metadata.plan_id;
-      const days   = Number.parseInt(metadata.days, 10) || 7;
+      const days   = clampDays(metadata.days, 7);
       token = await createAccessToken(days, `Paystack purchase: ${planId} (${email}, ref: ${reference})`, email);
       try {
         await sendTokenEmail(email, token.code, days);
@@ -278,14 +294,49 @@ router.post('/webhook', async (req, res) => {
     const rawBody = req.body;
     const signature = req.headers['x-paystack-signature'];
 
+    // Defence-in-depth: if anything has parsed the body upstream (the global
+    // express.json mount, or a future middleware misconfig), rawBody won't be
+    // a Buffer/string and HMAC can't be computed over the original bytes.
+    // Reject hard — never trust a webhook that we can't cryptographically
+    // verify.
+    if (!Buffer.isBuffer(rawBody) && typeof rawBody !== 'string') {
+      console.error('[MASS] Paystack webhook: rawBody is not Buffer/string — likely a middleware ordering bug');
+      return res.status(400).json({ error: 'Webhook body must be raw bytes' });
+    }
+
     if (!verifyPaystackWebhook(rawBody, signature)) {
       console.warn('[MASS] Paystack webhook signature verification failed');
       return res.status(401).json({ error: 'Invalid signature' });
     }
 
-    const event = JSON.parse(rawBody.toString());
+    let event;
+    try {
+      event = JSON.parse(Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : rawBody);
+    } catch (parseErr) {
+      console.warn('[MASS] Paystack webhook: signature verified but body is not valid JSON');
+      return res.status(400).json({ error: 'Malformed JSON body' });
+    }
+
+    // ── Event-level idempotency ───────────────────────────────────────────────
+    // Paystack retries unacknowledged webhooks for up to ~72h. We dedupe on
+    // event.id (or fall back to event.event + data.reference + data.id when
+    // the top-level id is missing on older shapes). Once we've successfully
+    // processed an event, replays are a no-op.
+    const eventKey =
+      event.id ?? `${event.event || 'unknown'}::${event.data?.reference || ''}::${event.data?.id || ''}`;
+    if (processedWebhookEvents.has(eventKey)) {
+      console.log(`[MASS] Paystack webhook ${eventKey} already processed, acking`);
+      return res.sendStatus(200);
+    }
 
     const eventType = event.event;
+    // Helper: mark this event as fully handled, then ack. Anything that
+    // throws BEFORE ack() runs leaves the event un-marked, so Paystack will
+    // retry. Anything that has ack()'d will be deduped on retry.
+    const ack = () => {
+      processedWebhookEvents.set(eventKey, { at: Date.now(), eventType });
+      return res.sendStatus(200);
+    };
 
     // ── subscription.create ───────────────────────────────────────────────────
     if (eventType === 'subscription.create') {
@@ -300,7 +351,7 @@ router.post('/webhook', async (req, res) => {
       const existing = await findSubscriptionToken(subscriptionCode);
       if (existing) {
         console.log(`[MASS] Webhook subscription.create: token already exists for sub ${subscriptionCode}`);
-        return res.sendStatus(200);
+        return ack();
       }
 
       const token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays);
@@ -310,7 +361,7 @@ router.post('/webhook', async (req, res) => {
         console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. sub=${subscriptionCode} token=${token.code} email=${email} error=${err?.message || err}`);
       }
       console.log(`[MASS] Webhook subscription.create: token ${token.code} created for sub ${subscriptionCode}`);
-      return res.sendStatus(200);
+      return ack();
     }
 
     // ── subscription.disable (cancelled or all retries exhausted) ─────────────
@@ -320,12 +371,12 @@ router.post('/webhook', async (req, res) => {
         await disableSubscriptionToken(subscriptionCode, 3); // 3-day grace period
         console.log(`[MASS] Webhook subscription.disable: grace period set for sub ${subscriptionCode}`);
       }
-      return res.sendStatus(200);
+      return ack();
     }
 
     // ── charge.success ────────────────────────────────────────────────────────
     if (eventType !== 'charge.success') {
-      return res.sendStatus(200); // Unhandled event type — ack and ignore
+      return ack(); // Unhandled event type — ack and ignore (so Paystack doesn't retry)
     }
 
     const paymentData      = event.data;
@@ -334,7 +385,7 @@ router.post('/webhook', async (req, res) => {
 
     if (!reference) {
       console.warn('[MASS] Paystack webhook missing reference');
-      return res.sendStatus(200);
+      return ack();
     }
 
     // Subscription renewal: charge.success with a subscription_code
@@ -364,13 +415,13 @@ router.post('/webhook', async (req, res) => {
           console.log(`[MASS] Webhook charge.success (new sub): token ${token.code} for sub ${subscriptionCode}`);
         }
       }
-      return res.sendStatus(200);
+      return ack();
     }
 
     // One-time charge.success (no subscription_code)
     if (pendingPayments.has(reference)) {
       console.log(`[MASS] Webhook: payment ${reference} already processed via callback`);
-      return res.sendStatus(200);
+      return ack();
     }
 
     const metadata = paymentData.metadata || {};
@@ -378,10 +429,10 @@ router.post('/webhook', async (req, res) => {
     // ── Download purchase ─────────────────────────────────────────────────────
     if (metadata.payment_type === 'download') {
       await handleDownloadWebhook(paymentData, reference);
-      return res.sendStatus(200);
+      return ack();
     }
 
-    const days   = Number.parseInt(metadata.days, 10) || 7;
+    const days   = clampDays(metadata.days, 7);
     const email  = paymentData.customer?.email || 'unknown';
     const planId = metadata.plan_id || 'unknown';
 
@@ -395,6 +446,7 @@ router.post('/webhook', async (req, res) => {
 
     pendingPayments.set(reference, { tokenCode: token.code, timestamp: Date.now() });
     console.log(`[MASS] Webhook: payment ${reference} → token ${token.code} (${days} days)`);
+    return ack();
   } catch (err) {
     console.error('[MASS] Paystack webhook error:', err);
     res.sendStatus(500);

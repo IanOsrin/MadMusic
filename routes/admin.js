@@ -21,6 +21,7 @@ import {
 } from '../cache.js';
 import { listSwrCaches, getSwrCacheByName, flushAllSwrCaches } from '../lib/swr-cache.js';
 import { SERVER_START_TIME } from '../lib/server-start-time.js';
+import { timingSafeEqualStr } from '../lib/crypto-utils.js';
 
 const router = Router();
 
@@ -35,7 +36,9 @@ function requireAdminKey(req, res, next) {
     return res.status(503).json({ ok: false, error: 'Admin endpoints disabled: ADMIN_SECRET not configured' });
   }
   const provided = (req.headers['x-admin-key'] || '').trim();
-  if (!provided || provided !== ADMIN_SECRET) {
+  // Constant-time compare: an attacker who can measure response time must not
+  // be able to guess the admin key one byte at a time.
+  if (!provided || !timingSafeEqualStr(provided, ADMIN_SECRET)) {
     console.warn('[admin] Invalid or missing X-Admin-Key');
     return res.status(401).json({ ok: false, error: 'Unauthorized' });
   }

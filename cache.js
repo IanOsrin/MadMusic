@@ -62,10 +62,23 @@ export const playlistImageLRU = new LRUCache({
 });
 
 // Pending payments cache — tracks processed Paystack references for idempotency.
-// LRU TTL of 1 hour replaces the setInterval cleanup loop that was in server.js.
+// Paystack retries unacknowledged webhooks for up to 72 hours, so the TTL must
+// outlast that window. 4 days × 2000 entries × ~256 B ≈ 0.5 MB per worker —
+// negligible compared to the catalogue caches.
 export const pendingPaymentsCache = new LRUCache({
-  max: 200,
-  ttl: HOUR_MS, // 1 hour
+  max: 2000,
+  ttl: 4 * DAY_MS,
+  updateAgeOnGet: false,
+  updateAgeOnHas: false
+});
+
+// Webhook-event idempotency cache — keyed by Paystack event.id (NOT reference,
+// because a single payment can trigger multiple events: charge.success,
+// invoice.create, subscription.create, etc., each with the same reference).
+// Holds processed event IDs for 4 days so retried deliveries are no-ops.
+export const processedWebhookEventsCache = new LRUCache({
+  max: 5000,
+  ttl: 4 * DAY_MS,
   updateAgeOnGet: false,
   updateAgeOnHas: false
 });
