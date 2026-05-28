@@ -13,6 +13,8 @@ data/playlist_requests.json
 data/access-tokens.json
 data/library.json
 data/*.lock
+# Runtime SWR cache snapshots — environment-specific, regenerated on first request
+data/trending-cache.json
 
 # Logs
 *.log

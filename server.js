@@ -102,7 +102,7 @@ app.use((req, res, next) => {
       "media-src 'self' https: blob:",       // https: for direct S3 audio URLs; blob: for streamed audio
       "connect-src 'self' http://localhost:8765 http://127.0.0.1:8765 https://ipwho.is https://open.er-api.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com",
       "font-src 'self' https:",              // https: for Google Fonts (fonts.gstatic.com)
-      "frame-src https://www.googletagmanager.com",   // GTM noscript iframe (ns.html)
+      "frame-src 'self' https://www.googletagmanager.com",   // 'self' for the in-app ringtone modal iframe; GTM noscript iframe (ns.html)
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'"

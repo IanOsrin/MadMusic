@@ -10,6 +10,10 @@
 //     have already loaded.
 //
 import { Router } from 'express';
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { fmFindRecords } from '../../fm-client.js';
 import { hasValidAudio, hasValidArtwork } from '../../lib/track.js';
 import { recordIsVisible, FM_LAYOUT, FM_STREAM_EVENTS_LAYOUT } from '../../lib/fm-fields.js';
@@ -19,6 +23,10 @@ import { STREAM_TIME_FIELD } from '../../lib/stream-events.js';
 import { getTrackRecordCached } from '../../lib/track-cache.js';
 import { createSwrCache } from '../../lib/swr-cache.js';
 import { createLogger } from '../../lib/logger.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+const TRENDING_CACHE_FILE = path.join(__dirname, '..', '..', 'data', 'trending-cache.json');
 
 const router = Router();
 const log    = createLogger('trending');
@@ -175,6 +183,49 @@ async function fetchTrendingTracks(limit = 5) {
 // the loader again instead of serving the thin snapshot for 24 h.
 const TRENDING_MIN_USEFUL_RESULTS = 3;
 
+// ── Disk persistence ────────────────────────────────────────────────────────
+// The SWR cache lives in process memory and dies on every restart. Persist
+// the result to data/trending-cache.json so the next boot picks up where
+// we left off and no user pays the cold-FM cost again until the 24h TTL
+// genuinely lapses.
+//
+// File shape:
+//   { savedAt: <ms>, entries: [ { key, items, storedAt } ] }
+//
+// Writes are atomic via temp-file + rename so a crash mid-write can't leave
+// a half-written file.
+
+async function readTrendingFromDisk() {
+  try {
+    const raw = await fsp.readFile(TRENDING_CACHE_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.entries)) return null;
+    return parsed;
+  } catch (err) {
+    if (err.code !== 'ENOENT') log.warn(`trending-cache.json read failed: ${err.message}`);
+    return null;
+  }
+}
+
+async function writeTrendingToDisk(key, items) {
+  try {
+    // Merge with whatever's already on disk so different limits coexist.
+    const existing = await readTrendingFromDisk();
+    const entries  = (existing?.entries || []).filter((e) => e.key !== key);
+    entries.push({ key, items, storedAt: Date.now() });
+
+    const payload = JSON.stringify({ savedAt: Date.now(), entries });
+    const tmpPath = `${TRENDING_CACHE_FILE}.tmp.${process.pid}`;
+
+    await fsp.mkdir(path.dirname(TRENDING_CACHE_FILE), { recursive: true });
+    await fsp.writeFile(tmpPath, payload, 'utf8');
+    await fsp.rename(tmpPath, TRENDING_CACHE_FILE);
+    log.debug(`Persisted trending (key=${key}, ${items.length} items) to disk`);
+  } catch (err) {
+    log.warn(`trending-cache.json write failed: ${err.message}`);
+  }
+}
+
 // ── SWR cache around /trending ──────────────────────────────────────────────
 // Key includes limit because different callers ask for different top-N sizes.
 const trendingSwr = createSwrCache({
@@ -187,9 +238,35 @@ const trendingSwr = createSwrCache({
     log.debug(`Loading trending (limit=${limit})`);
     const items = await fetchTrendingTracks(limit);
     log.debug(`Loaded ${items.length} trending tracks`);
+    // Persist usable results so restarts don't reset every user to cold cache.
+    if (items.length >= TRENDING_MIN_USEFUL_RESULTS) {
+      writeTrendingToDisk(key, items).catch(() => { /* logged inside writer */ });
+    }
     return items;
   }
 });
+
+// Seed the SWR cache synchronously on module load. Blocks the import for a few
+// ms while it reads ~50 KB of JSON, then the route is immediately ready to
+// serve from cache. If the file doesn't exist (first ever boot, or it was
+// cleared), this is a silent no-op and the cache fills on first request as
+// before.
+(function seedFromDisk() {
+  try {
+    const raw = fs.readFileSync(TRENDING_CACHE_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.entries)) return;
+    let seeded = 0;
+    for (const { key, items, storedAt } of parsed.entries) {
+      if (!key || !Array.isArray(items)) continue;
+      trendingSwr.cache.set(key, { value: items, storedAt: storedAt || 0 });
+      seeded += 1;
+    }
+    if (seeded) log.debug(`Seeded ${seeded} trending entries from disk`);
+  } catch (err) {
+    if (err.code !== 'ENOENT') log.warn(`trending-cache.json seed failed: ${err.message}`);
+  }
+})();
 
 export const trendingWarmer = (limit = 20) => trendingSwr.get(`trending:${limit}`);
 

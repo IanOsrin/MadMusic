@@ -42,6 +42,13 @@ function resolveContainerUpstream(req) {
     if (!urlValidation.valid) {
       return { error: { status: 400, body: { error: 'invalid_input', detail: urlValidation.error } } };
     }
+    // proxy=1 forces the server to stream the bytes through instead of
+    // 302-redirecting the browser. Needed by callers that fetch() the audio
+    // (e.g. ringtone.html for waveform decode) — fetch() applies CORS to
+    // redirect targets and the S3 bucket doesn't send permissive headers.
+    const forceProxy = ['1', 'true', 'yes'].includes(
+      String(req.query.proxy || '').toLowerCase()
+    );
     if (REGEX_HTTP_HTTPS.test(direct)) {
       try {
         const { hostname } = new URL(direct);
@@ -51,10 +58,12 @@ function resolveContainerUpstream(req) {
         // Public S3/CDN URLs — redirect the browser directly instead of proxying.
         // This eliminates the server round-trip and lets the browser cache the image itself.
         const isFmUrl = FM_HOST && direct.startsWith(FM_HOST);
-        if (!isFmUrl) {
+        if (!isFmUrl && !forceProxy) {
           return { redirect: direct };
         }
-        return { upstreamUrl: direct, requiresAuth: true };
+        // forceProxy or FM URL: stream the upstream bytes through. requiresAuth
+        // stays true only for FM URLs — public S3 doesn't need our FM token.
+        return { upstreamUrl: direct, requiresAuth: !!isFmUrl };
       } catch {
         return { error: { status: 400, body: { error: 'invalid_input', detail: 'Invalid URL format' } } };
       }

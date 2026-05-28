@@ -322,6 +322,37 @@
   (function () {
     'use strict';
 
+    // ── Iframe-aware navigation ──────────────────────────────────────────────
+    // When this page is loaded inside the in-app ringtone modal (an iframe
+    // inside app.html/mobile.html), some things have to happen at the TOP
+    // window level instead of inside the frame:
+    //   1. The Paystack redirect — Paystack sets X-Frame-Options so it
+    //      cannot load inside an iframe; we must break out.
+    //   2. The "Back to app" link — should close the modal, not navigate
+    //      the iframe to "/" (which would render the whole app inside it).
+    const IS_IN_IFRAME = (function () {
+      try { return window.self !== window.top; } catch (e) { return true; }
+    })();
+    function navigateTop(url) {
+      try { (window.top || window).location.href = url; }
+      catch (e) { window.location.href = url; }
+    }
+    if (IS_IN_IFRAME) {
+      document.addEventListener('DOMContentLoaded', function () {
+        // Re-purpose the "Back to app" link as a close button when in-modal.
+        const backLink = document.querySelector('.page-header a[href="/"]');
+        if (backLink) {
+          backLink.textContent = '× Close';
+          backLink.href = '#';
+          backLink.addEventListener('click', function (e) {
+            e.preventDefault();
+            try { window.parent.postMessage({ type: 'ringtone-close' }, '*'); }
+            catch (err) { /* parent may be cross-origin in some setups */ }
+          });
+        }
+      });
+    }
+
     // ── Constants ────────────────────────────────────────────────────────────
     const MAX_SEL_SECS = 30;
     const MP3_BITRATE  = 128;
@@ -427,7 +458,22 @@
       if (!src) return '';
       const decoded = safeDecodeParam(src);
       if (decoded.startsWith('/')) return decoded;
-      if (decoded.startsWith('http')) return '/api/container?u=' + encodeURIComponent(decoded);
+      // Same-origin absolute URL? Strip the origin and use the path+query
+      // directly — wrapping it in /api/container?u=... would double-proxy.
+      // (Happens when the source page passes audio.currentSrc, which is
+      // always resolved to an absolute URL.)
+      if (decoded.startsWith('http')) {
+        try {
+          const u = new URL(decoded);
+          if (u.origin === window.location.origin) {
+            return u.pathname + u.search;
+          }
+        } catch (e) { /* fall through to external-URL wrap */ }
+        // External URL → proxy through /api/container with proxy=1 so the
+        // server streams the bytes instead of 302-redirecting (the redirect
+        // target — usually S3 — doesn't return CORS headers fetch() can use).
+        return '/api/container?u=' + encodeURIComponent(decoded) + '&proxy=1';
+      }
       return decoded;
     }
 
@@ -564,7 +610,10 @@
         if (!data.ok || !data.authorization_url) {
           throw new Error(data.error || 'Payment initialization failed');
         }
-        window.location.href = data.authorization_url;
+        // navigateTop breaks out of the modal iframe so Paystack loads at
+        // the top window level (it sets X-Frame-Options). Identical to
+        // window.location.href when running standalone.
+        navigateTop(data.authorization_url);
       } catch (err) {
         elBtnPurchase.disabled = false;
         elBtnPurchase.innerHTML = '✂ Purchase &amp; Download &mdash; R5';

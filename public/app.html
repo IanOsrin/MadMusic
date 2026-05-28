@@ -4250,6 +4250,77 @@
         window.showAlbumDetailView(album);
       };
 
+      // Same idea for window.openAlbumDirect. The bundle's original version
+      // fetches album info from /api/search then calls bundle-internal
+      // openTracksModal — which our override above can't catch because it's
+      // a closure-internal reference. Replace it with a thin shim that hands
+      // the album name + artist straight to showAlbumDetailView, which does
+      // its own /api/search fetch and renders the new two-column layout.
+      // Callers: hero banner cards, search-result rows, /?album=&artist= deep
+      // links, library tile clicks, anywhere with data-album attributes.
+      window.openAlbumDirect = function(albumName, artistName) {
+        if (!albumName || typeof window.showAlbumDetailView !== 'function') return;
+        console.log('[AlbumDetailView] Intercepted openAlbumDirect for:', albumName);
+        // Album name comes URL-encoded from data-album attributes; safe-decode.
+        var title = albumName;
+        try { title = decodeURIComponent(albumName); } catch (e) {}
+        var artist = artistName || '';
+        try { artist = decodeURIComponent(artistName || ''); } catch (e) {}
+        window.showAlbumDetailView({
+          title:   title,
+          artist:  artist,
+          picture: '',
+          genre:   '',
+          year:    '',
+          tracks:  []   // showAlbumDetailView fetches the tracks itself
+        });
+      };
+
+      // ── Capture-phase click interceptor ─────────────────────────────────────
+      // app.min.js attaches click handlers directly to .cover-wrap,
+      // .card-expand-btn, and .card-album-icon-btn that call its bundle-internal
+      // openTracksModal — NOT window.openTracksModal — so the override above
+      // can't reach them. This listener runs in capture phase, stops the
+      // bundled handler from firing, reads the album metadata from the DOM,
+      // and routes to showAlbumDetailView instead. End result: clicking any
+      // album card opens the new two-column view, never the old purple modal.
+      function _unwrapContainerSrc(src) {
+        if (!src) return '';
+        var m = String(src).match(/[?&]u=([^&]+)/);
+        if (m) { try { return decodeURIComponent(m[1]); } catch (e) {} }
+        return src;
+      }
+      document.addEventListener('click', function (e) {
+        var trigger = e.target.closest('.cover-wrap, .card-expand-btn, .card-album-icon-btn');
+        if (!trigger) return;
+
+        // Walk up to the nearest album-card-shaped container.
+        var card = trigger.closest('.card');
+        if (!card || !card.querySelector('h3')) return;
+
+        // Reconstruct the album from what's already rendered in the card.
+        var titleEl  = card.querySelector('h3');
+        var artistEl = card.querySelector('.card-artist');
+        var genreEl  = card.querySelector('.card-genre');
+        var imgEl    = card.querySelector('.cover-wrap img');
+        var album = {
+          title:   titleEl  ? (titleEl.textContent  || '').trim() : '',
+          artist:  artistEl ? (artistEl.textContent || '').trim() : '',
+          picture: imgEl ? _unwrapContainerSrc(imgEl.src) : '',
+          genre:   genreEl ? (genreEl.textContent || '').trim() : '',
+          tracks:  []  // showAlbumDetailView fetches the real tracks itself
+        };
+
+        if (!album.title || typeof window.showAlbumDetailView !== 'function') return;
+
+        // Block the bundled handler and route to the new view.
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        e.stopPropagation();
+        console.log('[AlbumDetailView] Intercepted card click for:', album.title);
+        window.showAlbumDetailView(album);
+      }, true);  // <-- capture phase is the whole point
+
       console.log('[AlbumDetailView] Album detail view override initialized');
     });
   })();
@@ -5162,6 +5233,160 @@
   <script src="/js/catalog.js?v=1"></script>
   <script src="/js/currency.js?v=2"></script>
   <script src="/js/discovery.js?v=2"></script>
+
+  <script>
+  /* ── Ringtone scissors button — global wiring ────────────────────────────────
+     player.js calls showRingtoneBtn() on its own playback path, but app.min.js
+     (and catalog.js) start playback by writing directly to <audio id="player">
+     without calling that helper, which is why the scissors had vanished from
+     the home / classic / modern views.
+
+     This block bridges every play path:
+       1. Wraps window.massSetCurrentTrack — every code path that plays a track
+          calls this with the track's metadata, so we capture the latest meta.
+       2. Listens for `play` / `loadeddata` on <audio id="player"> and shows
+          the scissors button with the current src + captured meta.
+       3. Hides the button on `ended` to mirror the original behaviour.
+     Non-invasive: no changes to app.min.js, player.js, or catalog.js needed.
+  ──────────────────────────────────────────────────────────────────────────── */
+  (function () {
+    var lastMeta = null;
+
+    function hookMass() {
+      if (typeof window.massSetCurrentTrack !== 'function') return false;
+      var orig = window.massSetCurrentTrack;
+      window.massSetCurrentTrack = function (meta) {
+        lastMeta = meta || null;
+        return orig.apply(this, arguments);
+      };
+      return true;
+    }
+    // app.min.js may not be loaded yet — try now, then poll briefly.
+    if (!hookMass()) {
+      var attempts = 0;
+      var t = setInterval(function () {
+        attempts++;
+        if (hookMass() || attempts > 50) clearInterval(t);
+      }, 100);
+    }
+
+    function buildRingtoneHref(url, title, artist, artwork) {
+      var p = new URLSearchParams();
+      p.set('src',    url    || '');
+      p.set('name',   title  || '');
+      p.set('artist', artist || '');
+      if (artwork) p.set('artwork', artwork);
+      return '/ringtone?' + p.toString();
+    }
+
+    function updateRingtoneBtn() {
+      var player = document.getElementById('player');
+      var btn    = document.getElementById('upRingtoneBtn');
+      if (!player || !btn) return;
+      var url = player.currentSrc || player.src;
+      if (!url || url === window.location.href) return;
+
+      var title   = (lastMeta && lastMeta.trackName)
+                 || (document.getElementById('upTitle')   || {}).textContent
+                 || '';
+      var artist  = (lastMeta && lastMeta.trackArtist)
+                 || (document.getElementById('upArtist')  || {}).textContent
+                 || '';
+      var artwork = (lastMeta && lastMeta.picture)
+                 || ((document.querySelector('#upArtwork img') || {}).src)
+                 || '';
+
+      btn.href = buildRingtoneHref(url, title, artist, artwork);
+      btn.classList.add('visible');
+    }
+
+    function hideRingtoneBtn() {
+      var btn = document.getElementById('upRingtoneBtn');
+      if (!btn) return;
+      btn.classList.remove('visible');
+      btn.href = '#';
+    }
+
+    // ── Ringtone modal (sub-window inside the main window) ─────────────────
+    // Injected once on DOMContentLoaded. The scissors click opens this
+    // instead of navigating to a new tab, so the user keeps their place
+    // in mad streamer. Cmd/Ctrl+click and middle-click fall through to the
+    // native <a> behaviour so power users can still open in a new tab.
+    function injectRingtoneModal() {
+      if (document.getElementById('ringtoneModalOverlay')) return;
+      var overlay = document.createElement('div');
+      overlay.id = 'ringtoneModalOverlay';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-label', 'Ringtone Maker');
+      overlay.style.cssText = [
+        'position:fixed', 'inset:0', 'background:rgba(0,0,0,0.72)',
+        'z-index:10000', 'display:none', 'align-items:center',
+        'justify-content:center', 'padding:24px'
+      ].join(';');
+      overlay.innerHTML =
+        '<div style="position:relative;width:100%;max-width:780px;height:min(90vh,820px);background:#0d0d12;border-radius:16px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,0.6);">' +
+          '<button id="ringtoneModalClose" title="Close" aria-label="Close" ' +
+            'style="position:absolute;top:10px;right:10px;z-index:10;width:34px;height:34px;border-radius:50%;border:none;background:rgba(255,255,255,0.12);color:#fff;font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;">' +
+            '×' +
+          '</button>' +
+          '<iframe id="ringtoneModalFrame" src="about:blank" ' +
+            'allow="autoplay; clipboard-write" ' +
+            'style="width:100%;height:100%;border:none;display:block;background:#0d0d12;"></iframe>' +
+        '</div>';
+      document.body.appendChild(overlay);
+
+      function close() {
+        overlay.style.display = 'none';
+        var f = document.getElementById('ringtoneModalFrame');
+        if (f) f.src = 'about:blank';
+        document.removeEventListener('keydown', onEsc);
+      }
+      function onEsc(e) { if (e.key === 'Escape') close(); }
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) close();   // backdrop click
+      });
+      document.getElementById('ringtoneModalClose').addEventListener('click', close);
+      // Listen for the close message the iframe sends when its "× Close"
+      // link is clicked. Same-origin so we can just check the type.
+      window.addEventListener('message', function (e) {
+        if (e && e.data && e.data.type === 'ringtone-close') close();
+      });
+
+      window._openRingtoneModal = function (url) {
+        var f = document.getElementById('ringtoneModalFrame');
+        if (!f) return;
+        f.src = url;
+        overlay.style.display = 'flex';
+        document.addEventListener('keydown', onEsc);
+      };
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      injectRingtoneModal();
+      var player = document.getElementById('player');
+      if (!player) return;
+      // Show on play / first metadata load — covers every code path.
+      player.addEventListener('play',           updateRingtoneBtn);
+      player.addEventListener('loadeddata',     updateRingtoneBtn);
+      player.addEventListener('loadedmetadata', updateRingtoneBtn);
+      // Hide when the track fully ends. Pausing does NOT hide — the user can
+      // still want to snip a ringtone from a paused track.
+      player.addEventListener('ended',          hideRingtoneBtn);
+
+      // Intercept scissors clicks: open the modal instead of a new tab.
+      // Cmd/Ctrl/Shift/middle-click still falls through to native behaviour.
+      var btn = document.getElementById('upRingtoneBtn');
+      if (btn) {
+        btn.addEventListener('click', function (e) {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+          if (!btn.href || btn.href.endsWith('#')) return;
+          e.preventDefault();
+          window._openRingtoneModal(btn.href);
+        });
+      }
+    });
+  })();
+  </script>
 
   <script>
   /* ── Hero banner — auto-rotating new-release artists on the home page ─────────

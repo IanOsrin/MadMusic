@@ -1350,6 +1350,20 @@
         <button class="player-control-btn play-pause" id="play-pause-btn">▶</button>
         <button class="player-control-btn" id="next-btn">⏭</button>
       </div>
+      <!-- Make Ringtone — opens /ringtone with the current track pre-loaded.
+           Hidden until a track is playing (see mobile-ringtone-wiring script). -->
+      <a id="mobileRingtoneBtn" class="btn btn-secondary"
+         href="#" target="_blank" rel="noopener"
+         style="width: 100%; max-width: 320px; display: none; align-items: center; justify-content: center; gap: 8px; text-decoration: none; margin-bottom: 8px;"
+         title="Make Ringtone" aria-label="Make Ringtone">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
+          <line x1="20" y1="4" x2="8.12" y2="15.88"/>
+          <line x1="14.47" y1="14.48" x2="20" y2="20"/>
+          <line x1="8.12" y1="8.12" x2="12" y2="12"/>
+        </svg>
+        <span>Make Ringtone</span>
+      </a>
       <button class="btn btn-secondary" style="width: 100%; max-width: 320px;" id="add-to-playlist-btn">+ Add to Playlist</button>
     </div>
   </div>
@@ -1366,6 +1380,123 @@
 
   <!-- Audio Element -->
   <audio id="audio" preload="metadata"></audio>
+
+  <script>
+  /* ── Mobile ringtone scissors button — global wiring ─────────────────────────
+     The mobile player has its own playTrack() function that writes directly to
+     <audio id="audio">. This block hides until a track is playing, then sets
+     #mobileRingtoneBtn's href from the currently-displayed track metadata so
+     tapping it opens /ringtone with the right src + name + artist + artwork.
+     Non-invasive: doesn't touch playTrack() or any existing handlers.
+  ──────────────────────────────────────────────────────────────────────────── */
+  (function () {
+    function buildHref(url, title, artist, artwork) {
+      var p = new URLSearchParams();
+      p.set('src',    url    || '');
+      p.set('name',   title  || '');
+      p.set('artist', artist || '');
+      if (artwork) p.set('artwork', artwork);
+      return '/ringtone?' + p.toString();
+    }
+
+    function getText(id) {
+      var el = document.getElementById(id);
+      return el ? (el.textContent || '').trim() : '';
+    }
+
+    function updateRingtoneBtn() {
+      var audio = document.getElementById('audio');
+      var btn   = document.getElementById('mobileRingtoneBtn');
+      if (!audio || !btn) return;
+      var url = audio.currentSrc || audio.src;
+      if (!url || url === window.location.href) return;
+
+      var title   = getText('player-title');
+      var artist  = getText('player-artist');
+      var artEl   = document.getElementById('player-artwork');
+      var artwork = artEl ? artEl.src : '';
+
+      btn.href = buildHref(url, title, artist, artwork);
+      btn.style.display = 'inline-flex';
+    }
+
+    function hideRingtoneBtn() {
+      var btn = document.getElementById('mobileRingtoneBtn');
+      if (!btn) return;
+      btn.style.display = 'none';
+      btn.href = '#';
+    }
+
+    // ── Mobile ringtone modal — full-screen sub-window inside the main app ──
+    // Injected once on DOMContentLoaded. Tapping the scissors opens this
+    // instead of a new tab.
+    function injectRingtoneModal() {
+      if (document.getElementById('ringtoneModalOverlay')) return;
+      var overlay = document.createElement('div');
+      overlay.id = 'ringtoneModalOverlay';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-label', 'Ringtone Maker');
+      overlay.style.cssText = [
+        'position:fixed', 'inset:0', 'background:#000',
+        'z-index:10000', 'display:none', 'flex-direction:column'
+      ].join(';');
+      overlay.innerHTML =
+        '<button id="ringtoneModalClose" title="Close" aria-label="Close" ' +
+          'style="position:absolute;top:14px;right:14px;z-index:10;width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,0.14);color:#fff;font-size:22px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;">' +
+          '×' +
+        '</button>' +
+        '<iframe id="ringtoneModalFrame" src="about:blank" ' +
+          'allow="autoplay; clipboard-write" ' +
+          'style="width:100%;height:100%;border:none;display:block;background:#0d0d12;"></iframe>';
+      document.body.appendChild(overlay);
+
+      function close() {
+        overlay.style.display = 'none';
+        var f = document.getElementById('ringtoneModalFrame');
+        if (f) f.src = 'about:blank';
+        document.removeEventListener('keydown', onEsc);
+      }
+      function onEsc(e) { if (e.key === 'Escape') close(); }
+      document.getElementById('ringtoneModalClose').addEventListener('click', close);
+      // Listen for the close message the iframe sends when its "× Close"
+      // link is tapped.
+      window.addEventListener('message', function (e) {
+        if (e && e.data && e.data.type === 'ringtone-close') close();
+      });
+
+      window._openRingtoneModal = function (url) {
+        var f = document.getElementById('ringtoneModalFrame');
+        if (!f) return;
+        f.src = url;
+        overlay.style.display = 'flex';
+        document.addEventListener('keydown', onEsc);
+      };
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      injectRingtoneModal();
+      var audio = document.getElementById('audio');
+      if (!audio) return;
+      // Show on play / first metadata load — covers every path that sets audio.src.
+      audio.addEventListener('play',           updateRingtoneBtn);
+      audio.addEventListener('loadeddata',     updateRingtoneBtn);
+      audio.addEventListener('loadedmetadata', updateRingtoneBtn);
+      // Hide only on track end. Pause does NOT hide — user can still snip
+      // a ringtone from a paused track.
+      audio.addEventListener('ended',          hideRingtoneBtn);
+
+      // Intercept scissors taps: open the modal instead of a new tab.
+      var btn = document.getElementById('mobileRingtoneBtn');
+      if (btn) {
+        btn.addEventListener('click', function (e) {
+          if (!btn.href || btn.href.endsWith('#')) return;
+          e.preventDefault();
+          window._openRingtoneModal(btn.href);
+        });
+      }
+    });
+  })();
+  </script>
 
   <script>
     // ===== Fetch Interceptor for Access Token =====
