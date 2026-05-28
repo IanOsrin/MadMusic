@@ -158,24 +158,32 @@ app.use(express.json({ limit: '2mb' }));
 // Rate limiting configuration
 const isDevelopment = (process.env.NODE_ENV === 'development' || process.env.HOST === 'localhost' || process.env.HOST === '127.0.0.1');
 
+// In test mode (MASS_NO_LISTEN=true) rate limits would prevent supertest from
+// firing many requests against the same endpoint. Skip in that case only.
+const TEST_MODE = process.env.MASS_NO_LISTEN === 'true';
+const skipInTest = () => TEST_MODE;
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: isDevelopment ? 1000 : 100,
   message: { error: 'Too many requests, please try again later' },
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  skip: skipInTest
 });
 
 const expensiveLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: isDevelopment ? 500 : 20,
-  message: { error: 'Rate limit exceeded for this endpoint' }
+  message: { error: 'Rate limit exceeded for this endpoint' },
+  skip: skipInTest
 });
 
 const paymentLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  message: { error: 'Too many payment requests, please try again later' }
+  message: { error: 'Too many payment requests, please try again later' },
+  skip: skipInTest
 });
 
 // Apply general rate limiting to all API routes

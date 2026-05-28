@@ -22,6 +22,7 @@ import {
   AUDIO_FIELD_CANDIDATES
 } from '../lib/fm-fields.js';
 import { paystackRequest } from '../lib/paystack.js';
+import { isStrictEmail } from '../lib/validators.js';
 
 const router = Router();
 
@@ -57,7 +58,7 @@ async function fetchTrackRecord(recordId) {
 router.post('/initiate', async (req, res) => {
   const { trackId, trackRecordId, email } = req.body;
 
-  if (!trackId || !trackRecordId || !email || !email.includes('@')) {
+  if (!trackId || !trackRecordId || !isStrictEmail(email)) {
     return res.status(400).json({ ok: false, error: 'trackId, trackRecordId and a valid email are required' });
   }
 

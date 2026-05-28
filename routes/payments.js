@@ -13,6 +13,7 @@ import {
   findTrialTokenByEmail
 } from '../lib/token-store.js';
 import { pendingPaymentsCache } from '../cache.js';
+import { isStrictEmail } from '../lib/validators.js';
 
 const router = Router();
 
@@ -46,7 +47,7 @@ router.post('/initialize', async (req, res) => {
   try {
     const { email, plan, source } = req.body;
 
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
+    if (!isStrictEmail(email)) {
       return res.status(400).json({ ok: false, error: 'Valid email is required' });
     }
 
@@ -108,7 +109,7 @@ router.post('/trial', async (req, res) => {
   try {
     const { email } = req.body;
 
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
+    if (!isStrictEmail(email)) {
       return res.status(400).json({ ok: false, error: 'Valid email is required' });
     }
 
@@ -139,7 +140,7 @@ router.post('/subscribe', async (req, res) => {
   try {
     const { email, source } = req.body;
 
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
+    if (!isStrictEmail(email)) {
       return res.status(400).json({ ok: false, error: 'Valid email is required' });
     }
 

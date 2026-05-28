@@ -18,6 +18,7 @@
 import { Router } from 'express';
 import { fmCreateRecord, fmFindRecords } from '../fm-client.js';
 import { paystackRequest } from '../lib/paystack.js';
+import { isStrictEmail } from '../lib/validators.js';
 
 const router = Router();
 
@@ -48,7 +49,7 @@ async function findRingtonePurchase(reference) {
 router.post('/initiate', async (req, res) => {
   const { src, name, artist, artwork, startSec, durationSec, email } = req.body;
 
-  if (!email || typeof email !== 'string' || !email.includes('@')) {
+  if (!isStrictEmail(email)) {
     return res.status(400).json({ ok: false, error: 'Valid email address required' });
   }
   if (!src || typeof src !== 'string') {

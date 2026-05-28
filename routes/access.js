@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { validateAccessToken, MASS_SESSION_COOKIE, MASS_SESSION_MAX_AGE_SECONDS } from '../lib/auth.js';
 import { parseCookies, getClientIP } from '../lib/http.js';
 import { formatTimestampUTC, toCleanString, normalizeSeconds, parseFileMakerTimestamp } from '../lib/format.js';
-import { validateSessionId } from '../lib/validators.js';
+import { validateSessionId, isStrictEmail } from '../lib/validators.js';
 import {
   STREAM_EVENT_TYPES, STREAM_EVENT_DEBUG, STREAM_TERMINAL_EVENTS,
   STREAM_TIME_FIELD, STREAM_TIME_FIELD_LEGACY,
@@ -121,25 +121,17 @@ router.post('/validate', async (req, res) => {
 const EMAIL_CLAIM_CODES = new Map(); // tokenCodeUpper -> { email, code, expiresAt, attempts }
 const EMAIL_CLAIM_TTL_MS    = 10 * 60 * 1000;
 const EMAIL_CLAIM_MAX_TRIES = 5;
-const EMAIL_REGEX           = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 function generateClaimCode() {
   // 6-digit zero-padded — cryptographically random, not Math.random.
   return String(randomInt(0, 1_000_000)).padStart(6, '0');
 }
 
-function isPlausibleEmail(value) {
-  if (typeof value !== 'string') return false;
-  const trimmed = value.trim();
-  if (trimmed.length < 6 || trimmed.length > 254) return false;
-  return EMAIL_REGEX.test(trimmed);
-}
-
 router.post('/email/start', async (req, res) => {
   try {
     const { token, email } = req.body || {};
     if (!token) return res.status(400).json({ ok: false, error: 'Token required' });
-    if (!isPlausibleEmail(email)) {
+    if (!isStrictEmail(email)) {
       return res.status(400).json({ ok: false, error: 'Please enter a valid email address' });
     }
 
