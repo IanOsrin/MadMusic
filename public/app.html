@@ -3763,7 +3763,7 @@
                   albumsMap.set(albumTitle, {
                     title: albumTitle,
                     artist: f['Album Artist'] || f['Tape Files::Album Artist'] || f['Track Artist'] || album.artist,
-                    artwork: f['Tape Files::Artwork_S3_URL'] || f['Artwork::Picture'] || '/img/placeholder.jpg',
+                    artwork: f['Artwork_S3_URL'] || f['Tape Files::Artwork_S3_URL'] || f['Artwork::Picture'] || f['Artwork Picture'] || f['Picture'] || '/img/placeholder.jpg',
                     genre: f['Genre'] || f['Local Genre'] || '',
                     year: f['Year of Release'] || f['Year Recorded'] || '',
                     tracks: []
@@ -3801,22 +3801,29 @@
         const clickedEntry = {
           title: album.title,
           artist: album.artist,
-          artwork: album.picture || '/img/placeholder.jpg',
+          artwork: album.picture || '',
           genre: album.genre || '',
           year: album.year || '',
           tracks: album.tracks || []
         };
         const existingIdx = artistAlbums.findIndex(a => a.title === album.title);
         if (existingIdx !== -1) {
-          // If the clicked entry has no tracks (e.g. opened from library), keep the
-          // tracks that were fetched from the search result rather than discarding them
+          // When opened from New Releases / the hero banner, the clicked entry has
+          // no artwork/genre/year/tracks (openAlbumDirect passes none) — so keep the
+          // values resolved from the /api/search fetch instead of discarding them.
+          const fetched = artistAlbums[existingIdx];
           if (!clickedEntry.tracks || clickedEntry.tracks.length === 0) {
-            clickedEntry.tracks = artistAlbums[existingIdx].tracks || [];
+            clickedEntry.tracks = fetched.tracks || [];
           }
+          if (!clickedEntry.artwork) clickedEntry.artwork = fetched.artwork || '';
+          if (!clickedEntry.genre)   clickedEntry.genre   = fetched.genre   || '';
+          if (!clickedEntry.year)    clickedEntry.year    = fetched.year    || '';
           artistAlbums[existingIdx] = clickedEntry;
         } else {
           artistAlbums.unshift(clickedEntry);
         }
+        // Never leave the clicked album without a usable artwork value
+        if (!clickedEntry.artwork) clickedEntry.artwork = '/img/placeholder.jpg';
 
         // Populate album list (left column)
         albumsList.innerHTML = artistAlbums.map((a, index) => {
