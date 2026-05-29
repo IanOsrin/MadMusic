@@ -310,7 +310,11 @@ router.get('/featured-albums', async (req, res) => {
 
     const { value: items, state } = await featuredSwr.get('default');
     res.setHeader('X-Cache-State', state);
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    // Catalogue rails are identical for every user → safe to cache at the
+    // browser/edge for a short window. SWR already serves stale instantly, so a
+    // 60s shared cache only ever risks a <60s-stale rail (acceptable) while
+    // letting repeat loads skip Node + FileMaker entirely.
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
     return res.json({ ok: true, items: cloneRecordsForLimit(items, limit), total: items.length });
   } catch (err) {
     log.error('Failed to load featured albums', err);
@@ -327,7 +331,11 @@ router.get('/releases/latest', async (req, res) => {
 
     const { value: items, state } = await featuredSwr.get('default');
     res.setHeader('X-Cache-State', state);
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    // Catalogue rails are identical for every user → safe to cache at the
+    // browser/edge for a short window. SWR already serves stale instantly, so a
+    // 60s shared cache only ever risks a <60s-stale rail (acceptable) while
+    // letting repeat loads skip Node + FileMaker entirely.
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
     return res.json({ ok: true, items: cloneRecordsForLimit(items, limit), total: items.length });
   } catch (err) {
     log.error('Failed to load latest releases', err);
@@ -344,7 +352,11 @@ router.get('/new-releases', async (req, res) => {
 
     const { value: items, state } = await newReleasesSwr.get('default');
     res.setHeader('X-Cache-State', state);
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    // Catalogue rails are identical for every user → safe to cache at the
+    // browser/edge for a short window. SWR already serves stale instantly, so a
+    // 60s shared cache only ever risks a <60s-stale rail (acceptable) while
+    // letting repeat loads skip Node + FileMaker entirely.
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
     return res.json({ ok: true, items: cloneRecordsForLimit(items, limit), total: items.length });
   } catch (err) {
     log.error('Failed to load new releases', err);
@@ -360,7 +372,11 @@ router.get('/singles', async (req, res) => {
 
     const { value: items, state } = await singlesSwr.get('default');
     res.setHeader('X-Cache-State', state);
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    // Catalogue rails are identical for every user → safe to cache at the
+    // browser/edge for a short window. SWR already serves stale instantly, so a
+    // 60s shared cache only ever risks a <60s-stale rail (acceptable) while
+    // letting repeat loads skip Node + FileMaker entirely.
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
     return res.json({ ok: true, items: cloneRecordsForLimit(items), total: items.length });
   } catch (err) {
     log.error('Failed to load singles', err);
@@ -377,7 +393,11 @@ router.get('/g100-albums', async (req, res) => {
 
     const { value: items, state } = await g100Swr.get('default');
     res.setHeader('X-Cache-State', state);
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    // Catalogue rails are identical for every user → safe to cache at the
+    // browser/edge for a short window. SWR already serves stale instantly, so a
+    // 60s shared cache only ever risks a <60s-stale rail (acceptable) while
+    // letting repeat loads skip Node + FileMaker entirely.
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
     return res.json({ ok: true, items: cloneRecordsForLimit(items, limit), total: items.length });
   } catch (err) {
     log.error('G100 failed', err);

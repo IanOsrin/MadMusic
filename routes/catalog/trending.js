@@ -23,6 +23,7 @@ import { STREAM_TIME_FIELD } from '../../lib/stream-events.js';
 import { getTrackRecordCached } from '../../lib/track-cache.js';
 import { createSwrCache } from '../../lib/swr-cache.js';
 import { createLogger } from '../../lib/logger.js';
+import { LRUCache } from 'lru-cache';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -35,6 +36,12 @@ const TRENDING_LOOKBACK_HOURS = parsePositiveInt(process.env.TRENDING_LOOKBACK_H
 const TRENDING_FETCH_LIMIT    = parsePositiveInt(process.env.TRENDING_FETCH_LIMIT,    400);
 const TRENDING_MAX_LIMIT      = parsePositiveInt(process.env.TRENDING_MAX_LIMIT,      20);
 const TRENDING_TTL_MS         = parsePositiveInt(process.env.TRENDING_CACHE_TTL_MS,   24 * 60 * 60 * 1000);
+
+// Per-token cache for /my-stats. The handler otherwise runs a 2000-record
+// stream-events _find on every call; a short TTL collapses repeat hits (e.g. a
+// user reopening their stats panel) to a single FM round-trip every 5 minutes.
+const MY_STATS_TTL_MS = parsePositiveInt(process.env.MY_STATS_CACHE_TTL_MS, 5 * 60 * 1000);
+const myStatsCache = new LRUCache({ max: 2000, ttl: MY_STATS_TTL_MS });
 
 // ── Trending helpers ────────────────────────────────────────────────────────
 
@@ -281,6 +288,8 @@ router.get('/trending', async (req, res) => {
 
     const { value: items, state } = await trendingSwr.get(key);
     res.setHeader('X-Cache-State', state);
+    // User-agnostic catalogue data — short shared cache (see featured.js note).
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
 
     // Self-healing guard: if the result is too thin to be useful (e.g. FM
     // was briefly slow, returned a partial batch, or only one track passed
@@ -307,6 +316,12 @@ router.get('/my-stats', async (req, res) => {
   try {
     const token = (req.query.token || '').toString().trim().toUpperCase();
     if (!token) return res.status(400).json({ ok: false, error: 'token param required' });
+
+    const cached = myStatsCache.get(token);
+    if (cached) {
+      res.setHeader('X-Cache-State', 'fresh');
+      return res.json({ ok: true, tracks: cached });
+    }
 
     const findResult = await fmFindRecords(
       FM_STREAM_EVENTS_LAYOUT,
@@ -359,6 +374,7 @@ router.get('/my-stats', async (req, res) => {
     );
 
     const tracks = withDetails.filter(Boolean);
+    myStatsCache.set(token, tracks);
     return res.json({ ok: true, tracks });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'my-stats failed' });

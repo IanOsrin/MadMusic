@@ -100,6 +100,8 @@ router.get('/genres', async (req, res) => {
   try {
     const { value, state } = await genresSwr.get('default');
     res.setHeader('X-Cache-State', state);
+    // Genre list is user-agnostic and rarely changes — short shared cache.
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
     if (req.query.debug === '1') {
       return res.json({ ...value, genreCount: value.genres.length });
     }
