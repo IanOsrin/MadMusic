@@ -85,6 +85,7 @@
         '/api/explore',
         '/api/featured-albums',
         '/api/missing-audio-songs',
+        '/api/singles',
         '/api/payments/',    // payment flow must work before token exists
         '/api/download/',    // download purchase flow — token-free by design
         '/api/audio-proxy',  // Audio Lab proxy — no auth needed (key is gated separately)

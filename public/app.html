@@ -526,6 +526,96 @@
               </div>
             </section>
 
+            <!-- Singles Section (populated from /api/singles; stays hidden until data arrives) -->
+            <section class="section" id="singlesSection" hidden>
+              <div class="section-header">
+                <div>
+                  <h2 class="section-title">Singles</h2>
+                  <p class="section-subtitle">Standout single tracks</p>
+                </div>
+              </div>
+              <div class="horizontal-scroll-wrapper">
+                <button class="scroll-arrow scroll-arrow-left" data-target="singlesContainer" aria-label="Scroll left"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                <div id="singlesContainer" class="horizontal-scroll-container">
+                  <div class="loading"><div class="spinner"></div></div>
+                </div>
+                <button class="scroll-arrow scroll-arrow-right visible" data-target="singlesContainer" aria-label="Scroll right"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+              </div>
+            </section>
+            <style>
+              #singlesContainer { display: flex; gap: 16px; overflow-x: auto; scroll-behavior: smooth; }
+              .mad-single-card { flex: 0 0 auto; cursor: pointer; background: #000; border-radius: 8px; overflow: hidden; }
+              .mad-single-card .random-artwork { background: #000; }
+              .mad-single-card .random-artwork img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; display: block; }
+              .mad-single-card .random-title { font-weight: 600; font-size: 14px; margin-top: 6px; padding: 0 6px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+              .mad-single-card .random-artist { font-size: 12px; padding: 0 6px 6px; color: #aaa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            </style>
+            <script>
+            (function () {
+              function esc(s) {
+                return String(s == null ? '' : s)
+                  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+              }
+              function field(f, names) {
+                for (var i = 0; i < names.length; i++) {
+                  var v = f[names[i]];
+                  if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+                }
+                return '';
+              }
+              function artUrl(f) {
+                var a = field(f, ['Artwork_S3_URL', 'Tape Files::Artwork_S3_URL', 'Artwork::Picture', 'Artwork Picture', 'Picture']);
+                if (!a) return '/img/default-album.svg';
+                if (a.indexOf('http') === 0) {
+                  if (/^https?:\/\/(?:[^/]*\.)?s3[.-]/i.test(a)) return a;
+                  return '/api/container?u=' + encodeURIComponent(a);
+                }
+                return a;
+              }
+              function render(items) {
+                var container = document.getElementById('singlesContainer');
+                var section   = document.getElementById('singlesSection');
+                if (!container) return;
+                var byId = {};
+                container.innerHTML = items.map(function (it) {
+                  var f = it.fields || {};
+                  byId[it.recordId] = it;
+                  var title  = field(f, ['Track Name', 'Song Title']) || 'Untitled';
+                  var artist = field(f, ['Track Artist', 'Album Artist', 'Artist']) || 'Unknown Artist';
+                  return '<div class="random-card mad-single-card" data-record-id="' + esc(it.recordId) + '">' +
+                           '<div class="random-artwork"><img src="' + esc(artUrl(f)) + '" alt="' + esc(title) + '" loading="lazy" onerror="this.src=\'/img/default-album.svg\'"></div>' +
+                           '<div class="random-info"><div class="random-title">' + esc(title) + '</div><div class="random-artist">' + esc(artist) + '</div></div>' +
+                         '</div>';
+                }).join('');
+                container.querySelectorAll('.mad-single-card').forEach(function (card) {
+                  card.addEventListener('click', function () {
+                    var id = card.getAttribute('data-record-id');
+                    var item = byId[id];
+                    var P = window.MADPlayer;
+                    if (!item || !P || typeof P.playSong !== 'function') return;
+                    // Register the track so isCardDisplayed()/playSong() can resolve it.
+                    try { if (P.itemsStore && typeof P.itemsStore.set === 'function') P.itemsStore.set(id, item); } catch (e) {}
+                    P.playSong(id);
+                  });
+                });
+                if (section && items.length) section.hidden = false;
+              }
+              function load() {
+                fetch('/api/singles')
+                  .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+                  .then(function (data) {
+                    var items = (data && data.items) || [];
+                    var section = document.getElementById('singlesSection');
+                    if (!items.length) { if (section) section.hidden = true; return; }
+                    render(items);
+                  })
+                  .catch(function (e) { console.warn('[Singles] load failed:', e); });
+              }
+              if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', load);
+              else load();
+            })();
+            </script>
+
             <!-- Trending Section -->
             <section class="section">
               <div class="section-header">
@@ -4971,6 +5061,7 @@
     var searchHeading     = document.getElementById('searchResultsHeading');
     var searchSubtitle    = document.getElementById('searchResultsSubtitle');
     var newReleasesSection = document.getElementById('newReleasesSection');
+    var singlesSection    = document.getElementById('singlesSection');
     var trendingSection   = document.querySelector('#trendingContainer')?.closest('section.section');
     var discoverSection   = document.querySelector('#randomContainer')?.closest('section.section');
     var heroBanner        = document.getElementById('heroBanner');
@@ -4984,6 +5075,7 @@
       if (trendingSection)    trendingSection.style.display   = isSearch ? 'none' : '';
       if (discoverSection)    discoverSection.style.display   = isSearch ? 'none' : '';
       if (newReleasesSection) newReleasesSection.style.display = isSearch ? 'none' : '';
+      if (singlesSection)     singlesSection.style.display     = isSearch ? 'none' : '';
       if (heroBanner)         heroBanner.style.display        = isSearch ? 'none' : '';
 
       // Show/hide headings

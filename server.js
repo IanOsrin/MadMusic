@@ -190,7 +190,7 @@ const paymentLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 
 // Apply stricter rate limits to expensive and payment-sensitive endpoints
-app.use(['/api/explore', '/api/trending', '/api/featured-albums', '/api/missing-audio-songs'], expensiveLimiter);
+app.use(['/api/explore', '/api/trending', '/api/featured-albums', '/api/missing-audio-songs', '/api/singles'], expensiveLimiter);
 app.use(['/api/payments/initialize', '/api/payments/subscribe', '/api/payments/trial', '/api/ringtone/initiate'], paymentLimiter);
 
 // Add Cache-Control headers
@@ -219,7 +219,7 @@ app.use('/api/', async (req, res, next) => {
   const skipPaths = [
     '/access/validate', '/wake', '/container', '/random-songs', '/public-playlists',
     '/search', '/album', '/trending', '/explore', '/featured-albums', '/missing-audio-songs',
-    '/g100-albums', '/g100-playlists', '/genres',
+    '/g100-albums', '/g100-playlists', '/genres', '/singles',
     '/auth', '/payments/initialize', '/payments/subscribe', '/payments/trial', '/payments/callback',
     '/payments/webhook', '/payments/plans', '/payments/subscription-plan',
     '/access/stream-events', '/access/logout', '/access/email/', '/health',
@@ -663,6 +663,7 @@ if (process.env.PREWARM_CACHES === 'true' && (process.env.WORKER_INDEX || '0') =
   prewarm('Featured',         featuredWarmers.featured,    1000);
   prewarm('Trending',         trendingWarmer,              2000);
   prewarm('New Releases',     featuredWarmers.newReleases, 3000);
+  prewarm('Singles',          featuredWarmers.singles,     3500);
   prewarm('G100',             featuredWarmers.g100,        4000);
   prewarm('Public Playlists', publicPlaylistsWarmer,       5000);
   prewarm('Genres',           genresWarmer,                8000);

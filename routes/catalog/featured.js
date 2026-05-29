@@ -27,9 +27,16 @@ const log    = createLogger('featured');
 const FEATURED_TTL_MS     = parsePositiveInt(process.env.FEATURED_ALBUM_CACHE_TTL_MS, 10 * 60 * 1000);
 const NEW_RELEASES_TTL_MS = parsePositiveInt(process.env.NEW_RELEASES_CACHE_TTL_MS,   10 * 60 * 1000);
 const G100_TTL_MS         = parsePositiveInt(process.env.G100_CACHE_TTL_MS,           10 * 60 * 1000);
+const SINGLES_TTL_MS      = parsePositiveInt(process.env.SINGLES_CACHE_TTL_MS,        10 * 60 * 1000);
 
 const NEW_RELEASES_FIELD_CANDIDATES = ['Tape Files::New_Release', 'New_Release'];
 const NEW_RELEASES_VALUE            = 'Yes';
+
+// "singles" checkbox lives on the Tape Files table; it must be placed on the
+// API layout (API_Album_Songs) for the Data API to query it. Probe both the
+// related-field and base-field spellings so we work whichever way it's exposed.
+const SINGLES_FIELD_CANDIDATES = ['Tape Files::singles', 'singles', 'Tape Files::Singles', 'Singles'];
+const SINGLES_VALUE            = 'Yes';
 
 // Track which field candidate last succeeded so we skip the probe on steady state.
 let cachedFeaturedFieldName = null;
@@ -131,6 +138,47 @@ async function fetchNewReleaseRecords(limit = 200) {
   return [];
 }
 
+// ── Singles fetch ─────────────────────────────────────────────────────────────
+// One card per track (no album dedupe) — singles are individual tracks. Keep only
+// visible, playable, artwork-bearing records so the rail cards look and play right.
+async function trySinglesField(field, normalizedLimit) {
+  const query   = { [field]: SINGLES_VALUE };
+  const payload = { query: [query], limit: normalizedLimit, offset: 1 };
+  log.debug(`Singles: trying field "${field}"`);
+  const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
+  const json     = await response.json().catch(() => ({}));
+  const fmCode   = String(json?.messages?.[0]?.code ?? '');
+  if (!response.ok) {
+    if (isMissingFieldError(json) || fmCode === '401') return null;
+    log.warn(`Singles field "${field}" HTTP ${response.status} code=${fmCode}`);
+    return null;
+  }
+  const rawData  = json?.response?.data || [];
+  const filtered = rawData.filter(r => {
+    const f = r.fieldData || {};
+    return recordIsVisible(f) && hasValidAudio(f) && hasValidArtwork(f);
+  });
+  if (filtered.length > 0) {
+    log.debug(`Singles field "${field}" → ${filtered.length}/${rawData.length} records`);
+    return filtered;
+  }
+  return null;
+}
+
+async function fetchSinglesRecords(limit = 200) {
+  const normalizedLimit = Math.max(1, Math.min(1000, limit));
+  for (const field of SINGLES_FIELD_CANDIDATES) {
+    if (!field) continue;
+    try {
+      const result = await trySinglesField(field, normalizedLimit);
+      if (result !== null) return result;
+    } catch (err) {
+      log.warn(`Singles fetch threw for field "${field}"`, err?.message || err);
+    }
+  }
+  return [];
+}
+
 // ── G100 fetch ──────────────────────────────────────────────────────────────
 async function fetchG100Records(limit = 400) {
   const normalizedLimit = Math.max(1, Math.min(1000, limit));
@@ -220,6 +268,18 @@ const newReleasesSwr = createSwrCache({
   }
 });
 
+const singlesSwr = createSwrCache({
+  ttlMs: SINGLES_TTL_MS,
+  max:   4,
+  label: 'singles',
+  name:  'singles',
+  loader: async () => {
+    const records = await fetchSinglesRecords(1000);
+    log.debug(`Singles: ${records.length} tracks`);
+    return records.map(r => ({ recordId: r.recordId, modId: r.modId, fields: r.fieldData || {} }));
+  }
+});
+
 const g100Swr = createSwrCache({
   ttlMs: G100_TTL_MS,
   max:   4,
@@ -237,6 +297,7 @@ const g100Swr = createSwrCache({
 export const featuredWarmers = {
   featured:    () => featuredSwr.get('default'),
   newReleases: () => newReleasesSwr.get('default'),
+  singles:     () => singlesSwr.get('default'),
   g100:        () => g100Swr.get('default')
 };
 
@@ -288,6 +349,22 @@ router.get('/new-releases', async (req, res) => {
   } catch (err) {
     log.error('Failed to load new releases', err);
     return res.status(500).json({ ok: false, error: 'Failed to load new releases' });
+  }
+});
+
+// ── Route: GET /singles ─────────────────────────────────────────────────────
+router.get('/singles', async (req, res) => {
+  try {
+    const refresh = req.query.refresh === '1';
+    if (refresh) singlesSwr.cache.delete('default');
+
+    const { value: items, state } = await singlesSwr.get('default');
+    res.setHeader('X-Cache-State', state);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    return res.json({ ok: true, items: cloneRecordsForLimit(items), total: items.length });
+  } catch (err) {
+    log.error('Failed to load singles', err);
+    return res.status(500).json({ ok: false, error: 'Failed to load singles' });
   }
 });
 
