@@ -1,0 +1,17 @@
+{
+  "name": "mad-artwork-resize",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "One-shot S3 artwork derivative generator (3000px masters -> 300/800px WebP). Standalone; not part of the app.",
+  "scripts": {
+    "dry": "node resize-artwork.mjs --dry-run --limit=10",
+    "smoke": "node resize-artwork.mjs --limit=10",
+    "run": "node resize-artwork.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.600.0",
+    "p-limit": "^5.0.0",
+    "sharp": "^0.33.5"
+  }
+}

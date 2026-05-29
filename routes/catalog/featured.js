@@ -10,7 +10,7 @@
 //
 import { Router } from 'express';
 import { fmPost } from '../../fm-client.js';
-import { hasValidAudio, hasValidArtwork } from '../../lib/track.js';
+import { hasValidAudio, hasValidArtwork, thumbArtworkUrl } from '../../lib/track.js';
 import {
   recordIsVisible, recordIsFeatured, isMissingFieldError,
   FM_LAYOUT, FM_FEATURED_VALUE, FEATURED_FIELD_CANDIDATES,
@@ -42,12 +42,24 @@ const SINGLES_VALUE            = 'Yes';
 let cachedFeaturedFieldName = null;
 let cachedG100FieldName     = null;
 
+// When ARTWORK_THUMBS=true, rewrite master artwork URLs to the pre-generated
+// 300px WebP derivatives (see scripts/artwork-resize). Off by default so it's
+// only active once the derivatives actually exist on S3; flip the env var back
+// to 'false' to revert instantly. Covers all five rail endpoints since they all
+// pass their items through here.
+const ARTWORK_THUMBS = process.env.ARTWORK_THUMBS === 'true';
+const ARTWORK_FIELDS = ['Artwork_S3_URL', 'Tape Files::Artwork_S3_URL'];
+
 function cloneRecordsForLimit(records = [], count = records.length) {
-  return records.slice(0, Math.min(count, records.length)).map((record) => ({
-    recordId: record.recordId,
-    modId:    record.modId,
-    fields:   { ...(record.fields || record.fieldData || {}) }
-  }));
+  return records.slice(0, Math.min(count, records.length)).map((record) => {
+    const fields = { ...(record.fields || record.fieldData || {}) };
+    if (ARTWORK_THUMBS) {
+      for (const f of ARTWORK_FIELDS) {
+        if (fields[f]) fields[f] = thumbArtworkUrl(fields[f], 300);
+      }
+    }
+    return { recordId: record.recordId, modId: record.modId, fields };
+  });
 }
 
 // ── Featured album fetch ────────────────────────────────────────────────────
