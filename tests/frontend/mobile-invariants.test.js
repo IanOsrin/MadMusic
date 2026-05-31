@@ -1,0 +1,67 @@
+// Enforces the mobile.html invariants documented in CLAUDE.md, so a future
+// agent that trips one fails CI instead of shipping a silent bug. These are
+// static source scans (no backend) — they encode the landmines that the visual
+// net cannot catch.
+
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const mobile = readFileSync(join(root, 'public', 'mobile.html'), 'utf8');
+const helpers = readFileSync(join(root, 'public', 'js', 'helpers.js'), 'utf8');
+
+// Brace-matched extraction of `function NAME(...) {...}` (handles default-param
+// object literals via paren-then-brace matching).
+function extractFn(src, name) {
+  const m = new RegExp(`function\\s+${name}\\s*\\(`).exec(src);
+  if (!m) return null;
+  let p = src.indexOf('(', m.index), pd = 0, q = p;
+  for (; q < src.length; q++) { const c = src[q]; if (c === '(') pd++; else if (c === ')') { pd--; if (pd === 0) { q++; break; } } }
+  let b = src.indexOf('{', q), bd = 0, k = b;
+  for (; k < src.length; k++) { const c = src[k]; if (c === '{') bd++; else if (c === '}') { bd--; if (bd === 0) { k++; break; } } }
+  return src.slice(m.index, k);
+}
+
+const lines = (src) => src.split('\n').map((l, i) => ({ n: i + 1, l }));
+
+describe('mobile invariant: album grouping keys use getAlbumArtist (not track-first getArtistField)', () => {
+  // Using getArtistField (track-first) in an album|||artist grouping key splits a
+  // compilation into one card per track artist. (CLAUDE.md invariant #1.)
+  it('no album-key (|||) line calls getArtistField, in mobile.html or helpers.js', () => {
+    for (const [file, src] of [['mobile.html', mobile], ['helpers.js', helpers]]) {
+      const offenders = lines(src).filter(({ l }) => l.includes('|||') && /\bgetArtistField\s*\(/.test(l));
+      expect(offenders.map((o) => `${file}:${o.n}`), 'grouping key uses track-first getArtistField').toEqual([]);
+    }
+  });
+
+  it('no albumArtist variable is assigned from getArtistField in mobile.html', () => {
+    const offenders = lines(mobile).filter(({ l }) => /albumArtist\s*[:=]\s*getArtistField\s*\(/.test(l));
+    expect(offenders.map((o) => `mobile.html:${o.n}`), 'albumArtist must come from getAlbumArtist').toEqual([]);
+  });
+
+  it('helpers.js groupByAlbum keys on getAlbumArtist', () => {
+    const body = extractFn(helpers, 'groupByAlbum');
+    expect(body, 'groupByAlbum exists').toBeTruthy();
+    expect(body).toMatch(/getAlbumArtist\s*\(/);
+  });
+});
+
+describe('mobile invariant: shared utilities delegate to window.MADHelpers (no re-grown local copies)', () => {
+  // A re-implemented local copy drifts from canonical and reintroduces bugs like
+  // the 5-field hasValidAudio that hid playable tracks. (CLAUDE.md.)
+  const DELEGATED = [
+    'getFieldValue', 'getTitleField', 'getAlbumField', 'getGenreField',
+    'getArtistField', 'getAlbumArtist', 'hasValidAudio',
+  ];
+
+  for (const name of DELEGATED) {
+    it(`mobile.html ${name}() is a delegation to window.MADHelpers.${name}`, () => {
+      const body = extractFn(mobile, name);
+      expect(body, `${name} is defined in mobile.html`).toBeTruthy();
+      expect(body, `${name} must delegate to window.MADHelpers.${name}, not re-implement it`)
+        .toMatch(new RegExp(`window\\.MADHelpers\\.${name}\\b`));
+    });
+  }
+});
