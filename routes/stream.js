@@ -134,7 +134,7 @@ router.get('/track/:recordId/container', async (req, res) => {
     const cacheKey = `${layout}::${recordId}`;
     const cached = containerUrlCache.get(cacheKey);
     if (cached) {
-      res.json({ ok: true, url: cached.url, field: cached.field, _cached: true });
+      res.json({ ok: true, url: cached.url, field: cached.field, artworkUrl: cached.artworkUrl || '', _cached: true });
       return;
     }
 
@@ -196,10 +196,20 @@ router.get('/track/:recordId/container', async (req, res) => {
       return;
     }
 
-    // Cache the resolved URL so repeat plays skip the FileMaker lookup
-    containerUrlCache.set(cacheKey, { url: containerUrl, field: chosenField || requestedField || '' });
+    // Also resolve a fresh artwork URL from the same record. Saved playlist
+    // tracks store absolute FileMaker streaming URLs that expire (401), so
+    // callers re-resolve by recordId to get a working artwork for now-playing.
+    const ARTWORK_CANDIDATES = ['Artwork_S3_URL', 'Tape Files::Artwork_S3_URL', 'Artwork::Picture', 'Artwork Picture', 'Picture'];
+    let artworkUrl = '';
+    for (const candidate of ARTWORK_CANDIDATES) {
+      const value = getFieldValue(candidate);
+      if (value) { artworkUrl = value; break; }
+    }
 
-    res.json({ ok: true, url: containerUrl, field: chosenField || requestedField || '' });
+    // Cache the resolved URLs so repeat plays skip the FileMaker lookup
+    containerUrlCache.set(cacheKey, { url: containerUrl, field: chosenField || requestedField || '', artworkUrl });
+
+    res.json({ ok: true, url: containerUrl, field: chosenField || requestedField || '', artworkUrl });
   } catch (err) {
     console.error('[MASS] Container refresh failed:', err);
     res.status(500).json({ ok: false, error: 'Failed to refresh container' });

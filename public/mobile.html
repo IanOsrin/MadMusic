@@ -2090,15 +2090,32 @@
       });
     }
 
-    // Adapt a stored playlist track (mp3/artwork/name fields) into the format playTrack() expects
-    function playPlaylistTrack(playlistTrack) {
+    // Adapt a stored playlist track into the format playTrack() expects.
+    // Saved playlist tracks store ABSOLUTE FileMaker streaming URLs that expire
+    // (RCType=RCFileProcessor → 401), which left the now-playing artwork blank
+    // and audio broken. Re-resolve fresh audio + artwork by recordId; the stored
+    // URLs are only a fallback if the lookup fails.
+    async function playPlaylistTrack(playlistTrack) {
+      const recordId = playlistTrack.trackRecordId || playlistTrack.recordId || '';
+
+      let freshAudio = '', freshArtwork = '';
+      if (recordId) {
+        try {
+          const r = await fetch(`/api/track/${encodeURIComponent(recordId)}/container`);
+          const d = await r.json();
+          if (d && d.ok) { freshAudio = d.url || ''; freshArtwork = d.artworkUrl || ''; }
+        } catch (e) { /* fall back to stored URLs */ }
+      }
+
       const adapted = {
-        recordId: playlistTrack.trackRecordId || playlistTrack.recordId || '',
+        recordId,
         fields: {
           'Track Name': playlistTrack.name || '',
           'Album Title': playlistTrack.albumTitle || '',
           'Album Artist': playlistTrack.albumArtist || playlistTrack.trackArtist || '',
-          'Artwork_S3_URL': playlistTrack.artwork || '',
+          // Fresh S3 first; stored (possibly stale) only as fallback.
+          'Artwork_S3_URL': freshArtwork || playlistTrack.artwork || '',
+          'S3_URL': freshAudio || '',
           'mp3': playlistTrack.mp3 || ''
         }
       };
@@ -2255,12 +2272,20 @@
       state.streamSessionId = generateSessionId();
     }
 
+    // Set an artwork <img> src with a placeholder fallback if it fails to load
+    // (e.g. a track with no real cover — a malformed/empty S3 artwork URL).
+    function setArtwork(imgId, url) {
+      const img = document.getElementById(imgId);
+      if (!img) return;
+      img.onerror = () => { img.onerror = null; img.src = '/img/placeholder.png'; };
+      img.src = url;
+    }
+
     function updateFloatingPlayer() {
       if (!state.currentTrack) return;
 
       const fields = state.currentTrack.fields || {};
-      const artwork = getArtworkUrl(fields);
-      document.getElementById('floating-artwork').src = artwork;
+      setArtwork('floating-artwork', getArtworkUrl(fields));
     }
 
     function updatePlayerModal() {
@@ -2273,7 +2298,7 @@
       const album = getAlbumField(fields);
       const year = getYearField(fields);
 
-      document.getElementById('player-artwork').src = artwork;
+      setArtwork('player-artwork', artwork);
       document.getElementById('player-title').textContent = title;
       document.getElementById('player-artist').textContent = artist;
       document.getElementById('player-album').textContent = album;
