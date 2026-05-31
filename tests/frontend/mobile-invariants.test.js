@@ -9,7 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const mobile = readFileSync(join(root, 'public', 'mobile.html'), 'utf8');
+// The mobile app's JS was externalized from an inline <script> in mobile.html
+// into public/js/mobile.js. Scan both so these source checks hold wherever the
+// code lives (markup stays in mobile.html; functions live in mobile.js).
+const mobileHtml = readFileSync(join(root, 'public', 'mobile.html'), 'utf8');
+const mobileJs = readFileSync(join(root, 'public', 'js', 'mobile.js'), 'utf8');
+const mobile = mobileHtml + '\n' + mobileJs;
 const helpers = readFileSync(join(root, 'public', 'js', 'helpers.js'), 'utf8');
 
 // Brace-matched extraction of `function NAME(...) {...}` (handles default-param

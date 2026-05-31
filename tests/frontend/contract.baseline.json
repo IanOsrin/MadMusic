@@ -393,21 +393,17 @@
         "/js/helpers.js",
         "inline",
         "inline",
-        "inline"
+        "/js/mobile.js"
       ],
       "externalScripts": [
-        "/js/helpers.js"
+        "/js/helpers.js",
+        "/js/mobile.js"
       ],
       "windowGlobals": [
         "MADHelpers",
-        "_openRingtoneModal",
-        "clearAllFilters",
-        "clearDecadeFilter",
-        "clearGenreFilter",
-        "selectGenre"
+        "_openRingtoneModal"
       ],
       "definedIds": [
-        "${playlist.id}",
         "add-to-playlist-btn",
         "audio",
         "bottom-sheet",
@@ -855,7 +851,6 @@
     "featuredContainer",
     "filtersPanel",
     "filtersToggle",
-    "floating-artwork",
     "floating-player",
     "g100-content",
     "g100-playlists-content",
@@ -1395,7 +1390,6 @@
       "decades-content",
       "discover-content",
       "discover-refresh-btn",
-      "floating-artwork",
       "floating-player",
       "g100-content",
       "g100-playlists-content",
