@@ -319,6 +319,14 @@ function sendHtml(res, filename) {
   return loadHtml(filename)
     .then(html => {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      // HTML documents carry inline app logic, so they must never be cached —
+      // by browsers OR shared proxies. The path-based middleware above only
+      // matches '/' and '*.html', so extensionless view routes like /mobile,
+      // /albums, /jukebox would otherwise be served with no Cache-Control and
+      // get heuristically cached, leaving stale inline JS on devices.
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.send(html);
     })
     .catch(err => {
