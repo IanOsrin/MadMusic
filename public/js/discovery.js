@@ -261,38 +261,10 @@
       }
     }
 
-    let currentAudio = null;
-    let playGeneration = 0;   // incremented each time a new track starts; guards stale event listeners
-    let currentTrackInfo = null;
-    let isPlaying = false;
-
-    // Stream Event Tracking
-    const STREAM_EVENTS_ENDPOINT = '/api/access/stream-events';
-    const STREAM_SESSION_STORAGE_KEY = 'mass.session';
-    const STREAM_PROGRESS_INTERVAL_MS = 30 * 1000; // 30 seconds
-    let streamSessionId = null;
-    try {
-      streamSessionId = localStorage.getItem(STREAM_SESSION_STORAGE_KEY);
-    } catch {
-      streamSessionId = null;
-    }
-    if (!streamSessionId) {
-      const fallbackId = (window.crypto && typeof window.crypto.randomUUID === 'function')
-        ? window.crypto.randomUUID()
-        : Math.random().toString(36).slice(2);
-      streamSessionId = fallbackId;
-      try {
-        localStorage.setItem(STREAM_SESSION_STORAGE_KEY, streamSessionId);
-      } catch {
-        // ignore storage failures
-      }
-    }
-    let lastStreamReportTs = 0;
-    let lastStreamReportPos = 0;
-    let lastProgressSentAt = 0;
-    let progressInterval = null;
-    let hasReportedPlay = false; // Flag to prevent duplicate PLAY events
-    let isSwitchingTracks = false; // Flag to prevent events when switching tracks
+    // NOTE: Discovery no longer runs its own playback engine. All playback is
+    // owned by player.js (window.playSong / window.stopPlayback), which writes to
+    // the shared <audio id="player"> via _PLAYER. Discovery only renders rails and
+    // delegates play actions. The former engine + stream-event state lived here.
 
     // Fetch wrapper with access token (now handled by global fetch interceptor)
     async function apiFetch(url, options = {}) {
@@ -302,106 +274,6 @@
     }
 
     // Stream Event Tracking Functions
-    function getCurrentTrackMeta() {
-      if (!currentTrackInfo || !currentTrackInfo.recordId) return {};
-      return {
-        trackRecordId: currentTrackInfo.recordId,
-        trackISRC: currentTrackInfo.isrc || '',
-        title: currentTrackInfo.title || '',
-        artist: currentTrackInfo.artist || '',
-        album: currentTrackInfo.album || ''
-      };
-    }
-
-    async function sendStreamEvent(type, positionOverride, durationOverride, deltaOverride) {
-      if (typeof fetch !== 'function') return false;
-      const requestTs = Date.now();
-      const meta = getCurrentTrackMeta();
-
-      if (!meta.trackRecordId) {
-        console.warn('[Stream Event] No track record ID available');
-        return false;
-      }
-
-      const rawPos = typeof positionOverride === 'number' ? positionOverride : currentAudio?.currentTime || 0;
-      const rawDur = typeof durationOverride === 'number' ? durationOverride : currentAudio?.duration || 0;
-      const normalizedPos = toSeconds(rawPos);
-      const normalizedDur = toSeconds(rawDur);
-      const hasOverride = Number.isFinite(deltaOverride);
-      const overrideDelta = hasOverride ? Math.max(0, Math.round(deltaOverride)) : 0;
-      const deltaFromPos = Math.max(0, normalizedPos - (Number.isFinite(lastStreamReportPos) ? lastStreamReportPos : 0));
-      const deltaFromTime = lastStreamReportTs ? Math.max(0, Math.round((requestTs - lastStreamReportTs) / 1000)) : 0;
-      const normalizedDelta = hasOverride ? overrideDelta : (deltaFromPos || deltaFromTime);
-
-      const body = {
-        eventType: type,
-        trackRecordId: meta.trackRecordId,
-        trackISRC: meta.trackISRC || '',
-        positionSec: normalizedPos,
-        durationSec: normalizedDur,
-        deltaSec: normalizedDelta
-      };
-
-      try {
-        const headers = {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Session-ID': streamSessionId
-        };
-
-        if (currentAccessToken) {
-          headers['X-Access-Token'] = currentAccessToken;
-        }
-
-        const response = await fetch(STREAM_EVENTS_ENDPOINT, {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify(body)
-        });
-
-        if (!response.ok) {
-          console.warn('[Stream Event] Request failed:', response.status);
-          return false;
-        }
-
-        const responseJson = await response.json().catch(() => null);
-        if (!responseJson?.ok) {
-          console.warn('[Stream Event] Server reported failure');
-          return false;
-        }
-
-        console.log('[Stream Event] Sent:', type, meta.title);
-        lastStreamReportTs = requestTs;
-        lastStreamReportPos = normalizedPos;
-        return true;
-      } catch (err) {
-        console.error('[Stream Event] Error:', err);
-        return false;
-      }
-    }
-
-    function startProgressTracking() {
-      if (progressInterval) {
-        clearInterval(progressInterval);
-      }
-      progressInterval = setInterval(() => {
-        if (currentAudio && !currentAudio.paused) {
-          const now = Date.now();
-          if (now - lastProgressSentAt >= STREAM_PROGRESS_INTERVAL_MS) {
-            sendStreamEvent('PROGRESS');
-            lastProgressSentAt = now;
-          }
-        }
-      }, 5000); // Check every 5 seconds
-    }
-
-    function stopProgressTracking() {
-      if (progressInterval) {
-        clearInterval(progressInterval);
-        progressInterval = null;
-      }
-    }
-
     // Helper functions
     // Check if an item has valid audio
     // Escape HTML to prevent XSS attacks
@@ -425,10 +297,10 @@
 
     function showArtistAlbumsPrompt(recordId) {
       const item = itemsStore.get(recordId);
-      if (!item) { playSong(recordId); return; }
+      if (!item) { window.playSong(recordId); return; }
       const fields = item.fields || {};
       const artist = getArtistField(fields);
-      if (!artist) { playSong(recordId); return; }
+      if (!artist) { window.playSong(recordId); return; }
 
       document.getElementById('artistPromptOverlay')?.remove();
 
@@ -454,375 +326,12 @@
       document.body.appendChild(overlay);
     }
     // Update mini player UI
-    function updateMiniPlayer(title, artist, artworkUrl) {
-      const miniPlayer = document.getElementById('miniPlayer');
-      if (!miniPlayer) return; // #miniPlayer doesn't exist in app.html; #unifiedPlayer handles display
-      const playerTitle = document.getElementById('nowPlayingTitle');
-      const playerArtist = document.getElementById('nowPlayingSubtitle');
-      const playerArtwork = document.getElementById('nowPlayingThumbImg');
-      const playIcon = document.getElementById('playIcon');
-      const toggleBtn = document.getElementById('nowPlayingToggle');
-
-      miniPlayer.classList.add('active');
-      if (playerTitle) playerTitle.textContent = title;
-      if (playerArtist) {
-        playerArtist.textContent = artist;
-        playerArtist.onclick = artist
-          ? () => { window.location.href = `/albums?artist=${encodeURIComponent(artist)}`; }
-          : null;
-      }
-      if (playerArtwork) playerArtwork.src = artworkUrl || '';
-
-      if (toggleBtn) toggleBtn.title = isPlaying ? 'Pause' : 'Play';
-      if (playIcon) {
-        playIcon.querySelector('path').setAttribute('d',
-          isPlaying
-            ? 'M6 19h4V5H6v14zm8-14v14h4V5h-4z'  // pause icon
-            : 'M8 5v14l11-7z'                       // play icon
-        );
-      }
-    }
-
     // Hide mini player
-    function hideMiniPlayer() {
-      const miniPlayer = document.getElementById('miniPlayer');
-      if (!miniPlayer) return; // #miniPlayer doesn't exist in app.html
-      miniPlayer.classList.remove('active');
-    }
-
     // Update visual state to highlight currently playing card
-    function updateNowPlayingCard(recordId) {
-      // Remove now-playing class from all cards and reset play icons
-      document.querySelectorAll('.random-card.now-playing').forEach(card => {
-        card.classList.remove('now-playing');
-        const playIcon = card.querySelector('.play-icon');
-        if (playIcon) {
-          playIcon.textContent = '▶';
-        }
-      });
-
-      // Reset play icons in other sections (featured, highlights, trending)
-      document.querySelectorAll('.play-icon').forEach(icon => {
-        icon.textContent = '▶';
-      });
-      document.querySelectorAll('.btn-play').forEach(btn => {
-        btn.innerHTML = '▶ Play Now';
-      });
-      document.querySelectorAll('.trending-play-btn').forEach(btn => {
-        btn.textContent = '▶';
-      });
-
-      // Add now-playing class to current card and update icon to stop
-      const currentCard = document.querySelector(`.random-card[data-record-id="${recordId}"]`);
-      if (currentCard) {
-        currentCard.classList.add('now-playing');
-        const playIcon = currentCard.querySelector('.play-icon');
-        if (playIcon) {
-          playIcon.textContent = '■';
-        }
-
-        // Scroll to the card with smooth animation
-        setTimeout(() => {
-          currentCard.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center',
-            inline: 'nearest'
-          });
-        }, 100);
-      }
-
-      // Update featured button if playing from featured
-      const featuredBtn = document.querySelector('.featured-release .btn-play');
-      if (featuredBtn) {
-        const featuredRecordId = featuredBtn.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
-        if (featuredRecordId === recordId) {
-          featuredBtn.innerHTML = '■ Stop';
-        }
-      }
-
-      // Update highlight play icons
-      document.querySelectorAll('.highlight-card').forEach(card => {
-        const artworkDiv = card.querySelector('.highlight-artwork');
-        if (artworkDiv) {
-          const onclickAttr = artworkDiv.getAttribute('onclick');
-          const cardRecordId = onclickAttr?.match(/'([^']+)'/)?.[1];
-          if (cardRecordId === recordId) {
-            const playIcon = card.querySelector('.play-icon');
-            if (playIcon) playIcon.textContent = '■';
-          }
-        }
-      });
-
-      // Update trending play icons
-      document.querySelectorAll('.trending-card').forEach(card => {
-        const artworkDiv = card.querySelector('.trending-artwork');
-        if (artworkDiv) {
-          const onclickAttr = artworkDiv.getAttribute('onclick');
-          const cardRecordId = onclickAttr?.match(/'([^']+)'/)?.[1];
-          if (cardRecordId === recordId) {
-            const playIcon = card.querySelector('.play-icon');
-            if (playIcon) playIcon.textContent = '■';
-            const playBtn = card.querySelector('.trending-play-btn');
-            if (playBtn) playBtn.textContent = '■';
-          }
-        }
-      });
-    }
-
     // Check if a card is currently displayed in any section
-    function isCardDisplayed(recordId) {
-      // Check if the record exists in the itemsStore
-      // Items from featured, highlights, trending, and random sections are all stored there
-      return itemsStore.has(recordId);
-    }
-
     // Play function with actual audio playback
-    function playSong(recordId) {
-      console.log('[PlaySong] Called with recordId:', recordId);
-      console.log('[PlaySong] Items in store:', itemsStore.size);
-
-      // If clicking on the currently playing card, stop playback instead
-      if (currentTrackInfo && currentTrackInfo.recordId === recordId && currentAudio && !currentAudio.paused) {
-        console.log('[PlaySong] Stopping currently playing track');
-        stopPlayback();
-        return;
-      }
-
-      // Check if this card is currently displayed
-      if (!isCardDisplayed(recordId)) {
-        console.warn('[PlaySong] Card not displayed, skipping:', recordId);
-        return;
-      }
-
-      const item = itemsStore.get(recordId);
-      if (!item) {
-        console.error('[PlaySong] Item not found in store. RecordId:', recordId);
-        console.error('[PlaySong] Available IDs:', Array.from(itemsStore.keys()));
-        return;
-      }
-
-      console.log('[PlaySong] Found item:', item);
-      const audioUrl = getAudioUrl(item.fields, item.recordId);
-      console.log('[PlaySong] Audio URL:', audioUrl);
-
-      if (!audioUrl) {
-        console.warn('[PlaySong] Audio not available for this track:', recordId);
-        return;
-      }
-
-      const title = getTitleField(item.fields);
-      const artist = getArtistField(item.fields);
-      const album = getAlbumField(item.fields);
-      const artworkUrl = getArtworkUrl(item.fields);
-      const isrc = (item.fields?.['ISRC'] || '').trim();
-
-      console.log(`[PlaySong] Playing: ${title} by ${artist}`);
-
-      // Store current track info with recordId for stream tracking
-      currentTrackInfo = { title, artist, album, artworkUrl, recordId: item.recordId, isrc };
-
-      // Update visual state - highlight currently playing card
-      updateNowPlayingCard(recordId);
-
-      // Capture this play's generation so event listeners self-invalidate when a new track starts
-      const myGeneration = ++playGeneration;
-
-      // Stop current audio if playing
-      if (currentAudio) {
-        console.log('[PlaySong] Stopping previous audio');
-        isSwitchingTracks = true; // Prevent pause event from firing
-        stopProgressTracking();
-        sendStreamEvent('END');
-        currentAudio.pause();
-        currentAudio = null;
-      }
-
-      // Reset stream tracking state
-      lastStreamReportTs = 0;
-      lastStreamReportPos = 0;
-      lastProgressSentAt = 0;
-      hasReportedPlay = false;
-
-      // Route through the unified shared player so #unifiedPlayer ribbon shows
-      console.log('[PlaySong] Routing through unified player');
-      const sharedPlayer = document.getElementById('player');
-      currentAudio = sharedPlayer;
-
-      // Add generation-guarded stream event listeners on the shared player
-      sharedPlayer.addEventListener('ended', () => {
-        if (playGeneration !== myGeneration) return;
-        isPlaying = false;
-        const duration = sharedPlayer.duration || 0;
-        const finalPosition = sharedPlayer.currentTime || duration;
-        const delta = Math.abs((finalPosition || 0) - lastStreamReportPos);
-        sendStreamEvent('END', finalPosition, duration, delta);
-        stopProgressTracking();
-      });
-
-      sharedPlayer.addEventListener('error', (e) => {
-        if (playGeneration !== myGeneration) return;
-        console.error('[PlaySong] Audio error:', e);
-        sendStreamEvent('ERROR');
-        stopProgressTracking();
-        isPlaying = false;
-      });
-
-      sharedPlayer.addEventListener('pause', () => {
-        if (playGeneration !== myGeneration) return;
-        // Don't send PAUSE if we're switching tracks or if the track has ended
-        if (!sharedPlayer.ended && isPlaying && !isSwitchingTracks) {
-          sendStreamEvent('PAUSE');
-          stopProgressTracking();
-          isPlaying = false;
-        }
-      });
-
-      // Resume tracking if user resumes via the unified player's toggle
-      sharedPlayer.addEventListener('play', () => {
-        if (playGeneration !== myGeneration) return;
-        if (!isPlaying) {
-          isPlaying = true;
-          startProgressTracking();
-        }
-      });
-
-      // Update progress bar and time display
-      sharedPlayer.addEventListener('timeupdate', () => {
-        if (playGeneration !== myGeneration) return;
-        if (!sharedPlayer.duration) return;
-        const pct = (sharedPlayer.currentTime / sharedPlayer.duration) * 100;
-        const fill = document.getElementById('nowPlayingProgressFill');
-        const timeEl = document.getElementById('playerCurrentTime');
-        if (fill) fill.style.width = pct + '%';
-        if (timeEl) {
-          const s = Math.floor(sharedPlayer.currentTime);
-          timeEl.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-        }
-      });
-
-      // Reset progress bar when a new track starts
-      const fillEl = document.getElementById('nowPlayingProgressFill');
-      const timeEl = document.getElementById('playerCurrentTime');
-      if (fillEl) fillEl.style.width = '0%';
-      if (timeEl) timeEl.textContent = '0:00';
-
-      // Start playback and send PLAY event after metadata loads
-      let metadataLoaded = false;
-      sharedPlayer.addEventListener('loadedmetadata', () => {
-        if (playGeneration !== myGeneration) return;
-        console.log(`[PlaySong] Duration loaded: ${sharedPlayer.duration}s`);
-        metadataLoaded = true;
-      });
-
-      // Play via _PLAYER.playTrack so the unified ribbon activates
-      const _playPromise = (window._PLAYER && window._PLAYER.playTrack)
-        ? window._PLAYER.playTrack(audioUrl, { title, artist, artUrl: artworkUrl, recordId })
-        : (sharedPlayer
-            ? (() => { sharedPlayer.src = audioUrl; return sharedPlayer.play(); })()
-            : Promise.resolve());
-
-      (_playPromise || Promise.resolve()).then(() => {
-        if (playGeneration !== myGeneration) return;
-        console.log(`[PlaySong] ✓ Now playing: ${title} by ${artist}`);
-        isPlaying = true;
-        isSwitchingTracks = false; // Reset flag after successful play
-
-        // Wait a moment for metadata if not loaded yet, then send PLAY event
-        const sendPlayEvent = () => {
-          if (playGeneration !== myGeneration) return;
-          if (!hasReportedPlay) {
-            const duration = sharedPlayer.duration || 0;
-            console.log(`[Stream Event] Sending PLAY with duration: ${duration}s`);
-            sendStreamEvent('PLAY', 0, duration, 0);
-            hasReportedPlay = true;
-          }
-        };
-
-        if (metadataLoaded || sharedPlayer.duration) {
-          sendPlayEvent();
-        } else {
-          setTimeout(sendPlayEvent, 100);
-        }
-
-        startProgressTracking();
-      }).catch(err => {
-        if (playGeneration !== myGeneration) return;
-        isSwitchingTracks = false;
-        console.error('[PlaySong] ✗ Playback failed:', err);
-        sendStreamEvent('ERROR');
-        stopProgressTracking();
-        isPlaying = false;
-      });
-
-      // Emit event for potential integration with classic view
-      window.dispatchEvent(new CustomEvent('play-track', {
-        detail: {
-          url: audioUrl,
-          title,
-          artist,
-          album,
-          recordId: item.recordId
-        }
-      }));
-    }
-
     // Pause/Resume function
-    function togglePause() {
-      if (!currentAudio) return;
-
-      if (isPlaying) {
-        currentAudio.pause();
-        isPlaying = false;
-        // PAUSE event is sent by the pause listener
-      } else {
-        // Resume playback
-        currentAudio.play().then(() => {
-          isPlaying = true;
-          startProgressTracking();
-          updateMiniPlayer(currentTrackInfo.title, currentTrackInfo.artist, currentTrackInfo.artworkUrl);
-        });
-      }
-
-      if (currentTrackInfo) {
-        updateMiniPlayer(currentTrackInfo.title, currentTrackInfo.artist, currentTrackInfo.artworkUrl);
-      }
-    }
-
     // Stop function
-    function stopPlayback() {
-      playGeneration++; // invalidate stale listeners before pausing
-      if (currentAudio) {
-        isSwitchingTracks = true; // Suppress pause event
-        sendStreamEvent('END');
-        stopProgressTracking();
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-        currentAudio = null;
-        isSwitchingTracks = false;
-      }
-      isPlaying = false;
-      hasReportedPlay = false;
-      hideMiniPlayer();
-
-      // Remove now-playing class from all cards and reset all play icons
-      document.querySelectorAll('.random-card.now-playing').forEach(card => {
-        card.classList.remove('now-playing');
-      });
-
-      // Reset all play icons back to play button
-      document.querySelectorAll('.play-icon').forEach(icon => {
-        icon.textContent = '▶';
-      });
-      document.querySelectorAll('.btn-play').forEach(btn => {
-        btn.innerHTML = '▶ Play Now';
-      });
-      document.querySelectorAll('.trending-play-btn').forEach(btn => {
-        btn.textContent = '▶';
-      });
-
-      currentTrackInfo = null;
-    }
-
     // Render functions
     function renderFeatured(items) {
       const container = document.getElementById('featuredContainer');
@@ -1417,13 +926,7 @@
       _searchClear.addEventListener('click', clearSearch);
     }
 
-    // Send END event when page is unloaded
-    window.addEventListener('beforeunload', () => {
-      if (currentAudio && !currentAudio.paused) {
-        sendStreamEvent('END');
-        stopProgressTracking();
-      }
-    });
+    // (beforeunload END handling now lives in player.js, the single playback engine.)
 
     // Function to load all initial content
     function loadInitialContent() {
@@ -1538,26 +1041,8 @@
         if (btn) btn.addEventListener('click', () => applyAfricanTheme(!document.body.classList.contains('african-theme')));
       })();
 
-      // Setup mini player controls
-      const _nowPlayingToggle = document.getElementById('nowPlayingToggle');
-      if (_nowPlayingToggle) _nowPlayingToggle.addEventListener('click', togglePause);
-
-      const _playerClose = document.getElementById('playerClose');
-      if (_playerClose) _playerClose.addEventListener('click', () => {
-        if (currentAudio) {
-          isSwitchingTracks = true;
-          sendStreamEvent('END');
-          stopProgressTracking();
-          currentAudio.pause();
-          currentAudio = null;
-          isPlaying = false;
-        }
-        hideMiniPlayer();
-        const fill = document.getElementById('nowPlayingProgressFill');
-        const timeEl = document.getElementById('playerCurrentTime');
-        if (fill) fill.style.width = '0%';
-        if (timeEl) timeEl.textContent = '0:00';
-      });
+      // (Mini-player controls removed — those elements don't exist in app.html;
+      //  the unified player owns playback UI. Playback is player.js's.)
 
       const titleEl = document.getElementById('randomTitle');
       if (titleEl) {
@@ -1594,7 +1079,7 @@
           if (!recordId) return;
           // Clicking the ▶ play-icon circle keeps the original play behaviour
           if (e.target.closest('.play-icon')) {
-            playSong(recordId);
+            window.playSong(recordId);
             return;
           }
           // Clicking anywhere else on the cover shows the artist prompt
@@ -1807,15 +1292,10 @@
     clearSearch
   };
 
-  // Expose a stop hook so showView / player.js can stop discovery audio
+  // Stop hook kept for callers (showView etc.); playback is owned by player.js,
+  // so delegate to its single engine. (Discovery no longer runs its own.)
   window._discoveryStopPlayback = function () {
-    playGeneration++; // invalidate any stale event listeners from the last playSong call
-    if (currentAudio) {
-      isSwitchingTracks = true;
-      currentAudio.pause();
-      currentAudio = null;
-      isPlaying = false;
-    }
+    if (typeof window.stopPlayback === 'function') window.stopPlayback();
   };
 
   // Initialize on access ready event
