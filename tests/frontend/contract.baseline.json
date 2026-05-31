@@ -110,6 +110,7 @@
         "showUserPlaylistPage",
         "showView",
         "shuffleArtistCatalogue",
+        "stopPlayback",
         "toggleDarkMode"
       ],
       "definedIds": [
@@ -389,12 +390,16 @@
     "mobile.html": {
       "scriptOrder": [
         "inline",
+        "/js/helpers.js",
         "inline",
         "inline",
         "inline"
       ],
-      "externalScripts": [],
+      "externalScripts": [
+        "/js/helpers.js"
+      ],
       "windowGlobals": [
+        "MADHelpers",
         "_openRingtoneModal",
         "clearAllFilters",
         "clearDecadeFilter",
@@ -717,6 +722,7 @@
   },
   "crossFileGlobals": [
     "MADCurrency",
+    "MADHelpers",
     "MADNav",
     "MADOpenShareEmailModal",
     "MADPlayer",
@@ -739,10 +745,12 @@
     "massSetCurrentTrack",
     "openAlbumDirect",
     "openTracksModal",
+    "playSong",
     "run",
     "showPlaylistView",
     "showUserPlaylistPage",
-    "showView"
+    "showView",
+    "stopPlayback"
   ],
   "referencedIds": [
     "accessTokenInfo",
@@ -894,7 +902,6 @@
     "logout-btn",
     "logoutButton",
     "massToastContainer",
-    "miniPlayer",
     "mobile-discover-decade",
     "mobile-search-decade",
     "mobileArtistPrompt",
@@ -925,7 +932,6 @@
     "nowPlayingStatus",
     "nowPlayingSubtitle",
     "nowPlayingThumb",
-    "nowPlayingThumbImg",
     "nowPlayingTitle",
     "nowPlayingToggle",
     "nowPlayingVideo",
@@ -943,7 +949,6 @@
     "paymentPlans",
     "paymentSubmit",
     "play-pause-btn",
-    "playIcon",
     "player",
     "player-album",
     "player-artist",
@@ -952,7 +957,6 @@
     "player-modal",
     "player-title",
     "player-year",
-    "playerClose",
     "playerCurrentTime",
     "playhead",
     "playlistAlbumDetail",

@@ -17,6 +17,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/mobile.css?v=1">
+  <!-- Shared field/format helpers (window.MADHelpers); loaded before body scripts
+       so mobile's utilities can delegate to the single canonical source. -->
+  <script src="/js/helpers.js?v=1"></script>
 </head>
 <body>
   <!-- Google Tag Manager (noscript) -->
@@ -828,7 +831,7 @@
     };
 
     function getGenreField(fields) {
-      return getFieldValue(fields, ['Local Genre', 'Song Files::Local Genre']) || '';
+      return window.MADHelpers.getGenreField(fields);
     }
 
     // ===== Decades =====
@@ -1639,12 +1642,13 @@
         .forEach(el => { el.textContent = count; });
     }
 
-    // Helper functions for field extraction
+    // Field/format helpers delegate to the single canonical source in helpers.js
+    // (window.MADHelpers). Kept as thin wrappers so mobile's many call sites are
+    // unchanged. getArtworkUrl/getAudioUrl/getYearField/hasValidArtwork stay local
+    // because they have mobile-specific behaviour (placeholder, raw-value for the
+    // playTrack proxy, year/artwork rules).
     function getFieldValue(fields, fieldNames) {
-      for (const name of fieldNames) {
-        if (fields[name]) return fields[name];
-      }
-      return null;
+      return window.MADHelpers.getFieldValue(fields, fieldNames);
     }
 
     function getArtworkUrl(fields) {
@@ -1660,18 +1664,15 @@
     }
 
     function getTitleField(fields) {
-      const titleFields = ['Track Name', 'Song Name', 'Track Title', 'Song Title', 'Title'];
-      return getFieldValue(fields, titleFields) || 'Unknown Track';
+      return window.MADHelpers.getTitleField(fields);
     }
 
     function getArtistField(fields) {
-      const artistFields = ['Album Artist', 'Artist', 'Artist Name'];
-      return getFieldValue(fields, artistFields) || 'Unknown Artist';
+      return window.MADHelpers.getArtistField(fields);
     }
 
     function getAlbumField(fields) {
-      const albumFields = ['Album Title', 'Album', 'Album Name'];
-      return getFieldValue(fields, albumFields) || 'Unknown Album';
+      return window.MADHelpers.getAlbumField(fields);
     }
 
     function getYearField(fields) {
@@ -1684,17 +1685,11 @@
       return getFieldValue(fields, audioFields);
     }
 
-    // Check if an item has valid audio
+    // Check if an item has valid audio. Delegates to the canonical 10-field
+    // helper (was a 5-field copy here that wrongly hid tracks whose audio lives
+    // in Tape Files::* fields — e.g. missing New Releases).
     function hasValidAudio(item) {
-      if (!item || !item.fields) return false;
-      const audioFields = ['S3_URL', 'mp3', 'MP3', 'Audio File', 'Audio::mp3'];
-      const audio = getFieldValue(item.fields, audioFields);
-
-      // Check if audio field exists and is not empty
-      if (!audio) return false;
-      if (typeof audio === 'string' && audio.trim() === '') return false;
-
-      return true;
+      return window.MADHelpers.hasValidAudio(item);
     }
 
     // Check if an item has valid artwork
