@@ -462,7 +462,12 @@
         btn.addEventListener('click', function (e) {
           if (!btn.href || btn.href.endsWith('#')) return;
           e.preventDefault();
-          window._openRingtoneModal(btn.href);
+          var url = btn.href; // capture before any state change
+          // Halt main playback so the track doesn't play over the ringtone
+          // editor (matches the desktop scissors behaviour). The 'pause' event
+          // updates the floating player and emits a PAUSE stream event.
+          try { audio.pause(); } catch (_) {}
+          window._openRingtoneModal(url);
         });
       }
     });
