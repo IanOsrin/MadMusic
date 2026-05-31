@@ -1,6 +1,11 @@
 (function() {
   'use strict';
 
+  // Shared utilities — single source of truth in helpers.js (window.MADHelpers).
+  // Aliased so existing call sites keep working; do NOT redefine these below.
+  const { getFieldValue, getArtworkUrl, getTitleField, getAlbumField, escapeHtml, formatRelativeTime, formatTrendingMeta, toSeconds, groupByAlbum, shuffleArray, getGenreField, hasValidAudio, getArtistField } = window.MADHelpers;
+
+
   // ---- DISCOVERY FUNCTIONS ----
 
   // In-memory trending cache — persists for the lifetime of the page session.
@@ -297,12 +302,6 @@
     }
 
     // Stream Event Tracking Functions
-    function toSeconds(value) {
-      const numeric = typeof value === 'number' ? value : Number(value);
-      if (!Number.isFinite(numeric)) return 0;
-      return Math.max(0, Math.round(numeric));
-    }
-
     function getCurrentTrackMeta() {
       if (!currentTrackInfo || !currentTrackInfo.recordId) return {};
       return {
@@ -404,33 +403,6 @@
     }
 
     // Helper functions
-    function getFieldValue(fields, fieldNames) {
-      if (!fields) return null;
-      for (const name of fieldNames) {
-        if (fields[name]) return fields[name];
-      }
-      return null;
-    }
-
-    function getArtworkUrl(fields) {
-      const artworkFields = ['Artwork_S3_URL', 'Tape Files::Artwork_S3_URL', 'Artwork::Picture', 'Artwork Picture', 'Picture'];
-      const artwork = getFieldValue(fields, artworkFields);
-      if (!artwork) return null;
-
-      // Handle FileMaker container URLs
-      if (typeof artwork === 'string') {
-        if (artwork.startsWith('http')) {
-          // Check if it's an S3 URL - return directly without proxying
-          if (/^https?:\/\/.*\.s3[.-]/.test(artwork) || /^https?:\/\/s3[.-]/.test(artwork)) {
-            return artwork;
-          }
-          return `/api/container?u=${encodeURIComponent(artwork)}`;
-        }
-        return artwork;
-      }
-      return null;
-    }
-
     function getAudioUrl(fields, recordId) {
       const audioFields = ['S3_URL', 'Tape Files::S3_URL', 'mp3', 'MP3', 'Tape Files::mp3', 'Tape Files::MP3', 'Audio File', 'Audio::mp3', 'Stream URL', 'Audio URL'];
       const audio = getFieldValue(fields, audioFields);
@@ -447,96 +419,8 @@
     }
 
     // Check if an item has valid audio
-    function hasValidAudio(item) {
-      if (!item || !item.fields) return false;
-      const audioFields = ['S3_URL', 'Tape Files::S3_URL', 'mp3', 'MP3', 'Tape Files::mp3', 'Tape Files::MP3', 'Audio File', 'Audio::mp3', 'Stream URL', 'Audio URL'];
-      const audio = getFieldValue(item.fields, audioFields);
-
-      // Check if audio field exists and is not empty
-      if (!audio) return false;
-      if (typeof audio === 'string' && audio.trim() === '') return false;
-
-      return true;
-    }
-
     // Escape HTML to prevent XSS attacks
-    function escapeHtml(unsafe) {
-      if (typeof unsafe !== 'string') {
-        unsafe = String(unsafe ?? '');
-      }
-      return unsafe
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-
-    function getTitleField(fields) {
-      const titleFields = ['Track Name', 'Song Name', 'Track Title', 'Song Title', 'Title'];
-      return getFieldValue(fields, titleFields) || 'Unknown Track';
-    }
-
-    function getArtistField(fields) {
-      const artistFields = ['Track Artist', 'Artist', 'Artist Name', 'Album Artist'];
-      return getFieldValue(fields, artistFields) || 'Unknown Artist';
-    }
-
-    function getAlbumField(fields) {
-      const albumFields = ['Album Title', 'Album', 'Album Name'];
-      return getFieldValue(fields, albumFields) || 'Unknown Album';
-    }
-
-    function getGenreField(fields) {
-      return getFieldValue(fields, ['Local Genre', 'Song Files::Local Genre']) || '';
-    }
-
-    function formatRelativeTime(value) {
-      if (!value) return '';
-      const date = value instanceof Date ? value : new Date(value);
-      if (Number.isNaN(date.getTime())) return '';
-      const diffMs = Date.now() - date.getTime();
-      const minutes = Math.max(0, Math.round(diffMs / 60000));
-      if (minutes < 1) return 'Just now';
-      if (minutes < 60) return `${minutes}m ago`;
-      const hours = Math.round(minutes / 60);
-      if (hours < 24) return `${hours}h ago`;
-      const days = Math.round(hours / 24);
-      return `${days}d ago`;
-    }
-
-    function formatTrendingMeta(metrics = {}) {
-      const plays = Number(metrics.playCount) || 0;
-      const playLabel = plays ? `${plays} play${plays === 1 ? '' : 's'}` : '';
-      const relative = metrics.lastEventUTC ? formatRelativeTime(metrics.lastEventUTC) : '';
-      return [playLabel, relative].filter(Boolean).join(' · ');
-    }
-
     // Group tracks by album
-    function groupByAlbum(items) {
-      const albumMap = new Map();
-
-      items.forEach(item => {
-        const fields = item.fields || {};
-        const album = getAlbumField(fields);
-        const artist = getArtistField(fields);
-        const albumKey = `${album}|||${artist}`; // Use delimiter to avoid conflicts
-
-        if (!albumMap.has(albumKey)) {
-          albumMap.set(albumKey, {
-            album,
-            artist,
-            artwork: getArtworkUrl(fields),
-            tracks: []
-          });
-        }
-
-        albumMap.get(albumKey).tracks.push(item);
-      });
-
-      return Array.from(albumMap.values());
-    }
-
     // ---- Artist albums prompt ----
     function navigateToArtistAlbums(artist) {
       if (window.showView) window.showView('albums');
@@ -1225,15 +1109,6 @@
     }
 
     // Shuffle array utility
-    function shuffleArray(array) {
-      const shuffled = [...array];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      return shuffled;
-    }
-
     // Progressive rendering - append items one at a time
     async function renderRandomProgressive(items) {
       const container = document.getElementById('randomContainer');

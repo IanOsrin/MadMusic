@@ -87,7 +87,9 @@ function getTitleField(fields) {
  * @returns {string} The artist or 'Unknown Artist' as default
  */
 function getArtistField(fields) {
-  const artistFields = ['Album Artist', 'Artist', 'Artist Name'];
+  // Canonical priority (was duplicated 4 ways): prefer a track-specific artist,
+  // then generic Artist, then the album artist. Matches discovery.js rail rendering.
+  const artistFields = ['Track Artist', 'Artist', 'Artist Name', 'Album Artist'];
   return getFieldValue(fields, artistFields) || 'Unknown Artist';
 }
 
@@ -187,7 +189,10 @@ function formatDuration(secs) {
 
     function hasValidAudio(item) {
       if (!item || !item.fields) return false;
-      const audioFields = ['S3_URL', 'mp3', 'MP3', 'Audio File', 'Audio::mp3'];
+      // Canonical superset (was duplicated 4 ways): includes the Tape Files::*
+      // and Stream/Audio URL fallbacks the catalog actually uses — the shorter
+      // 5-field copy could wrongly hide playable tracks.
+      const audioFields = ['S3_URL', 'Tape Files::S3_URL', 'mp3', 'MP3', 'Tape Files::mp3', 'Tape Files::MP3', 'Audio File', 'Audio::mp3', 'Stream URL', 'Audio URL'];
       const audio = getFieldValue(item.fields, audioFields);
 
       // Check if audio field exists and is not empty

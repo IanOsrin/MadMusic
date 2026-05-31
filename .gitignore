@@ -42,3 +42,9 @@ Possible\ FX.docx
 
 # Working notes — keep out of the repo
 SESSION_NOTES.md
+
+# Playwright — keep specs + committed baseline snapshots, ignore run artifacts
+test-results/
+playwright-report/
+blob-report/
+.playwright/

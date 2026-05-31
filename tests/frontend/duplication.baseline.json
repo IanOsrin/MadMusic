@@ -1,0 +1,193 @@
+{
+  "note": "Stable duplication fingerprint of the frontend views. Lower is better. Regenerate with UPDATE_BASELINE=1 npx vitest run tests/frontend/duplication-baseline.test.js",
+  "perFile": {
+    "app.html": {
+      "totalLines": 6089,
+      "styleBlocks": 3,
+      "cssSignificantLines": 159,
+      "inlineJsSignificantLines": 2932
+    },
+    "mobile.html": {
+      "totalLines": 2588,
+      "styleBlocks": 0,
+      "cssSignificantLines": 0,
+      "inlineJsSignificantLines": 1271
+    },
+    "audio-lab.html": {
+      "totalLines": 4083,
+      "styleBlocks": 0,
+      "cssSignificantLines": 0,
+      "inlineJsSignificantLines": 2385
+    },
+    "ringtone.html": {
+      "totalLines": 903,
+      "styleBlocks": 1,
+      "cssSignificantLines": 111,
+      "inlineJsSignificantLines": 404
+    }
+  },
+  "cssDuplication": {
+    "sharedLineKeys": 5,
+    "redundantCopies": 5
+  },
+  "jsDuplication": {
+    "sharedLineKeys": 90,
+    "redundantCopies": 104
+  },
+  "totalRedundantCopies": 109,
+  "cssExamples": [
+    {
+      "files": [
+        "app.html",
+        "ringtone.html"
+      ],
+      "line": "align-items: center;"
+    },
+    {
+      "files": [
+        "app.html",
+        "ringtone.html"
+      ],
+      "line": "flex-direction: column;"
+    },
+    {
+      "files": [
+        "app.html",
+        "ringtone.html"
+      ],
+      "line": "display: flex; align-items: center; gap: 12px;"
+    },
+    {
+      "files": [
+        "app.html",
+        "ringtone.html"
+      ],
+      "line": "justify-content: center;"
+    },
+    {
+      "files": [
+        "app.html",
+        "ringtone.html"
+      ],
+      "line": "text-decoration: none;"
+    }
+  ],
+  "jsExamples": [
+    {
+      "files": [
+        "app.html",
+        "audio-lab.html",
+        "mobile.html",
+        "ringtone.html"
+      ],
+      "line": "(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':"
+    },
+    {
+      "files": [
+        "app.html",
+        "audio-lab.html",
+        "mobile.html",
+        "ringtone.html"
+      ],
+      "line": "new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],"
+    },
+    {
+      "files": [
+        "app.html",
+        "audio-lab.html",
+        "mobile.html",
+        "ringtone.html"
+      ],
+      "line": "j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src="
+    },
+    {
+      "files": [
+        "app.html",
+        "audio-lab.html",
+        "mobile.html",
+        "ringtone.html"
+      ],
+      "line": "'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);"
+    },
+    {
+      "files": [
+        "app.html",
+        "audio-lab.html",
+        "mobile.html",
+        "ringtone.html"
+      ],
+      "line": "})(window,document,'script','dataLayer','GTM-W4LLH7XT');"
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html"
+      ],
+      "line": "const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.use"
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html"
+      ],
+      "line": "const data = await response.json();"
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html"
+      ],
+      "line": "const items = data.items || [];"
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html"
+      ],
+      "line": "if (!items.length) {"
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html"
+      ],
+      "line": "const seen = new Set();"
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html"
+      ],
+      "line": "async function loadG100Playlists() {"
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html",
+        "ringtone.html"
+      ],
+      "line": "const data = await res.json();"
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html"
+      ],
+      "line": "const playlists = data.playlists || [];"
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html"
+      ],
+      "line": "if (!playlists.length) {"
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html"
+      ],
+      "line": "<div class=\"g100-playlist-art\">"
+    }
+  ]
+}
