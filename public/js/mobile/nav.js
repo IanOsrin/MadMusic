@@ -3,7 +3,9 @@
 import { DECADES, GENRES } from './data.js';
 import { state } from './state.js';
 import { loadPlaylists } from './playlists.js';
-import { loadDiscover, loadG100, loadG100Playlists, loadNewReleases } from './rails.js';
+import { loadDiscover } from './rails-discover.js';
+import { loadG100, loadG100Playlists } from './rails-g100.js';
+import { loadNewReleases } from './rails-newreleases.js';
 
 export function switchTab(tabName) {
       const wasAlreadyActive = state.currentTab === tabName;

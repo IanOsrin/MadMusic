@@ -9,7 +9,9 @@ import { buyAccess, logout, setAccessToken, updateAuthUI } from './auth.js';
 import { switchTab } from './nav.js';
 import { renderSearchResults, search } from './search.js';
 import { createPlaylist, loadPlaylists, showAddToPlaylistModal } from './playlists.js';
-import { filterG100Albums, loadDiscover, loadG100, loadNewReleases, refreshDiscover, renderDiscoverTracks } from './rails.js';
+import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js';
+import { filterG100Albums, loadG100 } from './rails-g100.js';
+import { loadNewReleases } from './rails-newreleases.js';
 import { closeModal, playTrack, sendStreamEvent, updatePlayerModal, updateProgress } from './player.js';
 
 // ===== Tab Navigation =====
