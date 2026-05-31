@@ -4,16 +4,21 @@
 // net cannot catch.
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 // The mobile app's JS was externalized from an inline <script> in mobile.html
-// into public/js/mobile.js. Scan both so these source checks hold wherever the
-// code lives (markup stays in mobile.html; functions live in mobile.js).
+// into the public/js/mobile/ module graph (main.js + fetch-interceptor.js). Scan
+// markup + every mobile module so these source checks hold wherever the code
+// lives (markup stays in mobile.html; functions live in the modules).
 const mobileHtml = readFileSync(join(root, 'public', 'mobile.html'), 'utf8');
-const mobileJs = readFileSync(join(root, 'public', 'js', 'mobile.js'), 'utf8');
+const mobileDir = join(root, 'public', 'js', 'mobile');
+const mobileJs = readdirSync(mobileDir)
+  .filter((f) => f.endsWith('.js'))
+  .map((f) => readFileSync(join(mobileDir, f), 'utf8'))
+  .join('\n');
 const mobile = mobileHtml + '\n' + mobileJs;
 const helpers = readFileSync(join(root, 'public', 'js', 'helpers.js'), 'utf8');
 

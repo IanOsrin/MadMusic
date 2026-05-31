@@ -469,6 +469,9 @@
   })();
   </script>
 
-  <script src="/js/mobile.js?v=1"></script>
+  <!-- Access-token fetch patch: classic script, MUST run before the module graph. -->
+  <script src="/js/mobile/fetch-interceptor.js?v=1"></script>
+  <!-- Mobile app (ES module graph). Deferred; runs after the classic scripts above. -->
+  <script type="module" src="/js/mobile/main.js?v=1"></script>
 </body>
 </html>

@@ -393,11 +393,13 @@
         "/js/helpers.js",
         "inline",
         "inline",
-        "/js/mobile.js"
+        "/js/mobile/fetch-interceptor.js",
+        "/js/mobile/main.js"
       ],
       "externalScripts": [
         "/js/helpers.js",
-        "/js/mobile.js"
+        "/js/mobile/fetch-interceptor.js",
+        "/js/mobile/main.js"
       ],
       "windowGlobals": [
         "MADHelpers",

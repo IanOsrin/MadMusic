@@ -1,33 +1,7 @@
-    // ===== Fetch Interceptor for Access Token =====
-    // This must run FIRST to intercept all API calls
-    (function() {
-      const originalFetch = window.fetch;
-
-      window.fetch = function(url, options = {}) {
-        const isApiCall = url.includes('/api/') || url.startsWith('/api/');
-
-        if (isApiCall) {
-          const accessToken = localStorage.getItem('mass_access_token');
-
-          if (accessToken) {
-            // Initialize headers if not present
-            if (!options.headers) {
-              options.headers = {};
-            }
-
-            // Add access token header
-            if (options.headers instanceof Headers) {
-              options.headers.set('X-Access-Token', accessToken);
-            } else if (typeof options.headers === 'object') {
-              options.headers['X-Access-Token'] = accessToken;
-            }
-          }
-        }
-
-        // Call original fetch
-        return originalFetch(url, options);
-      };
-    })();
+// Mobile app entry (ES module). Phase 1 of the mobile.js split: module-mode
+// switch only — code is unchanged from the former single mobile.js except the
+// fetch interceptor (now fetch-interceptor.js) and the window-exposure block
+// at the bottom. Carving into mobile/*.js modules follows in later phases.
 
     // ===== Genre List =====
     const GENRES = [
@@ -2141,3 +2115,13 @@
         });
       }
     })();
+
+    // ===== Inline-handler exposure (module scope has no implicit globals) =====
+    // mobile.html markup and dynamically-built template strings call these by name
+    // via on*="…" attributes. As a module, top-level `function` declarations are NOT
+    // attached to window, so without this the corresponding buttons silently no-op.
+    // (clear*Filter / selectGenre already self-assign to window above.)
+    Object.assign(window, {
+      loadNewReleases, loadG100, filterG100Albums, refreshDiscover,
+      buyAccess, setAccessToken, closeModal,
+    });
