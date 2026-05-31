@@ -1595,9 +1595,11 @@
         }
       });
 
-      // Render one card per album (limit to 100)
+      // Render one card per album (limit to 100). The rendered list is the
+      // Discover "feed" — now-playing prev/next navigate it (see play handler).
       const displayLimit = 100;
-      deduped.slice(0, displayLimit).forEach(track => {
+      state.discoverFeed = deduped.slice(0, displayLimit);
+      state.discoverFeed.forEach(track => {
         const fields = track.fields || {};
         const key = `${getAlbumField(fields)}|||${getAlbumArtist(fields)}`.toLowerCase();
         const albumCtx = albumMap.get(key);
@@ -1868,15 +1870,17 @@
         }
       });
 
-      // Play → play this track, set album as context so prev/next works
-      card.querySelector('.play-btn').addEventListener('click', async (e) => {
+      // Play → set the whole Discover feed as the queue so now-playing prev/next
+      // move through the feed (each card is one album's representative track).
+      card.querySelector('.play-btn').addEventListener('click', (e) => {
         e.stopPropagation();
-        // Try to use the full album from cache for better playlist context
-        const fullAlbum = albumCtx ? (state.discoverAlbumCache.get(albumKey) || albumCtx) : null;
-        if (fullAlbum) {
-          const idx = fullAlbum.tracks.findIndex(t => (t.recordId || t) === (track.recordId || track));
-          state.playlistContext = { tracks: fullAlbum.tracks, currentIndex: idx >= 0 ? idx : 0, playFn: playTrack };
-        }
+        const feed = state.discoverFeed || [];
+        const idx = feed.findIndex(t => (t.recordId || t) === (track.recordId || track));
+        state.playlistContext = {
+          tracks: feed.length ? feed : [track],
+          currentIndex: idx >= 0 ? idx : 0,
+          playFn: playTrack
+        };
         playTrack(track);
       });
 
