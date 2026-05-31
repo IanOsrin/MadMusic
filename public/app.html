@@ -5406,6 +5406,16 @@
       btn.href = '#';
     }
 
+    // Halt main-page playback so it doesn't play over the ringtone editor.
+    // Prefers the player modules' stop() (resets UI + sends an END stream event);
+    // always pauses the shared <audio id="player"> as a guaranteed fallback.
+    function stopMainPlayback() {
+      try { if (typeof window.stopPlayback === 'function') window.stopPlayback(); } catch (_) {}
+      try { if (typeof window._discoveryStopPlayback === 'function') window._discoveryStopPlayback(); } catch (_) {}
+      var p = document.getElementById('player');
+      if (p && !p.paused) { try { p.pause(); } catch (_) {} }
+    }
+
     // ── Ringtone modal (sub-window inside the main window) ─────────────────
     // Injected once on DOMContentLoaded. The scissors click opens this
     // instead of navigating to a new tab, so the user keeps their place
@@ -5480,6 +5490,7 @@
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
           if (!btn.href || btn.href.endsWith('#')) return;
           e.preventDefault();
+          stopMainPlayback();   // don't let the main track play over the ringtone editor
           window._openRingtoneModal(btn.href);
         });
       }

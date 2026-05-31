@@ -50,11 +50,17 @@ test.describe('frontend views render', () => {
     await page.goto('/audio-lab');
     await settle(page);
 
-    // The lab is gated; whatever state it lands in, the document must have
-    // rendered a body and thrown no uncaught script errors.
+    // Structural smoke check: the document renders, the editor's key landmarks
+    // exist, and no uncaught script errors fire.
+    //
+    // NOTE: deliberately no screenshot here. audio-lab's "AI Stem Server" status
+    // banner (#aiServerBanner) has a variable height depending on connection
+    // state, which shifts the entire layout below it run-to-run — so a full-page
+    // screenshot is inherently flaky and can't be stabilised by masking. audio-lab
+    // is also locked and out of the overhaul's scope, so a pixel guard adds little.
     await expect(page.locator('body')).toBeVisible();
+    await expect(page.locator('#dropZone')).toBeAttached();
+    await expect(page.locator('#aiServerBanner')).toBeAttached();
     expect(errors, `uncaught page errors: ${errors.join(' | ')}`).toEqual([]);
-
-    await expect(page).toHaveScreenshot('audio-lab.png');
   });
 });
