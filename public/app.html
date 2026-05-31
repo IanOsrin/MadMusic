@@ -5490,8 +5490,12 @@
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
           if (!btn.href || btn.href.endsWith('#')) return;
           e.preventDefault();
+          // Capture the ringtone URL BEFORE stopping: stopMainPlayback() resets
+          // the scissors (hideRingtoneBtn sets href='#'), so reading btn.href
+          // afterwards would load the homepage instead of the ringtone editor.
+          var ringtoneUrl = btn.href;
           stopMainPlayback();   // don't let the main track play over the ringtone editor
-          window._openRingtoneModal(btn.href);
+          window._openRingtoneModal(ringtoneUrl);
         });
       }
     });
