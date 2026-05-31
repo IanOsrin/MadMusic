@@ -57,7 +57,9 @@ function getArtworkUrl(fields) {
  * @returns {string|null} The audio URL or null if not found
  */
 function getAudioUrl(fields, recordId) {
-  const audioFields = ['S3_URL', 'mp3', 'MP3', 'Audio File', 'Audio::mp3'];
+  // Canonical superset (was duplicated 3 ways): same Tape Files::* / Stream URL
+  // fallbacks as hasValidAudio so a track judged playable actually resolves a URL.
+  const audioFields = ['S3_URL', 'Tape Files::S3_URL', 'mp3', 'MP3', 'Tape Files::mp3', 'Tape Files::MP3', 'Audio File', 'Audio::mp3', 'Stream URL', 'Audio URL'];
   const audio = getFieldValue(fields, audioFields);
   if (!audio) return null;
 

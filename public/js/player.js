@@ -6,7 +6,7 @@
 
   // Shared utilities — single source of truth in helpers.js (window.MADHelpers).
   // Aliased so existing call sites keep working; do NOT redefine these below.
-  const { getFieldValue, getArtworkUrl, getTitleField, getAlbumField, escapeHtml, formatRelativeTime, formatTrendingMeta, toSeconds, getGenreField, hasValidAudio, getArtistField } = window.MADHelpers;
+  const { getFieldValue, getArtworkUrl, getTitleField, getAlbumField, escapeHtml, formatRelativeTime, formatTrendingMeta, toSeconds, getGenreField, hasValidAudio, getArtistField, getAudioUrl } = window.MADHelpers;
 
 
   // ---- STATE ----
@@ -170,21 +170,6 @@
 
 
   // ---- HELPER FUNCTIONS ----
-
-      function getAudioUrl(fields, recordId) {
-        const audioFields = ['S3_URL', 'Tape Files::S3_URL', 'mp3', 'MP3', 'Tape Files::mp3', 'Tape Files::MP3', 'Audio File', 'Audio::mp3', 'Stream URL', 'Audio URL'];
-        const audio = getFieldValue(fields, audioFields);
-        if (!audio) return null;
-
-        if (typeof audio === 'string' && audio.startsWith('http')) {
-          // Check if it's an S3 URL - return directly without proxying
-          if (/^https?:\/\/.*\.s3[.-]/.test(audio) || /^https?:\/\/s3[.-]/.test(audio)) {
-            return audio;
-          }
-          return `/api/container?u=${encodeURIComponent(audio)}`;
-        }
-        return `/api/track/${recordId}/container`;
-      }
 
       // Check if an item has valid audio
       // Escape HTML to prevent XSS attacks

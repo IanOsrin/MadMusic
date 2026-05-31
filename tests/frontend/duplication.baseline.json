@@ -14,9 +14,9 @@
       "inlineJsSignificantLines": 1271
     },
     "audio-lab.html": {
-      "totalLines": 4083,
-      "styleBlocks": 0,
-      "cssSignificantLines": 0,
+      "totalLines": 4641,
+      "styleBlocks": 1,
+      "cssSignificantLines": 470,
       "inlineJsSignificantLines": 2385
     },
     "ringtone.html": {
@@ -27,18 +27,19 @@
     }
   },
   "cssDuplication": {
-    "sharedLineKeys": 5,
-    "redundantCopies": 5
+    "sharedLineKeys": 10,
+    "redundantCopies": 12
   },
   "jsDuplication": {
     "sharedLineKeys": 90,
     "redundantCopies": 104
   },
-  "totalRedundantCopies": 109,
+  "totalRedundantCopies": 116,
   "cssExamples": [
     {
       "files": [
         "app.html",
+        "audio-lab.html",
         "ringtone.html"
       ],
       "line": "align-items: center;"
@@ -46,6 +47,7 @@
     {
       "files": [
         "app.html",
+        "audio-lab.html",
         "ringtone.html"
       ],
       "line": "flex-direction: column;"
@@ -67,9 +69,44 @@
     {
       "files": [
         "app.html",
+        "audio-lab.html"
+      ],
+      "line": "white-space: nowrap;"
+    },
+    {
+      "files": [
+        "app.html",
+        "audio-lab.html"
+      ],
+      "line": "text-overflow: ellipsis;"
+    },
+    {
+      "files": [
+        "app.html",
         "ringtone.html"
       ],
       "line": "text-decoration: none;"
+    },
+    {
+      "files": [
+        "audio-lab.html",
+        "ringtone.html"
+      ],
+      "line": "background: var(--bg);"
+    },
+    {
+      "files": [
+        "audio-lab.html",
+        "ringtone.html"
+      ],
+      "line": "border: 1px solid var(--border);"
+    },
+    {
+      "files": [
+        "audio-lab.html",
+        "ringtone.html"
+      ],
+      "line": "border-radius: 10px;"
     }
   ],
   "jsExamples": [
