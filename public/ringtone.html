@@ -454,10 +454,22 @@
       return m + ':' + String(s).padStart(2, '0');
     }
 
+    // /api/container only STREAMS bytes when proxy=1 is set; without it the
+    // server 302-redirects to the real target (usually S3), which returns no
+    // CORS headers fetch() can read. The mobile player sets audio.src to a
+    // proxied /api/container URL WITHOUT proxy=1, so any same-origin container
+    // path must have proxy=1 forced on before we fetch it for decoding.
+    function ensureContainerProxy(path) {
+      if (/^\/api\/container\b/.test(path) && !/[?&]proxy=1\b/.test(path)) {
+        return path + (path.includes('?') ? '&' : '?') + 'proxy=1';
+      }
+      return path;
+    }
+
     function normaliseSrc(src) {
       if (!src) return '';
       const decoded = safeDecodeParam(src);
-      if (decoded.startsWith('/')) return decoded;
+      if (decoded.startsWith('/')) return ensureContainerProxy(decoded);
       // Same-origin absolute URL? Strip the origin and use the path+query
       // directly — wrapping it in /api/container?u=... would double-proxy.
       // (Happens when the source page passes audio.currentSrc, which is
@@ -466,7 +478,7 @@
         try {
           const u = new URL(decoded);
           if (u.origin === window.location.origin) {
-            return u.pathname + u.search;
+            return ensureContainerProxy(u.pathname + u.search);
           }
         } catch (e) { /* fall through to external-URL wrap */ }
         // External URL → proxy through /api/container with proxy=1 so the

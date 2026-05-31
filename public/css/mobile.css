@@ -411,8 +411,8 @@
     /* ===== Floating Player ===== */
     #floating-player {
       position: fixed;
-      width: 60px;
-      height: 60px;
+      width: 76px;
+      height: 76px;
       border-radius: 50%;
       background: var(--bg-card);
       border: 2px solid var(--border);
