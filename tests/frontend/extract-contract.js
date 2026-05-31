@@ -25,6 +25,8 @@ export const JS_MODULES = [
   'js/catalog.js', 'js/currency.js', 'js/discovery.js',
   'js/mobile/fetch-interceptor.js', 'js/mobile/main.js',
   'js/mobile/data.js', 'js/mobile/state.js', 'js/mobile/util.js', 'js/mobile/fields.js',
+  'js/mobile/auth.js', 'js/mobile/nav.js', 'js/mobile/search.js', 'js/mobile/playlists.js',
+  'js/mobile/cards.js', 'js/mobile/rails.js', 'js/mobile/player.js',
 ];
 
 // Browser/DOM built-ins that live on window but are not part of OUR contract.
