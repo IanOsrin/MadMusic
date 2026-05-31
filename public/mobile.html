@@ -1142,7 +1142,7 @@
       tracks.forEach(track => {
         const fields = track.fields || track.fieldData || {};
         const albumTitle = getAlbumField(fields) || getTitleField(fields) || 'Unknown Album';
-        const artist    = getArtistField(fields) || 'Unknown Artist';
+        const artist    = getAlbumArtist(fields);
         const artwork   = getArtworkUrl(fields);
         const key       = `${albumTitle}|||${artist}`.toLowerCase();
 
@@ -1246,7 +1246,7 @@
         items.forEach(item => {
           const fields = item.fields || {};
           const albumTitle = getAlbumField(fields);
-          const artist     = getArtistField(fields);
+          const artist     = getAlbumArtist(fields);
           const artwork    = getArtworkUrl(fields);
           const key        = `${albumTitle}|||${artist}`.toLowerCase();
 
@@ -1568,7 +1568,7 @@
       filteredTracks.forEach(track => {
         const fields = track.fields || {};
         const albumTitle  = getAlbumField(fields);
-        const albumArtist = getArtistField(fields);
+        const albumArtist = getAlbumArtist(fields);
         const key = `${albumTitle}|||${albumArtist}`.toLowerCase();
         if (!albumMap.has(key)) {
           albumMap.set(key, {
@@ -1588,7 +1588,7 @@
       const deduped = [];
       filteredTracks.forEach(track => {
         const fields = track.fields || {};
-        const key = `${getAlbumField(fields)}|||${getArtistField(fields)}`.toLowerCase();
+        const key = `${getAlbumField(fields)}|||${getAlbumArtist(fields)}`.toLowerCase();
         if (!seenAlbums.has(key)) {
           seenAlbums.add(key);
           deduped.push(track);
@@ -1599,7 +1599,7 @@
       const displayLimit = 100;
       deduped.slice(0, displayLimit).forEach(track => {
         const fields = track.fields || {};
-        const key = `${getAlbumField(fields)}|||${getArtistField(fields)}`.toLowerCase();
+        const key = `${getAlbumField(fields)}|||${getAlbumArtist(fields)}`.toLowerCase();
         const albumCtx = albumMap.get(key);
         const card = createDiscoverTrackCard(track, albumCtx);
         elements.discoverContent.appendChild(card);
@@ -1671,6 +1671,13 @@
       return window.MADHelpers.getArtistField(fields);
     }
 
+    // Album-level artist for grouping keys/album cards (album-first). Using the
+    // track-first getArtistField here would split a compilation album into one
+    // card per track artist.
+    function getAlbumArtist(fields) {
+      return window.MADHelpers.getAlbumArtist(fields);
+    }
+
     function getAlbumField(fields) {
       return window.MADHelpers.getAlbumField(fields);
     }
@@ -1715,7 +1722,7 @@
       tracks.forEach(track => {
         const fields = track.fields || {};
         const albumTitle = getAlbumField(fields);
-        const albumArtist = getArtistField(fields);
+        const albumArtist = getAlbumArtist(fields);
         const albumKey = `${albumTitle}|||${albumArtist}`.toLowerCase();
 
         if (!albums.has(albumKey)) {
@@ -2168,7 +2175,7 @@
           recordId: track.recordId || '',
           name: getTitleField(fields),
           albumTitle: getAlbumField(fields),
-          albumArtist: getArtistField(fields),
+          albumArtist: getAlbumArtist(fields),
           artwork: getArtworkUrl(fields),
           mp3: getAudioUrl(fields) || ''
         };

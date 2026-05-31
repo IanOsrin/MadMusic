@@ -89,10 +89,18 @@ function getTitleField(fields) {
  * @returns {string} The artist or 'Unknown Artist' as default
  */
 function getArtistField(fields) {
-  // Canonical priority (was duplicated 4 ways): prefer a track-specific artist,
-  // then generic Artist, then the album artist. Matches discovery.js rail rendering.
+  // Track-level artist for DISPLAY: prefer a track-specific artist, then generic
+  // Artist, then the album artist. Matches discovery.js rail rendering.
   const artistFields = ['Track Artist', 'Artist', 'Artist Name', 'Album Artist'];
   return getFieldValue(fields, artistFields) || 'Unknown Artist';
+}
+
+// Album-level artist for GROUPING keys and album cards: prefer the album artist.
+// Use this (NOT getArtistField) when collapsing tracks into albums — otherwise a
+// compilation/various-artists album fragments into one card per track artist.
+function getAlbumArtist(fields) {
+  const albumArtistFields = ['Album Artist', 'Artist', 'Artist Name'];
+  return getFieldValue(fields, albumArtistFields) || 'Unknown Artist';
 }
 
 /**
@@ -171,7 +179,9 @@ function formatDuration(secs) {
       items.forEach(item => {
         const fields = item.fields || {};
         const album = getAlbumField(fields);
-        const artist = getArtistField(fields);
+        // Group by ALBUM artist, not the track artist — otherwise a compilation
+        // (many track artists on one album) fragments into one card per artist.
+        const artist = getAlbumArtist(fields);
         const albumKey = `${album}|||${artist}`; // Use delimiter to avoid conflicts
 
         if (!albumMap.has(albumKey)) {
@@ -235,6 +245,7 @@ window.MADHelpers.getArtworkUrl = getArtworkUrl;
 window.MADHelpers.getAudioUrl = getAudioUrl;
 window.MADHelpers.getTitleField = getTitleField;
 window.MADHelpers.getArtistField = getArtistField;
+window.MADHelpers.getAlbumArtist = getAlbumArtist;
 window.MADHelpers.getAlbumField = getAlbumField;
 window.MADHelpers.formatDuration = formatDuration;
 window.MADHelpers.cleanGenreLabel = cleanGenreLabel;
