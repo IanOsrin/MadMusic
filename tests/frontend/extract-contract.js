@@ -24,6 +24,7 @@ export const JS_MODULES = [
   'js/helpers.js', 'js/auth.js', 'js/player.js', 'js/playlists.js',
   'js/catalog.js', 'js/currency.js', 'js/discovery.js',
   'js/mobile/fetch-interceptor.js', 'js/mobile/main.js',
+  'js/mobile/data.js', 'js/mobile/state.js', 'js/mobile/util.js', 'js/mobile/fields.js',
 ];
 
 // Browser/DOM built-ins that live on window but are not part of OUR contract.
