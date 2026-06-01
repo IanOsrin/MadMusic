@@ -4,7 +4,6 @@ import { elements, state } from './state.js';
 import { getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js';
 import { switchTab } from './nav.js';
 import { search } from './search.js';
-import { showAddToPlaylistModal } from './playlists.js';
 import { closeModal, playTrack } from './player.js';
 
 export function createAlbumCard(album) {
@@ -180,31 +179,4 @@ export function showMobileArtistPrompt(artistName) {
       overlay.querySelector('.mobile-artist-no').addEventListener('click', () => overlay.remove());
       overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
       document.body.appendChild(overlay);
-    }
-
-export function createTrackCard(track) {
-      const card = document.createElement('div');
-      card.className = 'track-card';
-
-      const fields = track.fields || {};
-      const artwork = getArtworkUrl(fields);
-      const title = getTitleField(fields);
-      const artist = getArtistField(fields);
-
-      card.innerHTML = `
-        <img class="track-artwork" src="${artwork}" alt="${title}" loading="lazy" onerror="this.src='/img/placeholder.png'">
-        <div class="track-info">
-          <div class="track-title">${title}</div>
-          <div class="track-artist">${artist}</div>
-        </div>
-        <div class="track-actions">
-          <button class="btn-icon play-btn">▶</button>
-          <button class="btn-icon add-btn">+</button>
-        </div>
-      `;
-
-      card.querySelector('.play-btn').addEventListener('click', () => playTrack(track));
-      card.querySelector('.add-btn').addEventListener('click', () => showAddToPlaylistModal(track));
-
-      return card;
     }

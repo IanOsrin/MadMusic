@@ -1,49 +1,7 @@
 // Auth + access-token flow for the mobile app.
 
 import { elements, state } from './state.js';
-import { generateSessionId, showToast } from './util.js';
-
-export async function checkAuth() {
-      const accessToken = localStorage.getItem('mass_access_token');
-      if (!accessToken) return null;
-
-      // Reuse the main app's session ID if present (same localStorage origin),
-      // so the server doesn't reject the token as "in use on another device"
-      if (!state.streamSessionId) {
-        state.streamSessionId = localStorage.getItem('mass.session') || generateSessionId();
-        localStorage.setItem('mass.session', state.streamSessionId);
-      }
-
-      try {
-        const response = await fetch('/api/access/validate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: accessToken.trim().toUpperCase(), sessionId: state.streamSessionId })
-        });
-
-        const data = await response.json();
-        if (response.ok && data.valid) {
-          // Store token info for display
-          localStorage.setItem('mass_token_info', JSON.stringify({
-            type: data.type,
-            expirationDate: data.expirationDate
-          }));
-          if (data.email) localStorage.setItem('mass_token_email', data.email);
-          return { email: data.email || 'Token User', tokenType: data.type, expirationDate: data.expirationDate };
-        } else {
-          // Token invalid/expired — clear it
-          localStorage.removeItem('mass_access_token');
-          localStorage.removeItem('mass_token_info');
-          localStorage.removeItem('mass_token_email');
-          return null;
-        }
-      } catch (err) {
-        console.error('Token validation failed', err);
-        // Keep token for retry, use cached info if available
-        const email = localStorage.getItem('mass_token_email');
-        return email ? { email } : null;
-      }
-    }
+import { showToast } from './util.js';
 
 export function logout() {
       localStorage.removeItem('mass_access_token');
