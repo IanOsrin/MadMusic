@@ -35,9 +35,14 @@ export async function playTrack(track) {
         return;
       }
 
-      // Play audio
+      // Play audio. play() rejects on a rapid src switch (AbortError — benign)
+      // or a load failure; catch it so it isn't an unhandled rejection. Real
+      // load failures still surface via the audio 'error' listener (toast +
+      // stream ERROR event). The desktop player likewise catches play().
       elements.audio.src = audioUrl;
-      elements.audio.play();
+      elements.audio.play().catch((err) => {
+        if (err && err.name !== 'AbortError') console.warn('Audio play() failed:', err.name || err);
+      });
 
       // Update UI
       updateFloatingPlayer();
