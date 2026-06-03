@@ -471,9 +471,17 @@
 
         <div class="layout-grid">
           <section class="content-column">
-            <!-- Hero banner: auto-rotating new-release artists (home only; hidden during search) -->
-            <section id="heroBanner" class="hero-banner" hidden aria-label="Featured new releases">
+            <!-- Hero banner: editorial carousel with new-release fallback (home only; hidden during search).
+                 Image discipline + data contract: docs/banners.md -->
+            <section id="heroBanner" class="hero-banner" hidden aria-label="Featured" aria-roledescription="carousel">
               <div class="hero-stage" id="heroStage"></div>
+              <button class="hero-nav hero-nav--prev" id="heroPrev" type="button" aria-label="Previous slide">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <button class="hero-nav hero-nav--next" id="heroNext" type="button" aria-label="Next slide">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+              <div class="hero-dots" id="heroDots" role="tablist" aria-label="Slides"></div>
             </section>
             <div class="toolbar">
               <div id="count" class="count"></div>
@@ -1806,17 +1814,6 @@
         <line x1="8.12" y1="8.12" x2="12" y2="12"/>
       </svg>
     </a>
-    <!-- Announce toggle — microphone icon, lights up when enabled -->
-    <button id="upAnnounceBtn" title="Now-Playing announcements" aria-label="Toggle announcements" style="background:none;border:none;cursor:pointer;padding:4px 5px;opacity:0.45;transition:opacity .2s;flex-shrink:0;" aria-pressed="false">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-      </svg>
-    </button>
-    <!-- Voice selector — populated from /api/tts/voices, hidden until announcements are on -->
-    <select id="upVoiceSelect" title="Choose announcement voice" aria-label="Choose announcement voice"
-      style="display:none;background:#1a1208;color:#d4a843;border:1px solid #6b4c1e;border-radius:5px;font-size:0.7rem;padding:2px 6px;max-width:160px;cursor:pointer;">
-      <option value="">Loading voices…</option>
-    </select>
     <!-- hidden legacy button -->
     <button id="upAddToPlaylist" style="display:none" aria-hidden="true"></button>
   </div>
@@ -3426,76 +3423,6 @@
       return null;
     }
 
-    // ── TTS announcement ─────────────────────────────────────────────────────
-    // Fetches a "Now playing…" MP3 from the server and plays it before the
-    // actual track. Falls back silently if TTS is unavailable or disabled.
-    var _ttsEnabled    = (localStorage.getItem('tts_announce') === 'true');   // opt-in: announcements OFF unless the visitor turned them on
-    var _ttsVoiceId    = localStorage.getItem('tts_voice_id') || '';   // '' = server default
-    var _ttsVoicesLoaded = false;
-    var _ttsInFlight   = null;   // pending announcement Audio object (for abort)
-    var _ttsPrefetched = {};     // key → blob URL pre-fetched during previous track
-
-    function _ttsKey(title, artist) {
-      return (_ttsVoiceId + '|' + (title || '') + '|' + (artist || '')).toLowerCase();
-    }
-
-    function _ttsParams(title, artist) {
-      var p = new URLSearchParams({ title: title || '', artist: artist || '' });
-      if (_ttsVoiceId) p.set('voiceId', _ttsVoiceId);
-      return p;
-    }
-
-    // Pre-fetch the announcement for the NEXT track while the current one plays.
-    // Called by playTrack after the main track starts.  Stores blob URL in _ttsPrefetched.
-    function ttsPrefetch(title, artist) {
-      if (!_ttsEnabled) return;
-      var key = _ttsKey(title, artist);
-      if (_ttsPrefetched[key]) return;   // already fetched
-      fetch('/api/tts/announce?' + _ttsParams(title, artist))
-        .then(function(r) { return r.ok ? r.blob() : Promise.reject(); })
-        .then(function(blob) { _ttsPrefetched[key] = URL.createObjectURL(blob); })
-        .catch(function() {});   // silently discard on error
-    }
-    window._TTS_PREFETCH = ttsPrefetch;   // expose so playlist/shuffle code can call it
-
-    function _playAnnouncement(title, artist, playerVol) {
-      if (!_ttsEnabled) return Promise.resolve();
-      var key    = _ttsKey(title, artist);
-      var cached = _ttsPrefetched[key];
-
-      function _playBlob(blobUrl, owned) {
-        return new Promise(function(resolve) {
-          var anno = new Audio(blobUrl);
-          anno.volume = typeof playerVol === 'number' ? playerVol : 1;
-          _ttsInFlight = anno;
-          function cleanup() { _ttsInFlight = null; if (owned) URL.revokeObjectURL(blobUrl); resolve(); }
-          anno.addEventListener('ended',  cleanup);
-          anno.addEventListener('error',  cleanup);
-          anno.play().catch(cleanup);
-        });
-      }
-
-      if (cached) {
-        delete _ttsPrefetched[key];   // consume it
-        return _playBlob(cached, true);
-      }
-
-      // Not pre-fetched — fetch now (adds ~300-800 ms latency first time)
-      console.log('[TTS] Fetching announcement for:', title || '(unknown)', 'by', artist || '(unknown)', _ttsVoiceId ? '(voice:' + _ttsVoiceId + ')' : '');
-      return fetch('/api/tts/announce?' + _ttsParams(title, artist))
-        .then(function(r) {
-          if (!r.ok) {
-            return r.json().catch(function(){ return {}; }).then(function(j) {
-              console.warn('[TTS] Server error', r.status, j.error || '');
-              return Promise.reject(new Error(j.error || r.status));
-            });
-          }
-          return r.blob();
-        })
-        .then(function(blob) { console.log('[TTS] Playing announcement (' + blob.size + ' bytes)'); return _playBlob(URL.createObjectURL(blob), true); })
-        .catch(function(e) { console.warn('[TTS] Announcement skipped:', e && e.message || e); return Promise.resolve(); });
-    }
-
     // ── public API ────────────────────────────────────────────────────────────
     function playTrack(url, meta) {
       if (!url) return Promise.resolve();
@@ -3507,8 +3434,6 @@
       var isNewTrack = (player.src !== abs);
 
       if (isNewTrack) {
-        // Abort any in-flight announcement for the previous track
-        if (_ttsInFlight) { try { _ttsInFlight.pause(); } catch(e){} _ttsInFlight = null; }
         if (!player.paused) player.pause();
         player.src = url;
       }
@@ -3525,101 +3450,8 @@
         });
       }
 
-      // Play announcement before new track (skip for resume of same track)
-      if (isNewTrack && _ttsEnabled && (_meta.title || _meta.artist)) {
-        var title  = _meta.title  || '';
-        var artist = _meta.artist || '';
-        return _playAnnouncement(title, artist, player.volume)
-          .then(function() { return player.play() || Promise.resolve(); });
-      }
-
-      // Same track paused → just resume; different track with TTS off → starts fresh
       return player.play() || Promise.resolve();
     }
-
-    // ── wire announce toggle button ───────────────────────────────────────────
-    document.addEventListener('DOMContentLoaded', function() {
-      var btn = document.getElementById('upAnnounceBtn');
-      if (!btn) return;
-
-      function _applyState() {
-        btn.style.opacity    = _ttsEnabled ? '1'    : '0.35';
-        btn.style.color      = _ttsEnabled ? '#6366f1' : '';
-        btn.setAttribute('aria-pressed', _ttsEnabled ? 'true' : 'false');
-        btn.title = _ttsEnabled ? 'Announcements ON — click to turn off' : 'Announcements OFF — click to turn on';
-      }
-      _applyState();
-
-      var voiceSel = document.getElementById('upVoiceSelect');
-
-      function _loadVoices() {
-        if (_ttsVoicesLoaded) return;
-        _ttsVoicesLoaded = true;
-        fetch('/api/tts/voices')
-          .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
-          .then(function(data) {
-            var voices = data.voices || [];
-            if (!voices.length) {
-              // No voices available — hide the selector instead of leaving the
-              // "Loading voices…" placeholder stuck, and allow a retry later.
-              voiceSel.style.display = 'none';
-              _ttsVoicesLoaded = false;
-              return;
-            }
-            var defId = data['default'] || '';
-            // Build the list as real <option> nodes — safe against any odd
-            // characters in voice names, and shows clean names (no category jargon).
-            voiceSel.innerHTML = '';
-            voices.forEach(function(v) {
-              var opt = document.createElement('option');
-              opt.value = v.id;
-              opt.textContent = v.name + (v.id === defId ? ' (default)' : '');
-              voiceSel.appendChild(opt);
-            });
-            // Show the saved pick, else the server default, else the first voice.
-            voiceSel.value = _ttsVoiceId || defId || '';
-            if (!voiceSel.value) voiceSel.value = voices[0].id;   // saved id no longer exists
-            _ttsVoiceId = voiceSel.value;
-          })
-          .catch(function(e) {
-            console.warn('[TTS] Could not load voices:', e);
-            // Hide the selector so it never sits on "Loading voices…" forever;
-            // reset the flag so it retries next time announcements are enabled.
-            voiceSel.style.display = 'none';
-            _ttsVoicesLoaded = false;
-          });
-      }
-
-      voiceSel.addEventListener('change', function() {
-        _ttsVoiceId = voiceSel.value;
-        localStorage.setItem('tts_voice_id', _ttsVoiceId);
-        // Clear prefetch cache so next play uses the new voice
-        _ttsPrefetched = {};
-      });
-
-      function _applyVoiceSelVisibility() {
-        voiceSel.style.display = _ttsEnabled ? '' : 'none';
-      }
-
-      btn.addEventListener('click', function() {
-        _ttsEnabled = !_ttsEnabled;
-        localStorage.setItem('tts_announce', _ttsEnabled ? 'true' : 'false');
-        _applyState();
-        _applyVoiceSelVisibility();
-        if (_ttsEnabled) {
-          _loadVoices();
-          btn.style.opacity = '0.6';
-          var player = document.getElementById('player');
-          var vol = player ? player.volume : 1;
-          _playAnnouncement('MAD Radio Direct', '', vol)
-            .then(function() { _applyState(); });
-        }
-      });
-
-      // Apply initial state
-      _applyVoiceSelVisibility();
-      if (_ttsEnabled) _loadVoices();
-    });
 
     function playQueue(tracks, startIdx) {
       var t = (tracks || [])[startIdx !== undefined ? startIdx : 0];
@@ -5503,12 +5335,18 @@
   </script>
 
   <script>
-  /* ── Hero banner — auto-rotating new-release artists on the home page ─────────
-     Sourced from /api/new-releases (same data as the New Releases row). Big edge-to-
-     edge artwork, artist + "New Release" badge overlaid; auto-rotates (no manual
-     controls); clicking opens the album. Hidden during search via updateHeadings(). */
+  /* ── Hero carousel — editorial slides with new-release fallback ───────────────
+     Data + image discipline: docs/banners.md.
+     1. Tries /api/featured-editorial (FM-driven CMS, SWR-cached server-side).
+        Editorial images are 16:9 masters → rendered as object-fit:cover <img>.
+     2. Falls back to /api/new-releases. Square album art is NEVER stretched:
+        blurred ambient back layer + sharp object-fit:contain front card.
+     Manual prev/next + dots; autoplay 6.5s (resets on manual nav, pauses when
+     tab hidden, disabled for prefers-reduced-motion). Hidden during search via
+     updateHeadings(). */
   (function () {
-    var ROTATE_MS = 5000, MAX_SLIDES = 7;
+    var DWELL_MS = 6500, MAX_SLIDES = 6;
+    var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     function getField(fields, names) {
       for (var i = 0; i < names.length; i++) {
@@ -5533,72 +5371,166 @@
 
     var banner = document.getElementById('heroBanner');
     var stage  = document.getElementById('heroStage');
+    var prevBtn = document.getElementById('heroPrev');
+    var nextBtn = document.getElementById('heroNext');
+    var dotsEl  = document.getElementById('heroDots');
     if (!banner || !stage) return;
 
-    function loadHero() {
-    fetch('/api/new-releases?limit=20')
-      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-      .then(function (data) {
-        var items = (data && data.items) || [];
-        var seen = {}, slides = [];
-        for (var i = 0; i < items.length && slides.length < MAX_SLIDES; i++) {
-          var f = items[i].fields || {};
-          var art = artworkUrl(f);
-          if (!art) continue;
-          var album  = getField(f, ['Album Title', 'Album', 'Album Name']) || 'Unknown Album';
-          var artist = getField(f, ['Track Artist', 'Artist', 'Artist Name', 'Album Artist']) || 'Unknown Artist';
-          var key = artist + '|' + album;
-          if (seen[key]) continue;
-          seen[key] = true;
-          slides.push({ art: art, album: String(album), artist: String(artist) });
-        }
-        if (!slides.length) return;
+    var slideEls = [], idx = 0, timer = null;
 
-        stage.innerHTML = slides.map(function (s, idx) {
-          var bg = esc(s.art).replace(/'/g, '%27');
-          return '<div class="hero-slide' + (idx === 0 ? ' is-active' : '') + '" role="button" tabindex="0"' +
-                 ' aria-label="' + esc(s.artist) + ' — ' + esc(s.album) + '"' +
-                 ' data-album="' + esc(s.album) + '" data-artist="' + esc(s.artist) + '"' +
-                 ' style="background-image:url(\'' + bg + '\')">' +
-                   '<span class="hero-badge">New Release</span>' +
-                   '<div class="hero-caption">' +
-                     '<div class="hero-artist">' + esc(s.artist) + '</div>' +
-                     '<div class="hero-album">' + esc(s.album) + '</div>' +
-                   '</div>' +
-                 '</div>';
-        }).join('');
-
-        function open(el) {
-          if (window.openAlbumDirect) {
-            window.openAlbumDirect(el.getAttribute('data-album'), el.getAttribute('data-artist'));
-          }
-        }
-        var slideEls = stage.querySelectorAll('.hero-slide');
-        slideEls.forEach(function (el) {
-          el.addEventListener('click', function () { open(el); });
-          el.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(el); }
-          });
+    function applySlide() {
+      slideEls.forEach(function (el, i) { el.classList.toggle('is-active', i === idx); });
+      if (dotsEl) {
+        Array.prototype.forEach.call(dotsEl.children, function (d, i) {
+          d.classList.toggle('is-active', i === idx);
         });
+      }
+    }
+    function goTo(i) {
+      var n = slideEls.length;
+      if (!n) return;
+      idx = ((i % n) + n) % n;
+      applySlide();
+      startAutoplay(); // manual nav gets a full dwell
+    }
+    function startAutoplay() {
+      clearInterval(timer); timer = null;
+      if (slideEls.length <= 1 || REDUCED) return;
+      timer = setInterval(function () { idx = (idx + 1) % slideEls.length; applySlide(); }, DWELL_MS);
+    }
+    function stopAutoplay() { clearInterval(timer); timer = null; }
 
-        banner.hidden = false; // reveal; updateHeadings() still hides it during search
+    function buildDots() {
+      if (!dotsEl) return;
+      dotsEl.innerHTML = '';
+      slideEls.forEach(function (_, i) {
+        var b = document.createElement('button');
+        b.className = 'hero-dot' + (i === idx ? ' is-active' : '');
+        b.type = 'button';
+        b.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+        b.addEventListener('click', function (e) { e.stopPropagation(); goTo(i); });
+        dotsEl.appendChild(b);
+      });
+    }
 
-        if (slideEls.length > 1) {
-          var idx = 0, timer = null;
-          function tick() {
-            slideEls[idx].classList.remove('is-active');
-            idx = (idx + 1) % slideEls.length;
-            slideEls[idx].classList.add('is-active');
-          }
-          function start() { if (!timer) timer = setInterval(tick, ROTATE_MS); }
-          function stop() { if (timer) { clearInterval(timer); timer = null; } }
-          start();
-          document.addEventListener('visibilitychange', function () {
-            if (document.hidden) stop(); else start();
+    /* slide := { image, title, sub, eyebrow, badge, ambient, onOpen } */
+    function renderSlides(slides) {
+      stage.innerHTML = slides.map(function (s, i) {
+        var img = esc(s.image);
+        return '<div class="hero-slide' + (s.ambient ? ' hero-slide--ambient' : '') + (i === 0 ? ' is-active' : '') + '"' +
+               ' role="button" tabindex="0" aria-label="' + esc(s.title) + (s.sub ? ' — ' + esc(s.sub) : '') + '">' +
+                 '<img class="hero-slide__bg" src="' + img + '" alt="" aria-hidden="true" loading="' + (i === 0 ? 'eager' : 'lazy') + '">' +
+                 (s.ambient ? '<img class="hero-slide__art" src="' + img + '" alt="' + esc(s.title) + '" loading="' + (i === 0 ? 'eager' : 'lazy') + '">' : '') +
+                 '<div class="hero-slide__scrim"></div>' +
+                 (s.badge ? '<span class="hero-badge">' + esc(s.badge) + '</span>' : '') +
+                 '<div class="hero-caption">' +
+                   (s.eyebrow ? '<div class="hero-eyebrow">' + esc(s.eyebrow) + '</div>' : '') +
+                   '<div class="hero-artist">' + esc(s.title) + '</div>' +
+                   (s.sub ? '<div class="hero-album">' + esc(s.sub) + '</div>' : '') +
+                   (s.cta ? '<button class="hero-cta" type="button">▶&nbsp;' + esc(s.cta) + '</button>' : '') +
+                 '</div>' +
+               '</div>';
+      }).join('');
+
+      slideEls = Array.prototype.slice.call(stage.querySelectorAll('.hero-slide'));
+      idx = 0;
+
+      slideEls.forEach(function (el, i) {
+        var s = slides[i];
+        // Broken image → drop the slide entirely (never show a broken banner)
+        var bg = el.querySelector('.hero-slide__bg');
+        if (bg) bg.addEventListener('error', function () {
+          el.remove();
+          slideEls = Array.prototype.slice.call(stage.querySelectorAll('.hero-slide'));
+          if (idx >= slideEls.length) idx = 0;
+          buildDots(); applySlide();
+        });
+        function open() { if (s.onOpen) s.onOpen(); }
+        el.addEventListener('click', open);
+        el.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+        });
+      });
+
+      buildDots();
+      banner.hidden = false; // updateHeadings() still hides it during search
+      startAutoplay();
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) stopAutoplay(); else startAutoplay();
+      });
+    }
+
+    if (prevBtn) prevBtn.addEventListener('click', function (e) { e.stopPropagation(); goTo(idx - 1); });
+    if (nextBtn) nextBtn.addEventListener('click', function (e) { e.stopPropagation(); goTo(idx + 1); });
+
+    // Editorial target → action. album/playlist targets are Phase 2 (no
+    // open-by-recordId path in v2.1 yet) — they fall through to no-op + warn.
+    function editorialAction(it) {
+      return function () {
+        var t = String(it.targetType || ''), id = String(it.targetId || '');
+        if (t === 'track' && id && window.playSong) return window.playSong(id);
+        if (t === 'external' && /^https?:\/\//.test(id)) return window.open(id, '_blank', 'noopener,noreferrer');
+        console.warn('[Hero] unhandled editorial target:', t, id);
+      };
+    }
+
+    function loadEditorial() {
+      return fetch('/api/featured-editorial?limit=' + MAX_SLIDES)
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data || data.source !== 'live' || !data.items || !data.items.length) return null;
+          return data.items.map(function (it) {
+            return {
+              image:   it.imageUrl,
+              title:   it.title,
+              sub:     '',
+              eyebrow: it.eyebrow || '',
+              badge:   '',
+              cta:     it.ctaLabel || 'Play',
+              ambient: false,            // editorial masters are 16:9 — safe to cover
+              onOpen:  editorialAction(it)
+            };
           });
-        }
-      })
-      .catch(function (err) { console.warn('[Hero] failed to load:', err); });
+        })
+        .catch(function () { return null; });
+    }
+
+    function loadFallback() {
+      return fetch('/api/new-releases?limit=20')
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+        .then(function (data) {
+          var items = (data && data.items) || [];
+          var seen = {}, slides = [];
+          for (var i = 0; i < items.length && slides.length < MAX_SLIDES; i++) {
+            var f = items[i].fields || {};
+            var art = artworkUrl(f);
+            if (!art) continue;
+            var album  = getField(f, ['Album Title', 'Album', 'Album Name']) || 'Unknown Album';
+            var artist = getField(f, ['Track Artist', 'Artist', 'Artist Name', 'Album Artist']) || 'Unknown Artist';
+            var key = artist + '|' + album;
+            if (seen[key]) continue;
+            seen[key] = true;
+            slides.push({
+              image:   art,
+              title:   String(artist),
+              sub:     String(album),
+              badge:   'New Release',
+              ambient: true,             // square art → blur-fill, never stretch
+              onOpen:  (function (al, ar) {
+                return function () { if (window.openAlbumDirect) window.openAlbumDirect(al, ar); };
+              })(String(album), String(artist))
+            });
+          }
+          return slides.length ? slides : null;
+        })
+        .catch(function (err) { console.warn('[Hero] fallback failed:', err); return null; });
+    }
+
+    function loadHero() {
+      loadEditorial().then(function (slides) {
+        if (slides && slides.length) return renderSlides(slides);
+        return loadFallback().then(function (fb) { if (fb) renderSlides(fb); });
+      });
     }
 
     // auth.js blocks API calls until the access token is ready — wait for that signal

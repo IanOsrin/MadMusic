@@ -7,6 +7,41 @@ Run tests before and after changes:
 - `npm test` — backend + frontend unit/integration (vitest)
 - `npm run test:visual` — Playwright (boots a dummy-cred server; no prod FileMaker)
 
+## Required reading before building
+
+- **`docs/FM-MAP.md`** — FileMaker layout/field/write-path map. Consult before ANY change
+  that touches FM data paths. Hard rule (10k-concurrent-user target): every new read path
+  goes through `lib/swr-cache.js` (SWR + concurrent dedup) — never a direct FM call on the
+  request path. Writes are never cached.
+- **`docs/banners.md`** — banner/hero image discipline + the `/api/featured-editorial`
+  data contract. Any new banner or hero surface must follow its rendering rules
+  (container owns the shape; square art never stretched — ambient blur + contain).
+- Project-level skills in `.claude/skills/`: `mad-streamer-audit-context` (May 2026 audit,
+  46 findings) and `mad-fm-dedup-pattern` (the SWR/dedup principle).
+
+## Recent integrations (2026-06-03) — current state
+
+1. **Editorial hero carousel** — `routes/featured-editorial.js` (ported from v3.1, SWR 60s,
+   mounted in server.js, public path). Reads FM layout `API_Hero_Featured`, which **does not
+   exist in FM yet** → feature-flagged `EDITORIAL_HERO_ENABLED` (default off). Frontend
+   (`#heroBanner` in app.html + hero CSS in app.css) falls back to `/api/new-releases`
+   slides using the ambient-blur treatment. Editorial slide actions: `track` → playSong,
+   `external` → window.open; `album`/`playlist` targets are Phase 2 (no open-by-recordId
+   path exists — wire before enabling such slides).
+2. **Two-pane search environment** — `renderSearchEnv()` in `public/js/discovery.js`
+   replaced the album-card search render on the home view. Left column = track rows,
+   right = sticky cue pane (`cueTrack`/`playCued`). Artist name in the cue pane re-runs
+   `performSearch(artist)`; View Album uses `window.openAlbumDirect`. Results filtered by
+   `hasValidAudio`; count shows 0 explicitly. CSS: `.search-env*` / `.se-*` in app.css.
+   `renderAlbums()` still exists and serves the default (non-search) random view.
+3. **Spacing pass** — `.section` margin 2.5rem, `.nr-grid` 1rem gap + scroll-snap +
+   hover-shadow padding. Aesthetic only; don't regress these when touching rails.
+
+The MadMusicV3.1 source tree (reference for further ports: charts/SQLite ingest, admin
+metrics, service worker, search intelligence) lives outside this repo — ask the user for
+the current copy. v2.1 and v3.1 have drifted in BOTH directions (v2.1's access.js/payments.js
+are newer); never merge files wholesale — port deliberately.
+
 ## Frontend layout (no build step)
 
 There is **no bundler**. HTML files are served as-is and contain inline `<script>` blocks.

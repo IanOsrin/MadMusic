@@ -643,6 +643,116 @@
     }
 
     // Render albums (grouped by album)
+    /* ── Search environment — two-pane results view ──────────────────────────
+       Left: vertical scrollable result list (one row per track).
+       Right: cue pane — clicking a row cues the track (artwork + info) without
+       playing; Play starts playback; the artist name click-throughs to a
+       fresh artist search. 0 results renders an explicit empty state (count
+       already shows "0 results" in the subtitle). */
+    let searchEnvItems = [];
+    let cuedIdx = -1;
+
+    function renderSearchEnv(items, query) {
+      const container = document.getElementById('randomContainer');
+      searchEnvItems = items || [];
+      cuedIdx = -1;
+
+      if (!searchEnvItems.length) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">🔍</div>
+            <p>0 results for "${escapeHtml(query)}"</p>
+            <p style="font-size: 0.875rem; margin-top: 0.5rem;">Try an artist, album, or song name</p>
+          </div>
+        `;
+        return;
+      }
+
+      searchEnvItems.forEach(t => storeItem(t.recordId, t));
+
+      const rows = searchEnvItems.map((item, i) => {
+        const f = item.fields || {};
+        const art    = getArtworkUrl(f);
+        const title  = getTitleField(f)  || 'Unknown Title';
+        const artist = getArtistField(f) || 'Unknown Artist';
+        const genre  = getGenreField(f);
+        return `
+          <div class="se-row" data-idx="${i}" role="option" tabindex="0" aria-label="${escapeHtml(title)} — ${escapeHtml(artist)}">
+            <div class="se-row__thumb">${art ? `<img src="${escapeHtml(art)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</div>
+            <div class="se-row__meta">
+              <div class="se-row__title">${escapeHtml(title)}</div>
+              <div class="se-row__sub">${escapeHtml(artist)}${genre ? ` · <span class="se-row__genre">${escapeHtml(genre)}</span>` : ''}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <div class="search-env">
+          <div class="search-env__list" role="listbox" aria-label="Search results">${rows}</div>
+          <div class="search-env__cue" id="seCue" aria-live="polite"></div>
+        </div>
+      `;
+
+      container.querySelectorAll('.se-row').forEach(row => {
+        const i = Number(row.dataset.idx);
+        row.addEventListener('click', () => cueTrack(i));
+        row.addEventListener('dblclick', () => playCued(i));
+        row.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cueTrack(i); }
+        });
+      });
+
+      cueTrack(0); // first result cued by default so the pane is never empty
+    }
+
+    function cueTrack(i) {
+      const item = searchEnvItems[i];
+      const cue = document.getElementById('seCue');
+      if (!item || !cue) return;
+      cuedIdx = i;
+
+      document.querySelectorAll('.se-row').forEach((r, ri) =>
+        r.classList.toggle('is-cued', ri === i));
+
+      const f = item.fields || {};
+      const art    = getArtworkUrl(f);
+      const title  = getTitleField(f)  || 'Unknown Title';
+      const artist = getArtistField(f) || 'Unknown Artist';
+      const album  = getAlbumField(f);
+      const genre  = getGenreField(f);
+
+      cue.innerHTML = `
+        <div class="se-cue__art">${art ? `<img src="${escapeHtml(art)}" alt="${escapeHtml(album || title)}" onerror="this.remove()">` : ''}</div>
+        <div class="se-cue__title">${escapeHtml(title)}</div>
+        <button class="se-cue__artist" type="button" title="See more from ${escapeHtml(artist)}">${escapeHtml(artist)}</button>
+        ${album ? `<div class="se-cue__album">${escapeHtml(album)}${genre ? ` · ${escapeHtml(genre)}` : ''}</div>` : ''}
+        <div class="se-cue__actions">
+          <button class="se-cue__play" type="button">▶&nbsp;&nbsp;Play</button>
+          ${album ? `<button class="se-cue__viewalbum" type="button">View Album</button>` : ''}
+        </div>
+      `;
+
+      cue.querySelector('.se-cue__play').addEventListener('click', () => playCued(i));
+      cue.querySelector('.se-cue__art')?.addEventListener('click', () => playCued(i));
+      // Artist click-through: stay in the search environment, scoped to the artist
+      cue.querySelector('.se-cue__artist').addEventListener('click', () => {
+        const si = document.getElementById('searchInput');
+        if (si) si.value = artist;
+        performSearch(artist);
+      });
+      cue.querySelector('.se-cue__viewalbum')?.addEventListener('click', () => {
+        if (window.openAlbumDirect) window.openAlbumDirect(album, artist);
+      });
+    }
+
+    function playCued(i) {
+      const item = searchEnvItems[i];
+      if (!item) return;
+      cueTrack(i);
+      if (window.playSong) window.playSong(item.recordId);
+    }
+
     function renderAlbums(albums) {
       const container = document.getElementById('randomContainer');
 
@@ -864,25 +974,11 @@
         if (searchIcon) { searchIcon.classList.remove('loading'); searchIcon.textContent = '🔍'; }
 
         // Search API returns { items: [...] } directly, no 'ok' field
-        if (data.items && data.items.length > 0) {
-          // Group tracks by album
-          const albums = groupByAlbum(data.items);
-          console.log('[Search] Grouped into', albums.length, 'albums from', data.items.length, 'tracks');
-
-          document.getElementById('randomTitle').textContent = `Search Results`;
-          document.getElementById('randomSubtitle').textContent = `${albums.length} album${albums.length !== 1 ? 's' : ''} (${data.items.length} track${data.items.length !== 1 ? 's' : ''}) for "${query}"`;
-          renderAlbums(albums);
-        } else {
-          document.getElementById('randomTitle').textContent = 'No Results';
-          document.getElementById('randomSubtitle').textContent = `No matches found for "${query}"`;
-          document.getElementById('randomContainer').innerHTML = `
-            <div class="empty-state">
-              <div class="empty-state-icon">🔍</div>
-              <p>No results found for "${query}"</p>
-              <p style="font-size: 0.875rem; margin-top: 0.5rem;">Try searching for an artist, album, or song name</p>
-            </div>
-          `;
-        }
+        const items = (data.items || []).filter(item => hasValidAudio(item));
+        document.getElementById('randomTitle').textContent = 'Search Results';
+        document.getElementById('randomSubtitle').textContent =
+          `${items.length} result${items.length !== 1 ? 's' : ''} for "${query}"`; // 0 shown explicitly
+        renderSearchEnv(items, query);
       } catch (error) {
         console.error('[Search] Failed:', error);
         isSearching = false;

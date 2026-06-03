@@ -18,10 +18,10 @@ import catalogRouter from './routes/catalog.js';
 import libraryRouter from './routes/library.js';
 import streamRouter from './routes/stream.js';
 import adminRouter from './routes/admin.js';
+import editorialRouter from './routes/featured-editorial.js';
 import downloadRouter from './routes/download.js';
 import ringtoneRouter from './routes/ringtone.js';
 import telkomRouter from './routes/telkom.js';
-import ttsRouter from './routes/tts.js'
 
 import { validateAccessToken } from './lib/auth.js';
 import { normalizeShareId } from './lib/format.js';
@@ -219,7 +219,7 @@ app.use('/api/', async (req, res, next) => {
   const skipPaths = [
     '/access/validate', '/wake', '/container', '/random-songs', '/public-playlists',
     '/search', '/album', '/trending', '/explore', '/featured-albums', '/missing-audio-songs',
-    '/g100-albums', '/g100-playlists', '/genres', '/singles',
+    '/g100-albums', '/g100-playlists', '/genres', '/singles', '/featured-editorial',
     '/auth', '/payments/initialize', '/payments/subscribe', '/payments/trial', '/payments/callback',
     '/payments/webhook', '/payments/plans', '/payments/subscription-plan',
     '/access/stream-events', '/access/logout', '/access/email/', '/health',
@@ -381,7 +381,7 @@ app.use('/api/library', libraryRouter);
 app.use('/api', catalogRouter);
 app.use('/api', streamRouter);
 app.use('/api', adminRouter);
-app.use('/api', ttsRouter);
+app.use('/api', editorialRouter);
 
 // Shared playlist routes (not under /api/playlists)
 app.get('/api/shared-playlists/:shareId', async (req, res) => {

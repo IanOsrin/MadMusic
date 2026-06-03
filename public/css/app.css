@@ -2603,11 +2603,18 @@
     }
     .filters-panel[hidden] { display: none; }
 
-    /* ── Hero banner (home page: auto-rotating new releases) ──────────────────── */
+    /* ── Hero banner (editorial carousel + new-release fallback) ───────────────
+       Image discipline per docs/banners.md:
+       • container owns the shape (aspect-ratio, clamped height)
+       • 16:9 editorial images: <img> object-fit:cover (zero effective crop)
+       • square fallback art: NEVER stretched — blurred ambient back layer +
+         sharp object-fit:contain front card                                  */
     .hero-banner {
       position: relative;
       width: 100%;
-      height: 360px;
+      aspect-ratio: 16 / 6.5;
+      max-height: 420px;
+      min-height: 240px;
       border-radius: 14px;
       overflow: hidden;
       margin: 0 0 1.75rem;
@@ -2618,20 +2625,42 @@
     .hero-slide {
       position: absolute;
       inset: 0;
-      background-size: cover;
-      background-position: center;
-      background-repeat: no-repeat;
       opacity: 0;
-      transition: opacity 0.8s ease;
+      transition: opacity 0.7s ease;
       cursor: pointer;
       pointer-events: none;
+      overflow: hidden;
     }
     .hero-slide.is-active { opacity: 1; pointer-events: auto; }
-    .hero-slide::after {
-      content: '';
+    /* Back layer: editorial = sharp cover image · fallback = blurred ambient */
+    .hero-slide__bg {
       position: absolute;
       inset: 0;
-      background: linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.12) 50%, rgba(0,0,0,0.32) 100%);
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+    }
+    .hero-slide--ambient .hero-slide__bg {
+      transform: scale(1.15);
+      filter: blur(28px) brightness(0.55) saturate(1.1);
+    }
+    /* Front card: only on ambient (square-art) slides — sharp, contained */
+    .hero-slide__art {
+      position: absolute;
+      top: 50%;
+      right: clamp(20px, 5%, 56px);
+      transform: translateY(-50%);
+      height: 78%;
+      aspect-ratio: 1 / 1;
+      object-fit: contain;
+      border-radius: 10px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    .hero-slide__scrim {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.30) 55%, rgba(0,0,0,0.05) 100%);
     }
     .hero-badge {
       position: absolute;
@@ -2654,9 +2683,18 @@
       bottom: 22px;
       z-index: 2;
       color: #fff;
+      max-width: 60%;
+    }
+    .hero-eyebrow {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      opacity: 0.85;
+      margin-bottom: 6px;
     }
     .hero-artist {
-      font-size: 2rem;
+      font-size: clamp(1.4rem, 2.6vw, 2rem);
       font-weight: 800;
       line-height: 1.1;
       text-shadow: 0 2px 14px rgba(0,0,0,0.55);
@@ -2667,10 +2705,206 @@
       margin-top: 5px;
       text-shadow: 0 1px 10px rgba(0,0,0,0.55);
     }
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 14px;
+      padding: 9px 18px;
+      border: 0;
+      border-radius: 50px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .12s ease, filter .12s ease;
+    }
+    .hero-cta:hover { transform: scale(1.04); filter: brightness(1.1); }
+    /* Carousel controls */
+    .hero-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 3;
+      width: 38px;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.45);
+      color: #fff;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity .18s ease, background .18s ease;
+    }
+    .hero-banner:hover .hero-nav,
+    .hero-nav:focus-visible { opacity: 1; }
+    .hero-nav:hover { background: rgba(0,0,0,0.7); }
+    .hero-nav--prev { left: 14px; }
+    .hero-nav--next { right: 14px; }
+    .hero-dots {
+      position: absolute;
+      bottom: 12px;
+      right: 18px;
+      z-index: 3;
+      display: flex;
+      gap: 7px;
+    }
+    .hero-dot {
+      width: 8px;
+      height: 8px;
+      border: 0;
+      border-radius: 50%;
+      padding: 0;
+      background: rgba(255,255,255,0.35);
+      cursor: pointer;
+      transition: background .18s ease, transform .18s ease;
+    }
+    .hero-dot.is-active { background: #fff; transform: scale(1.2); }
     @media (max-width: 720px) {
-      .hero-banner { height: 220px; }
-      .hero-artist { font-size: 1.4rem; }
+      .hero-banner { aspect-ratio: 16 / 9; min-height: 200px; }
+      .hero-caption { max-width: 75%; }
       .hero-album { font-size: 0.9rem; }
+      .hero-slide__art { display: none; } /* phones: ambient bg + text only */
+      .hero-nav { display: none; }        /* dots remain for nav */
+    }
+
+    /* ── Search environment (two-pane results view) ────────────────────────────
+       Left: scrollable result rows · Right: cue pane (selected track).
+       Mirrors the play-area layout; collapses to single column < 900px.      */
+    .search-env {
+      display: grid;
+      grid-template-columns: minmax(300px, 420px) 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+    .search-env__list {
+      max-height: calc(100vh - 260px);
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface, var(--bg-card));
+      scrollbar-width: thin;
+    }
+    .se-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background .12s ease;
+    }
+    .se-row:last-child { border-bottom: 0; }
+    .se-row:hover { background: rgba(139, 92, 246, 0.08); }
+    .se-row.is-cued { background: rgba(139, 92, 246, 0.16); }
+    .se-row__thumb {
+      width: 44px;
+      height: 44px;
+      flex-shrink: 0;
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--bg);
+    }
+    .se-row__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .se-row__meta { min-width: 0; }
+    .se-row__title {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: var(--fg, var(--text-primary));
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .se-row__sub {
+      font-size: 0.8rem;
+      color: var(--muted, var(--text-secondary));
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+    .search-env__cue {
+      position: sticky;
+      top: 90px;
+      text-align: center;
+      padding: 1.5rem 1rem 2rem;
+    }
+    .se-cue__art {
+      width: min(320px, 70%);
+      aspect-ratio: 1 / 1;
+      margin: 0 auto 1.1rem;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 12px 44px rgba(0,0,0,0.35);
+      cursor: pointer;
+      background: var(--bg-card);
+    }
+    .se-cue__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .se-cue__title {
+      font-size: 1.45rem;
+      font-weight: 800;
+      color: var(--fg, var(--text-primary));
+      line-height: 1.2;
+    }
+    .se-cue__artist {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 0;
+      border: 0;
+      background: none;
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration-line: underline;
+      text-decoration-color: transparent;
+      text-underline-offset: 3px;
+      transition: text-decoration-color .15s ease;
+    }
+    .se-cue__artist:hover { text-decoration-color: var(--accent); } /* hover affordance → click-through */
+    .se-cue__album {
+      font-size: 0.85rem;
+      color: var(--muted, var(--text-secondary));
+      margin-top: 4px;
+    }
+    .se-cue__actions {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 1.1rem;
+    }
+    .se-cue__play {
+      padding: 10px 26px;
+      border: 0;
+      border-radius: 50px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .12s ease, filter .12s ease;
+    }
+    .se-cue__play:hover { transform: scale(1.04); filter: brightness(1.1); }
+    .se-cue__viewalbum {
+      padding: 10px 18px;
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      background: transparent;
+      color: var(--fg, var(--text-primary));
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color .12s ease;
+    }
+    .se-cue__viewalbum:hover { border-color: var(--accent); }
+    @media (max-width: 900px) {
+      .search-env { grid-template-columns: 1fr; }
+      .search-env__cue { position: static; order: -1; padding-top: 0; }
+      .search-env__list { max-height: 50vh; }
     }
 
     .view-switcher {
@@ -2834,15 +3068,18 @@
       padding: 2rem;
     }
 
+    /* Rail rhythm (Netflix/Spotify convention): clear vertical separation
+       between content rows, tighter title-to-cards coupling. Aesthetic only —
+       no layout/function change. */
     .section {
-      margin-bottom: 1.5rem;
+      margin-bottom: 2.5rem;
     }
 
     .section-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 0.75rem;
+      margin-bottom: 0.9rem;
     }
 
     .section-title {
@@ -3294,12 +3531,14 @@
       flex-wrap: nowrap;
       overflow-x: auto;
       overflow-y: visible;
-      gap: 1.25rem;
-      padding-bottom: 12px;
+      gap: 1rem;                      /* 16px card gutter — Spotify rail rhythm */
+      padding: 4px 2px 14px;          /* room for hover lift/shadow, no clipping */
       scroll-behavior: smooth;
+      scroll-snap-type: x proximity;  /* cards settle cleanly after a fling */
       scrollbar-width: thin;
       scrollbar-color: var(--accent, #e94560) transparent;
     }
+    .nr-grid > * { scroll-snap-align: start; }
     .nr-grid::-webkit-scrollbar { height: 4px; }
     .nr-grid::-webkit-scrollbar-thumb { background: var(--accent, #e94560); border-radius: 2px; }
     .nr-grid .trending-card { flex-shrink: 0; width: 185px; }
