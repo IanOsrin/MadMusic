@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { validateAccessToken, MASS_SESSION_COOKIE, MASS_SESSION_MAX_AGE_SECONDS } from '../lib/auth.js';
 import { parseCookies, getClientIP } from '../lib/http.js';
 import { formatTimestampUTC, toCleanString, normalizeSeconds, parseFileMakerTimestamp } from '../lib/format.js';
-import { validateSessionId, isStrictEmail } from '../lib/validators.js';
+import { validateSessionId, isStrictEmail, fmExactMatch } from '../lib/validators.js';
+import { LRUCache } from 'lru-cache';
 import {
   STREAM_EVENT_TYPES, STREAM_EVENT_DEBUG, STREAM_TERMINAL_EVENTS,
   STREAM_TIME_FIELD, STREAM_TIME_FIELD_LEGACY,
@@ -30,7 +31,10 @@ const TOTAL_PLAYED_OVERSHOOT_FACTOR = 1.05;
 // can't read the accumulated total from FileMaker on every event. This Map
 // shadows TotalPlayedSec locally and is updated after every successful write.
 // Keyed by "sessionId::trackRecordId" — same format as the LRU.
-const streamTotalMap = new Map();
+// Bounded LRU (was an unbounded Map → memory-leak DoS at 10k-concurrent scale).
+// Entries expire after 6h of inactivity even if a session never sends a
+// terminal event to clear them. get/set/delete are call-site compatible.
+const streamTotalMap = new LRUCache({ max: 50000, ttl: 6 * 60 * 60 * 1000 });
 
 const router = Router();
 
@@ -59,15 +63,6 @@ router.post('/validate', async (req, res) => {
     const result = await validateAccessToken(token, sessionId, req);
 
     if (result.valid) {
-      if (result.email) {
-        const emailCookieParts = [
-          `mass.email=${encodeURIComponent(result.email)}`,
-          'Path=/',
-          'Max-Age=31536000',
-          'SameSite=Lax'
-        ];
-        res.setHeader('Set-Cookie', emailCookieParts.join('; '));
-      }
       res.json({
         ok: true,
         valid: true,
@@ -122,6 +117,38 @@ const EMAIL_CLAIM_CODES = new Map(); // tokenCodeUpper -> { email, code, expires
 const EMAIL_CLAIM_TTL_MS    = 10 * 60 * 1000;
 const EMAIL_CLAIM_MAX_TRIES = 5;
 
+// ── Email-send throttle (anti email-bomb) ────────────────────────────────────
+// Keyed by `${tokenCode}::${email}`. Allows at most 1 send per 60s and 5 per
+// hour per (token, email). In-memory only — server restart resets the window.
+const EMAIL_SEND_THROTTLE = new Map(); // key -> { sends: number[] (timestamps ms) }
+const EMAIL_SEND_MIN_INTERVAL_MS = 60 * 1000;       // 1 per 60s
+const EMAIL_SEND_HOUR_MS         = 60 * 60 * 1000;
+const EMAIL_SEND_MAX_PER_HOUR    = 5;
+
+// Returns { allowed, retryAfterSec }. Records the send when allowed. Prunes
+// timestamps older than an hour (and empty/stale keys) to bound memory.
+function checkEmailSendThrottle(key) {
+  const now = Date.now();
+  // Prune stale keys opportunistically.
+  for (const [k, entry] of EMAIL_SEND_THROTTLE) {
+    entry.sends = entry.sends.filter((t) => now - t < EMAIL_SEND_HOUR_MS);
+    if (entry.sends.length === 0) EMAIL_SEND_THROTTLE.delete(k);
+  }
+  const entry = EMAIL_SEND_THROTTLE.get(key) || { sends: [] };
+  const recent = entry.sends.filter((t) => now - t < EMAIL_SEND_HOUR_MS);
+  const lastSend = recent.length ? recent[recent.length - 1] : 0;
+  if (lastSend && now - lastSend < EMAIL_SEND_MIN_INTERVAL_MS) {
+    return { allowed: false, retryAfterSec: Math.ceil((EMAIL_SEND_MIN_INTERVAL_MS - (now - lastSend)) / 1000) };
+  }
+  if (recent.length >= EMAIL_SEND_MAX_PER_HOUR) {
+    const oldest = recent[0];
+    return { allowed: false, retryAfterSec: Math.ceil((EMAIL_SEND_HOUR_MS - (now - oldest)) / 1000) };
+  }
+  recent.push(now);
+  EMAIL_SEND_THROTTLE.set(key, { sends: recent });
+  return { allowed: true, retryAfterSec: 0 };
+}
+
 function generateClaimCode() {
   // 6-digit zero-padded — cryptographically random, not Math.random.
   return String(randomInt(0, 1_000_000)).padStart(6, '0');
@@ -155,6 +182,18 @@ router.post('/email/start', async (req, res) => {
       return res.status(409).json({
         ok: false,
         error: 'This token is already linked to a different email'
+      });
+    }
+
+    // Throttle sends per (token, email) to prevent using our SMTP as an
+    // email bomb against a victim address.
+    const throttle = checkEmailSendThrottle(`${tokenCode}::${normalizedEmail}`);
+    if (!throttle.allowed) {
+      res.setHeader('Retry-After', String(throttle.retryAfterSec));
+      return res.status(429).json({
+        ok: false,
+        error: 'Too many verification emails requested. Please wait before trying again.',
+        retryAfterSec: throttle.retryAfterSec
       });
     }
 
@@ -234,7 +273,7 @@ router.post('/email/confirm', async (req, res) => {
     // Code accepted — persist the email on the FM token record.
     const layout = process.env.FM_TOKENS_LAYOUT || 'API_Access_Tokens';
     const findResult = await fmFindRecords(layout, [
-      { 'Token_Code': `==${tokenCode}` }
+      { 'Token_Code': fmExactMatch(tokenCode) }
     ], { limit: 1 });
 
     if (!findResult?.data?.length) {
@@ -296,15 +335,7 @@ router.post('/email/confirm', async (req, res) => {
     tokenValidationCache.delete(tokenCode);
     EMAIL_CLAIM_CODES.delete(tokenCode);
 
-    // Also set the mass.email cookie so existing cookie-based fallbacks pick
-    // it up immediately on this device.
-    const cookieParts = [
-      `mass.email=${encodeURIComponent(claim.email)}`,
-      'Path=/',
-      'Max-Age=31536000',
-      'SameSite=Lax'
-    ];
-    res.setHeader('Set-Cookie', cookieParts.join('; '));
+    // The server trusts only the FM token email now — no cookie-based fallback.
 
     console.log(`[MASS] Email claim succeeded: ${tokenCode.slice(0, 8)}… -> ${claim.email}`);
 
@@ -334,7 +365,7 @@ router.post('/logout', async (req, res) => {
 
     const layout = process.env.FM_TOKENS_LAYOUT || 'API_Access_Tokens';
     const result = await fmFindRecords(layout, [
-      { 'Token_Code': `==${trimmedCode}` }
+      { 'Token_Code': fmExactMatch(trimmedCode) }
     ], { limit: 1 });
 
     if (result?.data?.length > 0) {
@@ -523,8 +554,10 @@ router.post('/stream-events', async (req, res) => {
         `${MASS_SESSION_COOKIE}=${encodeURIComponent(sessionId)}`,
         'Path=/',
         `Max-Age=${MASS_SESSION_MAX_AGE_SECONDS}`,
-        'SameSite=Lax'
+        'SameSite=Lax',
+        'HttpOnly'
       ];
+      if (process.env.NODE_ENV === 'production') cookieParts.push('Secure');
       res.setHeader('Set-Cookie', cookieParts.join('; '));
     }
 

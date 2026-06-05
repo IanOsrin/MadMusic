@@ -1,7 +1,7 @@
 // Album/track card builders + their modals for the mobile app.
 
 import { elements, state } from './state.js';
-import { getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js';
+import { escapeHtml, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js';
 import { switchTab } from './nav.js';
 import { search } from './search.js';
 import { closeModal, playTrack } from './player.js';
@@ -14,10 +14,10 @@ export function createAlbumCard(album) {
       const trackLabel = trackCount === 1 ? 'track' : 'tracks';
 
       card.innerHTML = `
-        <img class="track-artwork" src="${album.artwork}" alt="${album.title}" loading="lazy" onerror="this.src='/img/placeholder.png'">
+        <img class="track-artwork" src="${escapeHtml(album.artwork)}" alt="${escapeHtml(album.title)}" loading="lazy" onerror="this.src='/img/placeholder.png'">
         <div class="track-info">
-          <div class="track-title">${album.title}</div>
-          <div class="track-artist">${album.artist} • ${trackCount} ${trackLabel}</div>
+          <div class="track-title">${escapeHtml(album.title)}</div>
+          <div class="track-artist">${escapeHtml(album.artist)} • ${trackCount} ${trackLabel}</div>
         </div>
         <div class="track-actions">
           <button class="btn-icon view-btn">📋</button>
@@ -39,14 +39,14 @@ export function createAlbumCard(album) {
 
 export function showAlbumTracksModal(album) {
       elements.bottomSheet.innerHTML = `
-        <div class="bottom-sheet-header">${album.title}</div>
-        <p style="text-align: center; color: var(--text-secondary); margin-bottom: 16px;">${album.artist}</p>
+        <div class="bottom-sheet-header">${escapeHtml(album.title)}</div>
+        <p style="text-align: center; color: var(--text-secondary); margin-bottom: 16px;">${escapeHtml(album.artist)}</p>
         ${album.tracks.map((track, index) => {
           const fields = track.fields || {};
           const trackTitle = getTitleField(fields);
           return `
             <button class="bottom-sheet-option" data-track-index="${index}">
-              ${trackTitle}
+              ${escapeHtml(trackTitle)}
             </button>
           `;
         }).join('')}
@@ -84,14 +84,14 @@ export function createDiscoverTrackCard(track, albumCtx) {
       const discSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>`;
 
       card.innerHTML = `
-        <img class="track-artwork" src="${artwork}" alt="${title}" loading="lazy" onerror="this.src='/img/placeholder.png'">
+        <img class="track-artwork" src="${escapeHtml(artwork)}" alt="${escapeHtml(title)}" loading="lazy" onerror="this.src='/img/placeholder.png'">
         <div class="track-info">
-          <div class="track-title">${title}</div>
-          <div class="track-artist">${artist}</div>
-          ${genre ? `<span class="track-genre-tag">${genre}</span>` : ''}
+          <div class="track-title">${escapeHtml(title)}</div>
+          <div class="track-artist">${escapeHtml(artist)}</div>
+          ${genre ? `<span class="track-genre-tag">${escapeHtml(genre)}</span>` : ''}
         </div>
         <div class="track-actions">
-          <button class="album-count-btn" data-album-key="${albumKey || ''}" title="View full album">${discSVG}<span class="album-badge-count">…</span></button>
+          <button class="album-count-btn" data-album-key="${escapeHtml(albumKey || '')}" title="View full album">${discSVG}<span class="album-badge-count">…</span></button>
           <button class="btn-icon play-btn" title="Play">▶</button>
         </div>
       `;
@@ -161,7 +161,7 @@ export function showMobileArtistPrompt(artistName) {
       overlay.innerHTML = `
         <div class="mobile-artist-prompt-box">
           <p class="mobile-artist-prompt-q">See all albums by</p>
-          <p class="mobile-artist-prompt-name">${artistName.replace(/[<>]/g, '')}</p>
+          <p class="mobile-artist-prompt-name">${escapeHtml(artistName)}</p>
           <div class="mobile-artist-prompt-actions">
             <button class="mobile-artist-prompt-btn mobile-artist-yes">Yes, search</button>
             <button class="mobile-artist-prompt-btn mobile-artist-no">Dismiss</button>

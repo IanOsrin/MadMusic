@@ -1,7 +1,7 @@
 // Home rail: G100 albums + curated playlists (mobile).
 
 import { elements, state } from './state.js';
-import { getAlbumArtist, getAlbumField, getArtworkUrl, hasValidAudio } from './fields.js';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, hasValidAudio } from './fields.js';
 import { showAlbumTracksModal } from './cards.js';
 import { closeModal, playTrack } from './player.js';
 
@@ -72,7 +72,7 @@ export function renderG100Albums(filter = '') {
         : state.g100Albums;
 
       if (!albums.length) {
-        container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>No albums match "${filter}"</p></div>`;
+        container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>No albums match "${escapeHtml(filter)}"</p></div>`;
         return;
       }
 
@@ -88,11 +88,11 @@ export function renderG100Albums(filter = '') {
         const playSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
 
         card.innerHTML = `
-          <img class="nr-album-artwork" src="${album.artwork}" alt="${album.title}" loading="lazy" onerror="this.src='/img/placeholder.png'">
+          <img class="nr-album-artwork" src="${escapeHtml(album.artwork)}" alt="${escapeHtml(album.title)}" loading="lazy" onerror="this.src='/img/placeholder.png'">
           <span class="g100-badge">G100</span>
           <div class="nr-card-overlay">
-            <div class="nr-overlay-title">${album.title}</div>
-            <div class="nr-overlay-artist">${album.artist}</div>
+            <div class="nr-overlay-title">${escapeHtml(album.title)}</div>
+            <div class="nr-overlay-artist">${escapeHtml(album.artist)}</div>
             <div class="nr-overlay-actions">
               <span class="nr-track-count">${trackCount} ${trackLabel}</span>
               ${trackCount > 0 ? `<button class="nr-play-btn" style="background:var(--g100-gold);" title="Play">${playSVG}</button>` : ''}
@@ -164,12 +164,12 @@ export function renderG100Playlists(playlists) {
         card.innerHTML = `
           <div class="g100-playlist-art">
             ${pl.imageUrl
-              ? `<img src="${pl.imageUrl}" alt="${pl.name}" loading="lazy">`
+              ? `<img src="${escapeHtml(pl.imageUrl)}" alt="${escapeHtml(pl.name)}" loading="lazy">`
               : `<svg viewBox="0 0 24 24" fill="currentColor" width="40" height="40" style="opacity:0.6;"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>`
             }
           </div>
           <div class="g100-playlist-info">
-            <div class="g100-playlist-name">${pl.name}</div>
+            <div class="g100-playlist-name">${escapeHtml(pl.name)}</div>
             <div class="g100-playlist-count">${pl.trackCount} track${pl.trackCount !== 1 ? 's' : ''}</div>
           </div>
         `;
@@ -185,7 +185,7 @@ export function renderG100Playlists(playlists) {
 export async function showG100PlaylistTracks(playlistName) {
       // Show loading state in bottom sheet immediately
       elements.bottomSheet.innerHTML = `
-        <div class="bottom-sheet-header">${playlistName}</div>
+        <div class="bottom-sheet-header">${escapeHtml(playlistName)}</div>
         <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading tracks…</p></div>
         <button class="btn btn-secondary" style="width:100%;margin-top:16px;" onclick="closeModal()">Close</button>
       `;
@@ -197,7 +197,7 @@ export async function showG100PlaylistTracks(playlistName) {
 
         if (!data.ok || !data.tracks?.length) {
           elements.bottomSheet.innerHTML = `
-            <div class="bottom-sheet-header">${playlistName}</div>
+            <div class="bottom-sheet-header">${escapeHtml(playlistName)}</div>
             <div class="empty-state"><div class="empty-icon">🎵</div><p>No tracks in this playlist</p></div>
             <button class="btn btn-secondary" style="width:100%;margin-top:16px;" onclick="closeModal()">Close</button>
           `;
@@ -216,11 +216,11 @@ export async function showG100PlaylistTracks(playlistName) {
         }));
 
         elements.bottomSheet.innerHTML = `
-          <div class="bottom-sheet-header">${playlistName}</div>
+          <div class="bottom-sheet-header">${escapeHtml(playlistName)}</div>
           <p style="text-align:center;color:var(--text-secondary);margin-bottom:16px;">${tracks.length} track${tracks.length !== 1 ? 's' : ''}</p>
           ${tracks.map((t, idx) => {
             const fields = t.fields;
-            return `<button class="bottom-sheet-option" data-idx="${idx}">${fields['Track Name'] || 'Unknown Track'}<span style="display:block;font-size:11px;color:var(--text-muted);margin-top:2px;">${fields['Album Artist'] || ''}</span></button>`;
+            return `<button class="bottom-sheet-option" data-idx="${idx}">${escapeHtml(fields['Track Name'] || 'Unknown Track')}<span style="display:block;font-size:11px;color:var(--text-muted);margin-top:2px;">${escapeHtml(fields['Album Artist'] || '')}</span></button>`;
           }).join('')}
           <button class="btn btn-secondary" style="width:100%;margin-top:16px;" onclick="closeModal()">Close</button>
         `;
@@ -236,7 +236,7 @@ export async function showG100PlaylistTracks(playlistName) {
       } catch (err) {
         console.error('[G100 Playlist] Failed to load tracks', err);
         elements.bottomSheet.innerHTML = `
-          <div class="bottom-sheet-header">${playlistName}</div>
+          <div class="bottom-sheet-header">${escapeHtml(playlistName)}</div>
           <div class="empty-state"><div class="empty-icon">⚠️</div><p>Failed to load tracks</p></div>
           <button class="btn btn-secondary" style="width:100%;margin-top:16px;" onclick="closeModal()">Close</button>
         `;

@@ -3,6 +3,12 @@
 // local on purpose (getArtworkUrl/getAudioUrl/getYearField/hasValidArtwork).
 // Do NOT re-grow local copies of the delegated ones — that reintroduces drift.
 
+// Canonical HTML escaper (escapes & < > " ') shared by all mobile modules.
+// Thin delegation to the same window.MADHelpers helper the rest of the app uses.
+export function escapeHtml(s) {
+  return window.MADHelpers.escapeHtml(s);
+}
+
 export function getFieldValue(fields, fieldNames) {
   return window.MADHelpers.getFieldValue(fields, fieldNames);
 }

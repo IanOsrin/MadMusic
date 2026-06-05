@@ -1,7 +1,7 @@
 // Home rail: Discover feed (mobile).
 
 import { elements, state } from './state.js';
-import { getAlbumArtist, getAlbumField, getArtworkUrl, getGenreField, hasValidArtwork, hasValidAudio } from './fields.js';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getGenreField, hasValidArtwork, hasValidAudio } from './fields.js';
 import { search } from './search.js';
 import { createDiscoverTrackCard } from './cards.js';
 
@@ -84,8 +84,8 @@ export function renderDiscoverTracks() {
 
         let filterText = 'Filtered by: ';
         const filters = [];
-        if (state.selectedDecade) filters.push(`<strong style="color: var(--accent);">${state.selectedDecade.label}</strong>`);
-        if (state.selectedGenre !== 'All') filters.push(`<strong style="color: var(--accent);">${state.selectedGenre}</strong>`);
+        if (state.selectedDecade) filters.push(`<strong style="color: var(--accent);">${escapeHtml(state.selectedDecade.label)}</strong>`);
+        if (state.selectedGenre !== 'All') filters.push(`<strong style="color: var(--accent);">${escapeHtml(state.selectedGenre)}</strong>`);
         filterText += filters.join(' + ');
 
         indicator.innerHTML = `
@@ -109,7 +109,7 @@ export function renderDiscoverTracks() {
       if (filteredTracks.length === 0) {
         const message = state.selectedGenre === 'All'
           ? 'No tracks with audio and artwork available'
-          : `No ${state.selectedGenre} tracks with artwork found`;
+          : `No ${escapeHtml(state.selectedGenre)} tracks with artwork found`;
         elements.discoverContent.innerHTML += `<div class="empty-state"><div class="empty-icon">🎵</div><p>${message}</p></div>`;
         return;
       }

@@ -80,7 +80,7 @@ router.post('/initialize', async (req, res) => {
     // Use APP_URL from env to avoid host-header injection via X-Forwarded-Host.
     // Fall back to Express's req.protocol + req.get('host'), which already
     // respects the trust-proxy setting configured in server.js.
-    const APP_BASE = (process.env.APP_URL || '').replace(/\/$/, '');
+    const APP_BASE = (process.env.APP_URL || process.env.APP_BASE_URL || '').replace(/\/$/, '');
     const callbackBase = APP_BASE
       ? `${APP_BASE}/api/payments/callback`
       : `${req.protocol}://${req.get('host')}/api/payments/callback`;
@@ -100,7 +100,8 @@ router.post('/initialize', async (req, res) => {
         source: source === 'mobile' ? 'mobile' : 'desktop'
       }
     };
-    console.log(`[MASS] Paystack initialize payload:`, JSON.stringify(paystackPayload));
+    // Don't log the full payload — it contains the customer email (PII).
+    console.log(`[MASS] Paystack initialize: plan=${plan} amount=${selectedPlan.amount} source=${source === 'mobile' ? 'mobile' : 'desktop'}`);
 
     const data = await paystackRequest('POST', '/transaction/initialize', paystackPayload);
 
@@ -165,7 +166,7 @@ router.post('/subscribe', async (req, res) => {
       return res.status(503).json({ ok: false, error: 'Payment system not configured' });
     }
 
-    const APP_BASE    = (process.env.APP_URL || '').replace(/\/$/, '');
+    const APP_BASE    = (process.env.APP_URL || process.env.APP_BASE_URL || '').replace(/\/$/, '');
     const callbackBase = APP_BASE
       ? `${APP_BASE}/api/payments/callback`
       : `${req.protocol}://${req.get('host')}/api/payments/callback`;
@@ -185,7 +186,8 @@ router.post('/subscribe', async (req, res) => {
       }
     };
 
-    console.log(`[MASS] Subscription initialize payload:`, JSON.stringify(paystackPayload));
+    // Don't log the full payload — it contains the customer email (PII).
+    console.log(`[MASS] Subscription initialize: plan=${PAYSTACK_SUBSCRIPTION_PLAN.code} amount=${planAmount} source=${source === 'mobile' ? 'mobile' : 'desktop'}`);
     const data = await paystackRequest('POST', '/transaction/initialize', paystackPayload);
 
     console.log(`[MASS] Subscription checkout initialized: ${data.data.reference} (${email})`);

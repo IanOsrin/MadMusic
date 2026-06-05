@@ -23,7 +23,12 @@ import { STREAM_TIME_FIELD } from '../../lib/stream-events.js';
 import { getTrackRecordCached } from '../../lib/track-cache.js';
 import { createSwrCache } from '../../lib/swr-cache.js';
 import { createLogger } from '../../lib/logger.js';
+import { fmExactMatch } from '../../lib/validators.js';
 import { LRUCache } from 'lru-cache';
+
+// In production, never leak internal/FM error detail to public catalogue callers.
+const IS_PROD = process.env.NODE_ENV === 'production';
+const safeDetail = (detail) => (IS_PROD ? undefined : detail);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -307,15 +312,18 @@ router.get('/trending', async (req, res) => {
   } catch (err) {
     log.error('Failed to load trending tracks:', err);
     const detail = err?.message || 'Trending lookup failed';
-    res.status(500).json({ error: detail || 'Failed to load trending tracks' });
+    res.status(500).json({ error: IS_PROD ? 'Failed to load trending tracks' : (detail || 'Failed to load trending tracks') });
   }
 });
 
 // ── GET /my-stats ───────────────────────────────────────────────────────────
 router.get('/my-stats', async (req, res) => {
   try {
-    const token = (req.query.token || '').toString().trim().toUpperCase();
-    if (!token) return res.status(400).json({ ok: false, error: 'token param required' });
+    // Use the AUTHENTICATED token from the /api/ middleware (req.accessToken),
+    // never a caller-supplied ?token= — that was an IDOR (any caller could read
+    // any token's listening history) and leaked the token in the URL.
+    const token = (req.accessToken?.code || '').toString().trim().toUpperCase();
+    if (!token) return res.status(403).json({ ok: false, error: 'Authentication required' });
 
     const cached = myStatsCache.get(token);
     if (cached) {
@@ -325,7 +333,7 @@ router.get('/my-stats', async (req, res) => {
 
     const findResult = await fmFindRecords(
       FM_STREAM_EVENTS_LAYOUT,
-      [{ Token_Number: `==${token}` }],
+      [{ Token_Number: fmExactMatch(req.accessToken.code) }],
       { limit: 2000, offset: 1 }
     );
 
@@ -377,7 +385,7 @@ router.get('/my-stats', async (req, res) => {
     myStatsCache.set(token, tracks);
     return res.json({ ok: true, tracks });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message || 'my-stats failed' });
+    return res.status(500).json({ ok: false, error: IS_PROD ? 'my-stats failed' : (err.message || 'my-stats failed') });
   }
 });
 

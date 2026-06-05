@@ -2,7 +2,7 @@
 
 import { elements, state } from './state.js';
 import { showToast } from './util.js';
-import { getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, getTitleField } from './fields.js';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, getTitleField } from './fields.js';
 import { switchTab } from './nav.js';
 import { closeModal, playTrack } from './player.js';
 
@@ -38,7 +38,7 @@ export function renderPlaylists() {
         card.style.cursor = 'pointer';
         card.innerHTML = `
           <div class="track-info">
-            <div class="track-title">${playlist.name}</div>
+            <div class="track-title">${escapeHtml(playlist.name)}</div>
             <div class="track-artist">${trackCount} track${trackCount !== 1 ? 's' : ''}</div>
           </div>
           <button class="btn-icon play-playlist-btn" title="Play playlist">▶</button>
@@ -64,11 +64,11 @@ export function renderPlaylists() {
 export function showPlaylistTracks(playlist) {
       const tracks = playlist.tracks || [];
       elements.bottomSheet.innerHTML = `
-        <div class="bottom-sheet-header">${playlist.name}</div>
+        <div class="bottom-sheet-header">${escapeHtml(playlist.name)}</div>
         ${tracks.length === 0 ? '<p style="text-align:center;color:var(--text-muted);padding:16px;">No tracks yet</p>' :
           tracks.map((t, i) => `
             <button class="bottom-sheet-option" data-index="${i}" style="display:flex;align-items:center;gap:10px;text-align:left;">
-              <span style="flex:1;">${t.name || 'Unknown'}<br><small style="color:var(--text-muted)">${t.albumArtist || t.albumTitle || ''}</small></span>
+              <span style="flex:1;">${escapeHtml(t.name || 'Unknown')}<br><small style="color:var(--text-muted)">${escapeHtml(t.albumArtist || t.albumTitle || '')}</small></span>
               <span>▶</span>
             </button>
           `).join('')}
@@ -147,8 +147,8 @@ export function showAddToPlaylistModal(track) {
       elements.bottomSheet.innerHTML = `
         <div class="bottom-sheet-header">Add to Playlist</div>
         ${state.playlists.map(playlist => `
-          <button class="bottom-sheet-option" data-playlist-id="${playlist.id}">
-            ${playlist.name}
+          <button class="bottom-sheet-option" data-playlist-id="${escapeHtml(playlist.id)}">
+            ${escapeHtml(playlist.name)}
           </button>
         `).join('')}
         <button class="btn btn-secondary" style="width: 100%; margin-top: 16px;" onclick="closeModal()">Cancel</button>

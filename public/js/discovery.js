@@ -506,7 +506,7 @@
         return `
           <div class="trending-card">
             <div class="trending-rank">#${index + 1}</div>
-            <div class="trending-artwork" style="cursor:pointer" onclick="if(window.openAlbumDirect) window.openAlbumDirect('${escapeHtml(album)}','${escapeHtml(artist)}');">
+            <div class="trending-artwork" style="cursor:pointer" data-album-view data-album="${escapeHtml(album)}" data-artist="${escapeHtml(artist)}">
               ${artworkUrl
                 ? `<img src="${escapeHtml(artworkUrl)}" alt="${escapeHtml(title)}" onerror="this.closest('.trending-card').style.display='none'" />`
                 : ''
@@ -522,10 +522,12 @@
             </div>
             <button class="trending-play-btn" onclick="playSong('${escapeHtml(item.recordId)}')">▶</button>
             <a href="${escapeHtml(jukeboxUrl)}" class="trending-album-btn" title="View album in Jukebox">💿</a>
-            <button class="card-album-btn" title="View album" onclick="if(window.openAlbumDirect) window.openAlbumDirect('${escapeHtml(album)}','${escapeHtml(artist)}');"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <button class="card-album-btn" title="View album" data-album-view data-album="${escapeHtml(album)}" data-artist="${escapeHtml(artist)}"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></button>
           </div>
         `;
       }).join('');
+
+      setupAlbumViewDelegation(container);
     }
 
     // Helper to create HTML for a single random card
@@ -566,7 +568,7 @@
               <button class="track-action-btn card-library-btn" title="Save to library">♡ Save</button>
             </div>
           </div>
-          <button class="card-album-btn" title="View album" onclick="if(window.showView) window.showView('albums'); var s=document.getElementById('search'); if(s){s.value='${escapeHtml(album)}';} if(window.run) window.run('${escapeHtml(album)}');"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <button class="card-album-btn" title="View album" data-album-search data-album="${escapeHtml(album)}"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></button>
         </div>
       `;
     }
@@ -600,6 +602,7 @@
 
       container.innerHTML = validItems.map(item => createRandomCardHtml(item)).join('');
       setupCardQuickActions(container);
+      setupAlbumViewDelegation(container);
     }
 
     // Shuffle array utility
@@ -640,6 +643,7 @@
         container.insertAdjacentHTML('beforeend', cardHtml);
       }
       setupCardQuickActions(container);
+      setupAlbumViewDelegation(container);
     }
 
     // Render albums (grouped by album)
@@ -783,7 +787,7 @@
 
         return `
           <div class="random-card">
-            <div class="random-artwork" style="cursor:pointer" onclick="if(window.openAlbumDirect) window.openAlbumDirect('${escapeHtml(album)}','${escapeHtml(artist)}');">
+            <div class="random-artwork" style="cursor:pointer" data-album-view data-album="${escapeHtml(album)}" data-artist="${escapeHtml(artist)}">
               ${artwork
                 ? `<img src="${escapeHtml(artwork)}" alt="${escapeHtml(album)}" onerror="this.closest('.random-card').style.display='none'" />`
                 : ''
@@ -803,6 +807,8 @@
           </div>
         `;
       }).join('');
+
+      setupAlbumViewDelegation(container);
     }
 
     // Fetch and render data
@@ -1259,7 +1265,7 @@
           return `
             <div class="trending-card" data-record-id="${escapeHtml(item.recordId)}">
               <span class="nr-new-badge">New</span>
-              <div class="trending-artwork" style="cursor:pointer" onclick="if(window.openAlbumDirect) window.openAlbumDirect('${escapeHtml(album)}','${escapeHtml(artist)}');">
+              <div class="trending-artwork" style="cursor:pointer" data-album-view data-album="${escapeHtml(album)}" data-artist="${escapeHtml(artist)}">
                 ${artworkUrl
                   ? `<img src="${escapeHtml(artworkUrl)}" alt="${escapeHtml(title)}" onerror="this.closest('.trending-card').style.display='none'" />`
                   : ''
@@ -1280,6 +1286,7 @@
         }).join('');
 
         setupCardQuickActions(container);
+        setupAlbumViewDelegation(container);
         section.hidden = false;
         console.log(`[NewReleases] Rendered ${items.length} items`);
       } catch (err) {
@@ -1308,6 +1315,38 @@
   }
 
   // Single delegated handler — wired up once on each container after first render
+  // Delegated handler for "view album" / "search album" affordances on cards.
+  // Replaces inline onclick="...('${album}','${artist}')" handlers: escapeHtml is
+  // the wrong escaping for a JS-string-inside-an-attribute (the browser decodes
+  // entities back to raw quotes before the JS parser runs, so an album titled
+  // ');alert(1)// breaks out). We carry the values in escaped data-* attributes
+  // and read them back as plain strings here, so no JS-string parsing happens.
+  function setupAlbumViewDelegation(container) {
+    if (!container || container._albumViewReady) return;
+    container._albumViewReady = true;
+
+    container.addEventListener('click', (e) => {
+      // "Run a search for this album" affordance (random cards)
+      const searchEl = e.target.closest('[data-album-search]');
+      if (searchEl && container.contains(searchEl)) {
+        const album = searchEl.dataset.album || '';
+        if (window.showView) window.showView('albums');
+        const s = document.getElementById('search');
+        if (s) s.value = album;
+        if (window.run) window.run(album);
+        return;
+      }
+
+      // "Open this album directly" affordance (trending / album / new-release cards)
+      const viewEl = e.target.closest('[data-album-view]');
+      if (viewEl && container.contains(viewEl)) {
+        const album  = viewEl.dataset.album  || '';
+        const artist = viewEl.dataset.artist || '';
+        if (window.openAlbumDirect) window.openAlbumDirect(album, artist);
+      }
+    });
+  }
+
   function setupCardQuickActions(container) {
     if (!container || container._cardActionsReady) return;
     container._cardActionsReady = true;

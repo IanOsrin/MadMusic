@@ -12,8 +12,39 @@
 import { Router } from 'express';
 import { fmFindRecords, fmCreateRecord, fmUpdateRecord } from '../fm-client.js';
 import { createAccessToken, findTelkomToken, disableSubscriptionToken } from '../lib/token-store.js';
+import { timingSafeEqualStr } from '../lib/crypto-utils.js';
 
 const router = Router();
+
+// Hard ceiling on any token duration a webhook can request (days). Telkom plans
+// are monthly; this prevents a crafted/garbage next_billing_at from minting a
+// multi-year token. Tunable via env.
+const TELKOM_MAX_TOKEN_DAYS = Math.max(1, parseInt(process.env.TELKOM_MAX_TOKEN_DAYS, 10) || 366);
+
+/**
+ * Verify that an incoming Telkom webhook is authentic.
+ *
+ * Security model: Telkom must send a shared secret in a header (default
+ * `x-telkom-secret`, overridable via TELKOM_WEBHOOK_HEADER). The expected value
+ * is TELKOM_WEBHOOK_SECRET. Comparison is constant-time.
+ *
+ * Env-gated (safe-by-default): if TELKOM_WEBHOOK_SECRET is unset we log a loud
+ * warning and ALLOW the request so an existing integration isn't broken before
+ * the secret is coordinated with Telkom. SET TELKOM_WEBHOOK_SECRET to enforce.
+ *
+ * Returns true if the request should be processed, false if it must be rejected.
+ */
+function verifyTelkomWebhook(req) {
+  const expected = process.env.TELKOM_WEBHOOK_SECRET;
+  if (!expected) {
+    console.warn('[Telkom] SECURITY: TELKOM_WEBHOOK_SECRET is not set — webhook authentication is DISABLED. ' +
+      'Anyone can mint tokens. Set TELKOM_WEBHOOK_SECRET (and configure Telkom to send it) to enforce.');
+    return true; // off-by-default; do not break a live integration
+  }
+  const headerName = (process.env.TELKOM_WEBHOOK_HEADER || 'x-telkom-secret').toLowerCase();
+  const provided = req.headers[headerName];
+  return typeof provided === 'string' && timingSafeEqualStr(provided, expected);
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -26,7 +57,7 @@ async function createTelkomToken(msisdn, subscriptionId, nextBillingAt) {
     ? Math.ceil((new Date(nextBillingAt) - new Date()) / (1000 * 60 * 60 * 24))
     : 30;
 
-  const days  = Math.max(billingDays, 1);
+  const days  = Math.min(Math.max(billingDays, 1), TELKOM_MAX_TOKEN_DAYS);
   const notes = `Telkom subscription (msisdn: ${msisdn}, sub_id: ${subscriptionId})`;
 
   const token = await createAccessToken(days, notes, null, 'telkom');
@@ -88,6 +119,11 @@ async function updateUserStatus(recordId, subscriptionId, status, nextBillingAt)
  * On NEW_SUBSCRIPTION we return an activation_link in the response body.
  */
 router.post('/subscription', async (req, res) => {
+  if (!verifyTelkomWebhook(req)) {
+    console.warn('[Telkom] Rejected subscription webhook: invalid or missing secret');
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+
   const body = req.body;
 
   console.log('[Telkom] Subscription notification received:', JSON.stringify(body));
@@ -178,6 +214,11 @@ router.post('/subscription', async (req, res) => {
  * We extend the subscriber's token to cover the new billing period.
  */
 router.post('/billing', async (req, res) => {
+  if (!verifyTelkomWebhook(req)) {
+    console.warn('[Telkom] Rejected billing webhook: invalid or missing secret');
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+
   const body = req.body;
 
   console.log('[Telkom] Billing notification received:', JSON.stringify(body));

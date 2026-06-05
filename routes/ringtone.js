@@ -18,7 +18,7 @@
 import { Router } from 'express';
 import { fmCreateRecord, fmFindRecords } from '../fm-client.js';
 import { paystackRequest } from '../lib/paystack.js';
-import { isStrictEmail } from '../lib/validators.js';
+import { isStrictEmail, fmExactMatch } from '../lib/validators.js';
 
 const router = Router();
 
@@ -30,18 +30,48 @@ const FM_RINGTONE_LAYOUT =
   process.env.FM_DOWNLOADS_LAYOUT ||
   'API_Ringtone_Purchases';
 
+// How long a purchase reference can be used to verify the ringtone. Defends
+// against a leaked `ref` (it rides in URLs) being replayed indefinitely.
+const DOWNLOAD_LINK_TTL_HOURS = Number.parseFloat(process.env.DOWNLOAD_LINK_TTL_HOURS || '48') || 48;
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function findRingtonePurchase(reference) {
   try {
     const result = await fmFindRecords(FM_RINGTONE_LAYOUT, [
-      { Paystack_Reference: `==${reference}`, Status: 'complete' }
+      { Paystack_Reference: fmExactMatch(reference), Status: 'complete' }
     ], { limit: 1 });
     if (!result.ok || !result.data?.length) return null;
     return result.data[0].fieldData;
   } catch {
     return null;
   }
+}
+
+// Candidate timestamp fields on the purchase record. The FM map does not document
+// an explicit Created/Paid field on API_Ringtone_Purchases, so we probe the common
+// names. Returns ms-epoch or null if none is present/parseable.
+const PURCHASE_TS_FIELD_CANDIDATES = [
+  'Created', 'Created_At', 'CreatedTimestamp', 'Creation_Timestamp',
+  'Date_Created', 'Timestamp', 'Paid_At', 'Paid', 'Purchase_Date', 'Date'
+];
+
+// Reject a leaked/replayed ref once the purchase is older than the TTL window.
+// Guarded: if no timestamp field is present/parseable we log and ALLOW so a
+// schema gap never blocks a legitimate verification. TODO: confirm the actual
+// timestamp field name on API_Ringtone_Purchases and pin it here.
+function isPurchaseFresh(fieldData) {
+  for (const field of PURCHASE_TS_FIELD_CANDIDATES) {
+    const raw = fieldData?.[field];
+    if (raw === undefined || raw === null || raw === '') continue;
+    const ms = Date.parse(String(raw));
+    if (Number.isFinite(ms)) {
+      const ageHours = (Date.now() - ms) / (60 * 60 * 1000);
+      return ageHours <= DOWNLOAD_LINK_TTL_HOURS;
+    }
+  }
+  console.warn('[RINGTONE] No parseable purchase timestamp — skipping recency check (allowing verify)');
+  return true;
 }
 
 // ── POST /api/ringtone/initiate ───────────────────────────────────────────────
@@ -131,9 +161,10 @@ router.get('/callback', async (req, res) => {
       }
     }
 
-    // Redirect back to the ringtone page with paid reference + all original params
+    // Redirect back to the ringtone page with the original params. Do NOT include
+    // the Paystack reference — it is a replayable bearer token for /verify.
     const params = new URLSearchParams();
-    params.set('paid',   reference);
+    params.set('download', 'success');
     params.set('src',    src    || '');
     params.set('name',   name   || '');
     params.set('artist', artist || '');
@@ -158,6 +189,10 @@ router.get('/verify', async (req, res) => {
     const purchase = await findRingtonePurchase(ref);
     if (!purchase) {
       return res.status(403).json({ ok: false, valid: false, error: 'No valid purchase found' });
+    }
+    // Reject stale/leaked references — a verify link is only valid for a window.
+    if (!isPurchaseFresh(purchase)) {
+      return res.status(403).json({ ok: false, valid: false, error: 'This link has expired' });
     }
     return res.json({ ok: true, valid: true });
   } catch (err) {

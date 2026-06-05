@@ -5,6 +5,8 @@ import http2 from 'node:http2';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { Readable } from 'node:stream';
+import dns from 'node:dns/promises';
+import net from 'node:net';
 import compression from 'compression';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
@@ -24,6 +26,7 @@ import ringtoneRouter from './routes/ringtone.js';
 import telkomRouter from './routes/telkom.js';
 
 import { validateAccessToken } from './lib/auth.js';
+import { timingSafeEqualStr } from './lib/crypto-utils.js';
 import { normalizeShareId } from './lib/format.js';
 import { sanitizePlaylistForShare } from './lib/playlist.js';
 import { buildShareUrl } from './lib/http.js';
@@ -45,13 +48,31 @@ process.on('uncaughtException', (err) => {
 });
 
 function parseTrustProxy(value) {
-  if (value === undefined || value === null) return 'loopback';
-  if (typeof value === 'boolean' || typeof value === 'number' || Array.isArray(value)) return value;
+  const isProd = process.env.NODE_ENV === 'production';
+  // Default: in production, trust exactly one proxy hop (Render's edge). In dev,
+  // trust loopback only. Never default to trusting all hops.
+  if (value === undefined || value === null) return isProd ? 1 : 'loopback';
+  if (typeof value === 'number' || Array.isArray(value)) return value;
+  if (typeof value === 'boolean') {
+    // `true` makes req.ip the client-controlled left-most X-Forwarded-For, which
+    // lets attackers rotate the header to defeat rate limiting. Refuse it in prod.
+    if (value === true && isProd) {
+      console.warn('[SECURITY] TRUST_PROXY=true is unsafe in production (spoofable client IP). Coercing to 1 hop.');
+      return 1;
+    }
+    return value;
+  }
   if (typeof value !== 'string') return value;
   const trimmed = value.trim();
-  if (!trimmed) return false;
+  if (!trimmed) return isProd ? 1 : false;
   const lower = trimmed.toLowerCase();
-  if (lower === 'true') return true;
+  if (lower === 'true') {
+    if (isProd) {
+      console.warn('[SECURITY] TRUST_PROXY=true is unsafe in production (spoofable client IP). Set it to the proxy hop count (Render = 1). Coercing to 1.');
+      return 1;
+    }
+    return true;
+  }
   if (lower === 'false') return false;
   if (/^\d+$/.test(trimmed)) {
     const num = Number(trimmed);
@@ -108,6 +129,21 @@ app.use((req, res, next) => {
       "form-action 'self'"
     ].join('; ')
   );
+  next();
+});
+
+// ── Audio Lab feature flag ────────────────────────────────────────────────────
+// Audio Lab is OFF by default. The code stays in place; this gate simply makes
+// the page, its static HTML, and every /api/audio-lab/* endpoint return 404 so
+// the whole surface (including audio-lab.html's reflected-title param) is
+// unreachable until revived. To turn it back on, set AUDIO_LAB_ENABLED=true.
+const AUDIO_LAB_ENABLED = process.env.AUDIO_LAB_ENABLED === 'true';
+app.use((req, res, next) => {
+  if (AUDIO_LAB_ENABLED) return next();
+  const p = req.path.toLowerCase();
+  if (p === '/audio-lab' || p === '/audio-lab.html' || p.startsWith('/api/audio-lab')) {
+    return res.status(404).send('Not found');
+  }
   next();
 });
 
@@ -228,7 +264,9 @@ app.use('/api/', async (req, res, next) => {
     '/download/',
     '/ringtone/',
     '/audio-proxy',
-    '/audio-lab/',
+    // NOTE: '/audio-lab/' is intentionally NOT skipped — every /api/audio-lab/*
+    // endpoint (key validation + the Replicate proxy) requires a valid access
+    // token so we never forward to a paid third-party API unauthenticated.
     '/catalog/'
   ];
 
@@ -257,11 +295,18 @@ app.use('/api/', async (req, res, next) => {
 
   if (!validation.valid) {
     const STALE_GRACE_MS = 24 * 60 * 60 * 1000;
-    if (cached?.data && (Date.now() - cached.expiresAt) < STALE_GRACE_MS) {
-      console.warn(`[MASS] FM validation failed (${validation.reason}), using stale cache for token ${cacheKey.slice(0, 8)}…`);
+    // Only fall back to the stale cache when FileMaker was UNREACHABLE (network/
+    // 5xx/timeout). An authoritative "token disabled / expired / in use elsewhere"
+    // verdict must deny immediately — otherwise a revoked subscriber keeps access
+    // for up to 24h. validateAccessToken sets `definitive: true` for real denials.
+    const fmUnavailable = validation.definitive !== true;
+    if (fmUnavailable && cached?.data && (Date.now() - cached.expiresAt) < STALE_GRACE_MS) {
+      console.warn(`[MASS] FM unreachable (${validation.reason}), using stale cache for token ${cacheKey.slice(0, 8)}…`);
       req.accessToken = cached.data;
       return next();
     }
+    // Definitive denial: drop any cached entry so it can't be reused.
+    if (validation.definitive === true) tokenValidationCache.delete(cacheKey);
     return res.status(403).json({
       ok: false,
       error: 'Invalid or expired access token',
@@ -307,10 +352,16 @@ const DEV_MODE = process.env.NODE_ENV !== 'production';
 async function loadHtml(filename) {
   if (!DEV_MODE && _htmlCache.has(filename)) return _htmlCache.get(filename);
   const raw = await fs.readFile(path.join(PUBLIC_DIR, filename), 'utf8');
-  const stamped = raw.replace(
+  let stamped = raw.replace(
     /((?:src|href)="\/(?:js|css)\/[^"]+)\?v=[^"&]*/g,
     `$1?v=${DEPLOY_STAMP}`
   );
+  // When Audio Lab is disabled, hide its UI entry points (home widget + per-track
+  // buttons) so users don't hit the 404'd routes. Purely cosmetic; the server-side
+  // gate above is the real control. Re-enabling AUDIO_LAB_ENABLED removes this.
+  if (!AUDIO_LAB_ENABLED) {
+    stamped += '\n<style id="audio-lab-disabled">#audioLabWidget,.track-audio-lab-btn,.btn-audio-lab{display:none !important;}</style>\n';
+  }
   if (!DEV_MODE) _htmlCache.set(filename, stamped);
   return stamped;
 }
@@ -429,13 +480,16 @@ app.get('/audio-lab',(_req, res) => sendHtml(res, 'audio-lab.html'));
 // automatically on every subsequent /api/access/validate call.
 app.post('/api/audio-lab/validate-key', async (req, res) => {
   const { key } = req.body || {};
-  // Beta fallback: 'abc123' unlocks Audio Lab when AUDIO_LAB_KEY is unset, in any
-  // environment (restores the original behaviour). Set AUDIO_LAB_KEY in the host
-  // env later to override with a private key and lock this down for launch.
-  const validKey = process.env.AUDIO_LAB_KEY || 'abc123';
+  // No hardcoded fallback — the Audio Lab unlock key MUST be configured via the
+  // AUDIO_LAB_KEY env var. If it's unset, the feature fails closed (503) rather
+  // than accepting a well-known default that would let anyone unlock it.
+  const validKey = process.env.AUDIO_LAB_KEY;
   if (!validKey) return res.status(503).json({ ok: false, error: 'Audio Lab not configured' });
   if (!key) return res.status(400).json({ ok: false, error: 'No key provided' });
-  if (key.trim() !== validKey) return res.status(403).json({ ok: false, error: 'Invalid key' });
+  // Constant-time comparison to avoid leaking the key via timing.
+  if (!timingSafeEqualStr(String(key).trim(), validKey)) {
+    return res.status(403).json({ ok: false, error: 'Invalid key' });
+  }
 
   // Write Audio_Lab_Enabled = 1 to the FM token record
   try {
@@ -454,19 +508,52 @@ app.post('/api/audio-lab/validate-key', async (req, res) => {
   return res.json({ ok: true, audioLabEnabled: true });
 });
 
-// ── Private-IP patterns used by the audio proxy SSRF guard ───────────────────
-const _AUDIO_PROXY_PRIVATE_IP = [
-  /^10\./,
-  /^172\.(1[6-9]|2\d|3[01])\./,
-  /^192\.168\./,
-  /^169\.254\./,  // link-local
-  /^::1$/,        // IPv6 loopback
-  /^fe80:/i,      // IPv6 link-local
-  /^fc00:/i       // IPv6 unique-local
-];
-function _audioProxyIsPrivate(hostname) {
-  if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
-  return _AUDIO_PROXY_PRIVATE_IP.some(p => p.test(hostname));
+// ── SSRF guard ───────────────────────────────────────────────────────────────
+// Decide whether a resolved IP address belongs to a private/internal range.
+// Uses net.isIP + numeric checks so decimal/octal/hex/IPv4-mapped-IPv6 literals
+// can't slip past a string regex.
+function _ipIsPrivate(ip) {
+  if (!ip) return true;
+  const fam = net.isIP(ip);
+  if (fam === 4) {
+    const o = ip.split('.').map(Number);
+    if (o.length !== 4 || o.some(n => Number.isNaN(n) || n < 0 || n > 255)) return true;
+    if (o[0] === 10) return true;                          // 10.0.0.0/8
+    if (o[0] === 172 && o[1] >= 16 && o[1] <= 31) return true; // 172.16.0.0/12
+    if (o[0] === 192 && o[1] === 168) return true;         // 192.168.0.0/16
+    if (o[0] === 169 && o[1] === 254) return true;         // link-local
+    if (o[0] === 127) return true;                         // loopback
+    if (o[0] === 0) return true;                           // 0.0.0.0/8
+    if (o[0] >= 224) return true;                          // multicast/reserved
+    return false;
+  }
+  if (fam === 6) {
+    const low = ip.toLowerCase();
+    if (low === '::1' || low === '::') return true;
+    if (low.startsWith('fe80') || low.startsWith('fc') || low.startsWith('fd')) return true;
+    // IPv4-mapped IPv6 (::ffff:a.b.c.d) — re-check the embedded v4 address.
+    const m = low.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (m) return _ipIsPrivate(m[1]);
+    return false;
+  }
+  return true; // not a valid IP literal → treat as unsafe
+}
+
+// Resolve a hostname and return true if ANY resolved address is private/internal.
+// This defeats DNS-rebinding (attacker domain → 169.254.169.254) and alternate
+// IP encodings that a hostname-string regex would miss.
+async function _hostnameResolvesPrivate(hostname) {
+  if (!hostname) return true;
+  const h = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.internal')) return true;
+  if (net.isIP(h)) return _ipIsPrivate(h);
+  try {
+    const records = await dns.lookup(h, { all: true });
+    if (!records.length) return true;
+    return records.some(r => _ipIsPrivate(r.address));
+  } catch {
+    return true; // unresolvable → block
+  }
 }
 
 // ── Audio Lab proxy ── fetches a remote audio URL server-side to bypass CORS ──
@@ -475,12 +562,13 @@ app.get('/api/audio-proxy', async (req, res) => {
   if (!url) return res.status(400).json({ error: 'Missing url param' });
   try {
     const target = new URL(url); // throws if invalid
-    // Block non-https schemes and private/internal IP ranges (SSRF prevention)
+    // Block non-https schemes and private/internal IP ranges (SSRF prevention).
+    // Resolves DNS so rebinding and alternate IP encodings can't bypass the check.
     if (target.protocol !== 'https:') return res.status(400).json({ error: 'Only https URLs allowed' });
-    if (_audioProxyIsPrivate(target.hostname)) {
+    if (await _hostnameResolvesPrivate(target.hostname)) {
       return res.status(400).json({ error: 'Private or internal addresses not allowed' });
     }
-    const upstream = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+    const upstream = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(30_000) });
     if (!upstream.ok) return res.status(upstream.status).json({ error: `Upstream ${upstream.status}` });
     const ct = upstream.headers.get('content-type') || 'audio/mpeg';
     const cl = upstream.headers.get('content-length');
@@ -500,7 +588,8 @@ app.get('/api/audio-proxy', async (req, res) => {
     res.on('close', () => { if (!nodeStream.destroyed) nodeStream.destroy(); });
     nodeStream.pipe(res);
   } catch (err) {
-    if (!res.headersSent) res.status(500).json({ error: err.message });
+    console.warn('[audio-proxy] error:', err.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Upstream request failed' });
     else res.destroy();
   }
 });
@@ -512,7 +601,10 @@ app.get('/api/audio-proxy', async (req, res) => {
 
 // Start a prediction — audio sent as base64 MP3 data URL (encoded client-side to keep size small).
 app.post('/api/audio-lab/replicate/predictions', async (req, res) => {
-  const replicateKey = req.headers['x-replicate-key'] || process.env.REPLICATE_API_KEY;
+  // Auth is enforced by the /api/ middleware (no longer skip-listed). The caller
+  // must supply their OWN Replicate key — we never fall back to the server's key
+  // for a client request, which would let callers spend the server's credits.
+  const replicateKey = req.headers['x-replicate-key'];
   if (!replicateKey) return res.status(400).json({ error: 'No Replicate API key provided' });
 
   try {
@@ -528,14 +620,19 @@ app.post('/api/audio-lab/replicate/predictions', async (req, res) => {
     res.status(upstream.status).json(data);
   } catch (err) {
     console.error('[Replicate] Proxy error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(502).json({ error: 'Upstream request failed' });
   }
 });
 
 // Step 3: Poll prediction status.
 app.get('/api/audio-lab/replicate/predictions/:id', async (req, res) => {
-  const replicateKey = req.headers['x-replicate-key'] || process.env.REPLICATE_API_KEY;
+  const replicateKey = req.headers['x-replicate-key'];
   if (!replicateKey) return res.status(400).json({ error: 'No Replicate API key provided' });
+  // Constrain the id to Replicate's id charset so it can't be used to path-traverse
+  // or hit arbitrary Replicate endpoints.
+  if (!/^[A-Za-z0-9]+$/.test(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid prediction id' });
+  }
 
   try {
     const upstream = await fetch(`https://api.replicate.com/v1/predictions/${req.params.id}`, {
@@ -545,7 +642,7 @@ app.get('/api/audio-lab/replicate/predictions/:id', async (req, res) => {
     res.status(upstream.status).json(data);
   } catch (err) {
     console.error('[Replicate] Poll error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(502).json({ error: 'Upstream request failed' });
   }
 });
 

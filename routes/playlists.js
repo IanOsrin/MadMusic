@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
 import { requireTokenEmail } from '../lib/auth.js';
 import { validators } from '../lib/validators.js';
+import { timingSafeEqualStr } from '../lib/crypto-utils.js';
 import { normalizeShareId, generateShareId, escapeHtml } from '../lib/format.js';
 import { buildShareUrl } from '../lib/http.js';
 import {
@@ -180,6 +181,10 @@ router.post('/:playlistId/tracks/bulk', async (req, res) => {
     const rawTracks = Array.isArray(req.body?.tracks) ? req.body.tracks : [];
     if (!rawTracks.length) {
       res.status(400).json({ ok: false, error: 'At least one track required' });
+      return;
+    }
+    if (rawTracks.length > 500) {
+      res.status(400).json({ ok: false, error: 'Too many tracks (max 500 per request)' });
       return;
     }
 
@@ -411,6 +416,18 @@ router.post('/:playlistId/publish-to-filemaker', async (req, res) => {
   const user = requireTokenEmail(req, res);
   if (!user) return;
 
+  // This writes the `PublicPlaylist` tag onto SHARED global-catalogue records
+  // (API_Album_Songs), so it affects every user's curated-playlist view — not
+  // just the caller's own data. Gate it behind an admin key when the deployment
+  // opts in (PUBLISH_REQUIRES_ADMIN=true). Off by default to preserve behaviour.
+  if (process.env.PUBLISH_REQUIRES_ADMIN === 'true') {
+    const provided = req.headers['x-admin-key'];
+    const expected = process.env.ADMIN_SECRET || '';
+    if (!expected || typeof provided !== 'string' || !timingSafeEqualStr(provided, expected)) {
+      return res.status(403).json({ ok: false, error: 'Admin authorization required' });
+    }
+  }
+
   try {
     const email      = user.email;
     const playlistId = req.params?.playlistId;
@@ -436,8 +453,15 @@ router.post('/:playlistId/publish-to-filemaker', async (req, res) => {
         results.push({ track: track.name || 'Unknown', success: false, error: 'No record ID found' });
         continue;
       }
+      // Only numeric FM internal record IDs are valid here — skip anything else
+      // so a malformed/injected value never reaches fmUpdateRecord.
+      const recIdValidation = validators.recordId(recId);
+      if (!recIdValidation.valid) {
+        results.push({ track: track.name || 'Unknown', recordId: recId, success: false, error: 'Invalid record ID' });
+        continue;
+      }
       try {
-        await fmUpdateRecord(FM_LAYOUT, recId, { 'PublicPlaylist': playlistName });
+        await fmUpdateRecord(FM_LAYOUT, recIdValidation.value, { 'PublicPlaylist': playlistName });
         results.push({ track: track.name || 'Unknown', recordId: recId, success: true });
         console.log(`[MASS] ✓ Updated track "${track.name}" (${recId}) with PublicPlaylist="${playlistName}"`);
       } catch (err) {
@@ -577,6 +601,9 @@ router.post('/:playlistId/import', async (req, res) => {
     }
     if (!importCode || typeof importCode !== 'string') {
       return res.status(400).json({ ok: false, error: 'Import code required' });
+    }
+    if (importCode.length > 4096) {
+      return res.status(400).json({ ok: false, error: 'Import code too long' });
     }
 
     // Verify the target playlist exists and belongs to this user

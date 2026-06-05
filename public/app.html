@@ -5290,6 +5290,8 @@
       // Listen for the close message the iframe sends when its "× Close"
       // link is clicked. Same-origin so we can just check the type.
       window.addEventListener('message', function (e) {
+        // Only trust messages from our own origin (the iframe is same-origin).
+        if (e.origin !== window.location.origin) return;
         if (e && e.data && e.data.type === 'ringtone-close') close();
       });
 

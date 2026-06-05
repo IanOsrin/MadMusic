@@ -22,11 +22,15 @@ import {
   AUDIO_FIELD_CANDIDATES
 } from '../lib/fm-fields.js';
 import { paystackRequest } from '../lib/paystack.js';
-import { isStrictEmail } from '../lib/validators.js';
+import { isStrictEmail, fmExactMatch } from '../lib/validators.js';
 
 const router = Router();
 
 const FM_DOWNLOADS_LAYOUT = process.env.FM_DOWNLOADS_LAYOUT || 'API_Download_Purchases';
+
+// How long a purchase reference can be used to fetch the file. Defends against
+// a leaked `ref` (it rides in URLs) being replayed indefinitely.
+const DOWNLOAD_LINK_TTL_HOURS = Number.parseFloat(process.env.DOWNLOAD_LINK_TTL_HOURS || '48') || 48;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -40,7 +44,7 @@ function resolveAudioUrl(fieldData) {
 
 async function findPurchaseByRef(reference) {
   const result = await fmFindRecords(FM_DOWNLOADS_LAYOUT, [
-    { Paystack_Reference: `==${reference}`, Status: 'complete' }
+    { Paystack_Reference: fmExactMatch(reference), Status: 'complete' }
   ], { limit: 1 });
   if (!result.ok || result.data.length === 0) return null;
   return result.data[0].fieldData;
@@ -50,6 +54,38 @@ async function fetchTrackRecord(recordId) {
   const record = await fmGetRecordById(FM_LAYOUT, recordId);
   if (!record) return null;
   return record.fieldData || null;
+}
+
+// Candidate timestamp fields on the purchase record. The FM map does not document
+// an explicit Created/Paid field on API_Download_Purchases, so we probe the common
+// names. Returns ms-epoch or null if none is present/parseable.
+const PURCHASE_TS_FIELD_CANDIDATES = [
+  'Created', 'Created_At', 'CreatedTimestamp', 'Creation_Timestamp',
+  'Date_Created', 'Timestamp', 'Paid_At', 'Paid', 'Purchase_Date', 'Date'
+];
+
+function purchaseTimestampMs(fieldData) {
+  for (const field of PURCHASE_TS_FIELD_CANDIDATES) {
+    const raw = fieldData?.[field];
+    if (raw === undefined || raw === null || raw === '') continue;
+    const ms = Date.parse(String(raw));
+    if (Number.isFinite(ms)) return ms;
+  }
+  return null;
+}
+
+// Reject a leaked/replayed ref once the purchase is older than the TTL window.
+// Guarded: if no timestamp field is present/parseable we log and ALLOW so a
+// schema gap never blocks a legitimate download. TODO: confirm the actual
+// timestamp field name on API_Download_Purchases and pin it here.
+function isPurchaseFresh(fieldData) {
+  const ms = purchaseTimestampMs(fieldData);
+  if (ms === null) {
+    console.warn('[DOWNLOAD] No parseable purchase timestamp — skipping recency check (allowing download)');
+    return true;
+  }
+  const ageHours = (Date.now() - ms) / (60 * 60 * 1000);
+  return ageHours <= DOWNLOAD_LINK_TTL_HOURS;
 }
 
 // ── POST /api/download/initiate ───────────────────────────────────────────────
@@ -140,7 +176,10 @@ router.get('/callback', async (req, res) => {
       console.log(`[DOWNLOAD] Purchase recorded: "${trackName}" ref=${reference} email=${email}`);
     }
 
-    return res.redirect(`/?download=success&ref=${encodeURIComponent(reference)}&name=${encodeURIComponent(trackName || '')}&recordId=${encodeURIComponent(trackRecordId || '')}`);
+    // Do NOT include the Paystack reference in the browser-facing URL — it is a
+    // replayable bearer token for /file. The frontend re-uses it from its own
+    // initiate() response if it needs to fetch the file.
+    return res.redirect(`/?download=success&name=${encodeURIComponent(trackName || '')}&recordId=${encodeURIComponent(trackRecordId || '')}`);
   } catch (err) {
     console.error('[DOWNLOAD] Callback error:', err.message);
     return res.redirect('/?download=error&reason=server_error');
@@ -158,6 +197,11 @@ router.get('/file', async (req, res) => {
     const purchase = await findPurchaseByRef(ref);
     if (!purchase) {
       return res.status(403).json({ ok: false, error: 'No valid purchase found for this reference' });
+    }
+
+    // Reject stale/leaked references — a download link is only valid for a window.
+    if (!isPurchaseFresh(purchase)) {
+      return res.status(403).json({ ok: false, error: 'This download link has expired' });
     }
 
     const trackRecordId = purchase['TrackRecordID'] || '';

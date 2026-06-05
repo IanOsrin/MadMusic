@@ -5,6 +5,9 @@ import { loadUserLibrary, updateUserLibrary } from '../lib/library-store.js';
 
 const router = Router();
 
+// Cap per-user library size to bound storage / write amplification.
+const LIBRARY_MAX_ITEMS = Number.parseInt(process.env.LIBRARY_MAX_ITEMS || '5000', 10) || 5000;
+
 // All library routes return user-specific data — never cache on client or CDN.
 router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
@@ -31,6 +34,9 @@ router.post('/songs', async (req, res) => {
       const duplicate = songs.find(s => s.trackRecordId && s.trackRecordId === trackRecordId);
       if (duplicate) return { songs, albums, duplicate, song: duplicate };
 
+      // Enforce the per-user cap before appending a new song.
+      if (songs.length >= LIBRARY_MAX_ITEMS) return { songs, albums, capped: true };
+
       const song = {
         id:            randomUUID(),
         trackRecordId: trackRecordId || '',
@@ -47,6 +53,9 @@ router.post('/songs', async (req, res) => {
       return { songs, albums, song };
     });
 
+    if (result.capped) {
+      return res.status(400).json({ ok: false, error: `Library is full (max ${LIBRARY_MAX_ITEMS} songs)` });
+    }
     if (result.duplicate) return res.json({ ok: true, duplicate: true, song: result.song });
     res.status(201).json({ ok: true, song: result.song });
   } catch (err) {
@@ -84,6 +93,9 @@ router.post('/albums', async (req, res) => {
       const duplicate = albums.find(a => a.title === title && a.artist === artist);
       if (duplicate) return { songs, albums, duplicate, album: duplicate };
 
+      // Enforce the per-user cap before appending a new album.
+      if (albums.length >= LIBRARY_MAX_ITEMS) return { songs, albums, capped: true };
+
       const album = {
         id:      randomUUID(),
         title,
@@ -97,6 +109,9 @@ router.post('/albums', async (req, res) => {
       return { songs, albums, album };
     });
 
+    if (result.capped) {
+      return res.status(400).json({ ok: false, error: `Library is full (max ${LIBRARY_MAX_ITEMS} albums)` });
+    }
     if (result.duplicate) return res.json({ ok: true, duplicate: true, album: result.album });
     res.status(201).json({ ok: true, album: result.album });
   } catch (err) {

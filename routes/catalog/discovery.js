@@ -10,13 +10,18 @@ import {
   CATALOGUE_FIELD_CANDIDATES, pickFieldValueCaseInsensitive
 } from '../../lib/fm-fields.js';
 import { fmErrorToHttpStatus } from '../../lib/http.js';
-import { validateQueryString } from '../../lib/validators.js';
+import { validateQueryString, fmExactMatch } from '../../lib/validators.js';
 import { resolvePlaylistImage } from '../../lib/playlist.js';
 import { createSwrCache } from '../../lib/swr-cache.js';
 import { createLogger } from '../../lib/logger.js';
 import { parsePositiveInt } from '../../lib/format.js';
 
 const router       = Router();
+
+// In production, never leak internal/FM error detail to public catalogue callers.
+const IS_PROD = process.env.NODE_ENV === 'production';
+const safeDetail = (detail) => (IS_PROD ? undefined : detail);
+
 const log          = createLogger('public-playlists');
 const logRandom    = createLogger('random-songs');
 const logMissing   = createLogger('missing-audio');
@@ -216,7 +221,7 @@ router.get('/random-songs', async (req, res) => {
   } catch (err) {
     logRandom.error('Error:', err);
     const detail = err?.message || String(err);
-    res.status(500).json({ ok: false, error: 'Failed to fetch random songs', detail });
+    res.status(500).json({ ok: false, error: 'Failed to fetch random songs', detail: safeDetail(detail) });
   }
 });
 
@@ -229,7 +234,7 @@ router.get('/random-songs', async (req, res) => {
 async function loadPlaylistTracks(name) {
   const result = await fmFindRecords(
     FM_LAYOUT,
-    [{ 'PublicPlaylist': `==${name}` }],
+    [{ 'PublicPlaylist': fmExactMatch(name) }],
     { limit: 2000, offset: 1 }
   );
   if (!result.ok) {
@@ -415,7 +420,7 @@ router.get('/missing-audio-songs', async (req, res) => {
   } catch (err) {
     logMissing.error('Error:', err);
     const detail = err?.message || String(err);
-    return res.status(500).json({ error: 'Missing audio songs failed', status: 500, detail });
+    return res.status(500).json({ error: 'Missing audio songs failed', status: 500, detail: safeDetail(detail) });
   }
 });
 
@@ -467,7 +472,7 @@ router.get('/album', async (req, res) => {
       const msg = json?.messages?.[0]?.message || 'FM error';
       const code = json?.messages?.[0]?.code;
       const httpStatus = fmErrorToHttpStatus(code, r.status);
-      return res.status(httpStatus).json({ error: 'Album lookup failed', status: httpStatus, detail: `${msg} (FM ${code})` });
+      return res.status(httpStatus).json({ error: 'Album lookup failed', status: httpStatus, detail: safeDetail(`${msg} (FM ${code})`) });
     }
 
     const rawData = json?.response?.data || [];
@@ -486,7 +491,7 @@ router.get('/album', async (req, res) => {
     return res.json(response);
   } catch (err) {
     const detail = err?.message || String(err);
-    return res.status(500).json({ error: 'Album lookup failed', status: 500, detail });
+    return res.status(500).json({ error: 'Album lookup failed', status: 500, detail: safeDetail(detail) });
   }
 });
 

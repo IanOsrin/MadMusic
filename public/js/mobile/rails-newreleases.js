@@ -1,7 +1,7 @@
 // Home rail: New Releases (mobile).
 
 import { elements, state } from './state.js';
-import { getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField, hasValidArtwork, hasValidAudio } from './fields.js';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField, hasValidArtwork, hasValidAudio } from './fields.js';
 import { showAlbumTracksModal } from './cards.js';
 import { playTrack } from './player.js';
 
@@ -88,11 +88,11 @@ export function renderNewReleases() {
         const playSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
 
         card.innerHTML = `
-          <img class="nr-album-artwork" src="${album.artwork}" alt="${album.title}" loading="lazy" onerror="this.src='/img/placeholder.png'">
+          <img class="nr-album-artwork" src="${escapeHtml(album.artwork)}" alt="${escapeHtml(album.title)}" loading="lazy" onerror="this.src='/img/placeholder.png'">
           <span class="nr-new-badge">NEW</span>
           <div class="nr-card-overlay">
-            <div class="nr-overlay-title">${album.title}</div>
-            <div class="nr-overlay-artist">${album.artist}</div>
+            <div class="nr-overlay-title">${escapeHtml(album.title)}</div>
+            <div class="nr-overlay-artist">${escapeHtml(album.artist)}</div>
             <div class="nr-overlay-actions">
               <span class="nr-track-count">${trackCount} ${trackLabel}</span>
               <button class="nr-play-btn" title="Play album">${playSVG}</button>

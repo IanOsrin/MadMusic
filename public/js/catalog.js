@@ -186,7 +186,9 @@
       if (detailHeader) detailHeader.hidden = true;
       if (albumDetail) albumDetail.style.width = '100%';
 
-      const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      // Canonical escaper: also escapes quotes (the old local copy did not, so
+      // values used inside data-* attributes could break out).
+      const esc = (s) => window.MADHelpers.escapeHtml(s);
 
       // Render all tracks as a flat numbered list
       trackList.innerHTML = tracks.map((track, index) => {
@@ -282,13 +284,13 @@
       if (detailHeader) detailHeader.hidden = false;
 
       if (trackList && album.tracks) {
-        const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const esc = (s) => window.MADHelpers.escapeHtml(s);
         trackList.innerHTML = album.tracks.map((track, index) => {
           const hasDelete = track.addedAt && track.playlistId;
           return `
           <div class="playlist-track-item" data-track-index="${index}"
-               data-added-at="${track.addedAt || ''}"
-               data-playlist-id="${track.playlistId || ''}">
+               data-added-at="${esc(track.addedAt || '')}"
+               data-playlist-id="${esc(track.playlistId || '')}">
             <div class="track-play-overlay">▶</div>
             <span class="playlist-track-number">${index + 1}.</span>
             <span class="playlist-track-name">${esc(track.name || track.trackName || 'Unknown Track')}</span>
@@ -550,7 +552,7 @@
           if (aiSearchStatus) {
             aiSearchStatusText.textContent = 'Error: ' + err.message;
           }
-          albumsEl.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:#ff4444;">Error: ${err.message}</div>`;
+          albumsEl.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:#ff4444;">Error: ${window.MADHelpers.escapeHtml(err.message)}</div>`;
         } finally {
           if (aiSearchButton) aiSearchButton.disabled = false;
         }

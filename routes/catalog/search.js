@@ -9,8 +9,14 @@ import {
 } from '../../lib/fm-fields.js';
 import { fmErrorToHttpStatus } from '../../lib/http.js';
 import { createLogger } from '../../lib/logger.js';
+import { validators } from '../../lib/validators.js';
 
 const router = Router();
+
+// In production, never leak internal/FM error detail to public catalogue
+// callers. Returns the detail in non-prod for debugging.
+const IS_PROD = process.env.NODE_ENV === 'production';
+const safeDetail = (detail) => (IS_PROD ? undefined : detail);
 const logSearch  = createLogger('search');
 const logExplore = createLogger('explore');
 const logAi      = createLogger('ai-search');
@@ -53,10 +59,26 @@ function normalizeAiValue(value) {
 
 router.get('/search', async (req, res) => {
   try {
-    const q = (req.query.q || '').toString().trim();
-    const artist = (req.query.artist || '').toString().trim();
-    const album = (req.query.album || '').toString().trim();
-    const track = (req.query.track || '').toString().trim();
+    // Validate + sanitize the free-text search inputs. searchQuery rejects FM
+    // find-operator characters and over-long values; we use the sanitized value.
+    const SEARCH_INPUTS = { q: req.query.q, artist: req.query.artist, album: req.query.album, track: req.query.track };
+    const sanitized = {};
+    for (const [field, raw] of Object.entries(SEARCH_INPUTS)) {
+      const val = (raw === undefined || raw === null) ? '' : String(raw).trim();
+      if (val) {
+        const check = validators.searchQuery(val);
+        if (!check.valid) {
+          return res.status(400).json({ error: `Invalid ${field}: ${check.error}` });
+        }
+        sanitized[field] = check.value;
+      } else {
+        sanitized[field] = '';
+      }
+    }
+    const q = sanitized.q;
+    const artist = sanitized.artist;
+    const album = sanitized.album;
+    const track = sanitized.track;
 
     // Handle genre as array (?genre=Rock&genre=Jazz) or comma-separated string (?genre=Rock,Jazz)
     const genreRaw = req.query.genre;
@@ -125,7 +147,7 @@ router.get('/search', async (req, res) => {
       const msg = json?.messages?.[0]?.message || 'FM error';
       const code = json?.messages?.[0]?.code;
       const httpStatus = fmErrorToHttpStatus(code, response.status);
-      return res.status(httpStatus).json({ error: 'Album search failed', status: httpStatus, detail: `${msg} (FM ${code})` });
+      return res.status(httpStatus).json({ error: 'Album search failed', status: httpStatus, detail: safeDetail(`${msg} (FM ${code})`) });
     }
 
     let rawData = json?.response?.data || [];
@@ -176,7 +198,7 @@ router.get('/search', async (req, res) => {
     res.json(response_obj);
   } catch (err) {
     const detail = err?.message || String(err);
-    res.status(500).json({ error: 'Album search failed', status: 500, detail });
+    res.status(500).json({ error: 'Album search failed', status: 500, detail: safeDetail(detail) });
   }
 });
 
@@ -280,7 +302,7 @@ router.get('/explore', async (req, res) => {
     res.json(result);
   } catch (err) {
     logExplore.error('failed', err);
-    res.status(500).json({ error: 'Explore failed', detail: err?.message || String(err) });
+    res.status(500).json({ error: 'Explore failed', detail: safeDetail(err?.message || String(err)) });
   }
 });
 
@@ -310,7 +332,7 @@ router.get('/ai-search', async (req, res) => {
   } catch (err) {
     logAi.error('Error:', err);
     const detail = err?.message || String(err);
-    res.status(500).json({ error: 'AI search failed', status: 500, detail });
+    res.status(500).json({ error: 'AI search failed', status: 500, detail: safeDetail(detail) });
   }
 });
 
