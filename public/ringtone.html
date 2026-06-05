@@ -287,7 +287,7 @@
             Preview
           </button>
           <button class="btn-purchase" id="btn-purchase">
-            ✂ Purchase &amp; Download &mdash; R5
+            ✂ Purchase &amp; Download &mdash; R1.50
           </button>
         </div>
       </div>
@@ -628,7 +628,7 @@
         navigateTop(data.authorization_url);
       } catch (err) {
         elBtnPurchase.disabled = false;
-        elBtnPurchase.innerHTML = '✂ Purchase &amp; Download &mdash; R5';
+        elBtnPurchase.innerHTML = '✂ Purchase &amp; Download &mdash; R1.50';
         elEmailError.textContent = err.message;
         elEmailError.style.display = 'block';
       }
@@ -851,14 +851,14 @@
         elEncodeFill.style.background = 'var(--danger)';
         if (!silent) {
           elBtnPurchase.disabled = false;
-          elBtnPurchase.innerHTML = '✂ Purchase &amp; Download &mdash; R5';
+          elBtnPurchase.innerHTML = '✂ Purchase &amp; Download &mdash; R1.50';
         }
         throw err;
       }
 
       if (!silent) {
         elBtnPurchase.disabled = false;
-        elBtnPurchase.innerHTML = '✂ Purchase &amp; Download &mdash; R5';
+        elBtnPurchase.innerHTML = '✂ Purchase &amp; Download &mdash; R1.50';
       }
     }
 

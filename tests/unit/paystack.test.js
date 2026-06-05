@@ -44,8 +44,8 @@ describe('verifyPaystackWebhook', () => {
 
 describe('PAYSTACK_PLANS catalogue', () => {
   it('contains 1/7/30-day plans with kobo amounts', () => {
-    expect(PAYSTACK_PLANS['1-day'].amount).toBe(300);
-    expect(PAYSTACK_PLANS['7-day'].amount).toBe(1500);
-    expect(PAYSTACK_PLANS['30-day'].amount).toBe(5000);
+    expect(PAYSTACK_PLANS['1-day'].amount).toBe(250);
+    expect(PAYSTACK_PLANS['7-day'].amount).toBe(750);
+    expect(PAYSTACK_PLANS['30-day'].amount).toBe(3999);
   });
 });

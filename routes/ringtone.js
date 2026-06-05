@@ -1,5 +1,5 @@
 /**
- * routes/ringtone.js — Ringtone purchase payment flow (R5 via Paystack).
+ * routes/ringtone.js — Ringtone purchase payment flow (R1.50 via Paystack).
  *
  * POST /api/ringtone/initiate   { src, name, artist, artwork, startSec, durationSec, email }
  *                               → { ok, authorization_url, reference }
@@ -22,8 +22,8 @@ import { isStrictEmail } from '../lib/validators.js';
 
 const router = Router();
 
-const RINGTONE_PRICE_ZAR   = 5;
-const RINGTONE_PRICE_CENTS = 500; // Paystack uses cents (ZAR)
+const RINGTONE_PRICE_ZAR   = 1.5;
+const RINGTONE_PRICE_CENTS = 150; // Paystack uses cents (ZAR)
 
 const FM_RINGTONE_LAYOUT =
   process.env.FM_RINGTONE_LAYOUT ||
