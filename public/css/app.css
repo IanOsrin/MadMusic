@@ -401,13 +401,27 @@
       flex: 1;
       margin-left: var(--sidebar-width);
       min-width: 0;
+      /* Clear the fixed 62px search bar + a 22px breathing gap, applied once for
+         EVERY view so the header-to-content spacing is consistent (was previously
+         supplied accidentally by the in-flow #accessTokenInfo bar — see below). */
+      padding-top: 84px;
       padding-bottom: var(--player-height);
     }
 
-    /* Fixed search bar in albums view — content must clear it */
-    #view-albums > main {
-      padding-top: 61px;
+    /* Legacy "Access Token / Reset App" status bar. It is a transient toast
+       (shown ~10s after login by auth.js, then re-hidden) and must NOT sit in
+       the document flow — left in flow it reserved 82px at the top of every page
+       and pushed all content down under the fixed search bar. Float it as a fixed
+       toast and actually collapse it when hidden. */
+    .access-token-info {
+      position: fixed;
+      top: 74px;
+      right: 18px;
+      z-index: 250;
+      width: auto;
+      max-width: 320px;
     }
+    .access-token-info.hidden { display: none; }
 
     /* New Navigation Section Styles */
     .nav-section-header {
@@ -1625,7 +1639,7 @@
     .header-actions{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;}
     .header-actions .btn, .auth-controls .btn{height:37px;padding:0.5rem 1rem;font-size:0.8rem;border-radius:7px;box-sizing:border-box;}
 
-    main{max-width:1400px;margin:0 auto;padding:24px 32px 40px 32px;}
+    main{max-width:1400px;margin:0 auto;padding:0 32px 40px 32px;}/* top clearance now on .main-wrapper */
     #homeContent{margin-bottom:32px;}
     .layout-grid{display:flex;gap:20px;align-items:flex-start;flex-wrap:nowrap;justify-content:space-between;}
     .playlist-column{flex:0 0 260px;max-width:260px;width:100%;display:flex;flex-direction:column;gap:14px;position:relative;order:1;}
