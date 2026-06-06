@@ -2659,6 +2659,18 @@
       transform: scale(1.15);
       filter: blur(28px) brightness(0.55) saturate(1.1);
     }
+    /* Big-face treatment: fallback square art fills the banner, cropped to the
+       upper-centre where faces usually sit (no blur, no letterbox). A per-slide
+       focal point set via inline object-position overrides this default. */
+    .hero-slide--face .hero-slide__bg {
+      object-fit: cover;
+      object-position: 50% 28%;
+    }
+    .hero-slide--face .hero-slide__scrim {
+      background:
+        linear-gradient(0deg, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.30) 34%, rgba(0,0,0,0) 56%),
+        linear-gradient(90deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.12) 48%, rgba(0,0,0,0) 72%);
+    }
     /* Front card: only on ambient (square-art) slides — sharp, contained */
     .hero-slide__art {
       position: absolute;

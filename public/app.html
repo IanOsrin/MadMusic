@@ -5360,6 +5360,10 @@
     function artworkUrl(fields) {
       var a = getField(fields, ['Artwork_S3_URL', 'Tape Files::Artwork_S3_URL', 'Artwork::Picture', 'Artwork Picture', 'Picture']);
       if (!a || typeof a !== 'string') return null;
+      // The hero fills the whole banner, so a 300px rail thumbnail looks blurry.
+      // Upgrade any small derivative (…/resized/NAME_300.webp or _800) back to the
+      // full-resolution master (…/NAME.jpg). No-op when already a master URL.
+      a = a.replace('/resized/', '/').replace(/_\d+\.webp(\?.*)?$/i, '.jpg$1');
       if (a.indexOf('http') === 0) {
         if (/^https?:\/\/.*\.s3[.-]/.test(a) || /^https?:\/\/s3[.-]/.test(a)) return a;
         return '/api/container?u=' + encodeURIComponent(a);
@@ -5419,9 +5423,9 @@
     function renderSlides(slides) {
       stage.innerHTML = slides.map(function (s, i) {
         var img = esc(s.image);
-        return '<div class="hero-slide' + (s.ambient ? ' hero-slide--ambient' : '') + (i === 0 ? ' is-active' : '') + '"' +
+        return '<div class="hero-slide' + (s.ambient ? ' hero-slide--ambient' : '') + (s.bigface ? ' hero-slide--face' : '') + (i === 0 ? ' is-active' : '') + '"' +
                ' role="button" tabindex="0" aria-label="' + esc(s.title) + (s.sub ? ' — ' + esc(s.sub) : '') + '">' +
-                 '<img class="hero-slide__bg" src="' + img + '" alt="" aria-hidden="true" loading="' + (i === 0 ? 'eager' : 'lazy') + '">' +
+                 '<img class="hero-slide__bg" src="' + img + '" alt="" aria-hidden="true"' + (s.focal ? ' style="object-position:' + esc(s.focal) + '"' : '') + ' loading="' + (i === 0 ? 'eager' : 'lazy') + '">' +
                  (s.ambient ? '<img class="hero-slide__art" src="' + img + '" alt="' + esc(s.title) + '" loading="' + (i === 0 ? 'eager' : 'lazy') + '">' : '') +
                  '<div class="hero-slide__scrim"></div>' +
                  (s.badge ? '<span class="hero-badge">' + esc(s.badge) + '</span>' : '') +
@@ -5517,7 +5521,7 @@
               title:   String(artist),
               sub:     String(album),
               badge:   'New Release',
-              ambient: true,             // square art → blur-fill, never stretch
+              bigface: true,             // square art → cover-crop, face-focal (upper-centre)
               onOpen:  (function (al, ar) {
                 return function () { if (window.openAlbumDirect) window.openAlbumDirect(al, ar); };
               })(String(album), String(artist))
