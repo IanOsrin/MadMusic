@@ -13,8 +13,13 @@ data/playlist_requests.json
 data/access-tokens.json
 data/library.json
 data/*.lock
+data/*.lock.*
 # Runtime SWR cache snapshots — environment-specific, regenerated on first request
 data/trending-cache.json
+
+# Vite/vitest crash artifacts and local agent settings
+vitest.config.js.timestamp-*.mjs
+.claude/settings.local.json
 
 # Logs
 *.log

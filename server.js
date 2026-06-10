@@ -147,6 +147,25 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── Telkom feature flag ───────────────────────────────────────────────────────
+// Telkom integration is OFF by default (ring-fenced June 2026 — waiting on
+// Telkom for webhook secret/signature, IP ranges, and PartnerHUB confirmation).
+// The code stays in place; this gate makes every /api/telkom/* endpoint return
+// 404, and the webhook paths are NOT added to the auth skip-list while off.
+// Known open issues to fix BEFORE enabling: fail-open when TELKOM_WEBHOOK_SECRET
+// unset; raw '==' FM finds (telkom.js:75,247 → fmExactMatch); SUSPENDED/CANCELLED
+// never disables tokens (disableSubscriptionToken type/key mismatch); billing
+// renewal not mirrored to the JSON token store.
+// To turn it back on, set TELKOM_ENABLED=true.
+const TELKOM_ENABLED = process.env.TELKOM_ENABLED === 'true';
+app.use((req, res, next) => {
+  if (TELKOM_ENABLED) return next();
+  if (req.path.toLowerCase().startsWith('/api/telkom')) {
+    return res.status(404).send('Not found');
+  }
+  next();
+});
+
 // CORS configuration
 const corsOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map(o => o.trim()).filter(Boolean)
@@ -260,7 +279,9 @@ app.use('/api/', async (req, res, next) => {
     '/payments/webhook', '/payments/plans', '/payments/subscription-plan',
     '/access/stream-events', '/access/logout', '/access/email/', '/health',
     '/tokens/resync', '/tokens/unsynced', '/tokens/clear-trials',
-    '/telkom/subscription', '/telkom/billing',
+    // Telkom webhook paths skip token auth ONLY while the integration is live;
+    // ring-fenced (404 before this middleware) when TELKOM_ENABLED is off.
+    ...(TELKOM_ENABLED ? ['/telkom/subscription', '/telkom/billing'] : []),
     '/download/',
     '/ringtone/',
     '/audio-proxy',
@@ -424,7 +445,7 @@ app.get('/img/jukebox.webp', async (req, res, next) => {
 // ========= ROUTE MOUNTS =========
 app.use('/api/access', accessRouter);
 app.use('/api/payments', paymentsRouter);
-app.use('/api/telkom', telkomRouter);
+if (TELKOM_ENABLED) app.use('/api/telkom', telkomRouter); // ring-fenced: 404'd above when off
 app.use('/api/download', downloadRouter);
 app.use('/api/ringtone', ringtoneRouter);
 app.use('/api/playlists', playlistsRouter);

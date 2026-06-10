@@ -39,7 +39,7 @@ const DOWNLOAD_LINK_TTL_HOURS = Number.parseFloat(process.env.DOWNLOAD_LINK_TTL_
 async function findRingtonePurchase(reference) {
   try {
     const result = await fmFindRecords(FM_RINGTONE_LAYOUT, [
-      { Paystack_Reference: fmExactMatch(reference), Status: 'complete' }
+      { Paystack_Reference: fmExactMatch(reference), Status: fmExactMatch('complete') }
     ], { limit: 1 });
     if (!result.ok || !result.data?.length) return null;
     return result.data[0].fieldData;

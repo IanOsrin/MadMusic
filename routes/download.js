@@ -44,7 +44,7 @@ function resolveAudioUrl(fieldData) {
 
 async function findPurchaseByRef(reference) {
   const result = await fmFindRecords(FM_DOWNLOADS_LAYOUT, [
-    { Paystack_Reference: fmExactMatch(reference), Status: 'complete' }
+    { Paystack_Reference: fmExactMatch(reference), Status: fmExactMatch('complete') }
   ], { limit: 1 });
   if (!result.ok || result.data.length === 0) return null;
   return result.data[0].fieldData;

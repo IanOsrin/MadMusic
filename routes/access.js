@@ -3,6 +3,7 @@ import { validateAccessToken, MASS_SESSION_COOKIE, MASS_SESSION_MAX_AGE_SECONDS 
 import { parseCookies, getClientIP } from '../lib/http.js';
 import { formatTimestampUTC, toCleanString, normalizeSeconds, parseFileMakerTimestamp } from '../lib/format.js';
 import { validateSessionId, isStrictEmail, fmExactMatch } from '../lib/validators.js';
+import { timingSafeEqualStr } from '../lib/crypto-utils.js';
 import { LRUCache } from 'lru-cache';
 import {
   STREAM_EVENT_TYPES, STREAM_EVENT_DEBUG, STREAM_TERMINAL_EVENTS,
@@ -261,7 +262,7 @@ router.post('/email/confirm', async (req, res) => {
     }
     claim.attempts += 1;
 
-    if (submittedCode !== claim.code) {
+    if (!timingSafeEqualStr(submittedCode, claim.code)) {
       const remaining = EMAIL_CLAIM_MAX_TRIES - claim.attempts;
       return res.status(400).json({
         ok: false,
