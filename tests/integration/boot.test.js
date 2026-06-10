@@ -27,6 +27,12 @@ describe('boot smoke', () => {
     expect(res.headers['content-type']).toMatch(/text\/html/);
   });
 
+  it('injects the editorial-hero flag so the hero can skip the dead round-trip', async () => {
+    const res = await request(app).get('/');
+    // Default config has EDITORIAL_HERO_ENABLED off → flag must be exactly false.
+    expect(res.text).toMatch(/window\.__EDITORIAL_HERO=false/);
+  });
+
   it('sets security headers (CSP, nosniff, frame, referrer)', async () => {
     const res = await request(app).get('/');
     expect(res.headers['content-security-policy']).toBeTruthy();

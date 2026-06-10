@@ -34,6 +34,7 @@ import { tokenValidationCache } from './cache.js';
 import { ensureToken, closeFmPool } from './fm-client.js';
 import { loadAccessTokens } from './lib/token-store.js';
 import { loadPlaylistByShareId } from './lib/playlist-store.js';
+import { createPrecompressedStatic } from './lib/precompressed-static.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -138,6 +139,10 @@ app.use((req, res, next) => {
 // the whole surface (including audio-lab.html's reflected-title param) is
 // unreachable until revived. To turn it back on, set AUDIO_LAB_ENABLED=true.
 const AUDIO_LAB_ENABLED = process.env.AUDIO_LAB_ENABLED === 'true';
+// Mirrors routes/featured-editorial.js. Surfaced to the client (see loadHtml)
+// so the hero can skip the guaranteed-empty /api/featured-editorial round-trip
+// when the feature is off — saving one above-the-fold RTT on every page load.
+const EDITORIAL_HERO_ENABLED = process.env.EDITORIAL_HERO_ENABLED === 'true';
 app.use((req, res, next) => {
   if (AUDIO_LAB_ENABLED) return next();
   const p = req.path.toLowerCase();
@@ -383,6 +388,11 @@ async function loadHtml(filename) {
   if (!AUDIO_LAB_ENABLED) {
     stamped += '\n<style id="audio-lab-disabled">#audioLabWidget,.track-audio-lab-btn,.btn-audio-lab{display:none !important;}</style>\n';
   }
+  // Tell the client whether the editorial hero is live. When false, the hero
+  // skips fetching /api/featured-editorial (which would return empty anyway)
+  // and goes straight to /api/new-releases — one fewer serial request above
+  // the fold. Absence of the flag preserves the original attempt-then-fallback.
+  stamped += `\n<script>window.__EDITORIAL_HERO=${EDITORIAL_HERO_ENABLED ? 'true' : 'false'};</script>\n`;
   if (!DEV_MODE) _htmlCache.set(filename, stamped);
   return stamped;
 }
@@ -408,22 +418,35 @@ function sendHtml(res, filename) {
 }
 // ───────────────────────────────────────────────────────────────────────────
 
+// Single source of truth for static-asset Cache-Control, shared by the
+// precompressed layer below and express.static so the two never disagree.
+function cacheControlFor(filePath) {
+  if (filePath.includes('.min.') || /\.[a-f0-9]{8,}\./i.test(filePath)) {
+    return 'public, max-age=31536000, immutable';
+  } else if (REGEX_STATIC_FILES.test(filePath)) {
+    return 'public, max-age=604800';
+  } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+    // In dev: no caching so edits show immediately.
+    // In production: 1 hour with revalidation (deploy stamp handles busting).
+    return DEV_MODE ? 'no-store' : 'public, max-age=3600, must-revalidate';
+  }
+  return 'no-cache';
+}
+
+// Serve boot-time brotli-q11 / gzip-9 copies of static text assets ahead of
+// express.static. Production only: in dev we want fresh disk reads on every
+// edit, so this layer is skipped and express.static (with on-the-fly q4) serves.
+if (!DEV_MODE) {
+  const precompressed = createPrecompressedStatic(PUBLIC_DIR, cacheControlFor);
+  const { count, rawBytes, brBytes } = precompressed.stats;
+  console.log(`[MASS] Precompressed ${count} static assets (br q11): ${(rawBytes / 1024).toFixed(0)}KB -> ${(brBytes / 1024).toFixed(0)}KB`);
+  app.use(precompressed);
+}
+
 app.use(express.static(PUBLIC_DIR, {
   index: false,
   setHeaders: (res, filePath) => {
-    if (filePath.includes('.min.') || /\.[a-f0-9]{8,}\./i.test(filePath)) {
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    } else if (REGEX_STATIC_FILES.test(filePath)) {
-      res.setHeader('Cache-Control', 'public, max-age=604800');
-    } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
-      // In dev: no caching so edits show immediately.
-      // In production: 1 hour with revalidation (deploy stamp handles busting).
-      res.setHeader('Cache-Control', DEV_MODE
-        ? 'no-store'
-        : 'public, max-age=3600, must-revalidate');
-    } else {
-      res.setHeader('Cache-Control', 'no-cache');
-    }
+    res.setHeader('Cache-Control', cacheControlFor(filePath));
   },
   etag: true,
   lastModified: true

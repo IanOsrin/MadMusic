@@ -13,7 +13,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/app.css?v=7">
 </head>
 <body>
@@ -5583,7 +5583,14 @@
     }
 
     function loadHero() {
-      loadEditorial().then(function (slides) {
+      // When the editorial hero is disabled (server injects window.__EDITORIAL_HERO),
+      // /api/featured-editorial returns empty — skip it and fetch new-releases
+      // directly, saving one serial round-trip on this above-the-fold element.
+      // If the flag is absent for any reason, keep the original attempt-then-fallback.
+      var attempt = (window.__EDITORIAL_HERO === false)
+        ? Promise.resolve(null)
+        : loadEditorial();
+      attempt.then(function (slides) {
         if (slides && slides.length) return renderSlides(slides);
         return loadFallback().then(function (fb) { if (fb) renderSlides(fb); });
       });

@@ -15,7 +15,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fmFindRecords } from '../../fm-client.js';
-import { hasValidAudio, hasValidArtwork } from '../../lib/track.js';
+import { hasValidAudio, hasValidArtwork, applyArtworkThumbs } from '../../lib/track.js';
 import { recordIsVisible, FM_LAYOUT, FM_STREAM_EVENTS_LAYOUT } from '../../lib/fm-fields.js';
 import { parsePositiveInt, normalizeRecordId, formatTimestampUTC, toCleanString, normalizeSeconds, parseFileMakerTimestamp } from '../../lib/format.js';
 import { firstNonEmpty } from '../../lib/fm-fields.js';
@@ -102,7 +102,7 @@ function collectValidResults(fetched, normalizedLimit) {
     results.push({
       recordId: record.recordId || stat.trackRecordId,
       modId:    record.modId || '0',
-      fields,
+      fields: applyArtworkThumbs({ ...fields }, 300),
       metrics: {
         plays:           stat.playCount,
         uniqueListeners: stat.sessionIds.size || 0,
