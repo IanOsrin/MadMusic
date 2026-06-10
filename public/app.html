@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/app.css?v=6">
+  <link rel="stylesheet" href="/css/app.css?v=7">
 </head>
 <body>
   <!-- Google Tag Manager (noscript) -->
@@ -294,7 +294,7 @@
         <button class="profile-popup-item" role="menuitem" data-action="whats-new">What's New</button>
         <button class="profile-popup-item" role="menuitem" data-action="listening-stats">Listening Stats</button>
         <div class="profile-popup-divider"></div>
-        <button class="profile-popup-item" role="menuitem" onclick="(function(){ const t=localStorage.getItem('mass_access_token'); window.location.href='/mobile.html'+(t?'?token='+encodeURIComponent(t):''); })()" style="display:flex;align-items:center;gap:8px;width:100%;text-align:left;">
+        <button class="profile-popup-item" role="menuitem" onclick="window.location.href='/mobile.html'" style="display:flex;align-items:center;gap:8px;width:100%;text-align:left;">
           <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px;flex-shrink:0;opacity:0.7;"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
           Mobile View
         </button>
@@ -308,34 +308,10 @@
 
   <div class="main-wrapper">
   <!-- Main content sections -->
-  <div id="view-highlights" class="view-section">
-      <div class="container">
-
-        <!-- Search Bar -->
-        <section class="section" style="padding-bottom:0;margin-bottom:1.5rem;position:sticky;top:0;z-index:100;background:var(--bg);margin-left:-2rem;margin-right:-2rem;padding-left:2rem;padding-right:2rem;margin-top:-1.4rem;padding-top:1.4rem;padding-bottom:1.4rem;border-bottom:1px solid var(--border);">
-          <div class="highlights-search-bar" style="display:flex;gap:8px;align-items:center;margin-bottom:0;">
-            <div style="position:relative;display:flex;align-items:center;max-width:520px;width:100%;">
-              <span id="searchIcon" style="position:absolute;left:12px;display:inline-flex;align-items:center;color:var(--text-muted);pointer-events:none;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="11" cy="11" r="7"/>
-                  <path d="M21 21l-4.35-4.35"/>
-                </svg>
-              </span>
-              <input
-                type="search"
-                id="searchInput"
-                class="search-input"
-                placeholder="Search artists, albums, songs…"
-                autocomplete="off"
-                style="width:100%;padding:10px 14px 10px 42px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--surface);color:var(--fg);outline:none;"
-              />
-            </div>
-            <button id="searchClear" type="button" style="display:none;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:13px;">✕ Clear</button>
-          </div>
-        </section>
-
-      </div>
-  </div>
+  <!-- (#view-highlights removed: it was unreachable — no nav item or showView()
+       call targeted it — and held only the orphaned discovery search bar
+       (#searchInput/#searchClear). Live search is the unified box in
+       #view-albums via the doSearch override.) -->
 
 
 
@@ -1413,7 +1389,7 @@
           </label>
         </div>
         <div class="account-row" style="margin-top:24px;">
-          <button onclick="(function(){ const t=localStorage.getItem('mass_access_token'); window.location.href='/mobile.html'+(t?'?token='+encodeURIComponent(t):''); })()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 16px;border-radius:10px;background:var(--accent,#8b5cf6);color:#fff;font-size:14px;font-weight:600;border:none;cursor:pointer;justify-content:center;">
+          <button onclick="window.location.href='/mobile.html'" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 16px;border-radius:10px;background:var(--accent,#8b5cf6);color:#fff;font-size:14px;font-weight:600;border:none;cursor:pointer;justify-content:center;">
             <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;flex-shrink:0;"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
             Switch to Mobile View
           </button>
@@ -2175,6 +2151,45 @@
     // Check if we need to trigger immediate search from URL params
     const hasUrlParams = window.__skipFeaturedLoad === true;
 
+    // When a single-box query names an artist, reveal them in the two-column
+    // artist view (one album shown, the rest in the sidebar) instead of a flat
+    // results rail. Groups results by album-artist (falling back to track artist,
+    // since some search rows only carry "Track Artist"); returns {artist, album}
+    // when the query exactly names an artist, or when every result shares one
+    // artist whose name contains the query. The album is that artist's first.
+    function detectArtistMatch(items, query) {
+      const H = window.MADHelpers || {};
+      const q = String(query || '').trim().toLowerCase();
+      if (!q || !Array.isArray(items) || !items.length) return null;
+      const byArtist = new Map();
+      for (const it of items) {
+        const f = it.fields || {};
+        let artist = H.getAlbumArtist ? H.getAlbumArtist(f) : '';
+        if (!artist || artist === 'Unknown Artist') artist = H.getArtistField ? H.getArtistField(f) : '';
+        artist = (artist || '').trim();
+        if (!artist || artist.toLowerCase() === 'unknown artist') continue;
+        const key = artist.toLowerCase();
+        if (!byArtist.has(key)) byArtist.set(key, { name: artist, albums: new Map() });
+        const album = (H.getAlbumField ? H.getAlbumField(f) : '').trim();
+        const rec = byArtist.get(key);
+        if (album && album.toLowerCase() !== 'unknown album' && !rec.albums.has(album)) {
+          rec.albums.set(album, it);
+        }
+      }
+      if (!byArtist.size) return null;
+      const pick = (rec) => {
+        const firstAlbum = rec.albums.keys().next().value || '';
+        return firstAlbum ? { artist: rec.name, album: firstAlbum } : null;
+      };
+      if (byArtist.has(q)) return pick(byArtist.get(q));
+      if (byArtist.size === 1) {
+        const rec = byArtist.values().next().value;
+        const n = rec.name.toLowerCase();
+        if (n.includes(q) || q.includes(n)) return pick(rec);
+      }
+      return null;
+    }
+
     function setupSearchOverride() {
       const originalDoSearch = typeof window.doSearch === 'function' ? window.doSearch : null;
       if (!originalDoSearch) {
@@ -2250,6 +2265,21 @@
           .then(async (r) => {
             if (!r.ok) throw new Error(await r.text().catch(() => `HTTP ${r.status}`));
             return r.json();
+          })
+          .then((data) => {
+            // Single-box artist query → open the two-column artist view instead
+            // of the flat rail. Reject as AbortError (run()'s .catch swallows it)
+            // so the rail never renders over the artist view.
+            const singleBox = Boolean(q && q.trim()) && !album && !track && !genreValue && !decadeValue;
+            if (singleBox && typeof window.showAlbumDetailView === 'function') {
+              let match = null;
+              try { match = detectArtistMatch(data.items || [], q.trim()); } catch {}
+              if (match) {
+                window.showAlbumDetailView({ title: match.album, artist: match.artist, picture: '', genre: '', year: '', tracks: [] });
+                const ab = new Error('artist view'); ab.name = 'AbortError'; throw ab;
+              }
+            }
+            return data;
           })
           .finally(() => {
             if (window.inFlight === ctrl) window.inFlight = null;
@@ -4529,20 +4559,37 @@
       return d.toLocaleDateString(undefined, { day:'numeric', month:'short', year:'numeric' });
     }
 
+    // HTML-escape for the card/row templates below. Every other esc() in this
+    // file is private to its own IIFE — this block needs its own copy.
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
     // Registries: store full song/album data keyed by library ID (avoids JSON-in-onclick)
     var _librarySongs  = new Map();
     var _libraryAlbums = new Map();
 
-    // Play a library song via the unified _PLAYER module
-    window.playLibrarySong = function(libId) {
+    // Play a library song via the unified _PLAYER module.
+    // Invariant 2: stored S3/FM streaming URLs are session-scoped and expire
+    // (401/silent). When we have a recordId, ALWAYS re-resolve a fresh url +
+    // artworkUrl at play time; the stored URL is a last-resort fallback only.
+    window.playLibrarySong = async function(libId) {
       var song = _librarySongs.get(libId);
       if (!song) { console.warn('[Library] Song not found:', libId); return; }
 
-      // Resolve audio URL — stored S3/mp3, or fall back to container API
-      var audioUrl = song.S3_URL || song.mp3 || '';
-      if (!audioUrl && song.trackRecordId) {
-        audioUrl = '/api/track/' + song.trackRecordId + '/container';
+      var audioUrl = '';
+      var freshArt = '';
+      if (song.trackRecordId) {
+        try {
+          const r = await fetch('/api/track/' + song.trackRecordId + '/container');
+          const d = await r.json();
+          if (d.url)        audioUrl = d.url;
+          if (d.artworkUrl) freshArt = d.artworkUrl;
+        } catch (e) { console.warn('[Library] container re-resolve failed', e); }
       }
+      // Fallback to stored URL only when no recordId / re-resolve failed
+      if (!audioUrl) audioUrl = song.S3_URL || song.mp3 || '';
       if (!audioUrl) { console.warn('[Library] No audio URL for:', song.name); return; }
 
       // Proxy non-S3 HTTPS URLs through the container endpoint (adds auth headers)
@@ -4550,8 +4597,8 @@
         audioUrl = '/api/container?u=' + encodeURIComponent(audioUrl);
       }
 
-      // Resolve artwork URL
-      var art    = song.artwork || '';
+      // Resolve artwork URL — prefer the freshly-resolved one
+      var art    = freshArt || song.artwork || '';
       var artUrl = art && art.includes('://') ? art :
                    (art ? '/api/container?u=' + encodeURIComponent(art) : '');
 
@@ -4572,13 +4619,13 @@
         <div class="trending-card library-album-card" data-lib-album-id="${album.id}"
              style="cursor:pointer;" onclick="window.openLibraryAlbum('${album.id}')">
           <div class="trending-artwork">
-            <img src="${art}" alt="${album.title}" onerror="this.src='/img/placeholder.jpg'" />
+            <img src="${esc(art)}" alt="${esc(album.title)}" onerror="this.src='/img/placeholder.jpg'" />
             <div class="play-overlay"><div class="play-icon">▶</div></div>
           </div>
           <div class="trending-info">
-            <div class="trending-title">${album.title}</div>
-            <div class="trending-artist">${album.artist || ''}</div>
-            <div class="trending-meta">${album.genre || ''}</div>
+            <div class="trending-title">${esc(album.title)}</div>
+            <div class="trending-artist">${esc(album.artist || '')}</div>
+            <div class="trending-meta">${esc(album.genre || '')}</div>
           </div>
           <button class="library-remove-btn" title="Remove from library"
             onclick="event.stopPropagation();removeLibraryAlbum('${album.id}')">✕</button>
@@ -4593,13 +4640,13 @@
       return `
         <div class="library-song-row" data-lib-song-id="${song.id}"
              style="cursor:pointer;" onclick="window.playLibrarySong('${song.id}')">
-          <img class="library-song-artwork" src="${art}" alt="${song.name}"
+          <img class="library-song-artwork" src="${esc(art)}" alt="${esc(song.name)}"
                onerror="this.src='/img/placeholder.jpg'" />
           <div class="library-song-info">
-            <p class="library-song-title">${song.name || 'Unknown Track'}</p>
-            <p class="library-song-artist">${song.albumArtist || song.trackArtist || ''}</p>
+            <p class="library-song-title">${esc(song.name || 'Unknown Track')}</p>
+            <p class="library-song-artist">${esc(song.albumArtist || song.trackArtist || '')}</p>
           </div>
-          <span class="library-song-meta">${extraMeta || formatDate(song.addedAt)}</span>
+          <span class="library-song-meta">${esc(extraMeta || formatDate(song.addedAt))}</span>
           <button class="library-remove-btn" title="Remove from library"
             onclick="event.stopPropagation();removeLibrarySong('${song.id}')">✕</button>
         </div>`;
@@ -4782,7 +4829,7 @@
   })();
   </script>
 
-  <!-- Section navigation: switches between #view-highlights and #view-albums -->
+  <!-- Section navigation: switches between the view-section divs (albums, g100, library views) -->
   <script>
   (function() {
     var libraryLoaders = {
@@ -4852,6 +4899,9 @@
     try { lastView = localStorage.getItem('mass_last_view') || 'albums'; } catch(e) {}
     // Don't restore library views on load — go to albums
     if (libraryLoaders[lastView]) lastView = 'albums';
+    // Guard against stale localStorage naming a removed view (e.g. 'highlights'):
+    // showView would hide everything and show nothing.
+    if (!document.getElementById('view-' + lastView)) lastView = 'albums';
     showView(lastView);
 
     document.querySelectorAll('.nav-item[data-view]').forEach(function(item) {
@@ -5163,7 +5213,7 @@
   <script src="/js/playlists.js?v=1"></script>
   <script src="/js/catalog.js?v=1"></script>
   <script src="/js/currency.js?v=2"></script>
-  <script src="/js/discovery.js?v=2"></script>
+  <script src="/js/discovery.js?v=5"></script>
 
   <script>
   /* ── Ringtone scissors button — global wiring ────────────────────────────────

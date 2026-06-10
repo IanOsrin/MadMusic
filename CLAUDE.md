@@ -28,11 +28,15 @@ Run tests before and after changes:
    slides using the ambient-blur treatment. Editorial slide actions: `track` → playSong,
    `external` → window.open; `album`/`playlist` targets are Phase 2 (no open-by-recordId
    path exists — wire before enabling such slides).
-2. **Two-pane search environment** — `renderSearchEnv()` in `public/js/discovery.js`
-   replaced the album-card search render on the home view. Left column = track rows,
-   right = sticky cue pane (`cueTrack`/`playCued`). Artist name in the cue pane re-runs
-   `performSearch(artist)`; View Album uses `window.openAlbumDirect`. Results filtered by
-   `hasValidAudio`; count shows 0 explicitly. CSS: `.search-env*` / `.se-*` in app.css.
+2. **Search: ONE live engine (2026-06-10)** — desktop search is the **`doSearch` override
+   in `app.html`** (≈line 2200, wrapping the original `doSearch` defined in `app.min.js`;
+   results applied via `window.run()`). It reads the unified box + hidden category fields
+   (`#searchArtist`/`#searchAlbum`/`#searchTrack`) in `#view-albums` and owns the
+   artist-query → two-column artist view behaviour (`openAlbumDirect`). The OTHER engine —
+   discovery.js's `performSearch`/`renderSearchEnv`/`cueTrack`/`detectArtistMatch`, its
+   `#searchInput` bar, the `#view-highlights` section, and the `.search-env*`/`.se-*` CSS —
+   was confirmed unreachable (no nav item or `showView('highlights')` existed) and was
+   **removed**. Don't reintroduce search logic in discovery.js; change `doSearch` instead.
    `renderAlbums()` still exists and serves the default (non-search) random view.
 3. **Spacing pass** — `.section` margin 2.5rem, `.nr-grid` 1rem gap + scroll-snap +
    hover-shadow padding. Aesthetic only; don't regress these when touching rails.
@@ -41,6 +45,15 @@ The MadMusicV3.1 source tree (reference for further ports: charts/SQLite ingest,
 metrics, service worker, search intelligence) lives outside this repo — ask the user for
 the current copy. v2.1 and v3.1 have drifted in BOTH directions (v2.1's access.js/payments.js
 are newer); never merge files wholesale — port deliberately.
+
+## Telkom is ring-fenced (2026-06-10)
+
+Waiting on deliverables from Telkom (webhook secret/signature scheme, IP ranges).
+`TELKOM_ENABLED` (default **off**) 404s all `/api/telkom/*` before auth and keeps the
+webhook paths out of the auth skip-list. `routes/telkom.js` is untouched but has known
+open findings (listed next to the flag in server.js) that MUST be fixed before enabling.
+Guard test: `tests/integration/telkom-ringfence.test.js`. Don't wire anything to Telkom
+routes or remove the fence without the user's say-so.
 
 ## Frontend layout (no build step)
 

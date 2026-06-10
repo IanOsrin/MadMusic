@@ -3,7 +3,7 @@
 
   // Shared utilities — single source of truth in helpers.js (window.MADHelpers).
   // Aliased so existing call sites keep working; do NOT redefine these below.
-  const { getFieldValue, getArtworkUrl, getTitleField, getAlbumField, escapeHtml, formatRelativeTime, formatTrendingMeta, toSeconds, groupByAlbum, shuffleArray, getGenreField, hasValidAudio, getArtistField, getAudioUrl } = window.MADHelpers;
+  const { getFieldValue, getArtworkUrl, getTitleField, getAlbumField, escapeHtml, formatRelativeTime, formatTrendingMeta, toSeconds, groupByAlbum, shuffleArray, getGenreField, hasValidAudio, getArtistField, getAlbumArtist, getAudioUrl } = window.MADHelpers;
 
 
   // ---- DISCOVERY FUNCTIONS ----
@@ -647,115 +647,10 @@
     }
 
     // Render albums (grouped by album)
-    /* ── Search environment — two-pane results view ──────────────────────────
-       Left: vertical scrollable result list (one row per track).
-       Right: cue pane — clicking a row cues the track (artwork + info) without
-       playing; Play starts playback; the artist name click-throughs to a
-       fresh artist search. 0 results renders an explicit empty state (count
-       already shows "0 results" in the subtitle). */
-    let searchEnvItems = [];
-    let cuedIdx = -1;
-
-    function renderSearchEnv(items, query) {
-      const container = document.getElementById('randomContainer');
-      searchEnvItems = items || [];
-      cuedIdx = -1;
-
-      if (!searchEnvItems.length) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-state-icon">🔍</div>
-            <p>0 results for "${escapeHtml(query)}"</p>
-            <p style="font-size: 0.875rem; margin-top: 0.5rem;">Try an artist, album, or song name</p>
-          </div>
-        `;
-        return;
-      }
-
-      searchEnvItems.forEach(t => storeItem(t.recordId, t));
-
-      const rows = searchEnvItems.map((item, i) => {
-        const f = item.fields || {};
-        const art    = getArtworkUrl(f);
-        const title  = getTitleField(f)  || 'Unknown Title';
-        const artist = getArtistField(f) || 'Unknown Artist';
-        const genre  = getGenreField(f);
-        return `
-          <div class="se-row" data-idx="${i}" role="option" tabindex="0" aria-label="${escapeHtml(title)} — ${escapeHtml(artist)}">
-            <div class="se-row__thumb">${art ? `<img src="${escapeHtml(art)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</div>
-            <div class="se-row__meta">
-              <div class="se-row__title">${escapeHtml(title)}</div>
-              <div class="se-row__sub">${escapeHtml(artist)}${genre ? ` · <span class="se-row__genre">${escapeHtml(genre)}</span>` : ''}</div>
-            </div>
-          </div>
-        `;
-      }).join('');
-
-      container.innerHTML = `
-        <div class="search-env">
-          <div class="search-env__list" role="listbox" aria-label="Search results">${rows}</div>
-          <div class="search-env__cue" id="seCue" aria-live="polite"></div>
-        </div>
-      `;
-
-      container.querySelectorAll('.se-row').forEach(row => {
-        const i = Number(row.dataset.idx);
-        row.addEventListener('click', () => cueTrack(i));
-        row.addEventListener('dblclick', () => playCued(i));
-        row.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cueTrack(i); }
-        });
-      });
-
-      cueTrack(0); // first result cued by default so the pane is never empty
-    }
-
-    function cueTrack(i) {
-      const item = searchEnvItems[i];
-      const cue = document.getElementById('seCue');
-      if (!item || !cue) return;
-      cuedIdx = i;
-
-      document.querySelectorAll('.se-row').forEach((r, ri) =>
-        r.classList.toggle('is-cued', ri === i));
-
-      const f = item.fields || {};
-      const art    = getArtworkUrl(f);
-      const title  = getTitleField(f)  || 'Unknown Title';
-      const artist = getArtistField(f) || 'Unknown Artist';
-      const album  = getAlbumField(f);
-      const genre  = getGenreField(f);
-
-      cue.innerHTML = `
-        <div class="se-cue__art">${art ? `<img src="${escapeHtml(art)}" alt="${escapeHtml(album || title)}" onerror="this.remove()">` : ''}</div>
-        <div class="se-cue__title">${escapeHtml(title)}</div>
-        <button class="se-cue__artist" type="button" title="See more from ${escapeHtml(artist)}">${escapeHtml(artist)}</button>
-        ${album ? `<div class="se-cue__album">${escapeHtml(album)}${genre ? ` · ${escapeHtml(genre)}` : ''}</div>` : ''}
-        <div class="se-cue__actions">
-          <button class="se-cue__play" type="button">▶&nbsp;&nbsp;Play</button>
-          ${album ? `<button class="se-cue__viewalbum" type="button">View Album</button>` : ''}
-        </div>
-      `;
-
-      cue.querySelector('.se-cue__play').addEventListener('click', () => playCued(i));
-      cue.querySelector('.se-cue__art')?.addEventListener('click', () => playCued(i));
-      // Artist click-through: stay in the search environment, scoped to the artist
-      cue.querySelector('.se-cue__artist').addEventListener('click', () => {
-        const si = document.getElementById('searchInput');
-        if (si) si.value = artist;
-        performSearch(artist);
-      });
-      cue.querySelector('.se-cue__viewalbum')?.addEventListener('click', () => {
-        if (window.openAlbumDirect) window.openAlbumDirect(album, artist);
-      });
-    }
-
-    function playCued(i) {
-      const item = searchEnvItems[i];
-      if (!item) return;
-      cueTrack(i);
-      if (window.playSong) window.playSong(item.recordId);
-    }
+    /* The two-pane "search environment" (renderSearchEnv/cueTrack/playCued)
+       was removed: it belonged to the orphaned discovery search engine whose
+       UI (#searchInput in #view-highlights) was unreachable. Live search is
+       the doSearch override in app.html. */
 
     function renderAlbums(albums) {
       const container = document.getElementById('randomContainer');
@@ -920,113 +815,27 @@
             });
           randomItems = deduped;
           console.log('[Random] Loaded', items.length, 'items, deduped to', deduped.length, 'unique artists');
-          if (!isSearching) {
-            renderRandom(deduped);
-          }
+          renderRandom(deduped);
         } else {
           randomItems = [];
-          if (!isSearching) {
-            renderRandom([]);
-          }
+          renderRandom([]);
         }
       } catch (error) {
         console.error('[Random] Failed to load:', error);
         randomItems = [];
-        if (!isSearching) {
-          document.getElementById('randomContainer').innerHTML = `
-            <div class="empty-state">
-              <div class="empty-state-icon">⚠️</div>
-              <p>Failed to load songs</p>
-            </div>
-          `;
-        }
-      }
-    }
-
-    // Search functionality
-    let isSearching = false;
-
-    async function performSearch(query) {
-      const searchIcon = document.getElementById('searchIcon');
-      const searchClearEl = document.getElementById('searchClear');
-      if (!query) {
-        // Clear search - restore random view
-        isSearching = false;
-        if (searchClearEl) searchClearEl.style.display = 'none';
-        if (searchIcon) { searchIcon.classList.remove('loading'); searchIcon.textContent = '🔍'; }
-        loadRandom(true);
-        return;
-      }
-
-      try {
-        isSearching = true;
-        if (searchIcon) { searchIcon.classList.add('loading'); searchIcon.textContent = '⏳'; }
-        if (searchClearEl) searchClearEl.style.display = 'block';
-
-        console.log('[Search] Searching for:', query);
-
-        // Use the general 'q' parameter for broad search across all fields
-        // This searches artist, album, and track name
-        // Higher limit to ensure we get all albums for an artist
-        const searchParams = new URLSearchParams();
-        searchParams.set('q', query);
-        searchParams.set('limit', '300');
-
-        const response = await apiFetch(`${API.search}?${searchParams.toString()}`);
-        const data = await response.json();
-
-        console.log('[Search] Results:', data);
-
-        if (searchIcon) { searchIcon.classList.remove('loading'); searchIcon.textContent = '🔍'; }
-
-        // Search API returns { items: [...] } directly, no 'ok' field
-        const items = (data.items || []).filter(item => hasValidAudio(item));
-        document.getElementById('randomTitle').textContent = 'Search Results';
-        document.getElementById('randomSubtitle').textContent =
-          `${items.length} result${items.length !== 1 ? 's' : ''} for "${query}"`; // 0 shown explicitly
-        renderSearchEnv(items, query);
-      } catch (error) {
-        console.error('[Search] Failed:', error);
-        isSearching = false;
-        if (searchIcon) { searchIcon.classList.remove('loading'); searchIcon.textContent = '🔍'; }
         document.getElementById('randomContainer').innerHTML = `
           <div class="empty-state">
             <div class="empty-state-icon">⚠️</div>
-            <p>Search failed</p>
+            <p>Failed to load songs</p>
           </div>
         `;
       }
     }
 
-    function clearSearch() {
-      const si = document.getElementById('searchInput');
-      if (si) si.value = '';
-      performSearch('');
-    }
-
-    // Search on Enter key only (search elements may not exist in all views)
-    const _searchInput = document.getElementById('searchInput');
-    const _searchClear = document.getElementById('searchClear');
-
-    if (_searchInput) {
-      _searchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          const query = e.target.value.trim();
-          if (!query) { clearSearch(); return; }
-          performSearch(query);
-        }
-      });
-
-      _searchInput.addEventListener('input', (e) => {
-        const hasValue = e.target.value.trim().length > 0;
-        if (_searchClear) _searchClear.style.display = hasValue ? 'block' : 'none';
-      });
-    }
-
-    if (_searchClear) {
-      _searchClear.addEventListener('click', clearSearch);
-    }
+    /* The discovery search engine (performSearch/clearSearch/detectArtistMatch
+       + #searchInput listeners) was removed as orphaned dead code. The
+       artist-match -> artist-view behaviour lives in the doSearch override
+       in app.html. */
 
     // (beforeunload END handling now lives in player.js, the single playback engine.)
 
@@ -1237,7 +1046,10 @@
         const items = allItems.filter(item => {
           const fields = item.fields || {};
           const album  = getAlbumField(fields);
-          const artist = getArtistField(fields);
+          // Album-first artist (NOT getArtistField, which is track-first): a
+          // compilation has one album artist but many track artists, so a
+          // track-first key would let the same album through once per track.
+          const artist = getAlbumArtist(fields);
           // Use artist+album as key; fall back to recordId if both are generic
           const key = (album && album !== 'Unknown Album')
             ? `${artist}|${album}`
@@ -1411,20 +1223,19 @@
   window.loadNewReleases = loadNewReleases;
   window.loadRandom = loadRandom;
   window.loadInitialContent = loadInitialContent;
-  window.performSearch = performSearch;
-  window.clearSearch = clearSearch;
   window.apiFetch = apiFetch;
   window.initDarkMode = initDarkMode;
-  window.applyAfricanTheme = applyAfricanTheme;
+  // NOTE: applyAfricanTheme intentionally not exported — it lives inside the
+  // theme IIFE in initDarkMode and is fully self-contained (button binding +
+  // state restore). A previous module-scope export of it threw a
+  // ReferenceError that aborted everything below this line.
   window.MADDiscovery = {
     loadFeatured,
     loadHighlights,
     loadTrending,
     loadNewReleases,
     loadRandom,
-    loadInitialContent,
-    performSearch,
-    clearSearch
+    loadInitialContent
   };
 
   // Stop hook kept for callers (showView etc.); playback is owned by player.js,
@@ -1433,6 +1244,7 @@
     if (typeof window.stopPlayback === 'function') window.stopPlayback();
   };
 
-  // Initialize on access ready event
-  document.addEventListener('mass:access-ready', loadInitialContent);
+  // NOTE: no listener here — 'mass:access-ready' is dispatched on window
+  // (auth.js) and discovery already listens on window above (with a
+  // massAccessReady race-guard). A document-level listener would never fire.
 })();
