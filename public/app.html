@@ -4087,7 +4087,22 @@
                     return;
                   }
 
-                  // Redirect to Paystack — callback returns with ?download=success&ref=...
+                  // Persist the Paystack reference across the redirect. The callback
+                  // deliberately does NOT echo the ref in the return URL (it is a
+                  // replayable bearer token for /api/download/file), so this
+                  // sessionStorage copy is the ONLY way the return handler can fetch
+                  // the file. Same-tab, dies with the tab — keeps the ref out of
+                  // history/referrer/logs.
+                  try {
+                    sessionStorage.setItem('mass_download_ref', JSON.stringify({
+                      ref:      data.reference,
+                      recordId: String(track.recordId),
+                      name:     track.name || '',
+                      t:        Date.now()
+                    }));
+                  } catch (e) { /* private mode — legacy ?ref= fallback still works */ }
+
+                  // Redirect to Paystack — callback returns with ?download=success&name=…&recordId=…
                   window.location.href = data.authorization_url;
                 } catch (err) {
                   alert('Network error. Please try again.');
@@ -5992,13 +6007,37 @@
     const params = new URLSearchParams(window.location.search);
     if (params.get('download') !== 'success') return;
 
-    const ref       = params.get('ref')  || '';
-    const trackName = params.get('name') || '';
+    const trackName = params.get('name')     || '';
+    const recordId  = params.get('recordId') || '';
 
     // Clean the URL immediately
     history.replaceState(null, '', window.location.pathname);
 
-    if (!ref) return;
+    // The callback strips the Paystack ref from the return URL (it is a
+    // replayable bearer token for /api/download/file). The initiate handler
+    // saved it to sessionStorage right before redirecting to Paystack —
+    // recover it from there, cross-checked against the recordId the callback
+    // DOES pass. Legacy ?ref= URLs still work as a fallback.
+    let ref = '';
+    try {
+      const stored = JSON.parse(sessionStorage.getItem('mass_download_ref') || 'null');
+      sessionStorage.removeItem('mass_download_ref'); // single-use either way
+      if (stored && stored.ref && (!recordId || String(stored.recordId) === recordId)) {
+        ref = stored.ref;
+      }
+    } catch (e) { /* fall through to URL fallback */ }
+    if (!ref) ref = params.get('ref') || '';
+
+    if (!ref) {
+      // Payment completed but the reference didn't survive the round-trip
+      // (new tab / cleared session). The purchase IS recorded server-side —
+      // never fail silently here.
+      console.warn('[DOWNLOAD] Returned from payment with no stored reference');
+      if (typeof window.MADShowToast === 'function') {
+        window.MADShowToast('Payment received, but the download could not start automatically. Please contact support with your payment receipt.', 'error');
+      }
+      return;
+    }
 
     // No token needed — fetch file directly by Paystack reference
     fetch(`/api/download/file?ref=${encodeURIComponent(ref)}`)
