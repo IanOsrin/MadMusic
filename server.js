@@ -24,6 +24,7 @@ import editorialRouter from './routes/featured-editorial.js';
 import downloadRouter from './routes/download.js';
 import ringtoneRouter from './routes/ringtone.js';
 import telkomRouter from './routes/telkom.js';
+import podcastsRouter from './routes/podcasts.js';
 
 import { validateAccessToken } from './lib/auth.js';
 import { timingSafeEqualStr } from './lib/crypto-utils.js';
@@ -163,9 +164,22 @@ app.use((req, res, next) => {
 // renewal not mirrored to the JSON token store.
 // To turn it back on, set TELKOM_ENABLED=true.
 const TELKOM_ENABLED = process.env.TELKOM_ENABLED === 'true';
+
+// Podcasts section (2026-06-11): ships dark. While the flag is off the path
+// 404s BEFORE the auth middleware — otherwise an unmounted /api path falls
+// through to the token wall and a stale frontend probing it would get a 403
+// with requiresAccessToken, popping the token gate for no reason.
+const PODCASTS_ENABLED = process.env.PODCASTS_ENABLED === 'true';
 app.use((req, res, next) => {
   if (TELKOM_ENABLED) return next();
   if (req.path.toLowerCase().startsWith('/api/telkom')) {
+    return res.status(404).send('Not found');
+  }
+  next();
+});
+app.use((req, res, next) => {
+  if (PODCASTS_ENABLED) return next();
+  if (req.path.toLowerCase().startsWith('/api/podcasts')) {
     return res.status(404).send('Not found');
   }
   next();
@@ -287,6 +301,9 @@ app.use('/api/', async (req, res, next) => {
     // Telkom webhook paths skip token auth ONLY while the integration is live;
     // ring-fenced (404 before this middleware) when TELKOM_ENABLED is off.
     ...(TELKOM_ENABLED ? ['/telkom/subscription', '/telkom/billing'] : []),
+    // Podcasts are public catalogue content (like /trending, /singles); the
+    // path is only mounted when PODCASTS_ENABLED, so skip it under the same gate.
+    ...(PODCASTS_ENABLED ? ['/podcasts'] : []),
     '/download/',
     '/ringtone/',
     '/audio-proxy',
@@ -469,6 +486,7 @@ app.get('/img/jukebox.webp', async (req, res, next) => {
 app.use('/api/access', accessRouter);
 app.use('/api/payments', paymentsRouter);
 if (TELKOM_ENABLED) app.use('/api/telkom', telkomRouter); // ring-fenced: 404'd above when off
+if (PODCASTS_ENABLED) app.use('/api', podcastsRouter);    // dark until PODCASTS_ENABLED=true
 app.use('/api/download', downloadRouter);
 app.use('/api/ringtone', ringtoneRouter);
 app.use('/api/playlists', playlistsRouter);
@@ -813,6 +831,7 @@ if (process.env.PREWARM_CACHES === 'true' && (process.env.WORKER_INDEX || '0') =
   prewarm('Trending',         trendingWarmer,              2000);
   prewarm('New Releases',     featuredWarmers.newReleases, 3000);
   prewarm('Singles',          featuredWarmers.singles,     3500);
+  prewarm('Global Favorites', featuredWarmers.globalFavorites, 3750);
   prewarm('G100',             featuredWarmers.g100,        4000);
   prewarm('Public Playlists', publicPlaylistsWarmer,       5000);
   prewarm('Genres',           genresWarmer,                8000);
