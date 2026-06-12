@@ -240,6 +240,7 @@
       random: '/api/random-songs?count=20&_t=' + Date.now(), // Increased to 20, added timestamp for fresh results
       trending: '/api/trending',
       newReleases: '/api/new-releases',
+      globalFavorites: '/api/global-favorites',
       search: '/api/search',
       container: '/api/container'
     };
@@ -856,6 +857,7 @@
       // loadHighlights(); // Removed - Highlights section disabled
       console.log('[MADMusic] About to call loadNewReleases()');
       loadNewReleases();
+      loadGlobalFavorites();
       console.log('[MADMusic] About to call loadTrending()');
       loadTrending();
       console.log('[MADMusic] About to call loadRandom()');
@@ -863,78 +865,19 @@
       console.log('[MADMusic] Initial content load calls completed');
     }
 
-    // Dark Mode Management
-    const DARK_MODE_KEY = 'madmusic.darkMode';
-
-    function applyDarkMode(isDark) {
-      document.documentElement.classList.toggle('dark-mode', isDark);
-      document.body.classList.toggle('dark-mode', isDark);
-      const darkModeToggle = document.getElementById('darkModeToggle');
-      if (darkModeToggle) {
-        darkModeToggle.textContent = isDark ? '☀️' : '🌙';
-        darkModeToggle.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
-        darkModeToggle.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
-      }
-      console.log('[Modern Dark Mode] Applied:', isDark);
-    }
-
-    function initDarkMode() {
-      try {
-        const saved = localStorage.getItem(DARK_MODE_KEY);
-        const isDark = saved === 'true';
-        console.log('[Modern Dark Mode] Initializing with saved preference:', isDark);
-        applyDarkMode(isDark);
-      } catch (e) {
-        console.warn('[Modern Dark Mode] Could not load preference:', e);
-      }
-    }
-
-    // Initialize dark mode before DOM loads
-    initDarkMode();
+    // Dark mode is owned by the app.html IIFE ('mass.darkMode' key, the
+    // #darkModeToggle pill + Settings checkbox). The "Modern Dark Mode"
+    // system that lived here (key 'madmusic.darkMode', emoji icons,
+    // auto-hide-on-mousemove) was removed 2026-06-12: it double-bound the
+    // toggle button and re-applied its own preference AFTER app.html's init,
+    // stomping the user's choice on every load. Don't reintroduce theme
+    // logic in this file.
 
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
       // Don't load content yet - wait for access token to be ready
 
-      // Setup dark mode toggle
-      const darkModeToggle = document.getElementById('darkModeToggle');
-      if (darkModeToggle) {
-        console.log('[Modern Dark Mode] Toggle button found, attaching listener');
-        // Sync button icon with current dark mode state after DOM loads
-        const currentDarkMode = document.body.classList.contains('dark-mode');
-        applyDarkMode(currentDarkMode);
-
-        // Auto-hide after 10 seconds
-        setTimeout(() => {
-          darkModeToggle.classList.add('auto-hidden');
-        }, 10000);
-
-        // Show on hover in bottom-right corner
-        document.addEventListener('mousemove', (e) => {
-          const showDistance = 100; // pixels from bottom-right corner
-          const fromRight = window.innerWidth - e.clientX;
-          const fromBottom = window.innerHeight - e.clientY;
-
-          if (fromRight < showDistance && fromBottom < showDistance) {
-            darkModeToggle.classList.remove('auto-hidden');
-          } else {
-            darkModeToggle.classList.add('auto-hidden');
-          }
-        });
-
-        darkModeToggle.addEventListener('click', () => {
-          console.log('[Modern Dark Mode] Button clicked');
-          const isDark = !document.body.classList.contains('dark-mode');
-          applyDarkMode(isDark);
-          try {
-            localStorage.setItem(DARK_MODE_KEY, isDark.toString());
-          } catch (e) {
-            console.warn('[Modern Dark Mode] Could not save preference:', e);
-          }
-        });
-      } else {
-        console.error('[Modern Dark Mode] Toggle button not found!');
-      }
+      // (Dark mode toggle setup removed — owned by app.html; see note above.)
 
       // African Theme Toggle
       (function() {
@@ -1028,13 +971,15 @@
     });
 
     // ── New Releases ──────────────────────────────────────────────────────────
-    async function loadNewReleases() {
-      const section   = document.getElementById('newReleasesSection');
-      const container = document.getElementById('newReleasesContainer');
+    // Shared album-rail loader — New Releases and Global Favorites render the
+    // same card markup from the same response shape; only the section ids,
+    // endpoint and optional badge differ.
+    async function loadAlbumRail({ sectionId, containerId, url, badgeHtml = '', logLabel }) {
+      const section   = document.getElementById(sectionId);
+      const container = document.getElementById(containerId);
       if (!section || !container) return;
 
       try {
-        const url = `${API.newReleases}?limit=20&_t=${Date.now()}`;
         const response = await apiFetch(url);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
@@ -1076,7 +1021,7 @@
 
           return `
             <div class="trending-card" data-record-id="${escapeHtml(item.recordId)}">
-              <span class="nr-new-badge">New</span>
+              ${badgeHtml}
               <div class="trending-artwork" style="cursor:pointer" data-album-view data-album="${escapeHtml(album)}" data-artist="${escapeHtml(artist)}">
                 ${artworkUrl
                   ? `<img src="${escapeHtml(artworkUrl)}" alt="${escapeHtml(title)}" onerror="this.closest('.trending-card').style.display='none'" />`
@@ -1100,11 +1045,30 @@
         setupCardQuickActions(container);
         setupAlbumViewDelegation(container);
         section.hidden = false;
-        console.log(`[NewReleases] Rendered ${items.length} items`);
+        console.log(`[${logLabel}] Rendered ${items.length} items`);
       } catch (err) {
-        console.warn('[NewReleases] Failed to load:', err);
+        console.warn(`[${logLabel}] Failed to load:`, err);
         section.hidden = true;
       }
+    }
+
+    function loadNewReleases() {
+      return loadAlbumRail({
+        sectionId:   'newReleasesSection',
+        containerId: 'newReleasesContainer',
+        url:         `${API.newReleases}?limit=20&_t=${Date.now()}`,
+        badgeHtml:   '<span class="nr-new-badge">New</span>',
+        logLabel:    'NewReleases'
+      });
+    }
+
+    function loadGlobalFavorites() {
+      return loadAlbumRail({
+        sectionId:   'globalFavoritesSection',
+        containerId: 'globalFavoritesContainer',
+        url:         `${API.globalFavorites}?limit=20&_t=${Date.now()}`,
+        logLabel:    'GlobalFavorites'
+      });
     }
 
   // ── Card quick-action buttons (+ Playlist / ♡ Save) ─────────────────────────
@@ -1224,11 +1188,12 @@
   window.loadRandom = loadRandom;
   window.loadInitialContent = loadInitialContent;
   window.apiFetch = apiFetch;
-  window.initDarkMode = initDarkMode;
-  // NOTE: applyAfricanTheme intentionally not exported — it lives inside the
-  // theme IIFE in initDarkMode and is fully self-contained (button binding +
-  // state restore). A previous module-scope export of it threw a
-  // ReferenceError that aborted everything below this line.
+  // NOTE: initDarkMode/applyDarkMode exports removed with the duplicate
+  // "Modern Dark Mode" system (2026-06-12) — dark mode is owned by app.html.
+  // applyAfricanTheme is intentionally not exported either — it lives inside
+  // the African-theme IIFE (DOMContentLoaded) and is fully self-contained.
+  // A previous module-scope export of a non-existent binding threw a
+  // ReferenceError that aborted everything below this line — don't repeat it.
   window.MADDiscovery = {
     loadFeatured,
     loadHighlights,

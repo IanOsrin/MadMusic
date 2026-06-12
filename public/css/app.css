@@ -141,6 +141,33 @@
       display: flex;
       min-height: 100vh;
     }
+    /* Light/dark mode toggle — its own row in the sidebar, just above the
+       "My Account" section. Label/icon name the mode you switch TO; the swap
+       is pure CSS off body.dark-mode. */
+    .theme-toggle {
+      margin: 0 20px 10px;
+      align-self: flex-start;
+      height: 30px;
+      padding: 0 12px;
+      border-radius: 15px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--fg);
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: transform .15s ease, background .2s ease;
+    }
+    .theme-toggle:hover { transform: scale(1.04); background: var(--hover-bg); }
+    .theme-toggle .theme-opt { display: flex; align-items: center; gap: 5px; }
+    .theme-toggle svg { width: 14px; height: 14px; }
+    body:not(.dark-mode) .theme-toggle .icon-sun { display: none; }
+    body.dark-mode .theme-toggle .icon-moon { display: none; }
     .sidebar {
       width: var(--sidebar-width);
       background: var(--sidebar-bg);

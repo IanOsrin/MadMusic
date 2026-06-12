@@ -278,6 +278,21 @@
 
     </nav>
 
+    <!-- Theme toggle — its own row above the account section.
+         id must NOT be "themeToggle": app.min.js's legacy classic/modern
+         switcher binds that id and would overwrite this button's content.
+         Label/icon show the mode you SWITCH TO; swap is pure CSS off body.dark-mode. -->
+    <button id="darkModeToggle" class="theme-toggle" aria-label="Toggle light/dark mode" title="Switch theme">
+      <span class="theme-opt icon-moon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        Dark Mode
+      </span>
+      <span class="theme-opt icon-sun">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        Light Mode
+      </span>
+    </button>
+
     <!-- Bottom Profile Section -->
     <div class="sidebar-bottom-profile" id="sidebarProfile">
       <button class="bottom-profile-btn" id="profileBtn" title="Account" aria-expanded="false" aria-haspopup="true">
@@ -507,6 +522,23 @@
                   <div class="loading"><div class="spinner"></div></div>
                 </div>
                 <button class="scroll-arrow scroll-arrow-right visible" data-target="newReleasesContainer" aria-label="Scroll right"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+              </div>
+            </section>
+
+            <!-- Global Favorites Section (populated from /api/global-favorites; stays hidden until data arrives) -->
+            <section class="section" id="globalFavoritesSection" hidden>
+              <div class="section-header">
+                <div>
+                  <h2 class="section-title">Global Favorites</h2>
+                  <p class="section-subtitle">Albums the world keeps coming back to</p>
+                </div>
+              </div>
+              <div class="horizontal-scroll-wrapper">
+                <button class="scroll-arrow scroll-arrow-left" data-target="globalFavoritesContainer" aria-label="Scroll left"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                <div id="globalFavoritesContainer" class="nr-grid horizontal-scroll-container">
+                  <div class="loading"><div class="spinner"></div></div>
+                </div>
+                <button class="scroll-arrow scroll-arrow-right visible" data-target="globalFavoritesContainer" aria-label="Scroll right"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
               </div>
             </section>
 
@@ -2796,22 +2828,38 @@
 
     function applyDarkMode(isDark) {
       document.body.classList.toggle('dark-mode', isDark);
-      console.log('[Dark Mode] Applied:', isDark);
     }
 
-    // Apply saved preference immediately
-    const savedMode = localStorage.getItem(DARK_MODE_KEY);
+    // Saved preference wins; first-time visitors follow their OS setting.
+    // 'madmusic.darkMode' is the storage key of the removed duplicate system
+    // in discovery.js — honoured once as a fallback so nobody loses their choice.
+    const savedMode = localStorage.getItem(DARK_MODE_KEY) ?? localStorage.getItem('madmusic.darkMode');
     if (savedMode !== null) {
-      const isDark = savedMode === 'true';
-      applyDarkMode(isDark);
+      applyDarkMode(savedMode === 'true');
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      applyDarkMode(true);
     }
 
-    // Make toggle function globally available for Settings button
+    // Used by the bottom-left toggle and the Settings modal checkbox.
     window.toggleDarkMode = function() {
       const isDark = !document.body.classList.contains('dark-mode');
       applyDarkMode(isDark);
       localStorage.setItem(DARK_MODE_KEY, isDark);
     };
+
+    // Sun/moon button in the bottom profile row. stopPropagation matters:
+    // the row itself opens the account popup on click.
+    document.getElementById('darkModeToggle')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.toggleDarkMode();
+    });
+
+    // Follow live OS theme changes only while the user hasn't chosen explicitly.
+    if (savedMode === null && window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (localStorage.getItem(DARK_MODE_KEY) === null) applyDarkMode(e.matches);
+      });
+    }
   })();
   </script>
 
@@ -4958,6 +5006,7 @@
     var searchHeading     = document.getElementById('searchResultsHeading');
     var searchSubtitle    = document.getElementById('searchResultsSubtitle');
     var newReleasesSection = document.getElementById('newReleasesSection');
+    var globalFavoritesSection = document.getElementById('globalFavoritesSection');
     var singlesSection    = document.getElementById('singlesSection');
     var trendingSection   = document.querySelector('#trendingContainer')?.closest('section.section');
     var discoverSection   = document.querySelector('#randomContainer')?.closest('section.section');
@@ -4972,6 +5021,7 @@
       if (trendingSection)    trendingSection.style.display   = isSearch ? 'none' : '';
       if (discoverSection)    discoverSection.style.display   = isSearch ? 'none' : '';
       if (newReleasesSection) newReleasesSection.style.display = isSearch ? 'none' : '';
+      if (globalFavoritesSection) globalFavoritesSection.style.display = isSearch ? 'none' : '';
       if (singlesSection)     singlesSection.style.display     = isSearch ? 'none' : '';
       if (heroBanner)         heroBanner.style.display        = isSearch ? 'none' : '';
 
