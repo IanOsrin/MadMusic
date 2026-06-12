@@ -27,7 +27,7 @@ Generated 2026-06-03 from static analysis of both codebases. FM database: `MADSt
 - Identity: `Album Title`, track artist vs `Tape Files::` album-artist fields (see CLAUDE.md invariant #1)
 - Audio: `S3_URL`, `Tape Files::S3_URL`, `mp3`/`MP3` variants (AUDIO_FIELD_CANDIDATES)
 - Artwork: `Artwork_S3_URL`, `Tape Files::Artwork_S3_URL`, `Artwork::Picture`, … (ARTWORK_FIELD_CANDIDATES)
-- Flags: `Tape Files::featured` = `yes` (FM_FEATURED_FIELD/VALUE) · `G100_Highlights` = `Yes` (G100) · visibility field optional (`FM_VISIBILITY_FIELD`)
+- Flags: `Tape Files::featured` = `yes` (FM_FEATURED_FIELD/VALUE) · `G100_Highlights` = `Yes` (G100) · `Tape Files::Singles` = `Yes` (/api/singles) · `Global_Favorites` = `Yes` (/api/global-favorites — **field not on layout yet as of 2026-06-12**; route probes `Tape Files::Global_Favorites`/`Global_Favorites` and returns empty until it's placed on `API_Album_Songs`) · visibility field optional (`FM_VISIBILITY_FIELD`)
 - Track order: TRACK_SEQUENCE_FIELDS candidate list (~25 variants)
 - Catalogue no: `Album Catalogue Number`, `Reference Catalogue Number`
 - Write: `PublicPlaylist` (curated playlist tagging from routes/playlists.js:440)

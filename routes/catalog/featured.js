@@ -1,4 +1,4 @@
-// routes/catalog/featured.js — /featured-albums, /releases/latest, /new-releases, /g100-albums
+// routes/catalog/featured.js — /featured-albums, /releases/latest, /new-releases, /singles, /global-favorites, /g100-albums
 //
 // All three endpoints now share the same stale-while-revalidate pattern:
 //   - Fresh cache hit  → return immediately.
@@ -17,6 +17,7 @@ import {
   G100_FIELD_CANDIDATES, G100_VALUE, G100_VALUE_LC
 } from '../../lib/fm-fields.js';
 import { parsePositiveInt } from '../../lib/format.js';
+import { dedupRecordsByAlbum } from '../../lib/album-dedup.js';
 import { createSwrCache } from '../../lib/swr-cache.js';
 import { createLogger } from '../../lib/logger.js';
 
@@ -28,6 +29,7 @@ const FEATURED_TTL_MS     = parsePositiveInt(process.env.FEATURED_ALBUM_CACHE_TT
 const NEW_RELEASES_TTL_MS = parsePositiveInt(process.env.NEW_RELEASES_CACHE_TTL_MS,   10 * 60 * 1000);
 const G100_TTL_MS         = parsePositiveInt(process.env.G100_CACHE_TTL_MS,           10 * 60 * 1000);
 const SINGLES_TTL_MS      = parsePositiveInt(process.env.SINGLES_CACHE_TTL_MS,        10 * 60 * 1000);
+const GLOBAL_FAVS_TTL_MS  = parsePositiveInt(process.env.GLOBAL_FAVORITES_CACHE_TTL_MS, 10 * 60 * 1000);
 
 const NEW_RELEASES_FIELD_CANDIDATES = ['Tape Files::New_Release', 'New_Release'];
 const NEW_RELEASES_VALUE            = 'Yes';
@@ -37,6 +39,11 @@ const NEW_RELEASES_VALUE            = 'Yes';
 // related-field and base-field spellings so we work whichever way it's exposed.
 const SINGLES_FIELD_CANDIDATES = ['Tape Files::singles', 'singles', 'Tape Files::Singles', 'Singles'];
 const SINGLES_VALUE            = 'Yes';
+
+// "Global_Favorites" checkbox — same shape as New_Release/singles; probe both the
+// related-field and base-field spellings so we work whichever way FM exposes it.
+const GLOBAL_FAVS_FIELD_CANDIDATES = ['Tape Files::Global_Favorites', 'Global_Favorites', 'Tape Files::global_favorites', 'global_favorites'];
+const GLOBAL_FAVS_VALUE            = 'Yes';
 
 // Track which field candidate last succeeded so we skip the probe on steady state.
 let cachedFeaturedFieldName = null;
@@ -182,6 +189,47 @@ async function fetchSinglesRecords(limit = 200) {
   return [];
 }
 
+// ── Global Favorites fetch ────────────────────────────────────────────────────
+// Album rail: keep visible, playable, artwork-bearing records here so the dedup
+// in the SWR loader picks a representative track the rail can actually render.
+async function tryGlobalFavoritesField(field, normalizedLimit) {
+  const query   = { [field]: GLOBAL_FAVS_VALUE };
+  const payload = { query: [query], limit: normalizedLimit, offset: 1 };
+  log.debug(`Global favorites: trying field "${field}"`);
+  const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
+  const json     = await response.json().catch(() => ({}));
+  const fmCode   = String(json?.messages?.[0]?.code ?? '');
+  if (!response.ok) {
+    if (isMissingFieldError(json) || fmCode === '401') return null;
+    log.warn(`Global favorites field "${field}" HTTP ${response.status} code=${fmCode}`);
+    return null;
+  }
+  const rawData  = json?.response?.data || [];
+  const filtered = rawData.filter(r => {
+    const f = r.fieldData || {};
+    return recordIsVisible(f) && hasValidAudio(f) && hasValidArtwork(f);
+  });
+  if (filtered.length > 0) {
+    log.debug(`Global favorites field "${field}" → ${filtered.length}/${rawData.length} records`);
+    return filtered;
+  }
+  return null;
+}
+
+async function fetchGlobalFavoritesRecords(limit = 1000) {
+  const normalizedLimit = Math.max(1, Math.min(1000, limit));
+  for (const field of GLOBAL_FAVS_FIELD_CANDIDATES) {
+    if (!field) continue;
+    try {
+      const result = await tryGlobalFavoritesField(field, normalizedLimit);
+      if (result !== null) return result;
+    } catch (err) {
+      log.warn(`Global favorites fetch threw for field "${field}"`, err?.message || err);
+    }
+  }
+  return [];
+}
+
 // ── G100 fetch ──────────────────────────────────────────────────────────────
 async function fetchG100Records(limit = 400) {
   const normalizedLimit = Math.max(1, Math.min(1000, limit));
@@ -254,18 +302,9 @@ const newReleasesSwr = createSwrCache({
   name:  'newReleases',
   loader: async () => {
     const records = await fetchNewReleaseRecords(1000);
-    // Dedupe by album-artist + album-title so we don't return every track of an album.
-    const seen    = new Set();
-    const deduped = [];
-    for (const r of records) {
-      const f      = r.fieldData || {};
-      const artist = (f['Album Artist'] || f['Tape Files::Album Artist'] || '').toLowerCase().trim();
-      const album  = (f['Album Title']  || f['Tape Files::Album_Title']  || '').toLowerCase().trim();
-      const key    = album ? `${artist}|||${album}` : r.recordId;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      deduped.push(r);
-    }
+    // One row per album, with album-first artist + Various Artists folding
+    // (see lib/album-dedup.js) so a stray Various row can't split an album.
+    const deduped = dedupRecordsByAlbum(records);
     log.debug(`New releases: ${deduped.length} unique albums from ${records.length} tracks`);
     return deduped.map(r => ({ recordId: r.recordId, modId: r.modId, fields: r.fieldData || {} }));
   }
@@ -280,6 +319,21 @@ const singlesSwr = createSwrCache({
     const records = await fetchSinglesRecords(1000);
     log.debug(`Singles: ${records.length} tracks`);
     return records.map(r => ({ recordId: r.recordId, modId: r.modId, fields: r.fieldData || {} }));
+  }
+});
+
+const globalFavoritesSwr = createSwrCache({
+  ttlMs: GLOBAL_FAVS_TTL_MS,
+  max:   4,
+  label: 'global-favorites',
+  name:  'globalFavorites',
+  loader: async () => {
+    const records = await fetchGlobalFavoritesRecords(1000);
+    // One row per album, with album-first artist + Various Artists folding
+    // (see lib/album-dedup.js) so a stray Various row can't split an album.
+    const deduped = dedupRecordsByAlbum(records);
+    log.debug(`Global favorites: ${deduped.length} unique albums from ${records.length} tracks`);
+    return deduped.map(r => ({ recordId: r.recordId, modId: r.modId, fields: r.fieldData || {} }));
   }
 });
 
@@ -301,6 +355,7 @@ export const featuredWarmers = {
   featured:    () => featuredSwr.get('default'),
   newReleases: () => newReleasesSwr.get('default'),
   singles:     () => singlesSwr.get('default'),
+  globalFavorites: () => globalFavoritesSwr.get('default'),
   g100:        () => g100Swr.get('default')
 };
 
@@ -384,6 +439,27 @@ router.get('/singles', async (req, res) => {
   } catch (err) {
     log.error('Failed to load singles', err);
     return res.status(500).json({ ok: false, error: 'Failed to load singles' });
+  }
+});
+
+// ── Route: GET /global-favorites ────────────────────────────────────────────
+router.get('/global-favorites', async (req, res) => {
+  try {
+    const limit   = Math.max(1, Math.min(100, Number.parseInt(req.query.limit || '20', 10)));
+    const refresh = req.query.refresh === '1';
+    if (refresh) globalFavoritesSwr.cache.delete('default');
+
+    const { value: items, state } = await globalFavoritesSwr.get('default');
+    res.setHeader('X-Cache-State', state);
+    // Catalogue rails are identical for every user → safe to cache at the
+    // browser/edge for a short window. SWR already serves stale instantly, so a
+    // 60s shared cache only ever risks a <60s-stale rail (acceptable) while
+    // letting repeat loads skip Node + FileMaker entirely.
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    return res.json({ ok: true, items: cloneRecordsForLimit(items, limit), total: items.length });
+  } catch (err) {
+    log.error('Failed to load global favorites', err);
+    return res.status(500).json({ ok: false, error: 'Failed to load global favorites' });
   }
 });
 
