@@ -53,3 +53,7 @@ test-results/
 playwright-report/
 blob-report/
 .playwright/
+data/semantic.db
+data/date-audit.csv
+data/date-fixes.xlsx
+data/m1-date-keys.json
