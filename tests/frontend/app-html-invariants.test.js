@@ -31,6 +31,21 @@ describe('app.html invariants', () => {
     expect(code).not.toMatch(/function applyDarkMode/);
   });
 
+  it('podcasts section: view + nav exist and /api/podcasts is on the frontend allowlist', () => {
+    expect(appHtml).toMatch(/id="view-podcasts"/);
+    expect(appHtml).toMatch(/id="navPodcasts"/);
+    // playback must NOT register podcast plays as music stream-events:
+    // playTrack is called without a recordId (FM recordIds are per-table, so a
+    // podcast id can collide with a song id and corrupt trending).
+    const callIdx = appHtml.indexOf('window._PLAYER.playTrack(ep.url');
+    expect(callIdx).toBeGreaterThan(-1);
+    expect(appHtml.slice(callIdx, callIdx + 300)).not.toMatch(/recordId/);
+    // auth.js fetch interceptor blocks non-allowlisted calls pre-token; without
+    // this entry the podcasts section silently never loads.
+    const authJs = readFileSync(join(root, 'public', 'js', 'auth.js'), 'utf8');
+    expect(authJs).toMatch(/'\/api\/podcasts'/);
+  });
+
   it('dark-mode toggle exists in the bottom profile row and is wired up', () => {
     expect(appHtml).toMatch(/id="darkModeToggle"/);
     expect(appHtml).toMatch(/getElementById\('darkModeToggle'\)/);

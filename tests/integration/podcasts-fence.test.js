@@ -6,6 +6,9 @@ import request from 'supertest';
 let app;
 
 beforeAll(async () => {
+  // dotenv does not override pre-set env vars, so this wins over a local .env
+  // that has PODCASTS_ENABLED=true for dev testing — the fence must be tested OFF.
+  process.env.PODCASTS_ENABLED = 'false';
   const mod = await import('../../server.js');
   app = mod.app;
 });

@@ -97,18 +97,23 @@ export function groupPodcastRecords(records = []) {
       durationSec: Number.parseFloat(f['DurationSec']) || null,
       publishDate: fmDateToIso(str(f, 'PublishDate')),
       url: s3Url,
+      // Episodes carry their own cover (each FM row has its own
+      // Artwork_S3_URL); the show-level artwork is the header/fallback.
+      artwork: str(f, 'Artwork_S3_URL'),
       explicit: Number(f['Explicit']) === 1
     });
   }
 
   const out = [...shows.values()];
   for (const show of out) {
-    // Newest first — podcast convention. PublishDate primary, number fallback.
+    // Serialized shows read in order: episode 1 first. Number primary,
+    // publish date fallback for shows without numbering.
     show.episodes.sort((a, b) =>
-      (b.publishDate || '').localeCompare(a.publishDate || '') ||
-      (b.episodeNumber ?? 0) - (a.episodeNumber ?? 0)
+      (a.episodeNumber ?? Infinity) - (b.episodeNumber ?? Infinity) ||
+      (a.publishDate || '').localeCompare(b.publishDate || '')
     );
-    show.latestPublishDate = show.episodes[0]?.publishDate || '';
+    show.latestPublishDate = show.episodes.reduce(
+      (max, e) => (e.publishDate > max ? e.publishDate : max), '');
     show.episodeCount = show.episodes.length;
   }
   // Featured shows first, then by most recent episode.

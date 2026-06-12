@@ -216,6 +216,13 @@
         </div>
       </div>
 
+      <!-- Podcasts — hidden until /api/podcasts answers with shows
+           (the route 404s while PODCASTS_ENABLED is off) -->
+      <button class="nav-item" data-view="podcasts" id="navPodcasts" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        Podcasts
+      </button>
+
       <!-- Library Section -->
       <div class="nav-section collapsed" id="librarySection">
         <div class="nav-section-header" onclick="toggleNavSection('librarySection')">
@@ -1078,6 +1085,21 @@
   </div>
 
   <!-- ── User Playlist Page ───────────────────────────────────────────── -->
+  <!-- ── Podcasts ─────────────────────────────────────────────────────────── -->
+  <div id="view-podcasts" class="view-section" hidden>
+    <main>
+      <div style="padding:20px 20px 0;">
+        <h2 style="font-size:1.4rem;font-weight:700;color:var(--fg);margin:0 0 4px;">Podcasts</h2>
+        <p style="font-size:0.85rem;color:var(--muted);margin:0;">Stories from the archive</p>
+      </div>
+      <div id="podcastShows" style="padding:20px;"></div>
+      <div id="podcastsEmpty" hidden style="padding:40px 20px;text-align:center;color:var(--muted);">
+        <div style="font-size:2rem;margin-bottom:8px;">🎙️</div>
+        <p>No podcasts available yet.</p>
+      </div>
+    </main>
+  </div>
+
   <div id="view-user-playlist" class="view-section" hidden>
     <div class="container">
       <div class="playlist-page">
@@ -2860,6 +2882,176 @@
         if (localStorage.getItem(DARK_MODE_KEY) === null) applyDarkMode(e.matches);
       });
     }
+  })();
+  </script>
+
+  <script>
+  // ── Podcasts section ────────────────────────────────────────────────────
+  // Loads /api/podcasts (404s while PODCASTS_ENABLED is off → nav stays
+  // hidden). Rendering is DOM-built — never innerHTML with FM data.
+  // Playback goes through _PLAYER.playTrack WITHOUT a recordId on purpose:
+  // podcast plays must not register as music stream-events (recordIds are
+  // per-table in FM, so a podcast id could collide with a song id and
+  // corrupt trending).
+  (function() {
+    let loaded = false;
+
+    // TEMPORARY embed (2026-06-12): show-level artwork isn't manageable yet —
+    // each FM row carries per-EPISODE art and there's no show-level field.
+    // Until the show-artwork story is built (FM field + ingest form support),
+    // header covers for known shows are mapped here by title (lowercase).
+    const SHOW_HEADER_ART = {
+      'g100 podcasts':        '/img/podcast-gallo-vault-sessions.jpg',
+      'gallo vault sessions': '/img/podcast-gallo-vault-sessions.jpg'
+    };
+
+    function fmtDuration(sec) {
+      if (!sec || sec <= 0) return '';
+      const m = Math.round(sec / 60);
+      return m >= 60 ? Math.floor(m / 60) + ' hr ' + (m % 60) + ' min' : m + ' min';
+    }
+
+    function fmtDate(iso) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return '';
+      try {
+        return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+      } catch (e) { return iso; }
+    }
+
+    function el(tag, className, text) {
+      const n = document.createElement(tag);
+      if (className) n.className = className;
+      if (text) n.textContent = text;
+      return n;
+    }
+
+    // Fullscreen artwork view — click the thumb to open, click/Esc to close.
+    function openLightbox(src, caption) {
+      const box = el('figure', 'podcast-lightbox');
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = caption || '';
+      box.appendChild(img);
+      if (caption) box.appendChild(el('figcaption', null, caption));
+      function close() {
+        box.remove();
+        document.removeEventListener('keydown', onKey);
+      }
+      function onKey(e) { if (e.key === 'Escape') close(); }
+      box.addEventListener('click', close);
+      document.addEventListener('keydown', onKey);
+      document.body.appendChild(box);
+    }
+
+    function renderShow(show) {
+      const block = el('section', 'podcast-show');
+
+      const head = el('div', 'podcast-show-head');
+      const headerArt = SHOW_HEADER_ART[show.showTitle.toLowerCase()] || show.artwork;
+      if (headerArt) {
+        const img = document.createElement('img');
+        img.src = headerArt;
+        img.alt = show.showTitle;
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.className = 'podcast-show-art';
+        img.title = 'View artwork';
+        img.style.cursor = 'zoom-in';
+        img.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openLightbox(headerArt, show.showTitle);
+        });
+        head.appendChild(img);
+      }
+      const meta = el('div', 'podcast-show-meta');
+      meta.appendChild(el('h3', 'podcast-show-title', show.showTitle));
+      if (show.host) meta.appendChild(el('div', 'podcast-show-host', show.host));
+      const bits = [show.category, show.episodeCount + ' episode' + (show.episodeCount === 1 ? '' : 's')]
+        .filter(Boolean).join(' · ');
+      meta.appendChild(el('div', 'podcast-show-bits', bits));
+      head.appendChild(meta);
+      block.appendChild(head);
+
+      const list = el('div', 'podcast-ep-list');
+      for (const ep of show.episodes) {
+        const row = el('div', 'podcast-ep');
+        row.setAttribute('role', 'button');
+        row.tabIndex = 0;
+
+        const epArt = ep.artwork || show.artwork;
+        if (epArt) {
+          const thumb = document.createElement('img');
+          thumb.src = epArt;
+          thumb.alt = '';
+          thumb.loading = 'lazy';
+          thumb.decoding = 'async';
+          thumb.className = 'podcast-ep-art';
+          thumb.title = 'View artwork';
+          // Thumb click zooms the art — must NOT bubble into the row's play.
+          thumb.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openLightbox(epArt, ep.title);
+          });
+          row.appendChild(thumb);
+        }
+
+        const btn = el('div', 'podcast-ep-play');
+        btn.appendChild(el('span', null, '▶'));
+        row.appendChild(btn);
+
+        const info = el('div', 'podcast-ep-info');
+        const titleLine = el('div', 'podcast-ep-title',
+          (ep.episodeNumber ? ep.episodeNumber + '. ' : '') + ep.title);
+        info.appendChild(titleLine);
+        const sub = [fmtDate(ep.publishDate), fmtDuration(ep.durationSec), ep.explicit ? 'E' : '']
+          .filter(Boolean).join(' · ');
+        if (sub) info.appendChild(el('div', 'podcast-ep-sub', sub));
+        if (ep.description) info.appendChild(el('div', 'podcast-ep-desc', ep.description));
+        row.appendChild(info);
+
+        function play() {
+          document.querySelectorAll('.podcast-ep.playing').forEach(r => r.classList.remove('playing'));
+          row.classList.add('playing');
+          // No recordId — see note at top of this IIFE.
+          window._PLAYER.playTrack(ep.url, {
+            title:  ep.title,
+            artist: show.host || show.showTitle,
+            album:  show.showTitle,
+            artUrl: ep.artwork || show.artwork || ''
+          });
+        }
+        row.addEventListener('click', play);
+        row.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); play(); }
+        });
+
+        list.appendChild(row);
+      }
+      block.appendChild(list);
+      return block;
+    }
+
+    function initPodcasts() {
+      if (loaded) return;
+      loaded = true;
+      fetch('/api/podcasts')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          const shows = data && data.ok ? data.shows : null;
+          if (!shows) return; // flag off (404) or error — nav stays hidden
+          const container = document.getElementById('podcastShows');
+          const empty = document.getElementById('podcastsEmpty');
+          container.textContent = '';
+          if (!shows.length) { empty.hidden = false; return; }
+          for (const show of shows) container.appendChild(renderShow(show));
+          const nav = document.getElementById('navPodcasts');
+          if (nav) nav.style.display = '';
+        })
+        .catch(err => console.warn('[Podcasts] load failed:', err.message));
+    }
+
+    if (window.massAccessReady) initPodcasts();
+    else window.addEventListener('mass:access-ready', initPodcasts, { once: true });
   })();
   </script>
 

@@ -61,13 +61,24 @@ describe('groupPodcastRecords', () => {
     expect(shows).toHaveLength(1);
   });
 
-  it('sorts episodes newest-first and stamps latestPublishDate', () => {
+  it('sorts episodes in reading order (1 → N) and stamps latestPublishDate', () => {
     const { shows } = groupPodcastRecords([
-      row({ 'Episode Title': 'Old', PublishDate: '03/01/2025', 'Episode Number': 1 }, '1'),
-      row({ 'Episode Title': 'New', PublishDate: '02/20/2026', 'Episode Number': 2 }, '2')
+      row({ 'Episode Title': 'Second', PublishDate: '02/20/2026', 'Episode Number': 2 }, '2'),
+      row({ 'Episode Title': 'First', PublishDate: '03/01/2025', 'Episode Number': 1 }, '1')
     ]);
-    expect(shows[0].episodes.map((e) => e.title)).toEqual(['New', 'Old']);
+    expect(shows[0].episodes.map((e) => e.title)).toEqual(['First', 'Second']);
     expect(shows[0].latestPublishDate).toBe('2026-02-20');
+  });
+
+  it('each episode carries its own artwork', () => {
+    const { shows } = groupPodcastRecords([
+      row({ 'Episode Number': 1, Artwork_S3_URL: 'https://b.s3.amazonaws.com/artwork/ep1.jpg' }, '1'),
+      row({ 'Episode Number': 2, Artwork_S3_URL: 'https://b.s3.amazonaws.com/artwork/ep2.jpg' }, '2')
+    ]);
+    expect(shows[0].episodes.map((e) => e.artwork)).toEqual([
+      'https://b.s3.amazonaws.com/artwork/ep1.jpg',
+      'https://b.s3.amazonaws.com/artwork/ep2.jpg'
+    ]);
   });
 
   it('converts FM MM/DD/YYYY dates to ISO', () => {
