@@ -10,7 +10,7 @@
 //
 import { Router } from 'express';
 import { fmPost } from '../../fm-client.js';
-import { hasValidAudio, hasValidArtwork, applyArtworkThumbs } from '../../lib/track.js';
+import { hasValidAudio, hasValidArtwork, applyArtworkThumbs, thumbArtworkUrl } from '../../lib/track.js';
 import {
   recordIsVisible, recordIsFeatured, isMissingFieldError,
   FM_LAYOUT, FM_FEATURED_VALUE, FEATURED_FIELD_CANDIDATES,
@@ -58,6 +58,43 @@ function cloneRecordsForLimit(records = [], count = records.length) {
     const fields = applyArtworkThumbs({ ...(record.fields || record.fieldData || {}) }, 300);
     return { recordId: record.recordId, modId: record.modId, fields };
   });
+}
+
+// hasValidArtwork() only checks the URL STRING — a record can carry an
+// Artwork_S3_URL whose file was never uploaded (or was deleted), passing the
+// filter but rendering as a broken card. This HEAD-checks the URL the rail will
+// actually serve (the 300px derivative when ARTWORK_THUMBS is on) and drops a
+// record only on a CONFIRMED 404/403. Timeouts / 5xx / network blips keep the
+// record (benefit of the doubt — a rare broken card beats dropping good art).
+function servedArtworkUrl(fields = {}) {
+  const raw = fields['Artwork_S3_URL'] || fields['Tape Files::Artwork_S3_URL'] || '';
+  return process.env.ARTWORK_THUMBS === 'true' ? thumbArtworkUrl(raw, 300) : raw;
+}
+
+async function artworkResolves(url) {
+  if (!url) return false;
+  try {
+    const res = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(4000) });
+    if (res.status === 404 || res.status === 403) return false; // confirmed missing
+    return true; // 200, or non-definitive (5xx/redirect) → keep
+  } catch {
+    return true; // timeout / network error → keep
+  }
+}
+
+// Filter records to those whose served artwork actually exists, with bounded
+// concurrency. Runs once per SWR cache fill (every ~10 min), not per request.
+async function filterToLiveArtwork(records, concurrency = 10) {
+  const out = [];
+  let i = 0;
+  async function worker() {
+    while (i < records.length) {
+      const rec = records[i++];
+      if (await artworkResolves(servedArtworkUrl(rec.fields || rec.fieldData || {}))) out.push(rec);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, records.length) }, worker));
+  return out;
 }
 
 // Random sample of up to `count` records (Fisher-Yates on a shallow copy — the
@@ -329,8 +366,12 @@ const singlesSwr = createSwrCache({
   name:  'singles',
   loader: async () => {
     const records = await fetchSinglesRecords(1000);
-    log.debug(`Singles: ${records.length} tracks`);
-    return records.map(r => ({ recordId: r.recordId, modId: r.modId, fields: r.fieldData || {} }));
+    const mapped  = records.map(r => ({ recordId: r.recordId, modId: r.modId, fields: r.fieldData || {} }));
+    // Drop singles whose artwork URL points at a non-existent S3 object so the
+    // random rail never surfaces a broken/placeholder card.
+    const live = await filterToLiveArtwork(mapped);
+    log.debug(`Singles: ${live.length}/${mapped.length} tracks with live artwork`);
+    return live;
   }
 });
 
