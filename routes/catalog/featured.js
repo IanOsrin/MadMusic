@@ -60,6 +60,18 @@ function cloneRecordsForLimit(records = [], count = records.length) {
   });
 }
 
+// Random sample of up to `count` records (Fisher-Yates on a shallow copy — the
+// pool array itself is the shared SWR value and must not be mutated).
+function sampleRandom(records = [], count = records.length) {
+  const a = records.slice();
+  const n = Math.min(count, a.length);
+  for (let i = 0; i < n; i++) {
+    const j = i + Math.floor(Math.random() * (a.length - i));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, n);
+}
+
 // ── Featured album fetch ────────────────────────────────────────────────────
 async function fetchFeaturedAlbumRecords(limit = 400) {
   if (!FEATURED_FIELD_CANDIDATES.length) return [];
@@ -425,17 +437,20 @@ router.get('/new-releases', async (req, res) => {
 // ── Route: GET /singles ─────────────────────────────────────────────────────
 router.get('/singles', async (req, res) => {
   try {
+    const limit   = Math.max(1, Math.min(100, Number.parseInt(req.query.limit || '25', 10)));
     const refresh = req.query.refresh === '1';
     if (refresh) singlesSwr.cache.delete('default');
 
     const { value: items, state } = await singlesSwr.get('default');
     res.setHeader('X-Cache-State', state);
-    // Catalogue rails are identical for every user → safe to cache at the
-    // browser/edge for a short window. SWR already serves stale instantly, so a
-    // 60s shared cache only ever risks a <60s-stale rail (acceptable) while
-    // letting repeat loads skip Node + FileMaker entirely.
-    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-    return res.json({ ok: true, items: cloneRecordsForLimit(items), total: items.length });
+    // Singles rail shows a RANDOM sample of the flagged-singles pool, reshuffled
+    // per request so it varies each visit. The pool is SWR-cached (one FM fetch
+    // /10 min); only the in-memory shuffle is per-request — negligible cost, no
+    // FM hit. no-store because a shared/browser cache would freeze one random
+    // set for everyone, defeating the point.
+    res.setHeader('Cache-Control', 'no-store');
+    const sample = sampleRandom(items, limit);
+    return res.json({ ok: true, items: cloneRecordsForLimit(sample), total: items.length });
   } catch (err) {
     log.error('Failed to load singles', err);
     return res.status(500).json({ ok: false, error: 'Failed to load singles' });
