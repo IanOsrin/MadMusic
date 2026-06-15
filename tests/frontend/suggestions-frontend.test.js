@@ -31,6 +31,14 @@ describe('Similar-albums frontend wiring', () => {
     expect(appHtml).toMatch(/openAlbumDirect\(/);
   });
 
+  it('rail opens albums by catalogue (so compilations show tracks)', () => {
+    // openAlbumDirect re-searches by artist and returns no tracks for
+    // "Various Artists" compilations; the rail must prefer /api/album?cat=.
+    expect(appHtml).toMatch(/openSimilarAlbumByCat/);
+    expect(appHtml).toContain('data-cat=');
+    expect(appHtml).toMatch(/\/api\/album\?cat=/);
+  });
+
   it('rail respects the server-injected feature flag (skips fetch when off)', () => {
     expect(appHtml).toContain('window.__SUGGESTIONS');
     expect(serverJs).toContain('window.__SUGGESTIONS=');

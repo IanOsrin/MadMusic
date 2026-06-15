@@ -4474,7 +4474,7 @@
           const meta = [it.year, it.genre].filter(Boolean).join(' · ');
           return `
             <button class="similar-album-card" type="button"
-                    data-album="${esc(it.album)}" data-artist="${esc(it.artist)}">
+                    data-album="${esc(it.album)}" data-artist="${esc(it.artist)}" data-cat="${esc(it.catalogue || '')}">
               <div class="similar-album-thumb">
                 <img src="${esc(art)}" alt="${esc(it.album)}" loading="lazy"
                      onerror="this.src='/img/placeholder.jpg'">
@@ -4486,13 +4486,58 @@
         }).join('');
 
         rail.querySelectorAll('.similar-album-card').forEach((card) => {
-          card.addEventListener('click', () => {
-            const a = card.dataset.album, ar = card.dataset.artist;
+          card.addEventListener('click', async () => {
+            const a = card.dataset.album, ar = card.dataset.artist, cat = card.dataset.cat;
+            // Prefer opening by catalogue (returns the album's exact tracks).
+            // openAlbumDirect re-searches by artist name and fails for
+            // compilations ("Various Artists") → "No tracks available".
+            if (cat && await openSimilarAlbumByCat(cat, a, ar)) return;
             if (a && typeof window.openAlbumDirect === 'function') window.openAlbumDirect(a, ar);
           });
         });
 
         section.hidden = false;
+      }
+
+      // Open a suggested album by its catalogue number via /api/album?cat=, which
+      // returns the album's tracks directly — robust where artist-name search
+      // isn't (compilations, album-artist ≠ track-artist). Returns true on success.
+      async function openSimilarAlbumByCat(cat, title, artist) {
+        if (typeof window.showAlbumDetailView !== 'function') return false;
+        try {
+          const res = await fetch(`/api/album?cat=${encodeURIComponent(cat)}&limit=200`);
+          if (!res.ok) return false;
+          const data = await res.json();
+          const items = (data && data.items) || [];
+          if (!items.length) return false;
+          const f0 = items[0].fields || {};
+          const tracks = items.map((it) => {
+            const f = it.fields || {};
+            return {
+              name:        f['Track Name'] || f['Tape Files::Track Name'] || 'Unknown Track',
+              trackArtist: f['Track Artist'] || f['Tape Files::Track Artist'] || '',
+              artist:      f['Track Artist'] || f['Tape Files::Track Artist'] || '',
+              duration:    f['Duration'] || '',
+              audioUrl:    f['S3_URL'] || f['mp3'] || '',
+              S3_URL:      f['S3_URL'] || '',
+              mp3:         f['mp3'] || '',
+              recordId:    it.recordId || '',
+              Download_Price: parseFloat(f['Download_Price'] || f['DownloadPrice'] || 0) || 0
+            };
+          });
+          window.showAlbumDetailView({
+            title:   title  || f0['Album Title']  || f0['Tape Files::Album Title']  || '',
+            artist:  artist || f0['Album Artist'] || f0['Tape Files::Album Artist'] || '',
+            picture: f0['Artwork_S3_URL'] || f0['Tape Files::Artwork_S3_URL'] || '',
+            genre:   f0['Genre'] || f0['Local Genre'] || '',
+            year:    f0['Year of Release'] || f0['Year Recorded'] || '',
+            tracks
+          });
+          return true;
+        } catch (err) {
+          console.warn('[Similar] open by catalogue failed:', err);
+          return false;
+        }
       }
 
       // Close button for album detail view
