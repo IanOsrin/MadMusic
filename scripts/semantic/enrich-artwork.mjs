@@ -36,10 +36,12 @@ const ROOT = path.join(__dirname, '..', '..');
 const DB_PATH = process.env.SUGGEST_OUT_DB || path.join(ROOT, 'data', 'suggest.db');
 const WRITE_SOURCE_PATH = process.env.SUGGEST_WRITE_SOURCE || path.join(ROOT, 'data', 'write-source.json');
 
-const HOST = process.env.INGEST_FM_HOST;
-const FMDB = process.env.INGEST_FM_DB;
-const USER = process.env.INGEST_FM_USER;
-const PASS = process.env.INGEST_FM_PASS;
+// Same source resolution as build-index.mjs: fmcloud (FM_*) by default,
+// SUGGEST_FM_* to override.
+const HOST = process.env.SUGGEST_FM_HOST || process.env.FM_HOST;
+const FMDB = process.env.SUGGEST_FM_DB   || process.env.FM_DB;
+const USER = process.env.SUGGEST_FM_USER || process.env.FM_USER;
+const PASS = process.env.SUGGEST_FM_PASS || process.env.FM_PASS;
 const LAYOUT = 'API_Album_Songs';
 const PAGE = 1000;
 

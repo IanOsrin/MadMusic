@@ -56,6 +56,12 @@ describe('semantic-index: suggestAlbums', () => {
     expect(r.items).toHaveLength(2);
   });
 
+  it('refreshIndex() is a safe no-op when SUGGEST_DB_URL is unset', async () => {
+    delete process.env.SUGGEST_DB_URL;
+    await expect(lib.refreshIndex()).resolves.toBe(false);
+    expect(lib.semanticIndexStatus().ready).toBe(true); // unchanged
+  });
+
   it('returns an empty list for an unknown seed (no throw)', () => {
     const r = lib.suggestAlbums({ title: 'Nope', artist: 'Nobody' }, 5);
     expect(r.ok).toBe(true);

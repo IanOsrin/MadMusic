@@ -15,6 +15,7 @@
     "test:visual:update": "playwright test --update-snapshots",
     "smoke": "node scripts/smoke.js",
     "build:suggest": "node scripts/semantic/build-suggest.mjs",
+    "refresh:suggest": "node scripts/semantic/build-index.mjs && node scripts/semantic/build-suggest.mjs && node scripts/semantic/enrich-artwork.mjs && aws s3 cp data/suggest.db s3://mass-music-audio-files/suggest/album-index.db --content-type application/x-sqlite3 && echo '[refresh] uploaded — live app will hot-swap within SUGGEST_REFRESH_MINUTES'",
     "load-test": "cd scripts && npx artillery run load-test.yml",
     "load-test:smoke": "cd scripts && bash run-load-test.sh --smoke",
     "load-test:full": "cd scripts && bash run-load-test.sh"

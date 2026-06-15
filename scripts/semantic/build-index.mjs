@@ -41,10 +41,14 @@ function isVisible(f) {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH = path.join(__dirname, '..', '..', 'data', 'semantic.db');
 
-const HOST = process.env.INGEST_FM_HOST;
-const FMDB = process.env.INGEST_FM_DB;
-const USER = process.env.INGEST_FM_USER;
-const PASS = process.env.INGEST_FM_PASS;
+// Data source: fmcloud (FM_*, the live DB) by default so the index reflects
+// daily edits without a snapshot-sync step. Embedding still runs LOCALLY below
+// (no external AI). Override with SUGGEST_FM_* to point at a snapshot/copy
+// (e.g. the M1 mad-ingest-worker) instead.
+const HOST = process.env.SUGGEST_FM_HOST || process.env.FM_HOST;
+const FMDB = process.env.SUGGEST_FM_DB   || process.env.FM_DB;
+const USER = process.env.SUGGEST_FM_USER || process.env.FM_USER;
+const PASS = process.env.SUGGEST_FM_PASS || process.env.FM_PASS;
 const LAYOUT = 'API_Album_Songs';
 
 // Must match the query-time model in the app exactly — see docs/semantic-search-proposal.md §8.
