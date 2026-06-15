@@ -463,6 +463,12 @@
               <div class="playlist-track-list" id="playlistTrackList">
                 <!-- Tracks will be populated here -->
               </div>
+              <!-- "Similar albums" rail — populated by renderSimilarAlbums() when
+                   SUGGESTIONS_ENABLED; stays hidden when the feature is off/empty. -->
+              <div class="similar-albums-section" id="similarAlbumsSection" hidden>
+                <h3 class="similar-albums-title">Similar albums</h3>
+                <div class="similar-albums-rail" id="similarAlbumsRail"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -4421,7 +4427,73 @@
         } else {
           trackList.innerHTML = '<div style="padding:20px;color:var(--muted);text-align:center;">No tracks available</div>';
         }
+
+        // "Similar albums" rail (semantic suggestions). Fire-and-forget — never
+        // blocks the panel; degrades silently when the feature is off.
+        renderSimilarAlbums(album);
       };
+
+      // ── Similar-albums rail ───────────────────────────────────────────────
+      // Item-to-item recommendations from /api/suggestions (semantic album
+      // index). Feature-flagged server-side: a 404 (flag off) or empty result
+      // just hides the section. A request token guards against the user
+      // switching albums faster than fetches resolve.
+      let _similarReqToken = 0;
+      async function renderSimilarAlbums(album) {
+        const section = document.getElementById('similarAlbumsSection');
+        const rail = document.getElementById('similarAlbumsRail');
+        if (!section || !rail || !album || !album.title) return;
+        // Feature off → skip the fetch entirely (server injects window.__SUGGESTIONS).
+        if (window.__SUGGESTIONS === false) { section.hidden = true; return; }
+
+        const token = ++_similarReqToken;
+        section.hidden = true;
+        rail.innerHTML = '';
+
+        const params = new URLSearchParams();
+        if (album.title)  params.set('title', album.title);
+        if (album.artist) params.set('artist', album.artist);
+        params.set('limit', '10');
+
+        let data;
+        try {
+          const res = await fetch(`/api/suggestions?${params.toString()}`);
+          if (!res.ok) return;           // 404 = feature off → leave hidden
+          data = await res.json();
+        } catch { return; }
+
+        if (token !== _similarReqToken) return;            // superseded
+        const items = (data && data.items) || [];
+        if (!items.length) return;
+
+        const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        rail.innerHTML = items.map((it) => {
+          const art = it.artworkSrc || '/img/placeholder.jpg';
+          const meta = [it.year, it.genre].filter(Boolean).join(' · ');
+          return `
+            <button class="similar-album-card" type="button"
+                    data-album="${esc(it.album)}" data-artist="${esc(it.artist)}">
+              <div class="similar-album-thumb">
+                <img src="${esc(art)}" alt="${esc(it.album)}" loading="lazy"
+                     onerror="this.src='/img/placeholder.jpg'">
+              </div>
+              <div class="similar-album-name">${esc(it.album)}</div>
+              <div class="similar-album-artist">${esc(it.artist)}</div>
+              ${meta ? `<div class="similar-album-meta">${esc(meta)}</div>` : ''}
+            </button>`;
+        }).join('');
+
+        rail.querySelectorAll('.similar-album-card').forEach((card) => {
+          card.addEventListener('click', () => {
+            const a = card.dataset.album, ar = card.dataset.artist;
+            if (a && typeof window.openAlbumDirect === 'function') window.openAlbumDirect(a, ar);
+          });
+        });
+
+        section.hidden = false;
+      }
 
       // Close button for album detail view
       document.addEventListener('keydown', (e) => {

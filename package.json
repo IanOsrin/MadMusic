@@ -14,6 +14,7 @@
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots",
     "smoke": "node scripts/smoke.js",
+    "build:suggest": "node scripts/semantic/build-suggest.mjs",
     "load-test": "cd scripts && npx artillery run load-test.yml",
     "load-test:smoke": "cd scripts && bash run-load-test.sh --smoke",
     "load-test:full": "cd scripts && bash run-load-test.sh"
@@ -22,6 +23,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "better-sqlite3": "^12.10.0",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
@@ -29,6 +31,7 @@
     "express-rate-limit": "^8.2.1",
     "lru-cache": "^11.2.2",
     "nodemailer": "^7.0.13",
+    "sqlite-vec": "^0.1.9",
     "undici": "^7"
   },
   "engines": {
@@ -46,8 +49,6 @@
     "@huggingface/transformers": "^4.2.0",
     "@playwright/test": "^1.60.0",
     "artillery": "^2.0.30",
-    "better-sqlite3": "^12.10.0",
-    "sqlite-vec": "^0.1.9",
     "supertest": "^7.2.2",
     "vitest": "^2.1.9"
   }

@@ -9,6 +9,16 @@
       ],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "madmusic-suggest",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "SUGGESTIONS_ENABLED=true NODE_ENV=development PORT=3055 node server.js"
+      ],
+      "port": 3055,
+      "autoPort": true
     }
   ]
 }

@@ -1479,6 +1479,74 @@
       margin-top: 12px;
       width: 100%;
     }
+    /* ── Similar-albums rail (semantic suggestions) ───────────────────────── */
+    .similar-albums-section {
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+    .similar-albums-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin: 0 0 12px;
+      color: var(--fg);
+    }
+    .similar-albums-rail {
+      display: flex;
+      gap: 14px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+      scroll-snap-type: x proximity;
+      -webkit-overflow-scrolling: touch;
+    }
+    .similar-albums-rail::-webkit-scrollbar { height: 6px; }
+    .similar-albums-rail::-webkit-scrollbar-thumb {
+      background: var(--border); border-radius: 3px;
+    }
+    .similar-album-card {
+      flex: 0 0 130px;
+      width: 130px;
+      scroll-snap-align: start;
+      background: none;
+      border: none;
+      padding: 0;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+      color: inherit;
+    }
+    .similar-album-thumb {
+      width: 130px;
+      height: 130px;
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--card);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .similar-album-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .similar-album-card:hover .similar-album-thumb {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .similar-album-name {
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 8px;
+      color: var(--fg);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .similar-album-artist {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .similar-album-meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
     .playlist-track-item {
       display: flex;
       align-items: center;

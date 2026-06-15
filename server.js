@@ -25,6 +25,8 @@ import downloadRouter from './routes/download.js';
 import ringtoneRouter from './routes/ringtone.js';
 import telkomRouter from './routes/telkom.js';
 import podcastsRouter from './routes/podcasts.js';
+import suggestionsRouter from './routes/suggestions.js';
+import { initSemanticIndex, semanticIndexStatus } from './lib/semantic-index.js';
 
 import { validateAccessToken } from './lib/auth.js';
 import { timingSafeEqualStr } from './lib/crypto-utils.js';
@@ -170,6 +172,15 @@ const TELKOM_ENABLED = process.env.TELKOM_ENABLED === 'true';
 // through to the token wall and a stale frontend probing it would get a 403
 // with requiresAccessToken, popping the token gate for no reason.
 const PODCASTS_ENABLED = process.env.PODCASTS_ENABLED === 'true';
+
+// "Similar albums" suggestions (2026-06-15): ships dark. Powered by the slim
+// semantic album index (data/suggest.db, lib/semantic-index.js) — a local
+// sqlite-vec nearest-neighbour query, never FileMaker. Like podcasts it 404s
+// BEFORE the auth middleware while off so a stale frontend probing it never
+// trips the token wall. Enable with SUGGESTIONS_ENABLED=true (an artifact must
+// be present on disk or downloadable via SUGGEST_DB_URL — see initSemanticIndex).
+const SUGGESTIONS_ENABLED = process.env.SUGGESTIONS_ENABLED === 'true';
+
 app.use((req, res, next) => {
   if (TELKOM_ENABLED) return next();
   if (req.path.toLowerCase().startsWith('/api/telkom')) {
@@ -180,6 +191,13 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   if (PODCASTS_ENABLED) return next();
   if (req.path.toLowerCase().startsWith('/api/podcasts')) {
+    return res.status(404).send('Not found');
+  }
+  next();
+});
+app.use((req, res, next) => {
+  if (SUGGESTIONS_ENABLED) return next();
+  if (req.path.toLowerCase().startsWith('/api/suggestions')) {
     return res.status(404).send('Not found');
   }
   next();
@@ -304,6 +322,9 @@ app.use('/api/', async (req, res, next) => {
     // Podcasts are public catalogue content (like /trending, /singles); the
     // path is only mounted when PODCASTS_ENABLED, so skip it under the same gate.
     ...(PODCASTS_ENABLED ? ['/podcasts'] : []),
+    // Similar-albums suggestions are public catalogue content; only skip-listed
+    // while enabled (the path is 404'd before this middleware when off).
+    ...(SUGGESTIONS_ENABLED ? ['/suggestions'] : []),
     '/download/',
     '/ringtone/',
     '/audio-proxy',
@@ -410,6 +431,9 @@ async function loadHtml(filename) {
   // and goes straight to /api/new-releases — one fewer serial request above
   // the fold. Absence of the flag preserves the original attempt-then-fallback.
   stamped += `\n<script>window.__EDITORIAL_HERO=${EDITORIAL_HERO_ENABLED ? 'true' : 'false'};</script>\n`;
+  // Tell the client whether "Similar albums" is live, so the album page skips
+  // the /api/suggestions round-trip (which would 404) when the feature is off.
+  stamped += `\n<script>window.__SUGGESTIONS=${SUGGESTIONS_ENABLED ? 'true' : 'false'};</script>\n`;
   if (!DEV_MODE) _htmlCache.set(filename, stamped);
   return stamped;
 }
@@ -487,6 +511,7 @@ app.use('/api/access', accessRouter);
 app.use('/api/payments', paymentsRouter);
 if (TELKOM_ENABLED) app.use('/api/telkom', telkomRouter); // ring-fenced: 404'd above when off
 if (PODCASTS_ENABLED) app.use('/api', podcastsRouter);    // dark until PODCASTS_ENABLED=true
+if (SUGGESTIONS_ENABLED) app.use('/api', suggestionsRouter); // dark until SUGGESTIONS_ENABLED=true
 app.use('/api/download', downloadRouter);
 app.use('/api/ringtone', ringtoneRouter);
 app.use('/api/playlists', playlistsRouter);
@@ -764,6 +789,15 @@ function logServerReady(protocolLabel = 'HTTP/1.1') {
 }
 
 await warmConnections();
+
+// Open the semantic album index at boot so the first "Similar albums" request
+// isn't slowed by the (one-time) DB open / S3 download. Non-fatal: if the
+// artifact is absent the route degrades to an empty rail. Off-thread of listen.
+if (SUGGESTIONS_ENABLED) {
+  initSemanticIndex()
+    .then(() => console.log('[MASS] Semantic suggestion index:', JSON.stringify(semanticIndexStatus())))
+    .catch((err) => console.warn('[MASS] Semantic index init failed:', err?.message || err));
+}
 
 let server = null;
 let serverStarted = false;

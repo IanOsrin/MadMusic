@@ -164,7 +164,14 @@ function buildMeta(f) {
     mood: val(f, 'AI_Mood'),
     energy: val(f, 'AI_Energy'),
     bpm: val(f, 'AI_BPM'),
-    language: val(f, 'Language Code')
+    language: val(f, 'Language Code'),
+    // Carried so the derived suggest.db can group/render albums + resolve seeds
+    // with zero FileMaker calls at runtime (see scripts/semantic/build-suggest.mjs).
+    // NOTE: `artist` above is the TRACK artist (for embedding richness); album
+    // identity/display must use `albumArtist` (CLAUDE invariant #1) + `catalogue`.
+    albumArtist: val(f, 'Album Artist') || val(f, 'Tape Files::Album Artist'),
+    artworkUrl: val(f, 'Artwork_S3_URL') || val(f, 'Tape Files::Artwork_S3_URL'),
+    catalogue: val(f, 'Reference Catalogue Number') || val(f, 'Album Catalogue Number')
   };
 }
 
