@@ -4023,6 +4023,40 @@
         // Never leave the clicked album without a usable artwork value
         if (!clickedEntry.artwork) clickedEntry.artwork = '/img/placeholder.jpg';
 
+        // Fallback: if the artist search didn't yield this album's tracks — which
+        // happens for "Various Artists" compilations and any album whose
+        // album-artist isn't the search artist — look it up by album TITLE so it
+        // doesn't render as "No tracks available". Only runs in the empty case,
+        // so albums that already resolved are untouched.
+        if (!clickedEntry.tracks || clickedEntry.tracks.length === 0) {
+          try {
+            const r = await fetch(`/api/album?title=${encodeURIComponent(album.title)}&limit=200`);
+            if (r.ok) {
+              const d = await r.json();
+              const items = (d && d.items) || [];
+              if (items.length) {
+                clickedEntry.tracks = items.map((it) => {
+                  const f = it.fields || {};
+                  return {
+                    name:        f['Track Name'] || f['Tape Files::Track Name'] || 'Unknown Track',
+                    trackArtist: f['Track Artist'] || f['Tape Files::Track Artist'] || '',
+                    artist:      f['Track Artist'] || f['Tape Files::Track Artist'] || '',
+                    duration:    f['Duration'] || '',
+                    audioUrl:    f['S3_URL'] || f['mp3'] || '',
+                    S3_URL:      f['S3_URL'] || '',
+                    mp3:         f['mp3'] || '',
+                    recordId:    it.recordId || '',
+                    Download_Price: parseFloat(f['Download_Price'] || f['DownloadPrice'] || 0) || 0
+                  };
+                });
+                if (existingIdx !== -1) artistAlbums[existingIdx] = clickedEntry;
+              }
+            }
+          } catch (err) {
+            console.warn('[AlbumDetailView] title fallback failed:', err);
+          }
+        }
+
         // Populate album list (left column)
         albumsList.innerHTML = artistAlbums.map((a, index) => {
           const artUrl = a.artwork && a.artwork.includes('://') ? a.artwork :
