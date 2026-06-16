@@ -19,8 +19,15 @@ import { createLogger } from '../lib/logger.js';
 const router = Router();
 const log = createLogger('suggestions');
 
+// "Fresh set each visit": draw each result from a relevance window of the closest
+// matches and shuffle, so re-opening an album shows a different but still-similar
+// set. Default on; set SUGGEST_SHUFFLE=false to restore deterministic closest-first.
+// Read per-request (cheap) so the mode is configurable without code changes.
+const shuffleEnabled = () => String(process.env.SUGGEST_SHUFFLE ?? 'true').toLowerCase() !== 'false';
+
 // Payloads are deterministic for a given (seed, limit) until the index is
-// rebuilt, so a plain LRU with a generous TTL is enough.
+// rebuilt, so a plain LRU with a generous TTL is enough. Skipped when shuffling
+// (a cached payload would freeze the "fresh each visit" set).
 const cache = new LRUCache({ max: 1000, ttl: 60 * 60 * 1000 });
 
 router.get('/suggestions', async (req, res) => {
@@ -54,15 +61,18 @@ router.get('/suggestions', async (req, res) => {
     const limitParam = Number.parseInt(req.query.limit || '10', 10);
     const limit = Number.isFinite(limitParam) ? Math.max(1, Math.min(20, limitParam)) : 10;
 
+    const shuffle = shuffleEnabled();
     const cacheKey = `${cat}|${title}|${artist}|${limit}`;
-    const cached = cache.get(cacheKey);
-    if (cached) {
-      res.setHeader('X-Cache-Hit', 'true');
-      res.setHeader('Cache-Control', 'public, max-age=3600');
-      return res.json(cached);
+    if (!shuffle) {
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        res.setHeader('X-Cache-Hit', 'true');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        return res.json(cached);
+      }
     }
 
-    const result = suggestAlbums({ cat, title, artist }, limit);
+    const result = suggestAlbums({ cat, title, artist }, limit, { shuffle });
     const payload = {
       ok: true,
       seed: result.seed,
@@ -71,8 +81,13 @@ router.get('/suggestions', async (req, res) => {
       indexReady: true
     };
 
-    cache.set(cacheKey, payload);
-    res.setHeader('Cache-Control', 'public, max-age=3600');
+    if (shuffle) {
+      // Each visit should differ — don't let the browser/CDN freeze the set.
+      res.setHeader('Cache-Control', 'no-store');
+    } else {
+      cache.set(cacheKey, payload);
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+    }
     return res.json(payload);
   } catch (err) {
     log.error('Error:', err);

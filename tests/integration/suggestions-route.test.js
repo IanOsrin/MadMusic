@@ -29,8 +29,16 @@ describe('GET /api/suggestions (SUGGESTIONS_ENABLED)', () => {
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.seed.album).toBe('Alpha');
-    expect(res.body.items.map((i) => i.album)).toEqual(['Beta', 'Gamma', 'Delta']);
+    // Shuffle is on by default → assert membership, not order.
+    expect(new Set(res.body.items.map((i) => i.album))).toEqual(new Set(['Beta', 'Gamma', 'Delta']));
     expect(res.body.count).toBe(3);
+  });
+
+  it('does not cache when shuffling (fresh each visit)', async () => {
+    await request(app).get('/api/suggestions?cat=CAT-B&limit=3');
+    const res = await request(app).get('/api/suggestions?cat=CAT-B&limit=3');
+    expect(res.headers['x-cache-hit']).toBeUndefined();
+    expect(res.headers['cache-control']).toBe('no-store');
   });
 
   it('resolves by catalogue', async () => {
@@ -53,9 +61,14 @@ describe('GET /api/suggestions (SUGGESTIONS_ENABLED)', () => {
     expect(res.body.count).toBe(0);
   });
 
-  it('serves a cache hit on the second identical request', async () => {
-    await request(app).get('/api/suggestions?cat=CAT-B&limit=3');
-    const res = await request(app).get('/api/suggestions?cat=CAT-B&limit=3');
-    expect(res.headers['x-cache-hit']).toBe('true');
+  it('serves a cache hit on the second identical request (shuffle off)', async () => {
+    process.env.SUGGEST_SHUFFLE = 'false';
+    try {
+      await request(app).get('/api/suggestions?cat=CAT-A&limit=3');
+      const res = await request(app).get('/api/suggestions?cat=CAT-A&limit=3');
+      expect(res.headers['x-cache-hit']).toBe('true');
+    } finally {
+      delete process.env.SUGGEST_SHUFFLE;
+    }
   });
 });

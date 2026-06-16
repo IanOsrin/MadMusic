@@ -1,7 +1,8 @@
-// Guards the per-artist diversity cap in suggestAlbums: semantic similarity
-// clusters an artist's own catalogue, so without a cap a single artist can fill
-// the rail. Fixture: 4 albums by "Repeat Artist" + 4 distinct artists, all near
-// the seed. "Various Artists" compilations are exempt from the cap.
+// Guards the diversity caps in suggestAlbums: semantic similarity clusters an
+// artist's own catalogue, so without a cap a single artist can fill the rail.
+// Fixture: 4 albums by "Repeat Artist" + 4 distinct artists + 2 "Various Artists"
+// compilations, all near the seed. Compilations share no artist so the per-artist
+// cap never bites them — they get their own separate cap (default 1).
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import path from 'node:path';
@@ -79,14 +80,49 @@ describe('suggestAlbums per-artist diversity cap', () => {
     expect(countByArtist(r.items, 'Repeat Artist')).toBe(1);
   });
 
-  it('does NOT cap Various Artists compilations', () => {
+  it('default cap allows only one Various Artists compilation', () => {
     const r = lib.suggestAlbums({ cat: 'CAT-1' }, 8, { maxPerArtist: 1 });
+    expect(countByArtist(r.items, 'Various Artists')).toBe(1);
+  });
+
+  it('maxCompilations is tunable per call', () => {
+    const r = lib.suggestAlbums({ cat: 'CAT-1' }, 8, { maxPerArtist: 1, maxCompilations: 2 });
     expect(countByArtist(r.items, 'Various Artists')).toBe(2);
+  });
+
+  it('maxCompilations: 0 excludes compilations entirely', () => {
+    const r = lib.suggestAlbums({ cat: 'CAT-1' }, 8, { maxPerArtist: 1, maxCompilations: 0 });
+    expect(countByArtist(r.items, 'Various Artists')).toBe(0);
   });
 
   it('still returns distinct-artist albums to fill the page', () => {
     const r = lib.suggestAlbums({ cat: 'CAT-1' }, 8, { maxPerArtist: 1 });
     const artists = new Set(r.items.map((i) => i.artist));
     expect(artists.size).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe('suggestAlbums shuffle (fresh set each visit)', () => {
+  it('still honours the caps when shuffling', () => {
+    for (let i = 0; i < 20; i++) {
+      const r = lib.suggestAlbums({ cat: 'CAT-1' }, 8, { shuffle: true });
+      expect(countByArtist(r.items, 'Repeat Artist')).toBeLessThanOrEqual(2);
+      expect(countByArtist(r.items, 'Various Artists')).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('varies the selection across repeated calls', () => {
+    const seen = new Set();
+    for (let i = 0; i < 30; i++) {
+      const r = lib.suggestAlbums({ cat: 'CAT-1' }, 5, { shuffle: true });
+      seen.add(r.items.map((x) => x.album).join(','));
+    }
+    expect(seen.size).toBeGreaterThan(1); // not frozen to one fixed ordering
+  });
+
+  it('is deterministic when shuffle is off (default)', () => {
+    const a = lib.suggestAlbums({ cat: 'CAT-1' }, 5).items.map((x) => x.album);
+    const b = lib.suggestAlbums({ cat: 'CAT-1' }, 5).items.map((x) => x.album);
+    expect(a).toEqual(b);
   });
 });
