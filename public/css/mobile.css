@@ -709,6 +709,12 @@
       background: var(--bg-primary);
     }
 
+    /* Close button in bottom sheet — sits below suggestions */
+    .bs-close-btn {
+      width: 100%;
+      margin-top: var(--spacing-md);
+    }
+
     /* ===== Similar Albums Rail (bottom sheet) ===== */
     .mob-suggestions {
       margin-top: var(--spacing-lg);

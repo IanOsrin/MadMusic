@@ -50,7 +50,7 @@ export function showAlbumTracksModal(album) {
             </button>
           `;
         }).join('')}
-        <button class="btn btn-secondary" style="width: 100%; margin-top: 16px;" onclick="closeModal()">Close</button>
+        <button class="btn btn-secondary bs-close-btn" onclick="closeModal()">Close</button>
       `;
 
       elements.modalOverlay.classList.add('show');
@@ -71,20 +71,23 @@ export function showAlbumTracksModal(album) {
     }
 
 async function appendMobileSuggestions(sheet, album) {
+  const closeBtn = sheet.querySelector('.bs-close-btn');
+  if (!closeBtn) return;
+
   // Placeholder shown immediately; replaced with cards or removed on completion.
   const rail = document.createElement('div');
   rail.className = 'mob-suggestions';
   rail.innerHTML = `<div class="mob-suggestions-title">You might also like</div>
     <div class="mob-suggestions-scroll"><div class="mob-suggestions-loading">Loading…</div></div>`;
-  sheet.appendChild(rail);
+  sheet.insertBefore(rail, closeBtn);
 
   try {
     const params = new URLSearchParams({ title: album.title, artist: album.artist, limit: 6 });
     const res = await fetch(`/api/suggestions?${params}`);
     const data = await res.json();
 
-    // Sheet may have been replaced by a new modal tap — bail if stale.
-    if (!sheet.isConnected) return;
+    // Rail may have been removed by a new modal tap — bail if stale.
+    if (!rail.isConnected) return;
 
     if (!data.ok || !data.items?.length) { rail.remove(); return; }
 
@@ -121,7 +124,7 @@ async function appendMobileSuggestions(sheet, album) {
       });
     });
   } catch {
-    if (sheet.isConnected) rail.remove();
+    if (rail.isConnected) rail.remove();
   }
 }
 
