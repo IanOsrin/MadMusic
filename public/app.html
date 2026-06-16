@@ -4157,7 +4157,8 @@
               url:      t.S3_URL || t.resolvedSrc || t.audioUrl || t.mp3 || '',
               title:    t.name || 'Unknown Track',
               artist:   t.trackArtist || t.artist || album.artist || '',
-              artUrl
+              artUrl,
+              cat: album.catalogue || '', albumTitle: album.title || '', albumArtist: album.artist || ''
             }));
             if (!P.startShuffleTracks(tracks)) console.warn('[Shuffle] No playable tracks on this album');
           };
@@ -4497,6 +4498,9 @@
         const section = document.getElementById('similarAlbumsSection');
         const rail = document.getElementById('similarAlbumsRail');
         if (!section || !rail || !album || !album.title) return;
+        // Record which album the detail panel is currently showing, so the
+        // "reveal album now playing" handler can skip a redundant re-render.
+        window.__currentAlbumKey = (album.title || '') + '|' + (album.artist || '');
         // Feature off → skip the fetch entirely (server injects window.__SUGGESTIONS).
         if (window.__SUGGESTIONS === false) { section.hidden = true; return; }
 
@@ -4582,7 +4586,9 @@
                   url,
                   title:  f['Track Name'] || f['Tape Files::Track Name'] || it.album || 'Unknown Track',
                   artist: f['Track Artist'] || f['Tape Files::Track Artist'] || it.artist || '',
-                  artUrl: proxyArt(art)
+                  artUrl: proxyArt(art),
+                  // Album identity so the player can reveal the album as it plays.
+                  cat: it.catalogue || '', albumTitle: it.album || '', albumArtist: it.artist || ''
                 };
               }
             }
@@ -4635,6 +4641,18 @@
           return false;
         }
       }
+
+      // Follow the music: when a shuffle plays a track, reveal that track's
+      // album (and its similar-albums rail) so the listener can add to a
+      // playlist, save it, etc. Skips when that album is already on screen.
+      window.addEventListener('mad-reveal-album', async (e) => {
+        const d = e.detail || {};
+        const key = (d.albumTitle || '') + '|' + (d.albumArtist || '');
+        if (key === '|' || key === window.__currentAlbumKey) return;   // nothing to do / already shown
+        window.__currentAlbumKey = key;                                // claim it now (avoids re-entry races)
+        if (d.cat && await openSimilarAlbumByCat(d.cat, d.albumTitle, d.albumArtist)) return;
+        if (d.albumTitle && typeof window.openAlbumDirect === 'function') window.openAlbumDirect(d.albumTitle, d.albumArtist);
+      });
 
       // Close button for album detail view
       document.addEventListener('keydown', (e) => {

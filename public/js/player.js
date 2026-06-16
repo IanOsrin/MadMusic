@@ -604,6 +604,15 @@
 
         window._PLAYER.playTrack(url, { title: d.title || 'Unknown Track', artist: d.artist || '', artUrl: d.artUrl || '', recordId: d.recordId || '' });
         showRingtoneBtn(url, d.title || '', d.artist || '', d.artUrl || '');
+
+        // Let the UI follow the music: ask the page to reveal the album now
+        // playing (+ its similar-albums rail) so the listener can act on it
+        // (add to playlist, etc.). The page decides whether a re-reveal is needed.
+        if (d.cat || d.albumTitle) {
+          window.dispatchEvent(new CustomEvent('mad-reveal-album', { detail: {
+            cat: d.cat || '', albumTitle: d.albumTitle || '', albumArtist: d.albumArtist || ''
+          } }));
+        }
       }
 
       // Descriptor shuffles play via _PLAYER directly (not playSong), so they
