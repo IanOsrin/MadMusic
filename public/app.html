@@ -1586,19 +1586,19 @@
       position: fixed;
       bottom: 0; left: 0; right: 0;
       height: 54px;
-      background: #ffffff;
-      border-top: 1px solid #e5e7eb;
+      background: #18181b;
+      border-top: 1px solid #2d2d2d;
       display: flex;
       align-items: center;
       gap: 12px;
       padding: 0 24px;
       z-index: 2000;
-      box-shadow: 0 -1px 8px rgba(0,0,0,0.07);
-    }
-    body.dark-mode #unifiedPlayer {
-      background: #18181b;
-      border-top-color: #2d2d2d;
       box-shadow: 0 -1px 8px rgba(0,0,0,0.35);
+    }
+    body.light-mode #unifiedPlayer {
+      background: #ffffff;
+      border-top-color: #e5e7eb;
+      box-shadow: 0 -1px 8px rgba(0,0,0,0.07);
     }
 
     /* Artwork hidden — v4 bar is compact */
@@ -1619,7 +1619,7 @@
     #upTitle {
       font-size: 13px;
       font-weight: 600;
-      color: #111827;
+      color: #f9fafb;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1627,15 +1627,15 @@
     }
     #upArtist {
       font-size: 11px;
-      color: #6b7280;
+      color: #9ca3af;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       margin-top: 1px;
       line-height: 1.3;
     }
-    body.dark-mode #upTitle  { color: #f9fafb; }
-    body.dark-mode #upArtist { color: #9ca3af; }
+    body.light-mode #upTitle  { color: #111827; }
+    body.light-mode #upArtist { color: #6b7280; }
 
     /* Transport controls */
     .up-centre {
@@ -1644,44 +1644,44 @@
     .up-skip {
       width: 28px; height: 28px;
       border: none; background: transparent;
-      color: #6b7280;
+      color: #9ca3af;
       cursor: pointer;
       display: flex; align-items: center; justify-content: center;
       border-radius: 50%;
       transition: color 0.15s, background 0.15s;
       padding: 0;
     }
-    .up-skip:hover { color: #111827; background: #f3f4f6; }
-    body.dark-mode .up-skip { color: #9ca3af; }
-    body.dark-mode .up-skip:hover { color: #f9fafb; background: #27272a; }
+    .up-skip:hover { color: #f9fafb; background: #27272a; }
+    body.light-mode .up-skip { color: #6b7280; }
+    body.light-mode .up-skip:hover { color: #111827; background: #f3f4f6; }
     .up-skip svg { pointer-events: none; }
 
     .up-btn {
       width: 36px; height: 36px;
       border-radius: 50%;
-      border: 1.5px solid #d1d5db;
-      background: #ffffff;
-      color: #111827;
+      border: 1.5px solid #3f3f46;
+      background: #27272a;
+      color: #f9fafb;
       cursor: pointer;
       display: flex; align-items: center; justify-content: center;
       transition: border-color 0.15s, background 0.15s, transform 0.12s;
       flex-shrink: 0;
     }
-    .up-btn:hover { border-color: #8b5cf6; background: #faf5ff; transform: scale(1.06); }
+    .up-btn:hover { border-color: #8b5cf6; background: #3b0764; transform: scale(1.06); }
     .up-btn svg { pointer-events: none; }
-    body.dark-mode .up-btn {
-      background: #27272a; border-color: #3f3f46; color: #f9fafb;
+    body.light-mode .up-btn {
+      background: #ffffff; border-color: #d1d5db; color: #111827;
     }
-    body.dark-mode .up-btn:hover { border-color: #8b5cf6; background: #3b0764; }
+    body.light-mode .up-btn:hover { border-color: #8b5cf6; background: #faf5ff; }
 
     /* Time labels */
     .up-time-label {
-      font-size: 11px; color: #9ca3af;
+      font-size: 11px; color: #6b7280;
       flex-shrink: 0; min-width: 32px; font-variant-numeric: tabular-nums;
       font-family: 'Open Sans', sans-serif;
     }
     .up-time-label.right { text-align: right; }
-    body.dark-mode .up-time-label { color: #6b7280; }
+    body.light-mode .up-time-label { color: #9ca3af; }
     /* Hide the old single time span */
     #upTime { display: none; }
 
@@ -1700,13 +1700,13 @@
     #upProgress.dragging #upProgressTrack { height: 5px; }
     #upProgressTrack {
       width: 100%; height: 3px;
-      background: #e5e7eb;
+      background: #3f3f46;
       border-radius: 3px;
       position: relative;
       transition: height 0.1s;
       pointer-events: none;
     }
-    body.dark-mode #upProgressTrack { background: #3f3f46; }
+    body.light-mode #upProgressTrack { background: #e5e7eb; }
     #upProgressFill {
       height: 100%;
       background: #8b5cf6;
@@ -1738,17 +1738,16 @@
     #upVolumeIcon {
       color: #9ca3af; flex-shrink: 0; display: flex; align-items: center;
     }
-    body.dark-mode #upVolumeIcon { color: #6b7280; }
     #upVolumeSlider {
       -webkit-appearance: none; appearance: none;
       width: 72px; height: 3px;
       border-radius: 3px;
-      background: linear-gradient(to right, #8b5cf6 var(--vol, 100%), #e5e7eb var(--vol, 100%));
+      background: linear-gradient(to right, #8b5cf6 var(--vol, 100%), #3f3f46 var(--vol, 100%));
       outline: none; cursor: pointer;
       flex-shrink: 0;
     }
-    body.dark-mode #upVolumeSlider {
-      background: linear-gradient(to right, #8b5cf6 var(--vol, 100%), #3f3f46 var(--vol, 100%));
+    body.light-mode #upVolumeSlider {
+      background: linear-gradient(to right, #8b5cf6 var(--vol, 100%), #e5e7eb var(--vol, 100%));
     }
     #upVolumeSlider::-webkit-slider-thumb {
       -webkit-appearance: none; appearance: none;
@@ -1780,8 +1779,8 @@
     }
     #upRingtoneBtn.visible { display: flex; }
     #upRingtoneBtn:hover { color: #f5a623; background: rgba(245,166,35,0.12); }
-    body.dark-mode #upRingtoneBtn { color: #6b7280; }
-    body.dark-mode #upRingtoneBtn:hover { color: #f5a623; background: rgba(245,166,35,0.12); }
+    #upRingtoneBtn { color: #6b7280; }
+    #upRingtoneBtn:hover { color: #f5a623; background: rgba(245,166,35,0.12); }
     #upRingtoneBtn svg { pointer-events: none; }
 
     /* Always add bottom padding so page content clears the bar */
@@ -2852,27 +2851,29 @@
   <script>
   // Dark mode functionality
   (function() {
+    // Dark is the default; toggling adds body.light-mode for the light theme.
+    // Legacy key 'mass.darkMode'=false means the user had light — honour it.
     const DARK_MODE_KEY = 'mass.darkMode';
 
-    function applyDarkMode(isDark) {
-      document.body.classList.toggle('dark-mode', isDark);
+    function applyLightMode(isLight) {
+      document.body.classList.toggle('light-mode', isLight);
+      document.documentElement.classList.toggle('light-mode', isLight);
     }
 
-    // Saved preference wins; first-time visitors follow their OS setting.
     // 'madmusic.darkMode' is the storage key of the removed duplicate system
     // in discovery.js — honoured once as a fallback so nobody loses their choice.
     const savedMode = localStorage.getItem(DARK_MODE_KEY) ?? localStorage.getItem('madmusic.darkMode');
     if (savedMode !== null) {
-      applyDarkMode(savedMode === 'true');
-    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      applyDarkMode(true);
+      applyLightMode(savedMode === 'false');
     }
+    // No saved preference → dark by default (no class needed).
 
     // Used by the bottom-left toggle and the Settings modal checkbox.
     window.toggleDarkMode = function() {
-      const isDark = !document.body.classList.contains('dark-mode');
-      applyDarkMode(isDark);
-      localStorage.setItem(DARK_MODE_KEY, isDark);
+      const isLight = !document.body.classList.contains('light-mode');
+      applyLightMode(isLight);
+      // Store as legacy format so existing readers remain compatible.
+      localStorage.setItem(DARK_MODE_KEY, isLight ? 'false' : 'true');
     };
 
     // Sun/moon button in the bottom profile row. stopPropagation matters:
@@ -2881,13 +2882,6 @@
       e.stopPropagation();
       window.toggleDarkMode();
     });
-
-    // Follow live OS theme changes only while the user hasn't chosen explicitly.
-    if (savedMode === null && window.matchMedia) {
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-        if (localStorage.getItem(DARK_MODE_KEY) === null) applyDarkMode(e.matches);
-      });
-    }
   })();
   </script>
 
@@ -5530,7 +5524,7 @@
         const autoplayToggle = document.getElementById('settingAutoplay');
         // Reflect current state — dark-mode class is the source of truth
         try {
-          darkToggle.checked     = document.body.classList.contains('dark-mode');
+          darkToggle.checked     = !document.body.classList.contains('light-mode');
           autoplayToggle.checked = localStorage.getItem('mass_autoplay') !== 'false';
         } catch(e) {}
 
