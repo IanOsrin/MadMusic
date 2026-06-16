@@ -63,7 +63,67 @@ export function showAlbumTracksModal(album) {
           closeModal();
         });
       });
+
+      // Append suggestions rail asynchronously — doesn't block the modal opening.
+      if (window.__SUGGESTIONS !== false) {
+        appendMobileSuggestions(elements.bottomSheet, album);
+      }
     }
+
+async function appendMobileSuggestions(sheet, album) {
+  // Placeholder shown immediately; replaced with cards or removed on completion.
+  const rail = document.createElement('div');
+  rail.className = 'mob-suggestions';
+  rail.innerHTML = `<div class="mob-suggestions-title">You might also like</div>
+    <div class="mob-suggestions-scroll"><div class="mob-suggestions-loading">Loading…</div></div>`;
+  sheet.appendChild(rail);
+
+  try {
+    const params = new URLSearchParams({ title: album.title, artist: album.artist, limit: 6 });
+    const res = await fetch(`/api/suggestions?${params}`);
+    const data = await res.json();
+
+    // Sheet may have been replaced by a new modal tap — bail if stale.
+    if (!sheet.isConnected) return;
+
+    if (!data.ok || !data.items?.length) { rail.remove(); return; }
+
+    const scroll = rail.querySelector('.mob-suggestions-scroll');
+    scroll.innerHTML = data.items.map(item => `
+      <button class="mob-sug-card" data-title="${escapeHtml(item.album)}" data-artist="${escapeHtml(item.artist)}">
+        <img class="mob-sug-art" src="${escapeHtml(item.artworkSrc || '/img/placeholder.png')}"
+             alt="${escapeHtml(item.album)}" loading="lazy" onerror="this.src='/img/placeholder.png'">
+        <div class="mob-sug-name">${escapeHtml(item.album)}</div>
+        <div class="mob-sug-artist">${escapeHtml(item.artist)}</div>
+      </button>
+    `).join('');
+
+    scroll.querySelectorAll('.mob-sug-card').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const title = btn.dataset.title;
+        const artist = btn.dataset.artist;
+        const cacheKey = `${title}|||${artist}`.toLowerCase();
+        const cached = state.discoverAlbumCache.get(cacheKey);
+        if (cached) { showAlbumTracksModal(cached); return; }
+
+        btn.disabled = true;
+        try {
+          const r = await fetch(`/api/album?${new URLSearchParams({ title, artist })}`);
+          const d = await r.json();
+          if (d.ok && d.items?.length) {
+            const sugAlbum = { title, artist, artwork: btn.querySelector('img').src, tracks: d.items };
+            state.discoverAlbumCache.set(cacheKey, sugAlbum);
+            showAlbumTracksModal(sugAlbum);
+          }
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch {
+    if (sheet.isConnected) rail.remove();
+  }
+}
 
 export function createDiscoverTrackCard(track, albumCtx) {
       const card = document.createElement('div');
