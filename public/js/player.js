@@ -20,6 +20,11 @@
       let shuffleQueue    = [];
       let shuffleQueueIdx = 0;
       let isShuffleActive = false;
+      // When true the queue holds resolved track descriptors ({url,title,…})
+      // played straight through _PLAYER, instead of recordIds passed to playSong.
+      // Used for album shuffle, where the view only has normalised track data.
+      let isDescShuffle   = false;
+      let descEndedWired  = false;
 
       // Stream Event Tracking
       const STREAM_EVENTS_ENDPOINT = '/api/access/stream-events';
@@ -495,7 +500,8 @@
           return;
         }
         console.log('[Shuffle] Advancing to track', shuffleQueueIdx + 1, 'of', shuffleQueue.length);
-        playSong(shuffleQueue[shuffleQueueIdx]);
+        if (isDescShuffle) _playDescriptor(shuffleQueue[shuffleQueueIdx]);
+        else playSong(shuffleQueue[shuffleQueueIdx]);
       }
 
       function startShufflePlay() {
@@ -511,6 +517,7 @@
         shuffleQueue    = _randomise(ids);
         shuffleQueueIdx = 0;
         isShuffleActive = true;
+        isDescShuffle   = false;
         _updateShuffleBtn();
 
         console.log('[Shuffle] Starting with', shuffleQueue.length, 'tracks');
@@ -519,6 +526,7 @@
 
       function stopShufflePlay() {
         isShuffleActive = false;
+        isDescShuffle   = false;
         shuffleQueue    = [];
         shuffleQueueIdx = 0;
         _updateShuffleBtn();
@@ -546,11 +554,69 @@
         shuffleQueue    = _randomise(ids);
         shuffleQueueIdx = 0;
         isShuffleActive = true;
+        isDescShuffle   = false;
         _updateShuffleBtn();
 
         console.log('[Shuffle] Catalogue shuffle with', shuffleQueue.length, 'tracks');
         playSong(shuffleQueue[0]);
         return true;
+      }
+
+      // Shuffle a known track list where the caller already has audio URLs +
+      // metadata (e.g. one album's tracks). The album views only hold normalised
+      // track data — not the raw { recordId, fields } playSong needs — so these
+      // play straight through _PLAYER. Descriptors: { recordId, url, title,
+      // artist, artUrl }. `url` may be empty if only recordId is known; it's then
+      // resolved lazily at play time (same fallback as a single track click).
+      function startShuffleTracks(tracks) {
+        const list = (tracks || []).filter(t => t && (t.url || t.recordId));
+        if (!list.length) { console.warn('[Shuffle] No playable tracks in list'); return false; }
+
+        shuffleQueue    = _randomise(list);
+        shuffleQueueIdx = 0;
+        isShuffleActive = true;
+        isDescShuffle   = true;
+        _wireDescEnded();
+        _updateShuffleBtn();
+
+        console.log('[Shuffle] Album shuffle with', shuffleQueue.length, 'tracks');
+        _playDescriptor(shuffleQueue[0]);
+        return true;
+      }
+
+      async function _playDescriptor(d) {
+        if (!d) return;
+        let url = d.url || '';
+        // Resolve a fresh streaming URL by recordId when we don't have one — the
+        // stable key is recordId; any stored absolute FM URL may have expired.
+        if (!url && d.recordId) {
+          try {
+            const r = await fetch(`/api/track/${d.recordId}/container`);
+            const j = await r.json();
+            if (j && j.url) url = j.url;
+          } catch (e) { console.warn('[Shuffle] URL resolve failed:', e); }
+        }
+        // Route non-S3 HTTPS URLs through the proxy (adds auth headers).
+        if (url && /^https?:\/\//i.test(url) && !/\.s3[.-]/.test(url) && !url.includes('/api/container?')) {
+          url = `/api/container?u=${encodeURIComponent(url)}`;
+        }
+        if (!url) { console.warn('[Shuffle] No URL for track, skipping'); _shuffleAdvance(); return; }
+
+        window._PLAYER.playTrack(url, { title: d.title || 'Unknown Track', artist: d.artist || '', artUrl: d.artUrl || '', recordId: d.recordId || '' });
+        showRingtoneBtn(url, d.title || '', d.artist || '', d.artUrl || '');
+      }
+
+      // Descriptor shuffles play via _PLAYER directly (not playSong), so they
+      // don't get playSong's per-track ended→advance listener. Wire one persistent
+      // listener that only advances while a descriptor shuffle is active.
+      function _wireDescEnded() {
+        if (descEndedWired) return;
+        const player = document.getElementById('player');
+        if (!player) return;
+        player.addEventListener('ended', () => {
+          if (isShuffleActive && isDescShuffle) setTimeout(_shuffleAdvance, 400);
+        });
+        descEndedWired = true;
       }
 
       function _updateShuffleBtn() {
@@ -638,6 +704,7 @@
     toggleShufflePl,
     startShufflePlay,
     startShuffleFromItems,
+    startShuffleTracks,
     stopShufflePlay,
     isShuffleActive: () => isShuffleActive
   };

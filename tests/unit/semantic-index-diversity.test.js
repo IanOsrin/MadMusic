@@ -125,4 +125,13 @@ describe('suggestAlbums shuffle (fresh set each visit)', () => {
     const b = lib.suggestAlbums({ cat: 'CAT-1' }, 5).items.map((x) => x.album);
     expect(a).toEqual(b);
   });
+
+  it('keeps the top matches (lock) fixed while shuffling the rest', () => {
+    const heads = new Set();
+    for (let i = 0; i < 15; i++) {
+      const albums = lib.suggestAlbums({ cat: 'CAT-1' }, 6, { shuffle: true }).items.map((x) => x.album);
+      heads.add(albums.slice(0, 3).join(',')); // default SHUFFLE_LOCK = 3
+    }
+    expect(heads.size).toBe(1); // closest 3 never change — variety doesn't cost relevance
+  });
 });

@@ -456,6 +456,7 @@
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                       ♡ Albums
                     </button>
+                    <button class="album-action-btn js-shuffle-toggle" id="shuffleAlbumBtn" data-idle-label="🔀 Shuffle Album" title="Play this album's tracks in random order">🔀 Shuffle Album</button>
                     <button class="album-action-btn js-shuffle-toggle" id="shuffleArtistBtn" data-idle-label="🔀 Shuffle Artist" title="Shuffle every track by this artist">🔀 Shuffle Artist</button>
                   </div>
                 </div>
@@ -466,7 +467,10 @@
               <!-- "Similar albums" rail — populated by renderSimilarAlbums() when
                    SUGGESTIONS_ENABLED; stays hidden when the feature is off/empty. -->
               <div class="similar-albums-section" id="similarAlbumsSection" hidden>
-                <h3 class="similar-albums-title">Similar albums</h3>
+                <div class="similar-albums-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                  <h3 class="similar-albums-title">Similar albums</h3>
+                  <button class="album-action-btn js-shuffle-toggle" id="shuffleSimilarBtn" data-idle-label="🔀 Shuffle these" title="Shuffle-play a track from each similar album">🔀 Shuffle these</button>
+                </div>
                 <div class="similar-albums-rail" id="similarAlbumsRail"></div>
               </div>
             </div>
@@ -4137,6 +4141,28 @@
           };
         }
 
+        // Shuffle Album — play this album's tracks in random order. Toggles off
+        // if a shuffle is already running (mirrors Shuffle Artist).
+        const shuffleAlbumBtn = document.getElementById('shuffleAlbumBtn');
+        if (shuffleAlbumBtn) {
+          shuffleAlbumBtn.onclick = () => {
+            const P = window.MADPlayer;
+            if (!P || typeof P.startShuffleTracks !== 'function') { console.warn('[Shuffle] player not ready'); return; }
+            if (typeof P.isShuffleActive === 'function' && P.isShuffleActive()) { P.stopShufflePlay(); return; }
+            const artUrl = album.artwork && album.artwork.includes('://')
+              ? album.artwork
+              : (album.artwork ? `/api/container?u=${encodeURIComponent(album.artwork)}` : '');
+            const tracks = (album.tracks || []).map(t => ({
+              recordId: t.recordId || '',
+              url:      t.S3_URL || t.resolvedSrc || t.audioUrl || t.mp3 || '',
+              title:    t.name || 'Unknown Track',
+              artist:   t.trackArtist || t.artist || album.artist || '',
+              artUrl
+            }));
+            if (!P.startShuffleTracks(tracks)) console.warn('[Shuffle] No playable tracks on this album');
+          };
+        }
+
         // Fetch library state once for this album panel
         let libraryData = { songs: [], albums: [] };
         try {
@@ -4524,7 +4550,49 @@
           });
         });
 
+        // "Shuffle these" — shuffle-play one track from each similar album.
+        const shuffleBtn = document.getElementById('shuffleSimilarBtn');
+        if (shuffleBtn) shuffleBtn.onclick = () => shuffleSimilarAlbums(items);
+
         section.hidden = false;
+      }
+
+      // Build a queue of one playable track per similar album (fetched by
+      // catalogue, in parallel) and shuffle-play it through the unified player.
+      // Toggles off if a shuffle is already running (mirrors the other buttons).
+      async function shuffleSimilarAlbums(items) {
+        const P = window.MADPlayer;
+        if (!P || typeof P.startShuffleTracks !== 'function') { console.warn('[Shuffle] player not ready'); return; }
+        if (typeof P.isShuffleActive === 'function' && P.isShuffleActive()) { P.stopShufflePlay(); return; }
+
+        const proxyArt = (u) => (u && u.includes('://')) ? u : (u ? `/api/container?u=${encodeURIComponent(u)}` : '');
+        const picks = await Promise.all((items || []).map(async (it) => {
+          if (!it || !it.catalogue) return null;
+          try {
+            const res = await fetch(`/api/album?cat=${encodeURIComponent(it.catalogue)}&limit=200`);
+            if (!res.ok) return null;
+            const tracks = ((await res.json()) || {}).items || [];
+            for (const t of tracks) {                       // first track with playable audio
+              const f = t.fields || {};
+              const url = f['S3_URL'] || f['mp3'] || '';
+              if (url || t.recordId) {
+                const art = f['Artwork_S3_URL'] || f['Tape Files::Artwork_S3_URL'] || it.artworkSrc || '';
+                return {
+                  recordId: t.recordId || '',
+                  url,
+                  title:  f['Track Name'] || f['Tape Files::Track Name'] || it.album || 'Unknown Track',
+                  artist: f['Track Artist'] || f['Tape Files::Track Artist'] || it.artist || '',
+                  artUrl: proxyArt(art)
+                };
+              }
+            }
+          } catch (e) { console.warn('[Shuffle] similar fetch failed for', it.catalogue, e); }
+          return null;
+        }));
+
+        const descriptors = picks.filter(Boolean);
+        if (!descriptors.length) { console.warn('[Shuffle] No playable tracks across similar albums'); return; }
+        P.startShuffleTracks(descriptors);
       }
 
       // Open a suggested album by its catalogue number via /api/album?cat=, which
