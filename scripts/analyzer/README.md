@@ -1,5 +1,12 @@
 # MAD Music Analyzer — Render-ready
 
+> ⚠️ **ONE Cron Job, built from `main`.** Do NOT create a second Cron Job from
+> `live`, or the analysis runs twice. The web service (which deploys from `live`)
+> never executes this script — only a Render **Cron Job** does — so the files
+> existing on both branches is harmless; the rule is just: don't create a
+> duplicate cron service.
+
+
 Analyses tracks with Essentia (BPM, key, mood, energy, quality) and writes the
 `AI_*` fields back to FileMaker. Stateless and unattended: it asks FileMaker for
 records whose `AI_BPM` is empty, so it auto-processes new tracks and never needs
