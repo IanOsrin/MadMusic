@@ -36,7 +36,7 @@
 
 import {
   S3Client, ListObjectsV2Command, GetObjectCommand,
-  PutObjectCommand, HeadObjectCommand
+  PutObjectCommand, HeadObjectCommand, CopyObjectCommand
 } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 import pLimit from 'p-limit';
@@ -49,11 +49,26 @@ const RESIZED_PREFIX = `${PREFIX}resized/`;
 const SIZES       = (process.env.ART_SIZES || '300,800').split(',').map(s => parseInt(s, 10)).filter(Boolean);
 const QUALITY     = parseInt(process.env.ART_QUALITY || '80', 10);
 const CONCURRENCY = parseInt(process.env.ART_CONCURRENCY || '8', 10);
+// Derivatives are NOT immutable: a re-uploaded master (same name) must be able to
+// supersede its old derivative. Cache for an hour, then revalidate (serving stale
+// while it does). Tunable via env.
+const CACHE_CONTROL = process.env.ART_CACHE_CONTROL || 'public, max-age=3600, stale-while-revalidate=86400';
 
 // ── Args ────────────────────────────────────────────────────────────────────
 const argv  = process.argv.slice(2);
 const DRY   = argv.includes('--dry-run');
 const FORCE = argv.includes('--force');
+// --restamp: rewrite the Cache-Control on EXISTING derivatives (server-side copy,
+// no re-resize) — used once to clear the legacy `immutable` header so changes can
+// ever propagate. Does not regenerate image content.
+const RESTAMP = argv.includes('--restamp');
+// --since=<hours>: only consider masters modified in the last N hours. Lets a
+// scheduled run process just recently-changed artwork (fast) instead of HEADing
+// the whole catalogue every time.
+const sinceArg = argv.find(a => a.startsWith('--since'));
+const SINCE_HOURS = sinceArg
+  ? (parseFloat(sinceArg.includes('=') ? sinceArg.split('=')[1] : argv[argv.indexOf(sinceArg) + 1]) || 0)
+  : 0;
 const limitArg = argv.find(a => a.startsWith('--limit'));
 const LIMIT = limitArg
   ? parseInt(limitArg.includes('=') ? limitArg.split('=')[1] : argv[argv.indexOf(limitArg) + 1], 10) || Infinity
@@ -73,13 +88,16 @@ async function objectExists(key) {
 }
 
 async function* listMasters() {
+  const sinceMs = SINCE_HOURS ? Date.now() - SINCE_HOURS * 3600 * 1000 : 0;
   let token;
   do {
     const out = await s3.send(new ListObjectsV2Command({
       Bucket: BUCKET, Prefix: PREFIX, ContinuationToken: token
     }));
     for (const obj of out.Contents || []) {
-      if (isMaster(obj.Key)) yield obj.Key;
+      if (!isMaster(obj.Key)) continue;
+      if (sinceMs && obj.LastModified && obj.LastModified.getTime() < sinceMs) continue; // unchanged recently
+      yield obj.Key;
     }
     token = out.IsTruncated ? out.NextContinuationToken : undefined;
   } while (token);
@@ -93,8 +111,21 @@ async function streamToBuffer(stream) {
 
 async function processKey(key) {
   if (!FORCE) {
-    const present = await Promise.all(SIZES.map(s => objectExists(derivedKey(key, s))));
-    if (present.every(Boolean)) return 'skipped';
+    // Regenerate when a derivative is missing OR OLDER than the master — so a
+    // re-uploaded master (same filename) gets fresh derivatives instead of the
+    // old ones lingering forever. (--force regenerates regardless.)
+    let masterMtime = 0;
+    try {
+      const mh = await s3.send(new HeadObjectCommand({ Bucket: BUCKET, Key: key }));
+      masterMtime = mh.LastModified ? mh.LastModified.getTime() : 0;
+    } catch { /* master vanished — let the GET below surface it */ }
+    const fresh = await Promise.all(SIZES.map(async (s) => {
+      try {
+        const dh = await s3.send(new HeadObjectCommand({ Bucket: BUCKET, Key: derivedKey(key, s) }));
+        return (dh.LastModified ? dh.LastModified.getTime() : 0) >= masterMtime;
+      } catch { return false; } // missing derivative
+    }));
+    if (fresh.every(Boolean)) return 'skipped';
   }
   if (DRY) return 'dry';
 
@@ -111,16 +142,45 @@ async function processKey(key) {
       Key:          derivedKey(key, size),
       Body:         out,
       ContentType:  'image/webp',
-      CacheControl: 'public, max-age=31536000, immutable'
+      CacheControl: CACHE_CONTROL
     }));
   }
   return 'done';
 }
 
+// Rewrite Cache-Control on every existing derivative via server-side CopyObject
+// (no download/resize). One-time use to clear the legacy `immutable` header.
+async function restampDerivatives() {
+  let token, seen = 0, done = 0, failed = 0;
+  do {
+    const out = await s3.send(new ListObjectsV2Command({
+      Bucket: BUCKET, Prefix: RESIZED_PREFIX, ContinuationToken: token
+    }));
+    const keys = (out.Contents || []).map(o => o.Key).filter(k => /\.webp$/i.test(k));
+    await Promise.all(keys.map(k => limit(async () => {
+      seen += 1;
+      if (DRY) { if (seen <= 10) console.log(`  would restamp: ${k}`); return; }
+      try {
+        await s3.send(new CopyObjectCommand({
+          Bucket: BUCKET, Key: k, CopySource: `${BUCKET}/${k}`,
+          MetadataDirective: 'REPLACE', ContentType: 'image/webp', CacheControl: CACHE_CONTROL
+        }));
+        done += 1;
+        if (done % 250 === 0) console.log(`  …restamped ${done} (${seen} seen)`);
+      } catch (err) { failed += 1; console.warn(`  ! ${k}: ${err.message}`); }
+    })));
+    token = out.IsTruncated ? out.NextContinuationToken : undefined;
+  } while (token);
+  console.log(`[restamp] ${done}/${seen} derivatives → Cache-Control: ${CACHE_CONTROL}${failed ? ` (${failed} failed)` : ''}`);
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 (async () => {
   console.log(`[resize] bucket=${BUCKET} region=${REGION} prefix=${PREFIX}`);
-  console.log(`[resize] sizes=${SIZES.join('/')} quality=${QUALITY} concurrency=${CONCURRENCY} dryRun=${DRY} force=${FORCE} limit=${LIMIT}`);
+  console.log(`[resize] sizes=${SIZES.join('/')} quality=${QUALITY} concurrency=${CONCURRENCY} dryRun=${DRY} force=${FORCE} restamp=${RESTAMP} since=${SINCE_HOURS || 'all'}h limit=${LIMIT}`);
+  console.log(`[resize] cacheControl="${CACHE_CONTROL}"`);
+
+  if (RESTAMP) { await restampDerivatives(); return; }
 
   const started = Date.now();
   let queued = 0, done = 0, skipped = 0, dry = 0, failed = 0;
