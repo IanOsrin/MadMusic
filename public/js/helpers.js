@@ -137,9 +137,16 @@ function formatDuration(secs) {
 function displayDuration(raw) {
   if (raw == null || raw === '') return '';
   const s = String(raw).trim();
-  const broken = s.match(/^(\d+):00:00$/);          // seconds dumped into the hours slot
-  if (broken) return formatDuration(parseInt(broken[1], 10));
-  if (/^\d+$/.test(s)) return formatDuration(parseInt(s, 10)); // bare seconds
+  // Corrupted rows collapse to a single number in the hours slot — "N:00:00"
+  // (minutes+seconds zeroed) — or a bare seconds count "N". Only N values that
+  // are a plausible track length in seconds (~0:30–30:00) can be trusted as
+  // seconds; the rest (0, tiny ambiguous, or absurdly large/garbage) are NOT
+  // recoverable from the field, so show blank rather than fabricate a time.
+  const m = s.match(/^(\d+):00:00$/) || (/^\d+$/.test(s) ? [s, s] : null);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    return (n >= 30 && n <= 1800) ? formatDuration(n) : '';
+  }
   return s;                                          // already "5:29", "1:02:03", etc.
 }
 
