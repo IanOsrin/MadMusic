@@ -125,6 +125,24 @@ function formatDuration(secs) {
   return m + ':' + s;
 }
 
+/**
+ * Render a catalogue Duration value as a clean M:SS string for display.
+ * The field is a FileMaker time field, so good rows arrive as "HH:MM:SS"
+ * (e.g. "00:06:58") — show them as "6:58". Leftover corrupt "N:00:00" rows
+ * (the data is corrected at source; these are unrecoverable stragglers) and
+ * zero values render blank.
+ * @param {string|number} raw
+ * @returns {string}
+ */
+function displayDuration(raw) {
+  if (raw == null || raw === '') return '';
+  const s = String(raw).trim();
+  if (/^\d+:00:00$/.test(s)) return '';                       // corrupt remnant / zero → blank
+  const m = s.match(/^(\d+):([0-5]?\d):([0-5]?\d)$/);          // HH:MM:SS → M:SS
+  if (m) return formatDuration((+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]));
+  return s;                                                    // already M:SS / unknown → leave as-is
+}
+
 
 /**
  * Utility functions for helper operations
@@ -248,6 +266,7 @@ window.MADHelpers.getArtistField = getArtistField;
 window.MADHelpers.getAlbumArtist = getAlbumArtist;
 window.MADHelpers.getAlbumField = getAlbumField;
 window.MADHelpers.formatDuration = formatDuration;
+window.MADHelpers.displayDuration = displayDuration;
 window.MADHelpers.cleanGenreLabel = cleanGenreLabel;
 window.MADHelpers.escapeHtml = escapeHtml;
 window.MADHelpers.formatRelativeTime = formatRelativeTime;
