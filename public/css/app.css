@@ -1297,7 +1297,22 @@
       flex: 1;
       min-height: 0;
       overflow: hidden;
+      position: relative; /* anchors the album-list scroll fade */
     }
+    /* Bottom fade over the album list — a "there's more, scroll down" cue.
+       Toggled by JS: only shown when the list overflows and isn't at the end. */
+    .playlist-view-content::after {
+      content: '';
+      position: absolute;
+      left: 0; bottom: 0;
+      width: 260px; height: 40px;
+      background: linear-gradient(rgba(0,0,0,0), var(--card));
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.18s ease;
+      z-index: 4;
+    }
+    .playlist-view-content.albums-can-scroll:not(.albums-at-end)::after { opacity: 1; }
 
     /* Left Column - Album List */
     .playlist-albums-list {
@@ -1312,13 +1327,39 @@
       height: 100%;
       border-right: 1px solid var(--border);
       background: var(--card);
+      scrollbar-width: thin;                         /* Firefox: always-visible slim bar */
+      scrollbar-color: rgba(255,255,255,0.28) rgba(255,255,255,0.04);
     }
     .playlist-albums-list::-webkit-scrollbar {
-      width: 6px;
+      width: 10px;
+    }
+    .playlist-albums-list::-webkit-scrollbar-track {
+      background: rgba(255,255,255,0.04);
     }
     .playlist-albums-list::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 3px;
+      background: rgba(255,255,255,0.26);
+      border-radius: 6px;
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+    .playlist-albums-list::-webkit-scrollbar-thumb:hover {
+      background: rgba(255,255,255,0.40);
+      background-clip: content-box;
+    }
+    /* Sticky count header so the size of the list is obvious */
+    .playlist-albums-count {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      margin: -8px 0 4px;
+      padding: 9px 14px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted, #8a8a8a);
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
     }
     .playlist-album-item {
       display: flex;
@@ -1705,6 +1746,15 @@
     .track-download-btn:hover {
       background: var(--accent);
       color: #fff;
+    }
+    /* Ringtone action — accent it so the feature is discoverable */
+    .track-ringtone-btn {
+      border-color: rgba(245,166,35,0.55);
+      color: #f5a623;
+    }
+    .track-ringtone-btn:hover {
+      background: #f5a623;
+      color: #1a1a1a;
     }
     .track-download-btn[data-purchased="1"] {
       border-color: #2a9d4e;

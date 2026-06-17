@@ -1767,25 +1767,27 @@
       background: #8b5cf6; cursor: pointer;
     }
 
-    /* Ringtone button */
+    /* Ringtone button — a labelled accent pill so it reads as an action */
     #upRingtoneBtn {
       flex-shrink: 0;
-      width: 28px; height: 28px;
-      border: none; background: transparent;
-      color: #9ca3af;
+      height: 28px;
+      padding: 0 11px;
+      gap: 6px;
+      border: 1px solid rgba(245,166,35,0.5);
+      background: rgba(245,166,35,0.14);
+      color: #f5a623;
       cursor: pointer;
       display: none;
       align-items: center; justify-content: center;
-      border-radius: 6px;
-      transition: color 0.15s, background 0.15s;
-      padding: 0;
+      border-radius: 14px;
+      font-size: 12px; font-weight: 700; white-space: nowrap;
+      transition: color 0.15s, background 0.15s, border-color 0.15s;
       text-decoration: none;
     }
-    #upRingtoneBtn.visible { display: flex; }
-    #upRingtoneBtn:hover { color: #f5a623; background: rgba(245,166,35,0.12); }
-    #upRingtoneBtn { color: #6b7280; }
-    #upRingtoneBtn:hover { color: #f5a623; background: rgba(245,166,35,0.12); }
+    #upRingtoneBtn.visible { display: inline-flex; }
+    #upRingtoneBtn:hover { background: rgba(245,166,35,0.26); border-color: rgba(245,166,35,0.8); }
     #upRingtoneBtn svg { pointer-events: none; }
+    .up-ringtone-label { pointer-events: none; }
 
     /* Always add bottom padding so page content clears the bar */
     body { padding-bottom: 54px; }
@@ -1845,13 +1847,14 @@
       <input id="upVolumeSlider" type="range" min="0" max="100" value="100" aria-label="Volume">
     </div>
     <!-- Ringtone button — shown when a track is playing -->
-    <a id="upRingtoneBtn" href="#" target="_blank" rel="noopener" title="Make Ringtone" aria-label="Make Ringtone">
+    <a id="upRingtoneBtn" href="#" target="_blank" rel="noopener" title="Make a ringtone from this track" aria-label="Make a ringtone from this track">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
         <line x1="20" y1="4" x2="8.12" y2="15.88"/>
         <line x1="14.47" y1="14.48" x2="20" y2="20"/>
         <line x1="8.12" y1="8.12" x2="12" y2="12"/>
       </svg>
+      <span class="up-ringtone-label">Ringtone</span>
     </a>
     <!-- hidden legacy button -->
     <button id="upAddToPlaylist" style="display:none" aria-hidden="true"></button>
@@ -4055,8 +4058,10 @@
           }
         }
 
-        // Populate album list (left column)
-        albumsList.innerHTML = artistAlbums.map((a, index) => {
+        // Populate album list (left column). A sticky count header makes the
+        // size of the list (and that there's more than one) obvious.
+        const albumsCount = `<div class="playlist-albums-count">${artistAlbums.length} album${artistAlbums.length === 1 ? '' : 's'}</div>`;
+        albumsList.innerHTML = albumsCount + artistAlbums.map((a, index) => {
           const artUrl = a.artwork && a.artwork.includes('://') ? a.artwork :
                         (a.artwork ? `/api/container?u=${encodeURIComponent(a.artwork)}` : '/img/placeholder.jpg');
           const isSelected = a.title === album.title;
@@ -4083,6 +4088,20 @@
             showAlbumDetailPanel(artistAlbums[albumIndex]);
           });
         });
+
+        // Scroll affordance: show the bottom fade only when the list actually
+        // overflows and isn't scrolled to the end.
+        const viewContent = albumsList.closest('.playlist-view-content');
+        const updateAlbumScrollCue = () => {
+          if (!viewContent) return;
+          const canScroll = albumsList.scrollHeight > albumsList.clientHeight + 4;
+          const atEnd = albumsList.scrollTop + albumsList.clientHeight >= albumsList.scrollHeight - 4;
+          viewContent.classList.toggle('albums-can-scroll', canScroll);
+          viewContent.classList.toggle('albums-at-end', atEnd);
+        };
+        albumsList.addEventListener('scroll', updateAlbumScrollCue, { passive: true });
+        updateAlbumScrollCue();
+        setTimeout(updateAlbumScrollCue, 60); // re-check after thumbnails/layout settle
 
         // Show the selected album in the right panel
         const selectedAlbum = artistAlbums.find(a => a.title === album.title) || artistAlbums[0];
@@ -4222,6 +4241,7 @@
                 <button class="track-action-btn track-add-playlist" data-track-index="${index}">+ Playlist</button>
                 <button class="track-action-btn track-add-library" data-track-index="${index}">♡ Songs</button>
                 ${(track.Download_Price || track.downloadPrice) ? `<button class="track-action-btn track-download-btn" data-track-index="${index}" data-price="${track.Download_Price || track.downloadPrice}">⬇ Download</button>` : ''}
+                ${(track.S3_URL || track.resolvedSrc || track.audioUrl || track.mp3) ? `<button class="track-action-btn track-ringtone-btn" data-track-index="${index}" title="Make a ringtone from this track">✂ Ringtone</button>` : ''}
                 ${(track.S3_URL || track.resolvedSrc || track.audioUrl || track.mp3) ? `<button class="track-action-btn track-audio-lab-btn btn-audio-lab" data-track-index="${index}" data-audio-url="${track.S3_URL || track.resolvedSrc || track.audioUrl || track.mp3 || ''}" data-track-name="${encodeURIComponent(track.name || '')}">🎛️ Audio Lab</button>` : ''}
               </div>
               <button class="track-kebab-btn" data-track-index="${index}" title="Track info">⋮</button>
@@ -4342,6 +4362,28 @@
                 if (audioUrl && typeof window.openAudioLabGated === 'function') {
                   window.openAudioLabGated(audioUrl, trackName);
                 }
+              });
+            }
+
+            // ✂ Ringtone button — open the ringtone editor for this track
+            const ringtoneBtn = item.querySelector('.track-ringtone-btn');
+            if (ringtoneBtn) {
+              ringtoneBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const t = album.tracks[parseInt(ringtoneBtn.dataset.trackIndex)];
+                let url = t.S3_URL || t.resolvedSrc || t.audioUrl || t.mp3 || '';
+                if (url && /^https?:\/\//i.test(url) && !/\.s3[.-]/.test(url) && !url.includes('/api/container?')) {
+                  url = `/api/container?u=${encodeURIComponent(url)}`;
+                }
+                const artUrl = album.artwork && album.artwork.includes('://')
+                  ? album.artwork
+                  : (album.artwork ? `/api/container?u=${encodeURIComponent(album.artwork)}` : '');
+                const href = (typeof buildRingtoneHref === 'function')
+                  ? buildRingtoneHref(url, t.name || '', t.trackArtist || t.artist || album.artist || '', artUrl)
+                  : url;
+                if (typeof stopMainPlayback === 'function') stopMainPlayback();
+                if (typeof window._openRingtoneModal === 'function') window._openRingtoneModal(href);
+                else window.open(href, '_blank');
               });
             }
 
