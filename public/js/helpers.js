@@ -145,6 +145,19 @@ function displayDuration(raw) {
 
 
 /**
+ * Upgrade a small artwork derivative (…/artwork/resized/NAME_300.webp or _800)
+ * back to the full-resolution master (…/artwork/NAME.jpg). No-op when the URL is
+ * already a master or isn't an artwork derivative. Used by the High-quality
+ * images preference.
+ * @param {string} url
+ * @returns {string}
+ */
+function toMasterArtwork(url) {
+  if (typeof url !== 'string' || url.indexOf('/artwork/resized/') === -1) return url;
+  return url.replace('/artwork/resized/', '/artwork/').replace(/_\d+\.webp(\?.*)?$/i, '.jpg$1');
+}
+
+/**
  * Utility functions for helper operations
  */
 
@@ -267,6 +280,7 @@ window.MADHelpers.getAlbumArtist = getAlbumArtist;
 window.MADHelpers.getAlbumField = getAlbumField;
 window.MADHelpers.formatDuration = formatDuration;
 window.MADHelpers.displayDuration = displayDuration;
+window.MADHelpers.toMasterArtwork = toMasterArtwork;
 window.MADHelpers.cleanGenreLabel = cleanGenreLabel;
 window.MADHelpers.escapeHtml = escapeHtml;
 window.MADHelpers.formatRelativeTime = formatRelativeTime;

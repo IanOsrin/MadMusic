@@ -320,6 +320,7 @@
         <button class="profile-popup-item" role="menuitem" data-action="settings">Settings</button>
         <button class="profile-popup-item" role="menuitem" data-action="whats-new">What's New</button>
         <button class="profile-popup-item" role="menuitem" data-action="listening-stats">Listening Stats</button>
+        <button class="profile-popup-item" role="menuitemcheckbox" id="hqImagesToggle" aria-checked="false" title="Load full-resolution album art (uses more data)">🖼️ High-quality images: Off</button>
         <div class="profile-popup-divider"></div>
         <button class="profile-popup-item" role="menuitem" onclick="window.location.href='/mobile.html'" style="display:flex;align-items:center;gap:8px;width:100%;text-align:left;">
           <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px;flex-shrink:0;opacity:0.7;"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
@@ -6655,6 +6656,73 @@
 
   // Also handle case where auth fires before this script runs
   if (window.massAudioLabEnabled) setActive(true);
+})();
+</script>
+
+<script>
+/* ── High-quality images preference ──────────────────────────────────────────
+   Opt-in: by default the server's light _300/_800 derivatives are used (best for
+   data/mobile). When the user turns this on, artwork <img> URLs are upgraded to
+   the full-resolution master. Implemented as a one global upgrader so every
+   surface (grids, album detail, now-playing, rails) is covered without touching
+   each render site. COMPLETELY INERT when off — no observer, no work. */
+(function HQImages() {
+  var KEY = 'mad_hq_images';
+  var isOn = function () { return localStorage.getItem(KEY) === '1'; };
+  var toMaster = function (u) {
+    return (window.MADHelpers && MADHelpers.toMasterArtwork) ? MADHelpers.toMasterArtwork(u) : u;
+  };
+  function upgradeImg(img) {
+    var s = img.getAttribute('src') || '';
+    if (s.indexOf('/artwork/resized/') === -1) return;
+    var m = toMaster(s);
+    if (m && m !== s) img.src = m; // attribute change re-fires the observer but is then a no-op
+  }
+  function sweep(root) {
+    (root || document).querySelectorAll('img[src*="/artwork/resized/"]').forEach(upgradeImg);
+  }
+  var obs = null;
+  function start() {
+    if (obs || !isOn()) return;
+    sweep();
+    obs = new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var mu = muts[i];
+        if (mu.type === 'attributes') { if (mu.target.tagName === 'IMG') upgradeImg(mu.target); continue; }
+        for (var j = 0; j < mu.addedNodes.length; j++) {
+          var n = mu.addedNodes[j];
+          if (n.nodeType !== 1) continue;
+          if (n.tagName === 'IMG') upgradeImg(n);
+          else if (n.querySelectorAll) sweep(n);
+        }
+      }
+    });
+    obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
+  }
+
+  // Toggle UI in the profile menu
+  function syncLabel() {
+    var btn = document.getElementById('hqImagesToggle');
+    if (!btn) return;
+    var on = isOn();
+    btn.setAttribute('aria-checked', on ? 'true' : 'false');
+    btn.textContent = '🖼️ High-quality images: ' + (on ? 'On' : 'Off');
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    syncLabel();
+    start();
+    var btn = document.getElementById('hqImagesToggle');
+    if (btn) btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var next = !isOn();
+      localStorage.setItem(KEY, next ? '1' : '0');
+      syncLabel();
+      // Turning ON upgrades in place; turning OFF needs a reload to refetch thumbs.
+      if (next) start(); else location.reload();
+    });
+  });
+
+  window.MADImageQuality = { isHigh: isOn };
 })();
 </script>
 
