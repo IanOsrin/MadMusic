@@ -4365,23 +4365,27 @@
               });
             }
 
-            // ✂ Ringtone button — open the ringtone editor for this track
+            // ✂ Ringtone button — open the ringtone editor for this track.
+            // Self-contained: build the /ringtone URL inline (helpers like
+            // buildRingtoneHref live in another script scope). The editor FETCHES
+            // the audio bytes, so the src must be same-origin/CORS-safe → route
+            // it through the container proxy with proxy=1 (invariant #3).
             const ringtoneBtn = item.querySelector('.track-ringtone-btn');
             if (ringtoneBtn) {
               ringtoneBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const t = album.tracks[parseInt(ringtoneBtn.dataset.trackIndex)];
-                let url = t.S3_URL || t.resolvedSrc || t.audioUrl || t.mp3 || '';
-                if (url && /^https?:\/\//i.test(url) && !/\.s3[.-]/.test(url) && !url.includes('/api/container?')) {
-                  url = `/api/container?u=${encodeURIComponent(url)}`;
-                }
-                const artUrl = album.artwork && album.artwork.includes('://')
-                  ? album.artwork
-                  : (album.artwork ? `/api/container?u=${encodeURIComponent(album.artwork)}` : '');
-                const href = (typeof buildRingtoneHref === 'function')
-                  ? buildRingtoneHref(url, t.name || '', t.trackArtist || t.artist || album.artist || '', artUrl)
-                  : url;
-                if (typeof stopMainPlayback === 'function') stopMainPlayback();
+                const raw = t.S3_URL || t.resolvedSrc || t.audioUrl || t.mp3 || '';
+                if (!raw) { console.warn('[Ringtone] no audio url for track'); return; }
+                const src = `/api/container?u=${encodeURIComponent(raw)}&proxy=1`;
+                const artRaw = album.artwork || '';
+                const params = new URLSearchParams();
+                params.set('src', src);
+                params.set('name', t.name || '');
+                params.set('artist', t.trackArtist || t.artist || album.artist || '');
+                if (artRaw) params.set('artwork', artRaw);
+                const href = '/ringtone?' + params.toString();
+                try { if (typeof window.stopPlayback === 'function') window.stopPlayback(); } catch (_) {}
                 if (typeof window._openRingtoneModal === 'function') window._openRingtoneModal(href);
                 else window.open(href, '_blank');
               });
