@@ -7,7 +7,9 @@
   "scripts": {
     "dry": "node resize-artwork.mjs --dry-run --limit=10",
     "smoke": "node resize-artwork.mjs --limit=10",
-    "run": "node resize-artwork.mjs"
+    "run": "node resize-artwork.mjs",
+    "audit": "node audit-artwork-sizes.mjs",
+    "maintain": "node resize-artwork.mjs --since=25 && node audit-artwork-sizes.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0",
