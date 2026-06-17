@@ -1,0 +1,6 @@
+# Never commit secrets or local state
+config.json
+progress.json
+*.log
+venv/
+__pycache__/
