@@ -125,38 +125,6 @@ function formatDuration(secs) {
   return m + ':' + s;
 }
 
-/**
- * Normalise a raw catalogue Duration value for display.
- * Some rows store the track length (in seconds) such that FileMaker renders it
- * as "N:00:00" — the seconds landed in the hours slot (e.g. "329:00:00" for a
- * 5:29 track). Bare-second values ("329") get the same treatment. Values that
- * are already a real M:SS / H:MM:SS time are passed through unchanged.
- * @param {string|number} raw
- * @returns {string} display-ready duration (e.g. "5:29")
- */
-function displayDuration(raw) {
-  if (raw == null || raw === '') return '';
-  const s = String(raw).trim();
-
-  // ONLY touch the broken pattern: a number collapsed into the hours slot —
-  // "N:00:00" (minutes+seconds zeroed) — or a bare seconds count "N", where N
-  // is the track length in seconds. Recover it in the SAME "HH:MM:SS" form the
-  // good rows use, but only when N is a plausible song length (~0:30–30:00);
-  // zero / tiny-ambiguous / absurdly-large values are unrecoverable → blank.
-  // Everything else (well-formed times like "00:03:05") is passed through
-  // UNCHANGED so rows that already display correctly are never altered.
-  const broken = s.match(/^(\d+):00:00$/) || (/^\d+$/.test(s) ? [s, s] : null);
-  if (broken) {
-    const n = parseInt(broken[1], 10);
-    if (n < 30 || n > 1800) return '';
-    const h = Math.floor(n / 3600), m = Math.floor((n % 3600) / 60), ss = n % 60;
-    const p = (x) => String(x).padStart(2, '0');
-    return `${p(h)}:${p(m)}:${p(ss)}`;               // e.g. "00:05:29" — matches good rows
-  }
-
-  return s;                                          // good rows untouched
-}
-
 
 /**
  * Utility functions for helper operations
@@ -280,7 +248,6 @@ window.MADHelpers.getArtistField = getArtistField;
 window.MADHelpers.getAlbumArtist = getAlbumArtist;
 window.MADHelpers.getAlbumField = getAlbumField;
 window.MADHelpers.formatDuration = formatDuration;
-window.MADHelpers.displayDuration = displayDuration;
 window.MADHelpers.cleanGenreLabel = cleanGenreLabel;
 window.MADHelpers.escapeHtml = escapeHtml;
 window.MADHelpers.formatRelativeTime = formatRelativeTime;
