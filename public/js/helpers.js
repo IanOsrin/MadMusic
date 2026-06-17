@@ -138,23 +138,23 @@ function displayDuration(raw) {
   if (raw == null || raw === '') return '';
   const s = String(raw).trim();
 
-  // Corrupted rows collapse to a single number in the hours slot — "N:00:00"
-  // (minutes+seconds zeroed) — or a bare seconds count "N". N is the track
-  // length in seconds, but only trust it when it's a plausible song length
-  // (~0:30–30:00). Zero, tiny-ambiguous, or absurdly large values are NOT
-  // recoverable from the field, so show blank rather than fabricate a time.
+  // ONLY touch the broken pattern: a number collapsed into the hours slot —
+  // "N:00:00" (minutes+seconds zeroed) — or a bare seconds count "N", where N
+  // is the track length in seconds. Recover it in the SAME "HH:MM:SS" form the
+  // good rows use, but only when N is a plausible song length (~0:30–30:00);
+  // zero / tiny-ambiguous / absurdly-large values are unrecoverable → blank.
+  // Everything else (well-formed times like "00:03:05") is passed through
+  // UNCHANGED so rows that already display correctly are never altered.
   const broken = s.match(/^(\d+):00:00$/) || (/^\d+$/.test(s) ? [s, s] : null);
   if (broken) {
     const n = parseInt(broken[1], 10);
-    return (n >= 30 && n <= 1800) ? formatDuration(n) : '';
+    if (n < 30 || n > 1800) return '';
+    const h = Math.floor(n / 3600), m = Math.floor((n % 3600) / 60), ss = n % 60;
+    const p = (x) => String(x).padStart(2, '0');
+    return `${p(h)}:${p(m)}:${p(ss)}`;               // e.g. "00:05:29" — matches good rows
   }
 
-  // Normal FileMaker time value "HH:MM:SS" (the Duration field is a time field;
-  // good rows come back as e.g. "00:03:05"). Render as clean M:SS.
-  const t = s.match(/^(\d+):([0-5]?\d):([0-5]?\d)$/);
-  if (t) return formatDuration((+t[1]) * 3600 + (+t[2]) * 60 + (+t[3]));
-
-  return s;                                          // already "5:29" etc. — leave as-is
+  return s;                                          // good rows untouched
 }
 
 
