@@ -15,6 +15,10 @@
   <title>MASS Mobile</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Warm the audio/artwork S3 connection at page load so the first play
+       doesn't pay the cold DNS+TLS cost (audio is preload="none"). -->
+  <link rel="preconnect" href="https://mass-music-audio-files.s3.eu-north-1.amazonaws.com">
+  <link rel="dns-prefetch" href="https://mass-music-audio-files.s3.eu-north-1.amazonaws.com">
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/mobile.css?v=1">
   <!-- Shared field/format helpers (window.MADHelpers); loaded before body scripts
