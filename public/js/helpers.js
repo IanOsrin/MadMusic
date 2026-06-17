@@ -137,17 +137,24 @@ function formatDuration(secs) {
 function displayDuration(raw) {
   if (raw == null || raw === '') return '';
   const s = String(raw).trim();
+
   // Corrupted rows collapse to a single number in the hours slot — "N:00:00"
-  // (minutes+seconds zeroed) — or a bare seconds count "N". Only N values that
-  // are a plausible track length in seconds (~0:30–30:00) can be trusted as
-  // seconds; the rest (0, tiny ambiguous, or absurdly large/garbage) are NOT
+  // (minutes+seconds zeroed) — or a bare seconds count "N". N is the track
+  // length in seconds, but only trust it when it's a plausible song length
+  // (~0:30–30:00). Zero, tiny-ambiguous, or absurdly large values are NOT
   // recoverable from the field, so show blank rather than fabricate a time.
-  const m = s.match(/^(\d+):00:00$/) || (/^\d+$/.test(s) ? [s, s] : null);
-  if (m) {
-    const n = parseInt(m[1], 10);
+  const broken = s.match(/^(\d+):00:00$/) || (/^\d+$/.test(s) ? [s, s] : null);
+  if (broken) {
+    const n = parseInt(broken[1], 10);
     return (n >= 30 && n <= 1800) ? formatDuration(n) : '';
   }
-  return s;                                          // already "5:29", "1:02:03", etc.
+
+  // Normal FileMaker time value "HH:MM:SS" (the Duration field is a time field;
+  // good rows come back as e.g. "00:03:05"). Render as clean M:SS.
+  const t = s.match(/^(\d+):([0-5]?\d):([0-5]?\d)$/);
+  if (t) return formatDuration((+t[1]) * 3600 + (+t[2]) * 60 + (+t[3]));
+
+  return s;                                          // already "5:29" etc. — leave as-is
 }
 
 
