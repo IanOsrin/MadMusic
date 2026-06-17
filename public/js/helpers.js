@@ -125,6 +125,24 @@ function formatDuration(secs) {
   return m + ':' + s;
 }
 
+/**
+ * Normalise a raw catalogue Duration value for display.
+ * Some rows store the track length (in seconds) such that FileMaker renders it
+ * as "N:00:00" — the seconds landed in the hours slot (e.g. "329:00:00" for a
+ * 5:29 track). Bare-second values ("329") get the same treatment. Values that
+ * are already a real M:SS / H:MM:SS time are passed through unchanged.
+ * @param {string|number} raw
+ * @returns {string} display-ready duration (e.g. "5:29")
+ */
+function displayDuration(raw) {
+  if (raw == null || raw === '') return '';
+  const s = String(raw).trim();
+  const broken = s.match(/^(\d+):00:00$/);          // seconds dumped into the hours slot
+  if (broken) return formatDuration(parseInt(broken[1], 10));
+  if (/^\d+$/.test(s)) return formatDuration(parseInt(s, 10)); // bare seconds
+  return s;                                          // already "5:29", "1:02:03", etc.
+}
+
 
 /**
  * Utility functions for helper operations
@@ -248,6 +266,7 @@ window.MADHelpers.getArtistField = getArtistField;
 window.MADHelpers.getAlbumArtist = getAlbumArtist;
 window.MADHelpers.getAlbumField = getAlbumField;
 window.MADHelpers.formatDuration = formatDuration;
+window.MADHelpers.displayDuration = displayDuration;
 window.MADHelpers.cleanGenreLabel = cleanGenreLabel;
 window.MADHelpers.escapeHtml = escapeHtml;
 window.MADHelpers.formatRelativeTime = formatRelativeTime;
