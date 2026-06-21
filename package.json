@@ -18,7 +18,9 @@
     "refresh:suggest": "node scripts/semantic/build-index.mjs && node scripts/semantic/build-suggest.mjs && node scripts/semantic/enrich-artwork.mjs && aws s3 cp data/suggest.db s3://mass-music-audio-files/suggest/album-index.db --content-type application/x-sqlite3 && echo '[refresh] uploaded — live app will hot-swap within SUGGEST_REFRESH_MINUTES'",
     "load-test": "cd scripts && npx artillery run load-test.yml",
     "load-test:smoke": "cd scripts && bash run-load-test.sh --smoke",
-    "load-test:full": "cd scripts && bash run-load-test.sh"
+    "load-test:full": "cd scripts && bash run-load-test.sh",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "keywords": [],
   "author": "",
@@ -47,9 +49,12 @@
   },
   "homepage": "https://github.com/IanOsrin/MASS#readme",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@huggingface/transformers": "^4.2.0",
     "@playwright/test": "^1.60.0",
     "artillery": "^2.0.30",
+    "eslint": "^10.5.0",
+    "globals": "^17.6.0",
     "supertest": "^7.2.2",
     "vitest": "^2.1.9"
   }
