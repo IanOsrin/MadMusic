@@ -307,6 +307,25 @@ app.use((req, res, next) => {
 // Token validation cache and middleware
 const TOKEN_CACHE_TTL_MS = 5 * 60 * 1000;
 
+// Concurrent-validation dedup. On a cold start the per-process tokenValidationCache
+// is empty, and the SPA fires a burst of /api/* calls at once. Without this map,
+// every request in that burst with the SAME token would miss the cache
+// simultaneously and each fire its own FileMaker _find (+ usage PATCH), flooding
+// the FM request queue (cap 8) while FM Cloud is itself cold — the root cause of
+// multi-minute "won't play" stalls. This collapses a burst of identical-token
+// lookups into a single in-flight FM round-trip (the swr-cache.js dedup principle,
+// applied to the auth read path per CLAUDE.md's hard rule).
+const tokenValidationInFlight = new Map(); // cacheKey -> Promise<validation>
+
+function validateAccessTokenDeduped(accessToken, cacheKey) {
+  const existing = tokenValidationInFlight.get(cacheKey);
+  if (existing) return existing;
+  const p = validateAccessToken(accessToken)
+    .finally(() => tokenValidationInFlight.delete(cacheKey));
+  tokenValidationInFlight.set(cacheKey, p);
+  return p;
+}
+
 app.use('/api/', async (req, res, next) => {
   const skipPaths = [
     '/access/validate', '/wake', '/container', '/random-songs', '/public-playlists',
@@ -355,7 +374,7 @@ app.use('/api/', async (req, res, next) => {
     return next();
   }
 
-  const validation = await validateAccessToken(accessToken);
+  const validation = await validateAccessTokenDeduped(accessToken, cacheKey);
 
   if (!validation.valid) {
     const STALE_GRACE_MS = 24 * 60 * 60 * 1000;
