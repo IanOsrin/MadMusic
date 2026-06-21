@@ -72,7 +72,9 @@ router.get('/suggestions', async (req, res) => {
       }
     }
 
-    const result = suggestAlbums({ cat, title, artist }, limit, { shuffle });
+    // coversOnly: the public rail must never show a placeholder sleeve, so drop
+    // cover-less albums rather than padding the page with them.
+    const result = suggestAlbums({ cat, title, artist }, limit, { shuffle, coversOnly: true });
     const payload = {
       ok: true,
       seed: result.seed,

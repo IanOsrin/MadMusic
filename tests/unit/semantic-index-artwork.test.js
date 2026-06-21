@@ -82,4 +82,11 @@ describe('suggestAlbums cover-preference', () => {
     expect(r.items).toHaveLength(4); // 2 covered + 2 art-less
     expect(r.items.filter((i) => !i.artworkSrc).length).toBe(2);
   });
+
+  it('coversOnly drops art-less albums entirely (never pads the rail)', () => {
+    // The public route passes coversOnly so a sleeveless card never renders.
+    const r = lib.suggestAlbums({ cat: 'CAT-1' }, 4, { coversOnly: true });
+    expect(r.items.every((i) => i.artworkSrc)).toBe(true);
+    expect(r.items.map((i) => i.album).sort()).toEqual(['farYes1', 'farYes2']);
+  });
 });

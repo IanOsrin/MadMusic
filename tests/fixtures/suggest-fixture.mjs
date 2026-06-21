@@ -48,7 +48,8 @@ export function buildSuggestFixture(dbPath) {
     const key = `${norm(a.album)}|||${norm(a.artist)}`;
     const meta = {
       album: a.album, artist: a.artist, year: '1990', genre: 'Afro', localGenre: 'Afro Folk',
-      language: 'zu', mood: 'Happy', recordId: String(id * 10), artworkUrl: '', catalogue: a.cat, trackCount: 8
+      language: 'zu', mood: 'Happy', recordId: String(id * 10),
+      artworkUrl: `https://s3.example.com/artwork/resized/${a.cat}_300.webp`, catalogue: a.cat, trackCount: 8
     };
     insA.run(id, key, JSON.stringify(meta));
     insV.run(BigInt(id), Buffer.from(vecFrom(a.vec).buffer));

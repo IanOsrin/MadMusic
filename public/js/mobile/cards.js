@@ -91,10 +91,13 @@ async function appendMobileSuggestions(sheet, album) {
     // Rail may have been removed by a new modal tap — bail if stale.
     if (!rail.isConnected) return;
 
-    if (!data.ok || !data.items?.length) { rail.remove(); return; }
+    // Defensive: drop sleeveless suggestions (placeholder art reads as broken).
+    // The backend already excludes cover-less albums; this guards a stale index.
+    const sugItems = (data.items || []).filter(item => item.artworkSrc);
+    if (!data.ok || !sugItems.length) { rail.remove(); return; }
 
     const scroll = rail.querySelector('.mob-suggestions-scroll');
-    scroll.innerHTML = data.items.map(item => `
+    scroll.innerHTML = sugItems.map(item => `
       <button class="mob-sug-card" data-title="${escapeHtml(item.album)}" data-artist="${escapeHtml(item.artist)}">
         <img class="mob-sug-art" src="${escapeHtml(item.artworkSrc || '/img/placeholder.png')}"
              alt="${escapeHtml(item.album)}" loading="lazy" onerror="this.src='/img/placeholder.png'">

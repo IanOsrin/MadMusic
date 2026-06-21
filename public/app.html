@@ -4573,7 +4573,9 @@
         } catch { return; }
 
         if (token !== _similarReqToken) return;            // superseded
-        const items = (data && data.items) || [];
+        // Defensive: never render a sleeveless card (placeholder art reads as broken).
+        // The backend already excludes cover-less albums; this guards a stale index.
+        const items = ((data && data.items) || []).filter((it) => it.artworkSrc);
         if (!items.length) return;
 
         const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
