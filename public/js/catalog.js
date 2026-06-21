@@ -125,7 +125,6 @@
 
     // Playlist View Functionality — flat track list, no album thumbnails
     function showPlaylistView(playlistName, tracks, playlistId) {
-      if (window.MADNav) window.MADNav.push();
       const playlistView = document.getElementById('playlistView');
       const layoutGrid = document.querySelector('.layout-grid');
       const playlistTitle = document.getElementById('playlistViewTitle');
@@ -138,6 +137,7 @@
 
       // Resolve playlistId from parameter or from first track
       const resolvedId = playlistId || tracks[0]?.playlistId || '';
+      if (window.MADRouter) window.MADRouter.pushOverlay('catalog-playlist', resolvedId);
 
       // Update title and switch view
       if (playlistTitle) playlistTitle.textContent = playlistName;

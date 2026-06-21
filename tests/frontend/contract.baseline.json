@@ -728,9 +728,9 @@
   "crossFileGlobals": [
     "MADCurrency",
     "MADHelpers",
-    "MADNav",
     "MADOpenShareEmailModal",
     "MADPlayer",
+    "MADRouter",
     "MADShowToast",
     "_PLAYER",
     "__skipFeaturedLoad",

@@ -6,6 +6,7 @@ import { loadPlaylists } from './playlists.js';
 import { loadDiscover } from './rails-discover.js';
 import { loadG100, loadG100Playlists } from './rails-g100.js';
 import { loadNewReleases } from './rails-newreleases.js';
+import { pushTab, isRestoring } from './router.js';
 
 export function switchTab(tabName) {
       const wasAlreadyActive = state.currentTab === tabName;
@@ -41,6 +42,10 @@ export function switchTab(tabName) {
       } else if (tabName === 'playlists' && state.currentUser && state.playlists.length === 0) {
         loadPlaylists();
       }
+
+      // Record this tab switch in browser history so Back/Forward traverse tabs.
+      // Skip during popstate restore, and when re-tapping the active tab (refresh only).
+      if (!wasAlreadyActive && !isRestoring()) pushTab(tabName);
     }
 
 export function renderGenres() {

@@ -6,6 +6,12 @@ import { getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getTitleFiel
 
 export function closeModal() {
       elements.modalOverlay.classList.remove('show');
+      // Keep browser history in sync: pop the overlay entry this modal pushed so a
+      // later Back doesn't land on a phantom entry. popstate-driven closes go through
+      // the router's own path and never reach here, so there's no recursion.
+      if (history.state && history.state.mad && history.state.kind === 'overlay') {
+        history.back();
+      }
     }
 
 export async function playTrack(track) {

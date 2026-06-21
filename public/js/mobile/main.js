@@ -13,6 +13,7 @@ import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-dis
 import { filterG100Albums, loadG100 } from './rails-g100.js';
 import { loadNewReleases } from './rails-newreleases.js';
 import { closeModal, playTrack, sendStreamEvent, updatePlayerModal, updateProgress } from './player.js';
+import { initRouter } from './router.js';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {
@@ -318,6 +319,10 @@ import { closeModal, playTrack, sendStreamEvent, updatePlayerModal, updateProgre
 
     // Start app
     init();
+
+    // Wire browser Back/Forward history (after init's synchronous payment-URL cleanup,
+    // so the seed re-stamps the real starting tab).
+    initRouter();
 
     // Decade filtering functionality
     (function() {

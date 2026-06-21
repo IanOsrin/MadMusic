@@ -1187,7 +1187,7 @@
         const playlistView = document.getElementById('view-user-playlist');
         if (!playlistView) return;
         playlistView.hidden = false;
-        if (window.MADNav) window.MADNav.push();
+        if (window.MADRouter) window.MADRouter.pushOverlay('user-playlist', playlistId);
 
         // Update nav state
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -3431,7 +3431,7 @@
           const pv = document.getElementById('playlistView');
           if (pv) { pv.classList.remove('active'); pv.style.display = 'none'; }
           const pub = document.getElementById('publicPlaylistView');
-          if (pub) { pub.hidden = false; if (window.MADNav) window.MADNav.push(); }
+          if (pub) { pub.hidden = false; if (window.MADRouter) window.MADRouter.pushOverlay('public-playlist', playlistId); }
         }, 100);
       };
 
@@ -3932,7 +3932,7 @@
 
       // New function to show album detail view (two-column layout)
       window.showAlbumDetailView = async function(album, relatedAlbums = []) {
-        if (window.MADNav) window.MADNav.push();
+        if (window.MADRouter) window.MADRouter.pushOverlay('album', album && album.recordId);
         const playlistView = document.getElementById('playlistView');
         const layoutGrid = document.querySelector('.layout-grid');
         const playlistTitle = document.getElementById('playlistViewTitle');
@@ -5447,11 +5447,11 @@
         var v = item.getAttribute('data-view');
         var currentlyOnView = !document.getElementById('view-' + v).hidden;
         if (currentlyOnView && v === 'albums') {
-          // Already on home — act like Clear
+          // Already on home — act like Clear (not a navigation; don't push history)
           var clearBtn = document.getElementById('clear');
           if (clearBtn) clearBtn.click();
         } else {
-          showView(v);
+          (window.navigateToView || showView)(v);
         }
       });
     });
@@ -5460,7 +5460,7 @@
     var navAlbumsBtn = document.getElementById('navAlbumsBtn');
     if (navAlbumsBtn) {
       navAlbumsBtn.addEventListener('click', function() {
-        showView('library-albums');
+        (window.navigateToView || showView)('library-albums');
         document.querySelectorAll('.nav-item[data-view]').forEach(function(i) {
           i.classList.remove('active');
         });
@@ -6194,65 +6194,73 @@
   </script>
 
   <script>
-  /* ── SPA back-button navigation ──────────────────────────────────────────────
-     Pushes a history entry each time the app navigates to a full-screen view so
-     the browser back button steps through in-app states instead of leaving.
+  /* ── SPA history router ──────────────────────────────────────────────────────
+     Every in-app navigation records a browser history entry so Back/Forward stay
+     INSIDE the app and step through visited destinations instead of leaving to the
+     previous site. One state-carrying router owns history.
 
-     View entry points call:  window.MADNav.push()
-     Back / close buttons call: window.MADNav.goBack()
-     popstate handler closes whichever view is currently on top.
+     history.state = { mad:true, seq, kind:'root'|'view'|'overlay', view,
+                       overlay?:{type,id} }   ← overlay stores a STABLE id only,
+     never display data or expiring FM URLs (CLAUDE.md invariant #2).
+
+     Top-level views navigate via window.navigateToView(name) (pushes a 'view' entry;
+     raw window.showView stays push-free for restores). Drill-downs (album/playlist)
+     push an 'overlay' entry via MADRouter.pushOverlay(type,id) so Back closes them.
+     Forward-reopening a closed drill-down DEGRADES to the base view (no by-recordId
+     album open exists; we never restore stale track data). In-app back/close buttons
+     call MADRouter.goBack() → history.back() → popstate renders the target state.
+
+     Seed = a 'root' floor entry + the live 'view' entry. First Back from home lands
+     on the floor (re-assert home, stay in app); a second Back leaves the site —
+     "stay on home once, then exit".
   ──────────────────────────────────────────────────────────────────────────── */
-  window.MADNav = (function () {
-    var depth = 0;
+  window.MADRouter = (function () {
+    var HOME = 'albums';
+    var _seq = 0;            // monotonic id stamped on each entry (debug / ownership)
+    var _restoring = false;  // true while popstate drives the UI → suppress pushes
 
-    // Stamp the initial entry so our popstate handler can identify its own events.
-    try { history.replaceState({ mad: 0 }, ''); } catch (e) {}
-
-    // Called whenever a navigable view opens. Adds one browser history entry.
-    function push() {
-      depth++;
-      try { history.pushState({ mad: depth }, ''); } catch (e) {}
+    // Name of the sidebar view currently shown (the base behind any overlay).
+    function _currentView() {
+      var shown = document.querySelector('.view-section:not([hidden])');
+      if (shown && shown.id && shown.id.indexOf('view-') === 0) return shown.id.slice(5);
+      return HOME;
     }
 
-    // Called by in-app back/close buttons.
-    // If we own a history entry, let history.back() drive the UI via popstate.
-    // Otherwise fall back to closing the view directly (e.g. page loaded mid-session).
+    function _seed() {
+      var v = _currentView();
+      try {
+        history.replaceState({ mad: true, seq: 0, kind: 'root', view: v }, '');
+        history.pushState({ mad: true, seq: 1, kind: 'view', view: v }, '');
+        _seq = 1;
+      } catch (e) {}
+    }
+
+    // Record a top-level view navigation. No-op while restoring.
+    function pushView(view) {
+      if (_restoring) return;
+      try { history.pushState({ mad: true, seq: ++_seq, kind: 'view', view: view }, ''); } catch (e) {}
+    }
+
+    // Record a drill-down so Back closes it. Stores only {type,id} — never data/URLs.
+    function pushOverlay(type, id) {
+      if (_restoring) return;
+      try {
+        history.pushState({ mad: true, seq: ++_seq, kind: 'overlay',
+                            view: _currentView(), overlay: { type: type, id: id || '' } }, '');
+      } catch (e) {}
+    }
+
+    // In-app back/close buttons defer to the browser; popstate does the work.
     function goBack(fallback) {
-      if (depth > 0) {
-        history.back(); // → popstate → _closeTopView()
-      } else if (typeof fallback === 'function') {
-        fallback();
-      }
+      if (_seq > 0) history.back();
+      else if (typeof fallback === 'function') fallback();
     }
 
-    // Restore albums/home view — shared by several close paths.
-    function _showHome() {
-      document.querySelectorAll('.view-section').forEach(function (v) { v.hidden = true; });
-      var homeView = document.getElementById('view-albums');
-      if (homeView) homeView.hidden = false;
-      document.querySelectorAll('.nav-item').forEach(function (n) { n.classList.remove('active'); });
-      var homeNav = document.querySelector('.nav-item[data-view="albums"]');
-      if (homeNav) homeNav.classList.add('active');
-    }
-
-    // Determine which view is topmost and close it.
-    function _closeTopView() {
-      var userPl   = document.getElementById('view-user-playlist');
-      var publicPl = document.getElementById('publicPlaylistView');
+    // Close whichever drill-down overlay is open, without touching history.
+    // (Sidebar .view-section panels are switched by showView; these overlays are not.)
+    function _closeAllOverlays() {
       var albumDtl = document.getElementById('playlistView');
-
-      if (userPl && !userPl.hidden) {
-        // User / shared playlist page → go home
-        _showHome();
-      } else if (publicPl && !publicPl.hidden) {
-        // Featured / recommended playlist panel
-        publicPl.hidden = true;
-        var albumsEl  = document.getElementById('albums');
-        var loadingEl = document.getElementById('loadingIndicator');
-        if (albumsEl)  albumsEl.hidden  = false;
-        if (loadingEl) loadingEl.hidden = false;
-      } else if (albumDtl && albumDtl.classList.contains('active')) {
-        // Album detail or catalog playlist view — distinguish by dataset
+      if (albumDtl && albumDtl.classList.contains('active')) {
         if (albumDtl.dataset.playlistMode === 'user' && typeof window.hidePlaylistView === 'function') {
           window.hidePlaylistView();
         } else if (typeof window.hideAlbumDetailView === 'function') {
@@ -6263,16 +6271,59 @@
           if (grid) grid.style.display = 'flex';
         }
       }
+      var publicPl = document.getElementById('publicPlaylistView');
+      if (publicPl && !publicPl.hidden) {
+        publicPl.hidden = true;
+        var albumsEl  = document.getElementById('albums');
+        var loadingEl = document.getElementById('loadingIndicator');
+        if (albumsEl)  albumsEl.hidden  = false;
+        if (loadingEl) loadingEl.hidden = false;
+      }
+    }
+
+    // Render a target history state: close overlays, then show its base view.
+    function _render(state) {
+      _restoring = true;
+      try {
+        _closeAllOverlays();
+        window.showView((state && state.view) || HOME);
+      } finally { _restoring = false; }
     }
 
     window.addEventListener('popstate', function (e) {
-      if (!e.state || !('mad' in e.state)) return; // Not our history entry
-      depth = Math.max(0, depth - 1);
-      _closeTopView();
+      var st = e.state;
+      if (!st || !st.mad) return; // foreign / ?share= entry — owned elsewhere
+      if (st.kind === 'root') {
+        // Re-assert home once and stay; the next Back will leave the site.
+        _restoring = true;
+        try { _closeAllOverlays(); window.showView(HOME); } finally { _restoring = false; }
+        return;
+      }
+      _render(st);
     });
 
-    return { push: push, goBack: goBack };
+    _seed();
+
+    return {
+      pushView: pushView,
+      pushOverlay: pushOverlay,
+      goBack: goBack,
+      isRestoring: function () { return _restoring; }
+    };
   })();
+
+  // navigate to a top-level view AND record it in history.
+  window.navigateToView = function (name) {
+    window.showView(name);
+    if (window.MADRouter) window.MADRouter.pushView(name);
+  };
+
+  // Back-compat shim: legacy call sites used window.MADNav.{push,goBack}.
+  // push() without identity opens a generic overlay back-stop.
+  window.MADNav = {
+    push: function () { if (window.MADRouter) window.MADRouter.pushOverlay('legacy', ''); },
+    goBack: function (fallback) { if (window.MADRouter) window.MADRouter.goBack(fallback); }
+  };
   </script>
 
 
@@ -6394,8 +6445,8 @@
         if (typeof window.showUserPlaylistPage === 'function') {
           window.showUserPlaylistPage(pl.name || 'Shared Playlist', tracks, '', { readOnly: true });
         }
-        // Clean ?share= from address bar without reloading
-        history.replaceState(null, '', window.location.pathname);
+        // Clean ?share= from address bar without reloading (keep MADRouter marker)
+        history.replaceState(history.state, '', window.location.pathname);
       } catch (err) {
         console.error('[Share] Failed to load shared playlist', err);
       }
@@ -6535,8 +6586,8 @@
     const trackName = params.get('name')     || '';
     const recordId  = params.get('recordId') || '';
 
-    // Clean the URL immediately
-    history.replaceState(null, '', window.location.pathname);
+    // Clean the URL immediately (keep the MADRouter history marker)
+    history.replaceState(history.state, '', window.location.pathname);
 
     // The callback strips the Paystack ref from the return URL (it is a
     // replayable bearer token for /api/download/file). The initiate handler

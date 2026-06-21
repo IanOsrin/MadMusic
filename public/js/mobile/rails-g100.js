@@ -4,6 +4,7 @@ import { elements, state } from './state.js';
 import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, hasValidAudio } from './fields.js';
 import { showAlbumTracksModal } from './cards.js';
 import { closeModal, playTrack } from './player.js';
+import { pushOverlay } from './router.js';
 
 export async function loadG100(forceRefresh = false) {
       const container = elements.g100Content;
@@ -190,6 +191,7 @@ export async function showG100PlaylistTracks(playlistName) {
         <button class="btn btn-secondary" style="width:100%;margin-top:16px;" onclick="closeModal()">Close</button>
       `;
       elements.modalOverlay.classList.add('show');
+      pushOverlay('g100-playlist', playlistName);
 
       try {
         const res  = await fetch(`/api/public-playlists?name=${encodeURIComponent(playlistName)}`);

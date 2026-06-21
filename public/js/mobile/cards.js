@@ -5,6 +5,7 @@ import { escapeHtml, getArtistField, getArtworkUrl, getGenreField, getTitleField
 import { switchTab } from './nav.js';
 import { search } from './search.js';
 import { closeModal, playTrack } from './player.js';
+import { pushOverlay } from './router.js';
 
 export function createAlbumCard(album) {
       const card = document.createElement('div');
@@ -54,6 +55,7 @@ export function showAlbumTracksModal(album) {
       `;
 
       elements.modalOverlay.classList.add('show');
+      pushOverlay('album-tracks', album.recordId || album.title);
 
       elements.bottomSheet.querySelectorAll('[data-track-index]').forEach(btn => {
         btn.addEventListener('click', () => {

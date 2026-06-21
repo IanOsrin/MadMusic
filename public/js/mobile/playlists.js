@@ -5,6 +5,7 @@ import { showToast } from './util.js';
 import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, getTitleField } from './fields.js';
 import { switchTab } from './nav.js';
 import { closeModal, playTrack } from './player.js';
+import { pushOverlay } from './router.js';
 
 export async function loadPlaylists() {
       try {
@@ -75,6 +76,7 @@ export function showPlaylistTracks(playlist) {
         <button class="btn btn-secondary" style="width:100%;margin-top:16px;" onclick="closeModal()">Close</button>
       `;
       elements.modalOverlay.classList.add('show');
+      pushOverlay('playlist-tracks', playlist.id);
       elements.bottomSheet.querySelectorAll('[data-index]').forEach(btn => {
         btn.addEventListener('click', () => {
           const idx = parseInt(btn.dataset.index);
