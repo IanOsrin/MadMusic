@@ -6,16 +6,13 @@ node_modules/
 .env.*
 !.env.example
 
-# Data files with user content (never commit — contain live tokens, emails, user data)
-data/playlists.json
-data/users.json
-data/playlist_requests.json
-data/access-tokens.json
-data/library.json
-data/*.lock
-data/*.lock.*
-# Runtime SWR cache snapshots — environment-specific, regenerated on first request
-data/trending-cache.json
+# data/ is runtime + generated content (live tokens, user data, locks, reports, caches).
+# Allowlist model: ignore the whole dir, then `!`-exempt anything that must be tracked.
+# Nothing is tracked today — add `!data/<file>` here if that ever changes.
+# This kills the stale-lock / stray-output whack-a-mole: new files in data/ never
+# show up as untracked.
+data/*
+!data/.gitkeep
 
 # Vite/vitest crash artifacts and local agent settings
 vitest.config.js.timestamp-*.mjs
@@ -53,7 +50,3 @@ test-results/
 playwright-report/
 blob-report/
 .playwright/
-data/semantic.db
-data/date-audit.csv
-data/date-fixes.xlsx
-data/m1-date-keys.json
