@@ -243,7 +243,7 @@ router.get('/file', async (req, res) => {
 
 export async function handleDownloadWebhook(paymentData, reference) {
   const metadata = paymentData.metadata || {};
-  const { trackId, trackRecordId, trackName, price } = metadata;
+  const { trackId, trackName, price } = metadata;
   const email = paymentData.customer?.email || '';
 
   if (!trackId) {

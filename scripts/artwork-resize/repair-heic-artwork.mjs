@@ -42,14 +42,6 @@ async function streamToBuffer(stream) {
   return Buffer.concat(chunks);
 }
 
-function decodeBuffer(input) {
-  try {
-    return sharp(input);
-  } catch {
-    return null;
-  }
-}
-
 async function toWebp(input, size, viaSips) {
   if (!viaSips) {
     return sharp(input).resize(size, size, { fit: 'inside', withoutEnlargement: true }).webp({ quality: QUALITY }).toBuffer();

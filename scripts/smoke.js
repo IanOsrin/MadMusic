@@ -6,7 +6,7 @@ async function requestJson(path, label) {
   const url = baseUrl.replace(/\/$/, '') + path;
   const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
   const text = await res.text();
-  let body = null;
+  let body;
   if (text) {
     try {
       body = JSON.parse(text);

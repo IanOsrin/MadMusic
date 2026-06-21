@@ -28,7 +28,6 @@ import { LRUCache } from 'lru-cache';
 
 // In production, never leak internal/FM error detail to public catalogue callers.
 const IS_PROD = process.env.NODE_ENV === 'production';
-const safeDetail = (detail) => (IS_PROD ? undefined : detail);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);

@@ -5,7 +5,6 @@ import { createHmac } from 'node:crypto';
 let app;
 let pendingPaymentsCache;
 let processedWebhookEventsCache;
-let tokenStore; // module — we'll spy on createAccessToken via env-driven shim is overkill; instead just check responses
 
 beforeAll(async () => {
   const serverMod = await import('../../server.js');
@@ -13,7 +12,7 @@ beforeAll(async () => {
   const cacheMod = await import('../../cache.js');
   pendingPaymentsCache = cacheMod.pendingPaymentsCache;
   processedWebhookEventsCache = cacheMod.processedWebhookEventsCache;
-  tokenStore = await import('../../lib/token-store.js');
+  await import('../../lib/token-store.js');
 });
 
 beforeEach(() => {

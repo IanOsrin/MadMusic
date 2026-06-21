@@ -153,7 +153,7 @@ async function main() {
   // Load existing tokens, add the new one, and save — under an advisory lock so
   // a concurrently running server (which also writes via lib/file-lock.js) cannot
   // interleave and lose a token.
-  let totalTokens = 0;
+  let totalTokens;
   const lockPath = await acquireLock(ACCESS_TOKENS_PATH);
   try {
     const tokenData = await loadTokens();

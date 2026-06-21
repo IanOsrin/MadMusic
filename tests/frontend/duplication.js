@@ -9,11 +9,9 @@
 // Pure functions, no backend, no dependencies.
 
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { PUBLIC_DIR, HTML_VIEWS } from './extract-contract.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 export { HTML_VIEWS };
 
 function read(name) {

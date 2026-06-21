@@ -27,7 +27,6 @@ beforeAll(() => {
 
   if (process.env.UPDATE_BASELINE === '1' || !existsSync(BASELINE_PATH)) {
     writeFileSync(BASELINE_PATH, JSON.stringify(current, null, 2) + '\n');
-    // eslint-disable-next-line no-console
     console.log(`[contract] baseline written to ${BASELINE_PATH}`);
   }
   baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'));

@@ -82,11 +82,6 @@ const isMaster   = (key) => /\.(jpe?g|png)$/i.test(key) && !key.startsWith(RESIZ
 const baseName   = (key) => key.slice(PREFIX.length).replace(/\.(jpe?g|png)$/i, '');
 const derivedKey = (key, size) => `${RESIZED_PREFIX}${baseName(key)}_${size}.webp`;
 
-async function objectExists(key) {
-  try { await s3.send(new HeadObjectCommand({ Bucket: BUCKET, Key: key })); return true; }
-  catch { return false; }
-}
-
 async function* listMasters() {
   const sinceMs = SINCE_HOURS ? Date.now() - SINCE_HOURS * 3600 * 1000 : 0;
   let token;

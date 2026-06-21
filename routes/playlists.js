@@ -13,7 +13,7 @@ import { normalizeTrackPayload } from '../lib/track.js';
 import { AUDIO_FIELD_CANDIDATES, ARTWORK_FIELD_CANDIDATES, FM_LAYOUT } from '../lib/fm-fields.js';
 import { emailTransporter } from '../lib/email.js';
 import {
-  loadUserPlaylists, loadPlaylistById, loadPlaylistByShareId,
+  loadUserPlaylists, loadPlaylistById,
   isShareIdTaken, createPlaylist, updatePlaylist, deletePlaylist
 } from '../lib/playlist-store.js';
 import { fmGetRecordById, fmUpdateRecord } from '../fm-client.js';

@@ -314,7 +314,7 @@ router.post('/webhook', async (req, res) => {
     let event;
     try {
       event = JSON.parse(Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : rawBody);
-    } catch (parseErr) {
+    } catch {
       console.warn('[MASS] Paystack webhook: signature verified but body is not valid JSON');
       return res.status(400).json({ error: 'Malformed JSON body' });
     }
