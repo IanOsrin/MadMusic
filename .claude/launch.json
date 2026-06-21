@@ -25,7 +25,7 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": [
         "-c",
-        "PORT=3997 HOST=127.0.0.1 NODE_ENV=development FM_HOST=https://fm.invalid FM_DB=TestDB FM_USER=test FM_PASS=test FM_LAYOUT=API_Album_Songs FM_TOKENS_LAYOUT=API_Access_Tokens FM_TIMEZONE_OFFSET=0 AUTH_SECRET=test-auth-secret ADMIN_SECRET=test-admin-secret PAYSTACK_SECRET_KEY=sk_test_dummy PAYSTACK_PUBLIC_KEY=pk_test_dummy EMAIL_HOST=smtp.invalid EMAIL_PORT=587 EMAIL_USER=test@test EMAIL_PASS=test EMAIL_FROM=test@test node server.js"
+        "PORT=3997 HOST=127.0.0.1 NODE_ENV=development SUGGESTIONS_ENABLED=true SUGGEST_DB_PATH=data/suggest.db FM_HOST=https://fm.invalid FM_DB=TestDB FM_USER=test FM_PASS=test FM_LAYOUT=API_Album_Songs FM_TOKENS_LAYOUT=API_Access_Tokens FM_TIMEZONE_OFFSET=0 AUTH_SECRET=test-auth-secret ADMIN_SECRET=test-admin-secret PAYSTACK_SECRET_KEY=sk_test_dummy PAYSTACK_PUBLIC_KEY=pk_test_dummy EMAIL_HOST=smtp.invalid EMAIL_PORT=587 EMAIL_USER=test@test EMAIL_PASS=test EMAIL_FROM=test@test node server.js"
       ],
       "port": 3997,
       "autoPort": true
