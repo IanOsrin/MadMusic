@@ -230,9 +230,18 @@ router.get('/callback', async (req, res) => {
 
     const data = await paystackRequest('GET', `/transaction/verify/${encodeURIComponent(reference)}`);
 
-    if (data.data?.status !== 'success') {
+    const verifyStatus = data.data?.status;
+    if (verifyStatus !== 'success') {
       pendingPayments.delete(reference);
-      console.warn(`[MASS] Payment verification failed for ${reference}: status=${data.data?.status}`);
+      // Async bank authorization (e.g. FNB in-app approval) leaves the charge
+      // 'pending'/'ongoing' when the browser returns — that is NOT a failure.
+      // The webhook delivers the token once the bank confirms, so show "pending"
+      // (and rely on the emailed token) rather than a false "failed".
+      if (verifyStatus === 'pending' || verifyStatus === 'ongoing') {
+        console.log(`[MASS] Payment ${reference} still ${verifyStatus} (awaiting bank auth) — webhook will finalise`);
+        return res.redirect(`${mobileCallback ? '/mobile.html' : '/'}?payment=pending&reason=bank_auth`);
+      }
+      console.warn(`[MASS] Payment verification failed for ${reference}: status=${verifyStatus}`);
       return res.redirect(`${mobileCallback ? '/mobile.html' : '/'}?payment=failed&reason=not_successful`);
     }
 
@@ -256,11 +265,9 @@ router.get('/callback', async (req, res) => {
         console.log(`[MASS] Subscription callback: token already exists for sub ${subscriptionCode}`);
       } else {
         token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays);
-        try {
-          await sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label);
-        } catch (err) {
-          console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. ref=${reference} token=${token.code} email=${email} error=${err?.message || err}`);
-        }
+        // Fire-and-forget: never block the post-payment redirect on email.
+        Promise.resolve(sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label)).catch((err) =>
+          console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. ref=${reference} token=${token.code} email=${email} error=${err?.message || err}`));
       }
       console.log(`[MASS] Subscription checkout complete: ${reference} → token ${token.code}`);
     } else {
@@ -268,11 +275,10 @@ router.get('/callback', async (req, res) => {
       const planId = metadata.plan_id;
       const days   = clampDays(metadata.days, 7);
       token = await createAccessToken(days, `Paystack purchase: ${planId} (${email}, ref: ${reference})`, email);
-      try {
-        await sendTokenEmail(email, token.code, days);
-      } catch (err) {
-        console.error(`[MASS] ⚠️  TOKEN EMAIL FAILED. ref=${reference} token=${token.code} email=${email} error=${err?.message || err}`);
-      }
+      // Fire-and-forget: the token is already returned in the redirect URL, so a
+      // slow/failing email must not delay or hang the user's return to the app.
+      Promise.resolve(sendTokenEmail(email, token.code, days)).catch((err) =>
+        console.error(`[MASS] ⚠️  TOKEN EMAIL FAILED. ref=${reference} token=${token.code} email=${email} error=${err?.message || err}`));
       console.log(`[MASS] Payment successful: ${reference} → token ${token.code} (${days} days)`);
     }
 
