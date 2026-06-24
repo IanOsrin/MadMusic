@@ -317,17 +317,38 @@ router.post('/email/confirm', async (req, res) => {
     if (hasIssuedTo) updateFields['Issued_To'] = claim.email;
     if (hasEmail)    updateFields['Email']     = claim.email;
 
-    try {
-      await fmUpdateRecord(layout, fmRecord.recordId, updateFields);
-    } catch (fmErr) {
+    // FM error 301 = "Record is in use by another user" — a FileMaker client or
+    // another request holds an (often uncommitted) lock on the token row. These
+    // locks are usually brief, so retry a few times with backoff before giving up.
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    let lastFmErr = null;
+    let wrote = false;
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        await fmUpdateRecord(layout, fmRecord.recordId, updateFields);
+        wrote = true;
+        break;
+      } catch (fmErr) {
+        lastFmErr = fmErr;
+        const isLock = /\(301\)/.test(fmErr?.message || '');
+        if (!isLock || attempt === 4) break;
+        console.warn(`[MASS] /email/confirm: FM record locked (301), retry ${attempt}/3 after backoff`);
+        await sleep(250 * attempt);
+      }
+    }
+
+    if (!wrote) {
       // Surface the real FM error so we don't get vague "Could not verify code"
-      // when it's actually a schema mismatch, permissions issue, etc.
-      console.error('[MASS] /email/confirm: fmUpdateRecord failed:', fmErr?.message || fmErr, 'fields attempted:', Object.keys(updateFields));
-      EMAIL_CLAIM_CODES.delete(tokenCode);
+      // when it's actually a schema mismatch, permissions issue, a lock, etc.
+      console.error('[MASS] /email/confirm: fmUpdateRecord failed:', lastFmErr?.message || lastFmErr, 'fields attempted:', Object.keys(updateFields));
+      // The code WAS correct — the write failed for reasons outside the user's
+      // control. Keep the claim alive and refund the attempt we counted so the
+      // user can simply press Confirm again without requesting a fresh code.
+      claim.attempts = Math.max(0, claim.attempts - 1);
       return res.status(502).json({
         ok: false,
-        error: 'Could not save email to FileMaker',
-        detail: fmErr?.message || String(fmErr)
+        error: 'Could not save email to FileMaker — please try again',
+        detail: lastFmErr?.message || String(lastFmErr)
       });
     }
 
