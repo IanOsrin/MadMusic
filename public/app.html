@@ -18,8 +18,8 @@
        preload="none", so without this the connection only opens on play. -->
   <link rel="preconnect" href="https://mass-music-audio-files.s3.eu-north-1.amazonaws.com">
   <link rel="dns-prefetch" href="https://mass-music-audio-files.s3.eu-north-1.amazonaws.com">
-  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/app.css?v=7">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css?v=8">
 </head>
 <body>
   <!-- Google Tag Manager (noscript) -->
@@ -194,7 +194,11 @@
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <img src="/img/Madmusiclogonew.png" alt="MAD — Music Africa Direct">
+      <!-- Two variants: dark-mode keeps the blue/purple pin with white text;
+           light-mode uses the original (dark text). Toggled by body theme class
+           in app.css — never recolour the pin with a CSS invert filter. -->
+      <img class="logo-dark" src="/img/Madmusiclogonew-dark.png" alt="MAD — Music Africa Direct">
+      <img class="logo-light" src="/img/Madmusiclogonew.png" alt="" aria-hidden="true">
     </div>
     <nav class="sidebar-nav">
       <!-- Home -->
@@ -1688,7 +1692,7 @@
     .up-time-label {
       font-size: 11px; color: #6b7280;
       flex-shrink: 0; min-width: 32px; font-variant-numeric: tabular-nums;
-      font-family: 'Open Sans', sans-serif;
+      font-family: 'Barlow', sans-serif;
     }
     .up-time-label.right { text-align: right; }
     body.light-mode .up-time-label { color: #9ca3af; }

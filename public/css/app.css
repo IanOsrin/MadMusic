@@ -290,14 +290,13 @@
     .sidebar-logo img {
       height: 110px;
       width: auto;
-      filter: brightness(0) invert(1);
     }
-    body.light-mode .sidebar-logo img {
-      filter: none;
-    }
-    body.african-theme .sidebar-logo img {
-      filter: brightness(0) invert(1);
-    }
+    /* Dark-first: show the dark-mode variant (blue pin + white text), hide light. */
+    .sidebar-logo .logo-light { display: none; }
+    .sidebar-logo .logo-dark  { display: block; }
+    /* Light mode: original logo (dark text), blue pin intact. */
+    body.light-mode .sidebar-logo .logo-dark  { display: none; }
+    body.light-mode .sidebar-logo .logo-light { display: block; }
     .sidebar-nav {
       padding: 8px 0 8px;
       flex: 1;
@@ -1869,16 +1868,16 @@
     }
 
 
-    html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:'Open Sans',-apple-system,BlinkMacSystemFont,sans-serif;min-height:100vh;}
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:'Barlow',-apple-system,BlinkMacSystemFont,sans-serif;min-height:100vh;}
     html{background:var(--bg);}
     body{background:var(--bg);}
     .searchbar{display:flex;align-items:center;gap:8px;flex:1;padding-left:32px;flex-wrap:wrap;row-gap:6px;}
     .search-fields{display:flex;gap:4px;flex:1 1 auto;flex-wrap:wrap;align-items:center;row-gap:6px;min-width:0;}
-    .searchbar input{background:var(--card);color:var(--fg);border:1.5px solid var(--border);border-radius:7px;padding:0.5rem 0.875rem;font-size:0.8rem;height:37px;box-sizing:border-box;outline:none;min-width:90px;font-family:'Open Sans',-apple-system,BlinkMacSystemFont,sans-serif;transition:border-color 0.15s ease,box-shadow 0.15s ease;}
+    .searchbar input{background:var(--card);color:var(--fg);border:1.5px solid var(--border);border-radius:7px;padding:0.5rem 0.875rem;font-size:0.8rem;height:37px;box-sizing:border-box;outline:none;min-width:90px;font-family:'Barlow',-apple-system,BlinkMacSystemFont,sans-serif;transition:border-color 0.15s ease,box-shadow 0.15s ease;}
     .searchbar input:focus{border-color:var(--accent) !important;box-shadow:0 0 0 3px rgba(139,92,246,0.18) !important;}
-    .searchbar select{padding:0.5rem 0.875rem;border-radius:7px;border:1.5px solid var(--border);background:var(--card);color:var(--muted);font-size:0.8rem;height:37px;box-sizing:border-box;cursor:pointer;min-width:120px;font-family:'Open Sans',-apple-system,BlinkMacSystemFont,sans-serif;outline:none;transition:border-color 0.15s ease,box-shadow 0.15s ease;}
+    .searchbar select{padding:0.5rem 0.875rem;border-radius:7px;border:1.5px solid var(--border);background:var(--card);color:var(--muted);font-size:0.8rem;height:37px;box-sizing:border-box;cursor:pointer;min-width:120px;font-family:'Barlow',-apple-system,BlinkMacSystemFont,sans-serif;outline:none;transition:border-color 0.15s ease,box-shadow 0.15s ease;}
     .searchbar select:focus{border-color:var(--accent) !important;box-shadow:0 0 0 3px rgba(139,92,246,0.18) !important;}
-    .searchbar button{border-radius:7px;padding:0.5rem 1rem;font-weight:600;cursor:pointer;font-size:0.8rem;height:37px;box-sizing:border-box;white-space:nowrap;font-family:'Open Sans',-apple-system,BlinkMacSystemFont,sans-serif;}
+    .searchbar button{border-radius:7px;padding:0.5rem 1rem;font-weight:600;cursor:pointer;font-size:0.8rem;height:37px;box-sizing:border-box;white-space:nowrap;font-family:'Barlow',-apple-system,BlinkMacSystemFont,sans-serif;}
     .searchbar > div:last-of-type{display:flex;gap:4px;align-items:center;}
     .header-actions{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;}
     .header-actions .btn, .auth-controls .btn{height:37px;padding:0.5rem 1rem;font-size:0.8rem;border-radius:7px;box-sizing:border-box;}
@@ -2469,7 +2468,7 @@
     }
 
     body {
-      font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif;
       background: var(--bg-primary);
       color: var(--text-primary);
       line-height: 1.6;
@@ -2737,7 +2736,7 @@
       border-radius: 50px;
       color: var(--text-primary);
       font-size: 0.8rem;
-      font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif;
       outline: none;
       transition: all 0.3s ease;
       box-sizing: border-box;
@@ -2840,7 +2839,7 @@
       color: var(--text-secondary);
       font-size: 0.8rem;
       font-weight: 600;
-      font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif;
       cursor: pointer;
       white-space: nowrap;
       transition: border-color 0.15s ease, color 0.15s ease;

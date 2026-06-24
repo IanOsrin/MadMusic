@@ -19,8 +19,8 @@
        doesn't pay the cold DNS+TLS cost (audio is preload="none"). -->
   <link rel="preconnect" href="https://mass-music-audio-files.s3.eu-north-1.amazonaws.com">
   <link rel="dns-prefetch" href="https://mass-music-audio-files.s3.eu-north-1.amazonaws.com">
-  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/mobile.css?v=1">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/mobile.css?v=2">
   <!-- Shared field/format helpers (window.MADHelpers); loaded before body scripts
        so mobile's utilities can delegate to the single canonical source. -->
   <script src="/js/helpers.js?v=1"></script>
@@ -52,7 +52,9 @@
 
   <!-- Header -->
   <header>
-    <div class="logo"><img src="/img/Madmusiclogonew.png" alt="MAD Music"></div>
+    <!-- Dark-mode variant: blue/purple pin retained, text white for the dark header
+         (mobile is dark-only; the original dark-text logo was illegible here). -->
+    <div class="logo"><img src="/img/Madmusiclogonew-dark.png" alt="MAD Music"></div>
     <div class="user-badge" id="user-badge">Guest</div>
   </header>
 
