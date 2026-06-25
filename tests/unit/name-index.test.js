@@ -12,8 +12,11 @@ fs.writeFileSync(FIXTURE, JSON.stringify({
     { name: 'Thandiswa', n: 70 },
     { name: 'Ladysmith Black Mambazo', n: 896 },
     { name: 'Oliver Mtukudzi', n: 775 },
+    { name: 'Tommy Oliver', n: 5 },
     { name: 'Soul Brothers', n: 1030 },
-    { name: 'Miriam Makeba', n: 120 }
+    { name: 'Miriam Makeba', n: 120 },
+    { name: 'Simphiwe Dana', n: 60 },
+    { name: 'Simphiwe Dana feat. Carlo Mombelli', n: 3 }
   ],
   albums: [
     { name: 'Zabalaza', n: 12 },
@@ -35,7 +38,7 @@ describe('name-index suggestNames', () => {
   it('loads the fixture and reports ready', () => {
     const s = nameIndexStatus();
     expect(s.ready).toBe(true);
-    expect(s.artists).toBe(5);
+    expect(s.artists).toBe(8);
     expect(s.albums).toBe(2);
   });
 
@@ -53,6 +56,24 @@ describe('name-index suggestNames', () => {
   it('handles a long-name typo (Ladysmith)', () => {
     const out = suggestNames('Ladismith Black Mambazo').map(s => s.name);
     expect(out[0]).toBe('Ladysmith Black Mambazo');
+  });
+
+  it('corrects a first-name typo when only the full name is stored', () => {
+    // "dimphiwe" must reach the "Simphiwe" word inside "Simphiwe Dana"
+    const out = suggestNames('dimphiwe').map(s => s.name);
+    expect(out[0]).toBe('Simphiwe Dana');
+  });
+
+  it('collapses near-duplicate "feat." variants of the same base name', () => {
+    const out = suggestNames('dimphiwe').map(s => s.name);
+    expect(out).not.toContain('Simphiwe Dana feat. Carlo Mombelli');
+  });
+
+  it('does not let a single shared common word pull in unrelated names', () => {
+    // "Oliver Mtukidzi" must not surface "Tommy Oliver" (shares only "Oliver")
+    const out = suggestNames('Oliver Mtukidzi').map(s => s.name);
+    expect(out[0]).toBe('Oliver Mtukudzi');
+    expect(out).not.toContain('Tommy Oliver');
   });
 
   it('returns nothing for gibberish', () => {
