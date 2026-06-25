@@ -27,6 +27,7 @@ import telkomRouter from './routes/telkom.js';
 import podcastsRouter from './routes/podcasts.js';
 import suggestionsRouter from './routes/suggestions.js';
 import { initSemanticIndex, semanticIndexStatus } from './lib/semantic-index.js';
+import { initNameIndex, nameIndexStatus } from './lib/name-index.js';
 
 import { validateAccessToken } from './lib/auth.js';
 import { timingSafeEqualStr } from './lib/crypto-utils.js';
@@ -817,6 +818,11 @@ if (SUGGESTIONS_ENABLED) {
     .then(() => console.log('[MASS] Semantic suggestion index:', JSON.stringify(semanticIndexStatus())))
     .catch((err) => console.warn('[MASS] Semantic index init failed:', err?.message || err));
 }
+
+// Catalogue name index for search "Did you mean…" typo suggestions. Always on
+// (no flag): degrades gracefully to no-suggestions when the artifact is absent.
+initNameIndex();
+console.log('[MASS] Search name index:', JSON.stringify(nameIndexStatus()));
 
 let server = null;
 let serverStarted = false;

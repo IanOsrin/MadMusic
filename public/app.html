@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://mass-music-audio-files.s3.eu-north-1.amazonaws.com">
   <link rel="dns-prefetch" href="https://mass-music-audio-files.s3.eu-north-1.amazonaws.com">
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/app.css?v=8">
+  <link rel="stylesheet" href="/css/app.css?v=9">
 </head>
 <body>
   <!-- Google Tag Manager (noscript) -->
@@ -730,6 +730,9 @@
               <p id="searchResultsSubtitle" style="font-size:0.85rem;color:var(--muted);margin:0;"></p>
               <button type="button" id="shuffleResultsBtn" class="js-shuffle-toggle genre-shuffle-btn" data-idle-label="🔀 Shuffle artist" style="display:none;margin-top:10px;" title="Shuffle every track by this artist">🔀 Shuffle artist</button>
             </div>
+
+            <!-- "Did you mean…" fuzzy suggestions (populated by the doSearch override) -->
+            <div id="searchSuggest" class="search-suggest" hidden></div>
 
             <div id="loadingIndicator" class="loading-indicator">
               <div class="loading-spinner"></div>
@@ -2266,6 +2269,43 @@
       return null;
     }
 
+    // Render the "Did you mean: X?" banner. `names` is the server's suggestions
+    // array (or null/empty to clear). Clicking a chip re-runs the search with the
+    // corrected term through the same doSearch path.
+    function renderSearchSuggestions(names, originalQuery) {
+      const box = document.getElementById('searchSuggest');
+      if (!box) return;
+      if (!Array.isArray(names) || names.length === 0) {
+        box.hidden = true;
+        box.innerHTML = '';
+        return;
+      }
+      box.innerHTML = '';
+      const label = document.createElement('span');
+      label.className = 'search-suggest__label';
+      label.textContent = 'Did you mean:';
+      box.appendChild(label);
+      names.slice(0, 4).forEach((name) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'search-suggest__chip';
+        chip.textContent = name;
+        chip.addEventListener('click', () => {
+          const input = document.getElementById('search');
+          if (input) input.value = name;
+          // Clear the hidden category fields so this runs as a fresh free-text query.
+          ['searchArtist', 'searchAlbum', 'searchTrack'].forEach((id) => {
+            const el = document.getElementById(id); if (el) el.value = '';
+          });
+          renderSearchSuggestions(null);
+          if (typeof window.doSearch === 'function') window.doSearch(name);
+        });
+        box.appendChild(chip);
+      });
+      box.hidden = false;
+    }
+    window.renderSearchSuggestions = renderSearchSuggestions;
+
     function setupSearchOverride() {
       const originalDoSearch = typeof window.doSearch === 'function' ? window.doSearch : null;
       if (!originalDoSearch) {
@@ -2351,10 +2391,13 @@
               let match = null;
               try { match = detectArtistMatch(data.items || [], q.trim()); } catch {}
               if (match) {
+                renderSearchSuggestions(null); // results found → no "did you mean"
                 window.showAlbumDetailView({ title: match.album, artist: match.artist, picture: '', genre: '', year: '', tracks: [] });
                 const ab = new Error('artist view'); ab.name = 'AbortError'; throw ab;
               }
             }
+            // "Did you mean…" — server attaches suggestions on a dead-end/relaxed query.
+            try { renderSearchSuggestions(data.suggestions, q); } catch {}
             return data;
           })
           .finally(() => {

@@ -11,6 +11,7 @@ import {
 import { fmErrorToHttpStatus } from '../../lib/http.js';
 import { createLogger } from '../../lib/logger.js';
 import { validators } from '../../lib/validators.js';
+import { suggestNames } from '../../lib/name-index.js';
 
 const router = Router();
 
@@ -93,6 +94,17 @@ const buildQueries = ({ q, artist, album, track, genres }) => {
   if (q) {
     return SEARCH_FIELDS_DEFAULT.map(f => ({ [f]: contains(q) }));
   }
+};
+
+// RELAXED free-text fallback: match ANY query word in ANY field (OR over
+// field×word), used only when the strict "all words in one field" query above
+// dead-ends. e.g. "Thandiswa Mazwai" — her records store Album Artist just as
+// "Thandiswa", so the strict query needs both words in one field and finds
+// nothing; relaxed matches the "Thandiswa" records (1 of 2 words) which
+// runSearch then ranks to the top by word-match count.
+const buildRelaxedQueries = (q) => {
+  const words = (q || '').trim().split(/\s+/).filter(Boolean).slice(0, 6);
+  return SEARCH_FIELDS_DEFAULT.flatMap(f => words.map(w => ({ [f]: `*${w}*` })));
   return [{ 'Album Title': '*' }];
 };
 
@@ -101,63 +113,106 @@ const buildQueries = ({ q, artist, album, track, genres }) => {
 // the right HTTP status. The returned object is the exact response shape the
 // frontend expects (do not change without checking pagination/genreOffset).
 async function runSearch({ q, artist, album, track, genres, limit, uiOff0, fmOff }) {
-  const queries = buildQueries({ q, artist, album, track, genres });
-  const payload = { query: queries, limit: Math.min(500, limit * 10), offset: fmOff };
+  const fmLimit = Math.min(500, limit * 10);
 
-  const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
-  const json = await response.json().catch(() => ({}));
+  // One FM _find + the post-filters (genre false-positive prune, audio/artwork
+  // validity). Returns the kept records plus the raw count the frontend needs
+  // to advance genreOffset. Throws a tagged error on FM failure (SWR won't cache).
+  async function fetchFiltered(queries) {
+    const payload = { query: queries, limit: fmLimit, offset: fmOff };
+    const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
+    const json = await response.json().catch(() => ({}));
 
-  if (!response.ok) {
-    const msg = json?.messages?.[0]?.message || 'FM error';
-    const code = json?.messages?.[0]?.code;
-    const err = new Error(`Album search failed: ${msg} (FM ${code})`);
-    err.httpStatus = fmErrorToHttpStatus(code, response.status);
-    err.clientDetail = `${msg} (FM ${code})`;
-    throw err;
-  }
-
-  let rawData = json?.response?.data || [];
-
-  // Save the raw FM count BEFORE any post-filtering — this is what the frontend uses to
-  // advance genreOffset so pagination doesn't re-request the same FM window.
-  const fmReturnedCount = rawData.length;
-
-  // Post-filter for ALL genre searches.
-  // FM's OR query on the related field "Song Files::Local Genre" can return a parent record
-  // whenever ANY related child matches, even if the parent's own Local Genre is unrelated
-  // (e.g. a Pop album with one incorrectly-tagged Song File entry labelled "Marabi").
-  // Filtering here ensures only records whose fieldData actually contains the genre pass through.
-  if (genres.length) {
-    const before = rawData.length;
-    rawData = rawData.filter(r => {
-      const f = r.fieldData || {};
-      return genres.some(g =>
-        GENRE_FIELDS.some(field => (f[field] || '').toLowerCase().includes(g.toLowerCase()))
-      );
-    });
-    if (rawData.length < before) {
-      logSearch.debug(`genre post-filter: FM returned ${before}, kept ${rawData.length} — removed ${before - rawData.length} false positive(s) for genre(s): ${genres.join(', ')}`);
+    if (!response.ok) {
+      const msg = json?.messages?.[0]?.message || 'FM error';
+      const code = json?.messages?.[0]?.code;
+      // FM "no records match" (401) is not an error for a search — return empty.
+      if (String(code) === '401') {
+        return { validRecords: [], fmReturnedCount: 0, foundCount: 0 };
+      }
+      const err = new Error(`Album search failed: ${msg} (FM ${code})`);
+      err.httpStatus = fmErrorToHttpStatus(code, response.status);
+      err.clientDetail = `${msg} (FM ${code})`;
+      throw err;
     }
+
+    let rawData = json?.response?.data || [];
+    // Raw FM count BEFORE post-filtering — frontend uses it to advance genreOffset.
+    const fmReturnedCount = rawData.length;
+
+    // Post-filter for ALL genre searches: FM's OR query on the related field
+    // "Song Files::Local Genre" can return a parent whenever ANY related child
+    // matches, even if the parent's own Local Genre is unrelated.
+    if (genres.length) {
+      const before = rawData.length;
+      rawData = rawData.filter(r => {
+        const f = r.fieldData || {};
+        return genres.some(g =>
+          GENRE_FIELDS.some(field => (f[field] || '').toLowerCase().includes(g.toLowerCase()))
+        );
+      });
+      if (rawData.length < before) {
+        logSearch.debug(`genre post-filter: FM returned ${before}, kept ${rawData.length} — removed ${before - rawData.length} false positive(s) for genre(s): ${genres.join(', ')}`);
+      }
+    }
+
+    const validRecords = rawData.filter(r => hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
+    return { validRecords, fmReturnedCount, foundCount: json?.response?.dataInfo?.foundCount };
   }
 
-  const validRecords = rawData.filter(r => hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
+  let { validRecords, fmReturnedCount, foundCount } = await fetchFiltered(buildQueries({ q, artist, album, track, genres }));
+  let relaxed = false;
 
-  const needle = (artist || q).toLowerCase();
-  if (needle) {
-    validRecords.sort((a, b) => {
-      const aAlbumArtist = (a.fieldData?.['Album Artist'] || '').toLowerCase();
-      const bAlbumArtist = (b.fieldData?.['Album Artist'] || '').toLowerCase();
-      const rank = (s) => { if (s.startsWith(needle)) { return 0; } return s.includes(needle) ? 1 : 2; };
-      return rank(aAlbumArtist) - rank(bAlbumArtist);
-    });
+  // Multi-word dead-end rescue. The strict q query requires EVERY word in ONE
+  // field, so a real-world multi-word name dead-ends when the catalogue stores
+  // only part of it. Retry matching ANY word and rank by word-match count.
+  // Plain free-text q only — structured artist/album/track/genre keep precise semantics.
+  const words = (q || '').trim().split(/\s+/).filter(Boolean);
+  if (q && words.length > 1 && !artist && !album && !track && !genres.length && validRecords.length === 0) {
+    const r = await fetchFiltered(buildRelaxedQueries(q));
+    validRecords = r.validRecords;
+    fmReturnedCount = r.fmReturnedCount;
+    foundCount = r.foundCount;
+    relaxed = true;
+    const lowWords = words.map(w => w.toLowerCase());
+    // Relevance for the relaxed (any-word) pass. A query word that the artist
+    // name *is* — or begins with — is a far stronger signal than a word that
+    // merely appears somewhere. This is what makes a full real-world name find
+    // the partial we actually store: the catalogue has only "Thandiswa" (no
+    // surname), so "Thandiswa Mazwai" must rank artist=="Thandiswa" (exact
+    // first-word match, +3) ABOVE "Ntsiki Mazwai" (only contains "Mazwai", +1),
+    // even though no "Thandiswa Mazwai" record exists.
+    const relevance = (fd) => {
+      const artist = (fd['Album Artist'] || fd['Track Artist'] || '').toLowerCase().trim();
+      const blob = SEARCH_FIELDS_DEFAULT.map(f => (fd[f] || '')).join(' ').toLowerCase();
+      let score = 0;
+      for (const w of lowWords) {
+        if (artist === w) score += 3;
+        else if (w.length >= 3 && artist.startsWith(w)) score += 2;
+        else if (blob.includes(w)) score += 1;
+      }
+      return score;
+    };
+    validRecords.sort((a, b) => relevance(b.fieldData || {}) - relevance(a.fieldData || {}));
+  } else {
+    const needle = (artist || q).toLowerCase();
+    if (needle) {
+      validRecords.sort((a, b) => {
+        const aAlbumArtist = (a.fieldData?.['Album Artist'] || '').toLowerCase();
+        const bAlbumArtist = (b.fieldData?.['Album Artist'] || '').toLowerCase();
+        const rank = (s) => { if (s.startsWith(needle)) { return 0; } return s.includes(needle) ? 1 : 2; };
+        return rank(aAlbumArtist) - rank(bAlbumArtist);
+      });
+    }
   }
 
   return {
     items: validRecords.slice(0, limit).map((d) => ({ recordId: d.recordId, modId: d.modId, fields: applyArtworkThumbs({ ...(d.fieldData || {}) }, 300) })),
-    rawReturnedCount: fmReturnedCount, // raw FM record count (before genre post-filter + audio/artwork filter) — used by frontend to advance genreOffset so pagination doesn't re-request the same FM window
-    total: json?.response?.dataInfo?.foundCount || validRecords.length,
+    rawReturnedCount: fmReturnedCount, // raw FM record count (before post-filters) — frontend advances genreOffset with this
+    total: foundCount || validRecords.length,
     offset: uiOff0,
-    limit
+    limit,
+    relaxed
   };
 }
 
@@ -215,6 +270,17 @@ router.get('/search', async (req, res) => {
     // let the browser/CDN cache popular queries briefly and serve stale while
     // revalidating, mirroring the featured rails.
     res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=300');
+
+    // "Did you mean…" — when a free-text query dead-ends (zero results) or only
+    // matched after relaxing the word constraint, offer fuzzy name corrections
+    // from the in-memory catalogue index (no FM on this path). Computed here,
+    // not inside the SWR value, so the cached payload stays canonical.
+    if (q && (value.items?.length === 0 || value.relaxed)) {
+      const sug = suggestNames(q, { limit: 4 }).map(s => s.name);
+      if (sug.length) {
+        return res.json({ ...value, suggestions: sug });
+      }
+    }
     res.json(value);
   } catch (err) {
     if (err && err.httpStatus) {
@@ -370,5 +436,5 @@ router.get('/ai-search', async (req, res) => {
 });
 
 // Export normalizeAiValue so other modules can reuse it if needed
-export { normalizeAiValue };
+export { normalizeAiValue, buildQueries, buildRelaxedQueries, SEARCH_FIELDS_DEFAULT };
 export default router;
