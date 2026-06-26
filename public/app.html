@@ -1325,7 +1325,11 @@
             src = '/api/container?u=' + encodeURIComponent(src);
           }
           const audioEl = document.getElementById('player');
-          if (audioEl) { audioEl.src = src; audioEl.load(); }
+          // Only preload into an IDLE player. If a track is currently playing,
+          // setting player.src here would interrupt it — and the user must be
+          // able to browse G100 / open playlists while the music keeps going
+          // (Spotify-style). Pressing play on a track still starts it normally.
+          if (audioEl && audioEl.paused) { audioEl.src = src; audioEl.load(); }
         })();
 
         // ── Consecutive play: advance to the next track when one ends ──────────
@@ -2133,7 +2137,7 @@
     });
   })();
   </script>
-  <script defer src="/app.min.js?v=101&t=1773263055"></script>
+  <script defer src="/app.min.js?v=102&t=1782800000"></script>
   <script>
   // ── Genre dropdown — populated dynamically from /api/genres ─────────────────
   // The select#searchGenre contains only the "All Genres" placeholder; we fetch
@@ -2447,7 +2451,13 @@
       // Clear button reloads the page for a clean state
       if (clearEl) {
         clearEl.addEventListener('click', () => {
-          window.location.reload();
+          // Soft reset (Spotify-style): collapse any open album-detail panel
+          // back to the grid. Playback intentionally KEEPS RUNNING — the
+          // app.min.js #clear handler clears the search fields and reloads
+          // featured albums; updateHeadings flips the view back to featured.
+          // (Was window.location.reload(), which hard-killed the music on every
+          // Home/Clear click. Changed 2026-06-26.)
+          if (typeof window.resetAlbumsView === 'function') window.resetAlbumsView();
         });
       }
 
@@ -5454,8 +5464,13 @@
     }
 
     function showView(name) {
-      // Stop discovery.js private audio when leaving any view
-      if (typeof window._discoveryStopPlayback === 'function') window._discoveryStopPlayback();
+      // NOTE: We intentionally do NOT stop playback on navigation. Music must
+      // keep playing while the user browses/searches (Spotify-style). The
+      // single <audio id="player"> and the player bar live at top-level body,
+      // so they survive view switches. (This used to call
+      // window._discoveryStopPlayback() to stop discovery.js's old private
+      // audio engine — that engine no longer exists, so the call only killed
+      // the shared player on every nav. Removed 2026-06-26.)
 
       // Reset Explore Albums whenever we navigate away from it
       var albumsEl = document.getElementById('view-albums');
@@ -5518,6 +5533,7 @@
     }
 
     window.showView = showView;
+    window.resetAlbumsView = resetAlbumsView;
   })();
   </script>
 
