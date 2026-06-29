@@ -36,6 +36,8 @@ import { sanitizePlaylistForShare } from './lib/playlist.js';
 import { buildShareUrl } from './lib/http.js';
 import { tokenValidationCache } from './cache.js';
 import { ensureToken, closeFmPool } from './fm-client.js';
+import { isPgEnabled, closePgPool } from './lib/pg.js';
+import { METADATA_SOURCE } from './lib/metadata-source.js';
 import { loadAccessTokens } from './lib/token-store.js';
 import { loadPlaylistByShareId } from './lib/playlist-store.js';
 import { createPrecompressedStatic } from './lib/precompressed-static.js';
@@ -181,6 +183,15 @@ const PODCASTS_ENABLED = process.env.PODCASTS_ENABLED === 'true';
 // trips the token wall. Enable with SUGGESTIONS_ENABLED=true (an artifact must
 // be present on disk or downloadable via SUGGEST_DB_URL — see initSemanticIndex).
 const SUGGESTIONS_ENABLED = process.env.SUGGESTIONS_ENABLED === 'true';
+
+// ── Catalog metadata source (Postgres mirror migration) ───────────────────────
+// Catalog READS come from either FileMaker (default) or the Postgres mirror of
+// MadStreamer. FileMaker stays the system of record; this only switches the read
+// path, and only when METADATA_SOURCE=postgres AND DATABASE_URL is set (the
+// resolver in lib/metadata-source.js degrades to filemaker otherwise). Flip to
+// postgres ONLY in the live env, after the mirror is populated. See
+// docs/postgres-mirror.md.
+console.log(`[MASS] Catalog metadata source: ${METADATA_SOURCE} (Postgres ${isPgEnabled() ? 'configured' : 'not configured'})`);
 
 app.use((req, res, next) => {
   if (TELKOM_ENABLED) return next();
@@ -911,6 +922,7 @@ process.on('SIGTERM', async () => {
     });
   }
   await closeFmPool();
+  await closePgPool();
   process.exit(0);
 });
 
@@ -922,6 +934,7 @@ process.on('SIGINT', async () => {
     });
   }
   await closeFmPool();
+  await closePgPool();
   process.exit(0);
 });
 

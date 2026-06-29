@@ -12,6 +12,8 @@ import { fmErrorToHttpStatus } from '../../lib/http.js';
 import { createLogger } from '../../lib/logger.js';
 import { validators } from '../../lib/validators.js';
 import { suggestNames } from '../../lib/name-index.js';
+import { usePostgresMetadata } from '../../lib/metadata-source.js';
+import { pgFind } from '../../lib/catalog-store-pg.js';
 
 const router = Router();
 
@@ -119,24 +121,32 @@ async function runSearch({ q, artist, album, track, genres, limit, uiOff0, fmOff
   // validity). Returns the kept records plus the raw count the frontend needs
   // to advance genreOffset. Throws a tagged error on FM failure (SWR won't cache).
   async function fetchFiltered(queries) {
-    const payload = { query: queries, limit: fmLimit, offset: fmOff };
-    const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
-    const json = await response.json().catch(() => ({}));
+    let rawData, foundCount;
+    if (usePostgresMetadata()) {
+      const result = await pgFind(queries, { limit: fmLimit, offset: fmOff });
+      rawData = result.data;
+      foundCount = result.foundCount;
+    } else {
+      const payload = { query: queries, limit: fmLimit, offset: fmOff };
+      const response = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
+      const json = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      const msg = json?.messages?.[0]?.message || 'FM error';
-      const code = json?.messages?.[0]?.code;
-      // FM "no records match" (401) is not an error for a search — return empty.
-      if (String(code) === '401') {
-        return { validRecords: [], fmReturnedCount: 0, foundCount: 0 };
+      if (!response.ok) {
+        const msg = json?.messages?.[0]?.message || 'FM error';
+        const code = json?.messages?.[0]?.code;
+        // FM "no records match" (401) is not an error for a search — return empty.
+        if (String(code) === '401') {
+          return { validRecords: [], fmReturnedCount: 0, foundCount: 0 };
+        }
+        const err = new Error(`Album search failed: ${msg} (FM ${code})`);
+        err.httpStatus = fmErrorToHttpStatus(code, response.status);
+        err.clientDetail = `${msg} (FM ${code})`;
+        throw err;
       }
-      const err = new Error(`Album search failed: ${msg} (FM ${code})`);
-      err.httpStatus = fmErrorToHttpStatus(code, response.status);
-      err.clientDetail = `${msg} (FM ${code})`;
-      throw err;
+      rawData = json?.response?.data || [];
+      foundCount = json?.response?.dataInfo?.foundCount;
     }
 
-    let rawData = json?.response?.data || [];
     // Raw FM count BEFORE post-filtering — frontend uses it to advance genreOffset.
     const fmReturnedCount = rawData.length;
 
@@ -157,7 +167,7 @@ async function runSearch({ q, artist, album, track, genres, limit, uiOff0, fmOff
     }
 
     const validRecords = rawData.filter(r => hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
-    return { validRecords, fmReturnedCount, foundCount: json?.response?.dataInfo?.foundCount };
+    return { validRecords, fmReturnedCount, foundCount };
   }
 
   let { validRecords, fmReturnedCount, foundCount } = await fetchFiltered(buildQueries({ q, artist, album, track, genres }));
@@ -328,6 +338,13 @@ async function tryYearField(field, start, end, limit, offset) {
 }
 
 async function fetchRecordsForYearRange(start, end, limit, offset) {
+  if (usePostgresMetadata()) {
+    const { data } = await pgFind(
+      [{ 'Year of Release': `${start}..${end}` }],
+      { limit: Math.min(500, limit + offset + 1) }
+    );
+    return data;
+  }
   // Fast path — try the cached working field first.
   if (cachedYearField) {
     const result = await tryYearField(cachedYearField, start, end, limit, offset);

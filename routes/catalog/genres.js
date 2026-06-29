@@ -11,6 +11,8 @@ import { FM_LAYOUT, applyVisibility } from '../../lib/fm-fields.js';
 import { parsePositiveInt } from '../../lib/format.js';
 import { createSwrCache } from '../../lib/swr-cache.js';
 import { createLogger } from '../../lib/logger.js';
+import { usePostgresMetadata } from '../../lib/metadata-source.js';
+import { pgGenres } from '../../lib/catalog-store-pg.js';
 
 const router    = Router();
 const log       = createLogger('genres');
@@ -41,6 +43,7 @@ async function fetchPage(query, offset) {
 }
 
 async function fetchAllGenres() {
+  if (usePostgresMetadata()) return pgGenres();
   const query = applyVisibility({ [GENRE_FIELD]: '*' });
 
   // First page — kicks off to discover foundCount

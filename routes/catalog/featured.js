@@ -20,6 +20,8 @@ import { parsePositiveInt } from '../../lib/format.js';
 import { dedupRecordsByAlbum } from '../../lib/album-dedup.js';
 import { createSwrCache } from '../../lib/swr-cache.js';
 import { createLogger } from '../../lib/logger.js';
+import { usePostgresMetadata } from '../../lib/metadata-source.js';
+import { pgFeatured, pgNewReleases, pgSingles, pgGlobalFavorites, pgG100 } from '../../lib/catalog-store-pg.js';
 
 const router = Router();
 const log    = createLogger('featured');
@@ -111,6 +113,7 @@ function sampleRandom(records = [], count = records.length) {
 
 // ── Featured album fetch ────────────────────────────────────────────────────
 async function fetchFeaturedAlbumRecords(limit = 400) {
+  if (usePostgresMetadata()) return pgFeatured(limit);
   if (!FEATURED_FIELD_CANDIDATES.length) return [];
   const normalizedLimit = Math.max(1, Math.min(1000, limit));
 
@@ -184,6 +187,7 @@ async function tryNewReleaseField(field, normalizedLimit) {
 }
 
 async function fetchNewReleaseRecords(limit = 200) {
+  if (usePostgresMetadata()) return pgNewReleases(limit);
   const normalizedLimit = Math.max(1, Math.min(1000, limit));
   for (const field of NEW_RELEASES_FIELD_CANDIDATES) {
     if (!field) continue;
@@ -225,6 +229,7 @@ async function trySinglesField(field, normalizedLimit) {
 }
 
 async function fetchSinglesRecords(limit = 200) {
+  if (usePostgresMetadata()) return pgSingles(limit);
   const normalizedLimit = Math.max(1, Math.min(1000, limit));
   for (const field of SINGLES_FIELD_CANDIDATES) {
     if (!field) continue;
@@ -266,6 +271,7 @@ async function tryGlobalFavoritesField(field, normalizedLimit) {
 }
 
 async function fetchGlobalFavoritesRecords(limit = 1000) {
+  if (usePostgresMetadata()) return pgGlobalFavorites(limit);
   const normalizedLimit = Math.max(1, Math.min(1000, limit));
   for (const field of GLOBAL_FAVS_FIELD_CANDIDATES) {
     if (!field) continue;
@@ -281,6 +287,7 @@ async function fetchGlobalFavoritesRecords(limit = 1000) {
 
 // ── G100 fetch ──────────────────────────────────────────────────────────────
 async function fetchG100Records(limit = 400) {
+  if (usePostgresMetadata()) return pgG100(limit);
   const normalizedLimit = Math.max(1, Math.min(1000, limit));
 
   const tryField = async (field) => {

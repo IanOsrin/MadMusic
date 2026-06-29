@@ -1,0 +1,37 @@
+# render.yaml — OPTIONAL Blueprint for the nightly catalog-sync cron ONLY.
+#
+# Your web services (Service A = madmusic.onrender.com, Service B =
+# musicafricadirect.com) and the Postgres instance are dashboard-managed; this
+# file intentionally defines ONLY the cron so it can live as infra-as-code
+# without Render trying to take over those services. Secrets use `sync: false`
+# (set them in the dashboard or an Environment Group — never commit them).
+# See docs/postgres-mirror.md.
+services:
+  - type: cron
+    name: madmusic-catalog-sync
+    runtime: node
+    plan: starter
+    region: oregon              # ⚠️ MUST match your Postgres instance's region
+    branch: live               # ⚠️ the branch Service B + this cron deploy from
+    schedule: "0 1 * * *"      # 01:00 UTC = 03:00 SAST — nightly, low traffic
+    buildCommand: npm install
+    startCommand: npm run sync:catalog
+    envVars:
+      # Internal Postgres URL (same region → private networking).
+      - key: DATABASE_URL
+        sync: false
+      # FileMaker (fmcloud) Data API creds — same values as the web service.
+      - key: FM_HOST
+        sync: false
+      - key: FM_DB
+        sync: false
+      - key: FM_USER
+        sync: false
+      - key: FM_PASS
+        sync: false
+      # Records per FM page (optional; default 500).
+      - key: SYNC_PAGE_SIZE
+        value: "500"
+    # Tip: instead of the five sync:false vars above, create a Render
+    # Environment Group with DATABASE_URL + FM_* and link it here and to
+    # Service B via:   envVarGroups: [ madmusic-shared ]

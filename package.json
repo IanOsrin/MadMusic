@@ -14,6 +14,8 @@
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots",
     "smoke": "node scripts/smoke.js",
+    "db:migrate": "node scripts/db/migrate.mjs",
+    "sync:catalog": "node scripts/sync/catalog-sync.mjs",
     "build:suggest": "node scripts/semantic/build-suggest.mjs",
     "refresh:suggest": "node scripts/semantic/build-index.mjs && node scripts/semantic/build-suggest.mjs && node scripts/semantic/enrich-artwork.mjs && aws s3 cp data/suggest.db s3://mass-music-audio-files/suggest/album-index.db --content-type application/x-sqlite3 && echo '[refresh] uploaded — live app will hot-swap within SUGGEST_REFRESH_MINUTES'",
     "load-test": "cd scripts && npx artillery run load-test.yml",
@@ -34,6 +36,7 @@
     "express-rate-limit": "^8.2.1",
     "lru-cache": "^11.2.2",
     "nodemailer": "^7.0.13",
+    "pg": "^8.22.0",
     "sqlite-vec": "^0.1.9",
     "undici": "^7"
   },
@@ -49,6 +52,10 @@
   },
   "homepage": "https://github.com/IanOsrin/MASS#readme",
   "devDependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
     "@eslint/js": "^10.0.1",
     "@huggingface/transformers": "^4.2.0",
     "@playwright/test": "^1.60.0",

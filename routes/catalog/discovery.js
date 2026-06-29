@@ -15,6 +15,8 @@ import { resolvePlaylistImage } from '../../lib/playlist.js';
 import { createSwrCache } from '../../lib/swr-cache.js';
 import { createLogger } from '../../lib/logger.js';
 import { parsePositiveInt } from '../../lib/format.js';
+import { usePostgresMetadata } from '../../lib/metadata-source.js';
+import { pgFind, pgRandomPool, pgMissingAudio } from '../../lib/catalog-store-pg.js';
 
 const router       = Router();
 
@@ -64,6 +66,7 @@ function deduplicateByAlbumArtist(records, count) {
 // Fetch a pool of songs from FM for a given genre key, bypassing the pool cache.
 // Returns { error, data, msg, code } — same shape as before.
 async function fetchPoolFromFM(genres) {
+  if (usePostgresMetadata()) return pgRandomPool(genres);
   if (genres.length > 0) {
     const genreFieldCandidates = ['Local Genre', 'Song Files::Local Genre'];
     for (const field of genreFieldCandidates) {
@@ -232,11 +235,13 @@ router.get('/random-songs', async (req, res) => {
 // Both return stale-instantly while a fresh fetch refreshes in the background.
 
 async function loadPlaylistTracks(name) {
-  const result = await fmFindRecords(
-    FM_LAYOUT,
-    [{ 'PublicPlaylist': fmExactMatch(name) }],
-    { limit: 2000, offset: 1 }
-  );
+  const result = usePostgresMetadata()
+    ? await pgFind([{ 'PublicPlaylist': fmExactMatch(name) }], { limit: 2000 })
+    : await fmFindRecords(
+        FM_LAYOUT,
+        [{ 'PublicPlaylist': fmExactMatch(name) }],
+        { limit: 2000, offset: 1 }
+      );
   if (!result.ok) {
     const err = new Error('Playlist not found or FM error');
     err.statusCode = 404;
@@ -284,11 +289,13 @@ async function loadPlaylistTracks(name) {
 }
 
 async function loadPlaylistListPayload() {
-  const result = await fmFindRecords(
-    FM_LAYOUT,
-    [{ 'PublicPlaylist': '*' }],
-    { limit: 2000, offset: 1 }
-  );
+  const result = usePostgresMetadata()
+    ? await pgFind([{ 'PublicPlaylist': '*' }], { limit: 2000 })
+    : await fmFindRecords(
+        FM_LAYOUT,
+        [{ 'PublicPlaylist': '*' }],
+        { limit: 2000, offset: 1 }
+      );
   if (!result.ok) {
     throw new Error('Failed to load public playlists from FileMaker');
   }
@@ -391,12 +398,12 @@ router.get('/missing-audio-songs', async (req, res) => {
 
     logMissing.debug(`fetching ${fetchLimit} records from offset ${randomOffset}`);
 
-    const json = await fmFindRecords(FM_LAYOUT, [{ 'Album Title': '*' }], {
-      limit: fetchLimit,
-      offset: randomOffset
-    });
-
-    const rawData = json?.data || [];
+    const rawData = usePostgresMetadata()
+      ? await pgMissingAudio(count)
+      : (await fmFindRecords(FM_LAYOUT, [{ 'Album Title': '*' }], {
+          limit: fetchLimit,
+          offset: randomOffset
+        }))?.data || [];
     logMissing.debug(`fetched ${rawData.length} total records`);
 
     const missingAudioRecords = rawData.filter(record => {
@@ -465,19 +472,26 @@ router.get('/album', async (req, res) => {
       return res.status(400).json({ error: 'Missing cat or title' });
     }
 
-    const payload = { query: queries, limit, offset: 1 };
-    const r = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
-    const json = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      const msg = json?.messages?.[0]?.message || 'FM error';
-      const code = json?.messages?.[0]?.code;
-      const httpStatus = fmErrorToHttpStatus(code, r.status);
-      return res.status(httpStatus).json({ error: 'Album lookup failed', status: httpStatus, detail: safeDetail(`${msg} (FM ${code})`) });
+    let rawData, actualTotal;
+    if (usePostgresMetadata()) {
+      const result = await pgFind(queries, { limit });
+      rawData = result.data;
+      actualTotal = result.foundCount;
+    } else {
+      const payload = { query: queries, limit, offset: 1 };
+      const r = await fmPost(`/layouts/${encodeURIComponent(FM_LAYOUT)}/_find`, payload);
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const msg = json?.messages?.[0]?.message || 'FM error';
+        const code = json?.messages?.[0]?.code;
+        const httpStatus = fmErrorToHttpStatus(code, r.status);
+        return res.status(httpStatus).json({ error: 'Album lookup failed', status: httpStatus, detail: safeDetail(`${msg} (FM ${code})`) });
+      }
+      rawData = json?.response?.data || [];
+      actualTotal = json?.response?.dataInfo?.foundCount ?? rawData.length;
     }
 
-    const rawData = json?.response?.data || [];
     const data = rawData.filter(d => hasValidAudio(d.fieldData || {}));
-    const actualTotal = json?.response?.dataInfo?.foundCount ?? rawData.length;
 
     const response = {
       ok: true,
