@@ -63,6 +63,15 @@ CREATE INDEX IF NOT EXISTS tracks_search_trgm
     gin_trgm_ops
   );
 
+-- Trigram indexes on the hot raw fields so pgFind's ILIKE (prefix/contains/suffix)
+-- is index-backed instead of a full scan (search + album lookup performance).
+CREATE INDEX IF NOT EXISTS tracks_trgm_album_artist ON tracks USING gin ((raw->>'Album Artist') gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS tracks_trgm_album_title  ON tracks USING gin ((raw->>'Album Title')  gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS tracks_trgm_track_name   ON tracks USING gin ((raw->>'Track Name')   gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS tracks_trgm_track_artist ON tracks USING gin ((raw->>'Track Artist') gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS tracks_trgm_local_genre  ON tracks USING gin ((raw->>'Local Genre')  gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS tracks_trgm_ref_cat      ON tracks USING gin ((raw->>'Reference Catalogue Number') gin_trgm_ops);
+
 -- Sync watermark + run log (one row per FileMaker layout mirrored).
 CREATE TABLE IF NOT EXISTS sync_state (
   source         text PRIMARY KEY,            -- e.g. 'API_Album_Songs'

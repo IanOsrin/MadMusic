@@ -48,12 +48,30 @@ describe('pgFind — FileMaker _find → SQL translation', () => {
     expect(lastCall()[0]).toMatch(/IS NOT NULL AND raw->>\$1 <> ''/);
   });
 
-  it('multi-token value ANDs each term (FM space = AND)', async () => {
+  it('multi-token *w* *w* (free-text contains) ANDs each substring', async () => {
     await pgFind([{ 'Album Title': '*lucky* *dube*' }]);
     const [sql, params] = lastCall();
     expect(sql).toMatch(/ILIKE \$\d+ AND raw->>\$\d+ ILIKE/);
     expect(params).toContain('%lucky%');
     expect(params).toContain('%dube%');
+  });
+
+  it('REGRESSION: multi-word begins "phrase*" is ONE whole-prefix, not split', async () => {
+    // begins("Soul Brothers") = "Soul Brothers*" — must NOT become %Soul% AND Brothers%
+    await pgFind([{ 'Album Artist': 'Soul Brothers*' }]);
+    const [sql, params] = lastCall();
+    expect(sql).not.toMatch(/ AND /);            // single condition
+    expect(params).toContain('Soul Brothers%');  // whole-phrase prefix
+    expect(params).not.toContain('%Soul%');
+  });
+
+  it('REGRESSION: plain multi-word value is a whole-prefix, not per-word substrings', async () => {
+    // /api/album?title=U Hlaza — "%U%" used to match everything → wrong album
+    await pgFind([{ 'Album Title': 'U Hlaza' }]);
+    const [sql, params] = lastCall();
+    expect(sql).not.toMatch(/ AND /);
+    expect(params).toContain('U Hlaza%');
+    expect(params).not.toContain('%U%');
   });
 
   it('multiple query objects OR together; fields within an object AND', async () => {
