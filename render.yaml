@@ -11,7 +11,7 @@ services:
     name: madmusic-catalog-sync
     runtime: node
     plan: starter
-    region: oregon              # ⚠️ MUST match your Postgres instance's region
+    region: frankfurt          # matches the Postgres instance (Frankfurt)
     branch: live               # ⚠️ the branch Service B + this cron deploy from
     schedule: "0 1 * * *"      # 01:00 UTC = 03:00 SAST — nightly, low traffic
     buildCommand: npm install
