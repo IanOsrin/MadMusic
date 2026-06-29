@@ -22,6 +22,7 @@ import {
 import { listSwrCaches, getSwrCacheByName, flushAllSwrCaches } from '../lib/swr-cache.js';
 import { SERVER_START_TIME } from '../lib/server-start-time.js';
 import { timingSafeEqualStr } from '../lib/crypto-utils.js';
+import { isPgEnabled, query as pgQuery } from '../lib/pg.js';
 
 const router = Router();
 
@@ -44,6 +45,94 @@ function requireAdminKey(req, res, next) {
   }
   return next();
 }
+
+// ── Postgres mirror status view ─────────────────────────────────────────────────
+// GET /api/pg-mirror
+//   • With a valid X-Admin-Key header → JSON snapshot of the catalog mirror.
+//   • In a browser (no header)        → a small HTML dashboard that prompts for
+//     the admin key once and fetches the JSON with the header (secret never goes
+//     in the URL). Read-only; reuses lib/db peek queries.
+async function gatherPgMirror() {
+  if (!isPgEnabled()) return { enabled: false };
+  const one = async (q) => (await pgQuery(q)).rows[0];
+  const all = async (q) => (await pgQuery(q)).rows;
+  const [syncState, totals, albumsGenres, visibility] = await Promise.all([
+    all('SELECT source, last_status, rows_total, last_synced_at FROM sync_state'),
+    one(`SELECT count(*) total,
+           count(*) FILTER (WHERE s3_audio_url IS NOT NULL) with_audio,
+           count(*) FILTER (WHERE is_featured) featured,
+           count(*) FILTER (WHERE is_g100) g100,
+           count(*) FILTER (WHERE is_single) singles,
+           count(*) FILTER (WHERE is_global_fav) global_fav,
+           count(*) FILTER (WHERE is_new_release) new_release
+         FROM tracks`),
+    one(`SELECT (SELECT count(*) FROM (SELECT DISTINCT lower(album_title), lower(album_artist) FROM tracks) a) albums,
+                (SELECT count(DISTINCT genre) FROM tracks WHERE genre <> '') genres`),
+    all(`SELECT coalesce(visibility,'(null)') visibility, count(*)::int count FROM tracks GROUP BY 1 ORDER BY 2 DESC`),
+  ]);
+  return { enabled: true, fetchedAt: new Date().toISOString(), syncState, totals, albumsGenres, visibility };
+}
+
+const PG_MIRROR_SHELL = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Catalog mirror</title><style>
+body{font:14px/1.5 system-ui,sans-serif;margin:0;background:#0f1115;color:#e6e8eb}
+header{padding:16px 20px;border-bottom:1px solid #222;display:flex;gap:12px;align-items:center}
+h1{font-size:16px;margin:0;font-weight:600}main{padding:20px;max-width:760px}
+input{font:inherit;padding:8px 10px;border:1px solid #333;border-radius:6px;background:#171a20;color:#e6e8eb}
+button{font:inherit;padding:8px 14px;border:0;border-radius:6px;background:#2d6cdf;color:#fff;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:12px 0}
+.card{background:#171a20;border:1px solid #222;border-radius:8px;padding:12px}
+.card .n{font-size:22px;font-weight:700}.card .l{color:#9aa3ad;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.muted{color:#9aa3ad}.err{color:#ff6b6b}table{border-collapse:collapse;width:100%;margin:6px 0}
+td,th{text-align:left;padding:6px 10px;border-bottom:1px solid #222}h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.04em;margin:20px 0 4px}
+</style>
+<header><h1>Catalog mirror — Postgres</h1><span id=ts class=muted></span><button id=refresh style=margin-left:auto>Refresh</button></header>
+<main id=app><form id=f><p>Enter admin key to view:</p><input id=k type=password autocomplete=current-password> <button>View</button></form></main>
+<script>
+const app=document.getElementById('app');
+function card(n,l){return '<div class=card><div class=n>'+n+'</div><div class=l>'+l+'</div></div>'}
+async function load(key){
+  app.innerHTML='<p class=muted>Loading…</p>';
+  let r; try{ r=await fetch('/api/pg-mirror',{headers:{'X-Admin-Key':key}}); }catch(e){ app.innerHTML='<p class=err>Network error</p>'; return; }
+  if(r.status===401){ sessionStorage.removeItem('mk'); app.innerHTML='<p class=err>Wrong key.</p>'+formHtml(); wire(); return; }
+  const d=await r.json();
+  if(!d.enabled){ app.innerHTML='<p class=err>Postgres is not configured on this service (METADATA_SOURCE/DATABASE_URL unset).</p>'; return; }
+  const t=d.totals||{}, ag=d.albumsGenres||{}, s=(d.syncState||[])[0]||{};
+  document.getElementById('ts').textContent='fetched '+new Date(d.fetchedAt).toLocaleString();
+  app.innerHTML=
+    '<h2>Sync</h2><table><tr><th>source<th>status<th>rows<th>last synced</tr>'+
+      '<tr><td>'+(s.source||'—')+'<td>'+(s.last_status||'—')+'<td>'+(s.rows_total||'—')+'<td>'+(s.last_synced_at?new Date(s.last_synced_at).toLocaleString():'—')+'</tr></table>'+
+    '<h2>Totals</h2><div class=grid>'+card(t.total,'tracks')+card(t.with_audio,'with audio')+card(ag.albums,'albums')+card(ag.genres,'genres')+'</div>'+
+    '<h2>Flag rails</h2><div class=grid>'+card(t.featured,'featured')+card(t.g100,'g100')+card(t.singles,'singles')+card(t.global_fav,'global fav')+card(t.new_release,'new release')+'</div>'+
+    '<h2>Visibility</h2><table>'+(d.visibility||[]).map(v=>'<tr><td>'+v.visibility+'<td>'+v.count+'</tr>').join('')+'</table>';
+}
+function formHtml(){return '<form id=f><p>Enter admin key to view:</p><input id=k type=password autocomplete=current-password> <button>View</button></form>'}
+function wire(){const f=document.getElementById('f'); if(f) f.onsubmit=e=>{e.preventDefault();const k=document.getElementById('k').value.trim();if(k){sessionStorage.setItem('mk',k);load(k);}};}
+document.getElementById('refresh').onclick=()=>{const k=sessionStorage.getItem('mk');if(k)load(k);};
+wire();
+const saved=sessionStorage.getItem('mk'); if(saved) load(saved);
+</script>`;
+
+router.get('/pg-mirror', async (req, res) => {
+  const provided = (req.headers['x-admin-key'] || '').trim();
+  const wantsJson = !!req.headers['x-admin-key'] || req.query.format === 'json' || !req.accepts('html');
+
+  // Browser with no key → serve the prompt shell (reveals nothing).
+  if (!provided && !wantsJson) {
+    res.type('html');
+    return res.send(PG_MIRROR_SHELL);
+  }
+  if (!ADMIN_SECRET) return res.status(503).json({ ok: false, error: 'Admin endpoints disabled: ADMIN_SECRET not configured' });
+  if (!provided || !timingSafeEqualStr(provided, ADMIN_SECRET)) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+  try {
+    return res.json({ ok: true, ...(await gatherPgMirror()) });
+  } catch (err) {
+    console.error('[admin] pg-mirror failed:', err?.message || err);
+    return res.status(500).json({ ok: false, error: 'pg-mirror query failed' });
+  }
+});
 
 // ── Named cache registry ──────────────────────────────────────────────────────
 //

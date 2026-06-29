@@ -346,7 +346,7 @@ app.use('/api/', async (req, res, next) => {
     '/auth', '/payments/initialize', '/payments/subscribe', '/payments/trial', '/payments/callback',
     '/payments/webhook', '/payments/plans', '/payments/subscription-plan',
     '/access/stream-events', '/access/logout', '/access/email/', '/health',
-    '/tokens/resync', '/tokens/unsynced', '/tokens/clear-trials',
+    '/tokens/resync', '/tokens/unsynced', '/tokens/clear-trials', '/pg-mirror',
     // Telkom webhook paths skip token auth ONLY while the integration is live;
     // ring-fenced (404 before this middleware) when TELKOM_ENABLED is off.
     ...(TELKOM_ENABLED ? ['/telkom/subscription', '/telkom/billing'] : []),

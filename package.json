@@ -22,7 +22,8 @@
     "load-test:smoke": "cd scripts && bash run-load-test.sh --smoke",
     "load-test:full": "cd scripts && bash run-load-test.sh",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "db:peek": "node scripts/db/peek.mjs"
   },
   "keywords": [],
   "author": "",
