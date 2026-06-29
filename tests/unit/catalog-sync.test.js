@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runCatalogSync } from '../../lib/catalog-sync.js';
+import { runCatalogSync, syncNewReleaseFlags } from '../../lib/catalog-sync.js';
 
 // Build a fake FM Data API GET /records response.
 function fmPage(records, foundCount) {
@@ -72,5 +72,30 @@ describe('runCatalogSync', () => {
   it('throws if required deps are missing', async () => {
     await expect(runCatalogSync({ query: () => {}, layout: 'L' })).rejects.toThrow(/fmGet/);
     await expect(runCatalogSync({ fmGet: () => {}, query: () => {} })).rejects.toThrow(/layout/);
+  });
+});
+
+describe('syncNewReleaseFlags', () => {
+  it('finds flagged recordIds and reconciles is_new_release in one UPDATE', async () => {
+    const fmPost = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ response: { data: [{ recordId: '11' }, { recordId: '22' }] } }),
+    }));
+    let updateParams = null;
+    const query = vi.fn(async (text, params) => { if (text.startsWith('UPDATE')) updateParams = params; return { rowCount: 2 }; });
+
+    const out = await syncNewReleaseFlags({ fmPost, query, layout: 'API_Album_Songs' });
+    expect(out).toEqual({ flagged: 2 });
+    expect(fmPost.mock.calls[0][1]).toMatchObject({ query: [{ 'Tape Files::New_Release': 'Yes' }] });
+    expect(query.mock.calls[0][0]).toMatch(/SET is_new_release = \(fm_record_id = ANY/);
+    expect(updateParams).toEqual([['11', '22']]);
+  });
+
+  it('falls back to the next field candidate on FM 102, and no-ops if none exist', async () => {
+    const fmPost = vi.fn(async () => ({ ok: false, json: async () => ({ messages: [{ code: '102' }] }) }));
+    const query = vi.fn(async () => ({ rowCount: 0 }));
+    const out = await syncNewReleaseFlags({ fmPost, query, layout: 'L' });
+    expect(out).toEqual({ flagged: null });
+    expect(query).not.toHaveBeenCalled(); // nothing reconciled when field absent
   });
 });

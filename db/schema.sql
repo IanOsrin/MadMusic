@@ -39,6 +39,10 @@ CREATE TABLE IF NOT EXISTS tracks (
 
 -- Additive column migrations for already-created tables (idempotent).
 ALTER TABLE tracks ADD COLUMN IF NOT EXISTS visibility text;
+-- New_Release lives on the Tape Files relationship and is NOT returned in
+-- fieldData (can't be derived from `raw`), so the sync sets it via a dedicated
+-- find. Default false; reconciled each sync run.
+ALTER TABLE tracks ADD COLUMN IF NOT EXISTS is_new_release boolean NOT NULL DEFAULT false;
 
 -- One-card-per-album rails group on (album_title, album_artist) — INVARIANT #1.
 CREATE INDEX IF NOT EXISTS tracks_album_idx
@@ -49,6 +53,7 @@ CREATE INDEX IF NOT EXISTS tracks_featured_idx   ON tracks (is_featured)   WHERE
 CREATE INDEX IF NOT EXISTS tracks_g100_idx       ON tracks (is_g100)       WHERE is_g100;
 CREATE INDEX IF NOT EXISTS tracks_single_idx     ON tracks (is_single)     WHERE is_single;
 CREATE INDEX IF NOT EXISTS tracks_global_fav_idx ON tracks (is_global_fav) WHERE is_global_fav;
+CREATE INDEX IF NOT EXISTS tracks_new_release_idx ON tracks (is_new_release) WHERE is_new_release;
 CREATE INDEX IF NOT EXISTS tracks_visibility_idx  ON tracks (visibility);
 
 -- Fuzzy search across title + album + artist (mirrors the live search engine).

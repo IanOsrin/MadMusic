@@ -10,11 +10,11 @@
 // ============================================================================
 
 import 'dotenv/config';
-import { fmGet, fmFindRecords, closeFmPool } from '../../fm-client.js';
+import { fmGet, fmFindRecords, fmPost, closeFmPool } from '../../fm-client.js';
 import { FM_LAYOUT } from '../../lib/fm-fields.js';
 import { isPgEnabled, query, closePgPool } from '../../lib/pg.js';
 import { parsePositiveInt } from '../../lib/format.js';
-import { runCatalogSync } from '../../lib/catalog-sync.js';
+import { runCatalogSync, syncNewReleaseFlags } from '../../lib/catalog-sync.js';
 import { mapRecordToRow, TRACK_COLUMNS } from '../../lib/catalog-mapper.js';
 
 const args = new Set(process.argv.slice(2));
@@ -135,6 +135,9 @@ async function main() {
   });
 
   console.log(`[catalog-sync] ✓ ${result.rowsUpserted} rows upserted, ${result.rowsDeleted} pruned, ${result.pages} pages`);
+
+  // New_Release is a related field not present in fieldData — flag it separately.
+  await syncNewReleaseFlags({ fmPost, query, layout: FM_LAYOUT, log: (msg) => console.log(msg) });
 }
 
 // Always tear down both connection pools so the cron process exits promptly

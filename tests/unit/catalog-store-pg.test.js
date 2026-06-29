@@ -66,9 +66,10 @@ describe('catalog-store-pg', () => {
     expect(query.mock.calls[0][1]).toEqual([1]);
   });
 
-  it('pgNewReleases returns empty (no New_Release column) without touching pg', async () => {
+  it('pgNewReleases queries is_new_release and filters by visibility', async () => {
+    query.mockResolvedValue({ rows: [good('1'), good('2')] });
     const recs = await pgNewReleases();
-    expect(recs).toEqual([]);
-    expect(query).not.toHaveBeenCalled();
+    expect(query.mock.calls[0][0]).toMatch(/WHERE is_new_release = true/);
+    expect(recs.map((r) => r.recordId)).toEqual(['1', '2']);
   });
 });
