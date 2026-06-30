@@ -42,3 +42,18 @@ ANALYZER_CONFIG=/path/to/config.json python mad_analyzer.py --limit 50 --dry-run
 ```
 
 `--dry-run` analyses without writing to FileMaker.
+
+## Render Docker cron (recommended — always-on, no machine to migrate)
+
+Essentia decodes MP3s via ffmpeg/libav, which Render's *native* Python build
+can't apt-install — so run it as a **Docker** cron. `Dockerfile` bundles ffmpeg;
+`render.yaml` defines the `madmusic-bpm-analyzer` cron (Frankfurt, `0 0 * * *` =
+02:00 SAST, `standard` plan for Essentia's RAM).
+
+Deploy: apply the Blueprint (or add a Docker Cron Job in the dashboard with
+`dockerfilePath: scripts/analyzer/Dockerfile`). Env: `FM_HOST` (include
+`https://`), `FM_DB`, `FM_USER`, `FM_PASS`, `AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY`, `AWS_REGION=eu-north-1`. Use **Trigger Run** to test.
+
+> ⚠️ ONE runner only — don't also schedule it on a desktop, or it double-writes
+> to FileMaker.

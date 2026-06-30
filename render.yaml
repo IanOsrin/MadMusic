@@ -1,4 +1,6 @@
-# render.yaml — OPTIONAL Blueprint for the nightly catalog-sync cron ONLY.
+# render.yaml — Blueprint for the maintenance CRON JOBS (catalog-sync +
+# BPM/Key analyzer). Does NOT define the web services or Postgres (those stay
+# dashboard-managed) — only the crons, so Render won't take them over.
 #
 # Your web services (Service A = madmusic.onrender.com, Service B =
 # musicafricadirect.com) and the Postgres instance are dashboard-managed; this
@@ -35,3 +37,33 @@ services:
     # Tip: instead of the five sync:false vars above, create a Render
     # Environment Group with DATABASE_URL + FM_* and link it here and to
     # Service B via:   envVarGroups: [ madmusic-shared ]
+
+  # ── BPM/Key analyzer (Docker — Essentia needs ffmpeg) ──────────────────────
+  # Finds FileMaker records with empty AI_BPM, analyses the S3 audio with
+  # Essentia, writes AI_BPM/AI_Key/AI_Mood/AI_Energy back to FileMaker. Postgres
+  # picks the values up on the next catalog-sync. ONE runner only — don't also
+  # schedule it on a desktop. ~1 GB RAM for MusicExtractor → standard plan.
+  - type: cron
+    name: madmusic-bpm-analyzer
+    runtime: docker
+    plan: standard
+    region: frankfurt
+    branch: live
+    schedule: "0 0 * * *"      # 00:00 UTC = 02:00 SAST (before the catalog sync)
+    dockerfilePath: ./scripts/analyzer/Dockerfile
+    dockerContext: ./scripts/analyzer
+    envVars:
+      - key: FM_HOST          # MUST include https:// (e.g. https://digitalcupboard.fmcloud.fm)
+        sync: false
+      - key: FM_DB
+        sync: false
+      - key: FM_USER
+        sync: false
+      - key: FM_PASS
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        value: eu-north-1

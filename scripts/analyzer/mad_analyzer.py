@@ -117,10 +117,14 @@ class FileMakerAPI:
         self.base = f"{self.host}/fmi/data/v1/databases/{self.database}"
 
     def login(self):
+        # Build the Basic header explicitly with UTF-8 base64. requests' auth=(u,p)
+        # tuple encodes Basic credentials as latin-1, which mangles passwords
+        # containing non-latin-1 characters → FM code 212 "invalid account".
+        import base64
+        cred = base64.b64encode(f"{self.username}:{self.password}".encode("utf-8")).decode("ascii")
         r = requests.post(
             f"{self.base}/sessions",
-            auth=(self.username, self.password),
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/json", "Authorization": f"Basic {cred}"},
             json={}, verify=self.verify,
         )
         r.raise_for_status()
