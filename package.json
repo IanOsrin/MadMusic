@@ -23,7 +23,8 @@
     "load-test:full": "cd scripts && bash run-load-test.sh",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "db:peek": "node scripts/db/peek.mjs"
+    "db:peek": "node scripts/db/peek.mjs",
+    "refresh:index": "node scripts/semantic/refresh-index.mjs"
   },
   "keywords": [],
   "author": "",

@@ -21,11 +21,15 @@
 import 'dotenv/config';
 import path from 'node:path';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import * as sqliteVec from 'sqlite-vec';
 import { pipeline } from '@huggingface/transformers';
 import { hasValidAudio } from '../../lib/track.js';
+import { isPgEnabled, query as pgQuery, closePgPool } from '../../lib/pg.js';
+
+const sha1 = (s) => createHash('sha1').update(s).digest('hex');
 
 // Visibility is enforced explicitly here rather than via lib/fm-fields'
 // recordIsVisible(), which silently passes everything when FM_VISIBILITY_FIELD
@@ -39,7 +43,7 @@ function isVisible(f) {
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.join(__dirname, '..', '..', 'data', 'semantic.db');
+const DB_PATH = process.env.SEMANTIC_DB_PATH || path.join(__dirname, '..', '..', 'data', 'semantic.db');
 
 // Data source: fmcloud (FM_*, the live DB) by default so the index reflects
 // daily edits without a snapshot-sync step. Embedding still runs LOCALLY below
@@ -168,6 +172,7 @@ function buildMeta(f) {
     mood: val(f, 'AI_Mood'),
     energy: val(f, 'AI_Energy'),
     bpm: val(f, 'AI_BPM'),
+    key: val(f, 'AI_Key'),   // carried for the album-level musical re-rank (build-suggest)
     language: val(f, 'Language Code'),
     // Carried so the derived suggest.db can group/render albums + resolve seeds
     // with zero FileMaker calls at runtime (see scripts/semantic/build-suggest.mjs).
@@ -179,94 +184,146 @@ function buildMeta(f) {
   };
 }
 
+// ── Source loaders (Postgres mirror by default; FileMaker fallback) ──────────
+
+function keepRow(recordId, f) {
+  if (!isVisible(f)) return null;
+  if (!hasValidAudio(f)) return null;
+  const doc = buildDoc(f);
+  if (!doc || doc.length < 20) return null;
+  return { recordId: String(recordId), doc, meta: buildMeta(f), hash: sha1(doc) };
+}
+
+async function loadRowsFromPg() {
+  const lim = Number.isFinite(argLimit) ? ` LIMIT ${Math.max(1, argLimit)}` : '';
+  console.log('[ingest] source: Postgres mirror (tracks)');
+  const { rows: recs } = await pgQuery(`SELECT fm_record_id AS "recordId", raw FROM tracks ORDER BY fm_record_id${lim}`);
+  const rows = [];
+  for (const rec of recs) {
+    const row = keepRow(rec.recordId, rec.raw || {});
+    if (row) rows.push(row);
+  }
+  console.log(`[ingest] PG scanned ${recs.length}, kept ${rows.length} (visible+playable)`);
+  return rows;
+}
+
+async function loadRowsFromFM() {
+  console.log(`[ingest] source: FileMaker ${HOST}/${FMDB} layout ${LAYOUT}`);
+  const token = await fmLogin();
+  const rows = [];
+  let offset = 1, scanned = 0;
+  const PAGE = 500;
+  try {
+    while (scanned < argLimit) {
+      const page = await fmPage(token, offset, Math.min(PAGE, argLimit - scanned));
+      if (!page.length) break;
+      for (const rec of page) {
+        scanned++;
+        const row = keepRow(rec.recordId, rec.fieldData);
+        if (row) rows.push(row);
+      }
+      offset += page.length;
+      if (scanned % 5000 < PAGE) console.log(`[ingest] scanned ${scanned}, kept ${rows.length}`);
+    }
+  } finally { await fmLogout(token); }
+  console.log(`[ingest] FM fetch done: scanned ${scanned}, kept ${rows.length}`);
+  return rows;
+}
+
+// Read the prior index so unchanged docs reuse their vector (incremental).
+// Returns Map recordId → { hash, embedding(Buffer) }. Empty if no prior or the
+// prior predates the hash column (→ one full rebuild establishes hashes).
+function loadPriorVectors(dbPath) {
+  const prior = new Map();
+  if (!fs.existsSync(dbPath)) return prior;
+  let pdb;
+  try {
+    pdb = new Database(dbPath, { readonly: true });
+    sqliteVec.load(pdb);
+    const cols = pdb.prepare('PRAGMA table_info(tracks)').all().map((c) => c.name);
+    if (!cols.includes('hash')) return prior;
+    const stmt = pdb.prepare('SELECT t.recordId AS recordId, t.hash AS hash, v.embedding AS embedding FROM tracks t JOIN vec_tracks v ON v.rowid = t.id');
+    for (const r of stmt.iterate()) prior.set(r.recordId, { hash: r.hash, embedding: r.embedding });
+  } catch (e) {
+    console.warn('[ingest] prior index unreadable — full rebuild:', e.message);
+    prior.clear();
+  } finally { if (pdb) { try { pdb.close(); } catch { /* noop */ } } }
+  return prior;
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 const t0 = Date.now();
-console.log(`[ingest] source: ${HOST}/${FMDB} layout ${LAYOUT}`);
-
-// Phase A — fetch + filter + compose
-const token = await fmLogin();
-const rows = [];
-let offset = 1;
-let scanned = 0;
-const PAGE = 500;
-try {
-  while (scanned < argLimit) {
-    const page = await fmPage(token, offset, Math.min(PAGE, argLimit - scanned));
-    if (!page.length) break;
-    for (const rec of page) {
-      const f = rec.fieldData;
-      scanned++;
-      if (!isVisible(f)) continue;
-      if (!hasValidAudio(f)) continue;
-      const doc = buildDoc(f);
-      if (!doc || doc.length < 20) continue;
-      rows.push({ recordId: String(rec.recordId), doc, meta: buildMeta(f) });
-    }
-    offset += page.length;
-    if (scanned % 5000 < PAGE) {
-      console.log(`[ingest] scanned ${scanned}, kept ${rows.length} (visible+playable)`);
-    }
-  }
-} finally {
-  await fmLogout(token);
-}
-console.log(`[ingest] fetch done: scanned ${scanned}, kept ${rows.length} (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
+const usePg = process.env.SUGGEST_SOURCE === 'postgres'
+  || (isPgEnabled() && !process.env.SUGGEST_FM_HOST && process.env.SUGGEST_SOURCE !== 'filemaker');
+const rows = usePg ? await loadRowsFromPg() : await loadRowsFromFM();
+if (usePg) await closePgPool();
 
 if (!rows.length) {
-  console.error('[ingest] nothing to index — check filters/credentials');
+  console.error('[ingest] nothing to index — check filters/source');
   process.exit(1);
 }
 
-// Phase B — embed locally + write sqlite-vec index
-console.log(`[ingest] loading embedding model ${MODEL_ID} (first run downloads ~120MB)…`);
-const embed = await pipeline('feature-extraction', MODEL_ID, { dtype: 'q8' });
+// Incremental: reuse the prior vector for any doc whose hash is unchanged.
+const prior = loadPriorVectors(DB_PATH);
+const toEmbed = rows.filter((r) => { const p = prior.get(r.recordId); return !p || p.hash !== r.hash; });
+console.log(`[ingest] ${rows.length} tracks · reuse ${rows.length - toEmbed.length} · (re)embed ${toEmbed.length}`);
 
+if (toEmbed.length) {
+  console.log(`[ingest] loading embedding model ${MODEL_ID} (first run downloads ~120MB)…`);
+  const embed = await pipeline('feature-extraction', MODEL_ID, { dtype: 'q8' });
+  const tEmbed = Date.now();
+  let done = 0;
+  for (let i = 0; i < toEmbed.length; i += EMBED_BATCH) {
+    const batch = toEmbed.slice(i, i + EMBED_BATCH);
+    // e5 models expect "passage: " on documents and "query: " on queries.
+    const out = await embed(batch.map((r) => `passage: ${r.doc}`), { pooling: 'mean', normalize: true });
+    const vecs = out.tolist();
+    batch.forEach((r, j) => { r.embedding = Buffer.from(new Float32Array(vecs[j]).buffer); });
+    done += batch.length;
+    if (done % 1600 < EMBED_BATCH) {
+      const rate = done / ((Date.now() - tEmbed) / 1000);
+      console.log(`[ingest] embedded ${done}/${toEmbed.length} (${rate.toFixed(0)}/s, ~${Math.round((toEmbed.length - done) / rate)}s left)`);
+    }
+  }
+}
+// Reused rows inherit their prior vector.
+for (const r of rows) if (!r.embedding) r.embedding = prior.get(r.recordId).embedding;
+
+// Write a fresh DB to a temp path, then atomic-rename (a crash can't corrupt it).
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-fs.rmSync(DB_PATH, { force: true }); // full rebuild — the index is disposable by design
-const db = new Database(DB_PATH);
+const tmp = `${DB_PATH}.tmp`;
+fs.rmSync(tmp, { force: true });
+const db = new Database(tmp);
 sqliteVec.load(db);
 db.exec(`
   CREATE TABLE tracks (
     id INTEGER PRIMARY KEY,
     recordId TEXT NOT NULL UNIQUE,
     doc TEXT NOT NULL,
-    meta TEXT NOT NULL
+    meta TEXT NOT NULL,
+    hash TEXT NOT NULL
   );
   CREATE VIRTUAL TABLE vec_tracks USING vec0(embedding float[${VEC_DIM}]);
   CREATE TABLE index_info (key TEXT PRIMARY KEY, value TEXT);
 `);
-const insTrack = db.prepare('INSERT INTO tracks (id, recordId, doc, meta) VALUES (?, ?, ?, ?)');
+const insTrack = db.prepare('INSERT INTO tracks (id, recordId, doc, meta, hash) VALUES (?, ?, ?, ?, ?)');
 const insVec = db.prepare('INSERT INTO vec_tracks (rowid, embedding) VALUES (?, ?)');
-
-let done = 0;
-const tEmbed = Date.now();
-for (let i = 0; i < rows.length; i += EMBED_BATCH) {
-  const batch = rows.slice(i, i + EMBED_BATCH);
-  // e5 models expect "passage: " on documents and "query: " on queries.
-  const out = await embed(batch.map((r) => `passage: ${r.doc}`), { pooling: 'mean', normalize: true });
-  const vecs = out.tolist();
-  const tx = db.transaction(() => {
-    batch.forEach((r, j) => {
-      const id = i + j + 1;
-      insTrack.run(id, r.recordId, r.doc, JSON.stringify(r.meta));
-      insVec.run(BigInt(id), Buffer.from(new Float32Array(vecs[j]).buffer));
-    });
+db.transaction(() => {
+  rows.forEach((r, i) => {
+    const id = i + 1;
+    insTrack.run(id, r.recordId, r.doc, JSON.stringify(r.meta), r.hash);
+    insVec.run(BigInt(id), r.embedding);
   });
-  tx();
-  done += batch.length;
-  if (done % 1600 < EMBED_BATCH) {
-    const rate = done / ((Date.now() - tEmbed) / 1000);
-    const eta = Math.round((rows.length - done) / rate);
-    console.log(`[ingest] embedded ${done}/${rows.length} (${rate.toFixed(0)}/s, ~${eta}s left)`);
-  }
-}
+})();
 
-db.prepare('INSERT INTO index_info (key, value) VALUES (?, ?)').run('model', MODEL_ID);
-db.prepare('INSERT INTO index_info (key, value) VALUES (?, ?)').run('dim', String(VEC_DIM));
-db.prepare('INSERT INTO index_info (key, value) VALUES (?, ?)').run('builtAt', new Date().toISOString());
-db.prepare('INSERT INTO index_info (key, value) VALUES (?, ?)').run('tracks', String(rows.length));
+const setInfo = db.prepare('INSERT INTO index_info (key, value) VALUES (?, ?)');
+setInfo.run('model', MODEL_ID);
+setInfo.run('dim', String(VEC_DIM));
+setInfo.run('builtAt', new Date().toISOString());
+setInfo.run('tracks', String(rows.length));
 db.close();
+fs.renameSync(tmp, DB_PATH);
 
 const mb = (fs.statSync(DB_PATH).size / 1024 / 1024).toFixed(1);
-console.log(`[ingest] DONE: ${rows.length} tracks → ${DB_PATH} (${mb} MB) in ${((Date.now() - t0) / 1000).toFixed(0)}s total`);
+console.log(`[ingest] DONE: ${rows.length} tracks (${toEmbed.length} embedded, ${rows.length - toEmbed.length} reused) → ${DB_PATH} (${mb} MB) in ${((Date.now() - t0) / 1000).toFixed(0)}s`);

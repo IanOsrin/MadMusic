@@ -49,6 +49,35 @@ if (!fs.existsSync(SRC_PATH)) {
 
 const norm = (s) => String(s ?? '').toLowerCase().trim().replace(/\s+/g, ' ');
 
+// ── Musical-feature helpers (album-level, for the re-rank in semantic-index) ──
+const PITCH = {
+  C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6,
+  G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11
+};
+// Essentia AI_Key ("A minor" / "F# major" / "Bb minor") → Camelot { num 1-12, major }.
+// Camelot follows the circle of fifths: C major = 8B, A minor = 8A, etc.
+function parseCamelot(s) {
+  const m = String(s ?? '').trim().match(/^([A-Ga-g])([#b]?)\s+(major|minor)$/);
+  if (!m) return null;
+  const pc = PITCH[m[1].toUpperCase() + (m[2] || '')];
+  if (pc == null) return null;
+  const major = /major/i.test(m[3]);
+  // major number from circle-of-fifths index; minor uses its relative-major pc.
+  const cof = (rootPc) => (rootPc * 7) % 12;
+  const num = major
+    ? ((cof(pc) + 7) % 12) + 1
+    : ((cof((pc + 3) % 12) + 7) % 12) + 1;
+  return { num, major };
+}
+const numOrNull = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+const median = (arr) => {
+  if (!arr.length) return null;
+  const a = arr.slice().sort((x, y) => x - y);
+  const i = a.length >> 1;
+  return a.length % 2 ? a[i] : (a[i - 1] + a[i]) / 2;
+};
+const mean = (arr) => (arr.length ? arr.reduce((x, y) => x + y, 0) / arr.length : null);
+
 // ── Backfill map (recordId → {catalogue, albumTitle, albumArtist}) ──────────
 const wsByRec = new Map();
 if (fs.existsSync(WRITE_SOURCE_PATH)) {
@@ -122,7 +151,11 @@ for (const row of rowIter) {
       artists: new Map(),                // albumArtist → count
       facets: { year: m.year || '', genre: m.genre || '', localGenre: m.localGenre || '', language: m.language || '', mood: m.mood || '' },
       recordId: String(row.recordId || ''),
-      artworkUrl: m.artworkUrl || ''
+      artworkUrl: m.artworkUrl || '',
+      // Musical features, accumulated only from ANALYSED tracks (valid AI_BPM).
+      bpms: [],
+      keys: new Map(),   // Camelot code → count
+      energies: []
     };
     acc.set(groupKey, entry);
   }
@@ -130,6 +163,16 @@ for (const row of rowIter) {
   entry.count++;
   tallyInc(entry.titles, albumTitle);
   tallyInc(entry.artists, albumArtist);
+  // Musical features: only from analysed tracks (AI_BPM is a positive number; the
+  // analyzer writes -1/empty for un-analysable/pending). Key + energy ride along.
+  const bpm = numOrNull(m.bpm);
+  if (bpm != null && bpm > 0) {
+    entry.bpms.push(bpm);
+    const en = numOrNull(m.energy);
+    if (en != null) entry.energies.push(en);
+    const cam = parseCamelot(m.key);
+    if (cam) tallyInc(entry.keys, `${cam.num}${cam.major ? 'B' : 'A'}`);
+  }
   // First track that carries facets / artwork wins as representative.
   if (!entry.facets.year && m.year) entry.facets.year = m.year;
   if (!entry.facets.genre && m.genre) entry.facets.genre = m.genre;
@@ -179,6 +222,13 @@ const tx = out.transaction(() => {
     const albumArtist = isCompilation ? 'Various Artists' : (distinctArtists[0] || tallyTop(entry.artists) || '');
     const albumTitle = tallyTop(entry.titles) || '';
 
+    // Album musical features (empty/null when no track was analysed).
+    const medBpm = median(entry.bpms);
+    const avgEnergy = mean(entry.energies);
+    const domKey = tallyTop(entry.keys);            // "8A" / "8B" / ''
+    const keyNum = domKey ? parseInt(domKey, 10) : null;
+    const keyMajor = domKey ? domKey.endsWith('B') : null;
+
     const meta = {
       album: albumTitle,
       artist: albumArtist,
@@ -187,6 +237,13 @@ const tx = out.transaction(() => {
       localGenre: entry.facets.localGenre,
       language: entry.facets.language,
       mood: entry.facets.mood,
+      // Musical features for the album-level re-rank (semantic-index.js).
+      bpm: medBpm != null ? Math.round(medBpm) : null,
+      energy: avgEnergy != null ? Math.round(avgEnergy) : null,
+      key: domKey || '',          // display Camelot code
+      keyNum,                     // 1-12, or null
+      keyMajor,                   // true = major (B), false = minor (A), or null
+      analysedTracks: entry.bpms.length,
       recordId: entry.recordId,
       // Store the ready-to-serve _300 derivative (no runtime rewrite). Empty for
       // the current index (predates artwork capture) → run enrich-artwork.mjs.

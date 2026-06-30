@@ -1,0 +1,17 @@
+# Build context for the similar-index Docker cron (context = repo root).
+# Keep it lean: deps are reinstalled, data/ is fetched from S3, secrets come from env.
+node_modules
+.git
+data
+.env
+.env.*
+android
+resources
+**/venv
+**/__pycache__
+**/*.pyc
+*.log
+test-results
+playwright-report
+coverage
+scripts/audio-normalize

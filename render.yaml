@@ -67,3 +67,29 @@ services:
         sync: false
       - key: AWS_REGION
         value: eu-north-1
+
+  # ── Similar-albums index rebuild (Docker — Node + embed model) ─────────────
+  # Reads the catalogue (incl. AI_BPM/AI_Key) from Postgres, re-embeds changed
+  # tracks (incremental), rebuilds the album index + musical features, and
+  # publishes semantic.db + suggest.db to S3 — the app hot-swaps it. Runs AFTER
+  # the analyzer (00:00) + catalog sync (01:00) so it sees the freshest AI data.
+  - type: cron
+    name: madmusic-similar-index
+    runtime: docker
+    plan: standard
+    region: frankfurt
+    branch: live
+    schedule: "0 2 * * *"      # 02:00 UTC = 04:00 SAST
+    dockerfilePath: ./scripts/semantic/Dockerfile
+    dockerContext: .           # repo root — needs lib/ + package.json
+    envVars:
+      - key: DATABASE_URL      # Internal Postgres URL (catalogue + AI fields source)
+        sync: false
+      - key: SUGGEST_SOURCE
+        value: postgres
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        value: eu-north-1
