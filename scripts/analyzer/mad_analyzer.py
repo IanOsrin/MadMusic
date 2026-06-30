@@ -141,14 +141,30 @@ class FileMakerAPI:
             self.token = None
 
     def _request(self, method, url, **kwargs):
-        """Send a request; on 401 (expired token) re-login once and retry."""
-        r = self.session.request(method, url, **kwargs)
-        if r.status_code == 401:
-            log.info("FM token expired — re-authenticating")
-            self.login()
-            r = self.session.request(method, url, **kwargs)
-        r.raise_for_status()
-        return r
+        """Send a request; retry transient connection/timeout errors with backoff,
+        and re-login once on 401 (expired token). FM writes are idempotent, so a
+        retried PATCH after a dropped connection is safe."""
+        kwargs.setdefault("timeout", 60)
+        relogged = False
+        last_err = None
+        for attempt in range(4):  # initial try + up to 3 retries (1s, 2s, 4s, 8s)
+            try:
+                r = self.session.request(method, url, **kwargs)
+            except (requests.ConnectionError, requests.Timeout) as e:
+                last_err = e
+                wait = 2 ** attempt
+                log.warning(f"FM {type(e).__name__} — retry {attempt + 1}/3 in {wait}s")
+                time.sleep(wait)
+                continue
+            if r.status_code == 401 and not relogged:
+                log.info("FM token expired — re-authenticating")
+                self.login()
+                relogged = True
+                continue
+            r.raise_for_status()
+            return r
+        # Exhausted retries on a transient error.
+        raise last_err if last_err else RuntimeError(f"FM request to {url} failed after retries")
 
     def find_unanalysed(self, bpm_field, limit):
         """Records whose AI_BPM is empty ('=' matches empty in FM)."""
