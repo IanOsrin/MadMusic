@@ -71,6 +71,11 @@ CREATE INDEX IF NOT EXISTS tracks_trgm_track_name   ON tracks USING gin ((raw->>
 CREATE INDEX IF NOT EXISTS tracks_trgm_track_artist ON tracks USING gin ((raw->>'Track Artist') gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS tracks_trgm_local_genre  ON tracks USING gin ((raw->>'Local Genre')  gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS tracks_trgm_ref_cat      ON tracks USING gin ((raw->>'Reference Catalogue Number') gin_trgm_ops);
+-- Free-text search (routes/catalog/search.js) ORs over these two extra fields;
+-- without a trigram index on EACH OR branch, Postgres falls back to a full seq
+-- scan for the whole OR (measured ~11 s vs ~2 ms once every branch is indexed).
+CREATE INDEX IF NOT EXISTS tracks_trgm_year          ON tracks USING gin ((raw->>'Year of Release') gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS tracks_trgm_language_code ON tracks USING gin ((raw->>'Language Code')   gin_trgm_ops);
 
 -- Sync watermark + run log (one row per FileMaker layout mirrored).
 CREATE TABLE IF NOT EXISTS sync_state (

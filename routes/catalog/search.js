@@ -64,7 +64,10 @@ function normalizeAiValue(value) {
 const SEARCH_FIELDS_BASE = ['Album Artist', 'Album Title', 'Track Name'];
 const SEARCH_FIELDS_OPTIONAL = ['Year of Release', 'Local Genre', 'Language Code'];
 const SEARCH_FIELDS_DEFAULT = [...SEARCH_FIELDS_BASE, ...SEARCH_FIELDS_OPTIONAL];
-const GENRE_FIELDS = ['Local Genre', 'Song Files::Local Genre'];
+// 'Local Genre' is the only populated genre field (Song Files::Local Genre is
+// empty for every row and has no trigram index, so ORing it in forces the whole
+// genre query into a full seq scan — ~4 s vs ~ms — while matching nothing).
+const GENRE_FIELDS = ['Local Genre'];
 
 // Artist can live on either the album header or the individual track.
 // When a caller sends ?artist=X we need to match both so that cards whose
