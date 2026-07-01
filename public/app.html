@@ -416,6 +416,23 @@
       </div>
 
         <!-- Playlist View (Two-Column Layout) -->
+        <style id="artist-bio-styles">
+          .artist-bio { display:flex; flex:0 0 auto; gap:16px; align-items:flex-start; margin:0 0 12px; padding:12px 16px; border-radius:12px; background:var(--bg-card, rgba(255,255,255,.04)); border:1px solid var(--border, rgba(255,255,255,.08)); }
+          .artist-bio-photo { width:96px; height:96px; border-radius:10px; object-fit:cover; flex:0 0 auto; background:rgba(255,255,255,.06); }
+          .artist-bio-body { flex:1 1 auto; min-width:0; }
+          .artist-bio-head { display:flex; align-items:baseline; gap:10px; margin-bottom:6px; }
+          .artist-bio-label { font-weight:700; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; opacity:.7; }
+          .artist-bio-country { font-size:.76rem; opacity:.55; }
+          .artist-bio-text { font-size:.9rem; line-height:1.55; opacity:.9; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; white-space:normal; }
+          .artist-bio.expanded .artist-bio-text { display:block; -webkit-line-clamp:none; max-height:24vh; overflow-y:scroll; padding-right:6px; white-space:pre-line; }
+          .artist-bio.expanded .artist-bio-text::-webkit-scrollbar { width:14px; }
+          .artist-bio.expanded .artist-bio-text::-webkit-scrollbar-track { background:rgba(255,255,255,.14); border-radius:8px; }
+          .artist-bio.expanded .artist-bio-text::-webkit-scrollbar-thumb { background:var(--accent, #8b5cf6); border-radius:8px; min-height:40px; }
+          .artist-bio.expanded .artist-bio-text::-webkit-scrollbar-thumb:hover { filter:brightness(1.2); }
+          @supports (scrollbar-width: thin) and (not (selector(::-webkit-scrollbar))) { .artist-bio.expanded .artist-bio-text { scrollbar-width:thin; scrollbar-color:var(--accent, #8b5cf6) rgba(255,255,255,.12); } }
+          .artist-bio-toggle { margin-top:8px; background:none; border:none; color:var(--accent, #4aa3ff); font-weight:600; cursor:pointer; padding:0; font-size:.85rem; }
+          @media (max-width:600px){ .artist-bio{ flex-direction:column; } .artist-bio-photo{ width:72px; height:72px; } }
+        </style>
         <div id="playlistView" class="playlist-view">
           <div class="playlist-view-header">
             <div class="playlist-view-header-top">
@@ -438,6 +455,9 @@
               </div>
             </div>
           </div>
+          <!-- Artist biography — rendered by loadArtistBio() when ARTIST_BIO is
+               enabled and a bio exists for this artist; stays hidden otherwise. -->
+          <div class="artist-bio" id="artistBio" hidden></div>
           <div class="playlist-view-content">
             <!-- Left Column - Album List -->
             <div class="playlist-albums-list" id="playlistAlbumsList">
@@ -3988,6 +4008,48 @@
       const originalOpenTracksModal = window.openTracksModal;
 
       // New function to show album detail view (two-column layout)
+      // Fetch + render the artist biography above the album grid. No-op when the
+      // feature is off (window.__ARTIST_BIO === false) or no bio exists — graceful
+      // absence. Resets on every open so a stale bio never lingers between artists.
+      async function loadArtistBio(artistName) {
+        const box = document.getElementById('artistBio');
+        if (!box) return;
+        box.hidden = true; box.innerHTML = ''; box.classList.remove('expanded');
+        if (window.__ARTIST_BIO === false) return;
+        const name = String(artistName || '').trim();
+        if (!name) return;
+        const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+        try {
+          const r = await fetch('/api/artist-bio?name=' + encodeURIComponent(name));
+          if (!r.ok) return;
+          const data = await r.json();
+          if (!data || !data.found || !data.artist) return;
+          const a = data.artist;
+          const photo = a.imageUrl
+            ? '<img class="artist-bio-photo" src="/api/container?u=' + encodeURIComponent(a.imageUrl) + '" alt="' + esc(a.name) + '" onerror="this.remove()">'
+            : '';
+          const country = a.country ? '<span class="artist-bio-country">' + esc(a.country) + '</span>' : '';
+          box.innerHTML =
+            photo +
+            '<div class="artist-bio-body">' +
+              '<div class="artist-bio-head"><span class="artist-bio-label">About ' + esc(a.name) + '</span>' + country + '</div>' +
+              '<div class="artist-bio-text">' + esc(a.bio) + '</div>' +
+              '<button type="button" class="artist-bio-toggle">Read more</button>' +
+            '</div>';
+          box.hidden = false;
+          const textEl = box.querySelector('.artist-bio-text');
+          const toggle = box.querySelector('.artist-bio-toggle');
+          // Only offer "Read more" when the text actually overflows the clamp.
+          requestAnimationFrame(() => {
+            if (textEl.scrollHeight <= textEl.clientHeight + 4) toggle.style.display = 'none';
+          });
+          toggle.addEventListener('click', () => {
+            const expanded = box.classList.toggle('expanded');
+            toggle.textContent = expanded ? 'Read less' : 'Read more';
+          });
+        } catch (e) { /* silent — no bio is a fine default */ }
+      }
+
       window.showAlbumDetailView = async function(album, relatedAlbums = []) {
         if (window.MADRouter) window.MADRouter.pushOverlay('album', album && album.recordId);
         const playlistView = document.getElementById('playlistView');
@@ -4002,6 +4064,9 @@
         // Update title to album title
         if (playlistTitle) playlistTitle.textContent = album.artist || 'Album';
         if (playlistSubtitle) playlistSubtitle.textContent = 'Artist';
+
+        // Artist biography above the albums — async, non-blocking (never delays the list).
+        loadArtistBio(album.artist);
 
         // Hide regular grid, show playlist view
         layoutGrid.style.display = 'none';
@@ -5813,7 +5878,7 @@
 
   <!-- Modules: Load in dependency order -->
   <script src="/js/helpers.js?v=1"></script>
-  <script src="/js/auth.js?v=1"></script>
+  <script src="/js/auth.js?v=2"></script>
   <script src="/js/player.js?v=1"></script>
   <script src="/js/playlists.js?v=1"></script>
   <script src="/js/catalog.js?v=1"></script>

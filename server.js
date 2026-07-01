@@ -21,6 +21,7 @@ import libraryRouter from './routes/library.js';
 import streamRouter from './routes/stream.js';
 import adminRouter from './routes/admin.js';
 import editorialRouter from './routes/featured-editorial.js';
+import artistBioRouter from './routes/artist-bio.js';
 import downloadRouter from './routes/download.js';
 import ringtoneRouter from './routes/ringtone.js';
 import telkomRouter from './routes/telkom.js';
@@ -149,6 +150,9 @@ const AUDIO_LAB_ENABLED = process.env.AUDIO_LAB_ENABLED === 'true';
 // so the hero can skip the guaranteed-empty /api/featured-editorial round-trip
 // when the feature is off — saving one above-the-fold RTT on every page load.
 const EDITORIAL_HERO_ENABLED = process.env.EDITORIAL_HERO_ENABLED === 'true';
+// Mirrors routes/artist-bio.js — surfaced to the client so the artist view can
+// skip the /api/artist-bio round-trip (which returns { found:false }) when off.
+const ARTIST_BIO_ENABLED = process.env.ARTIST_BIO_ENABLED === 'true';
 app.use((req, res, next) => {
   if (AUDIO_LAB_ENABLED) return next();
   const p = req.path.toLowerCase();
@@ -342,7 +346,7 @@ app.use('/api/', async (req, res, next) => {
   const skipPaths = [
     '/access/validate', '/wake', '/container', '/random-songs', '/public-playlists',
     '/search', '/album', '/trending', '/explore', '/featured-albums', '/missing-audio-songs',
-    '/g100-albums', '/g100-playlists', '/genres', '/singles', '/featured-editorial',
+    '/g100-albums', '/g100-playlists', '/genres', '/singles', '/featured-editorial', '/artist-bio',
     '/auth', '/payments/initialize', '/payments/subscribe', '/payments/trial', '/payments/callback',
     '/payments/webhook', '/payments/plans', '/payments/subscription-plan',
     '/access/stream-events', '/access/logout', '/access/email/', '/health',
@@ -465,6 +469,9 @@ async function loadHtml(filename) {
   // Tell the client whether "Similar albums" is live, so the album page skips
   // the /api/suggestions round-trip (which would 404) when the feature is off.
   stamped += `\n<script>window.__SUGGESTIONS=${SUGGESTIONS_ENABLED ? 'true' : 'false'};</script>\n`;
+  // Tell the client whether artist bios are live, so the artist view skips the
+  // /api/artist-bio round-trip (which returns { found:false }) when the feature is off.
+  stamped += `\n<script>window.__ARTIST_BIO=${ARTIST_BIO_ENABLED ? 'true' : 'false'};</script>\n`;
   if (!DEV_MODE) _htmlCache.set(filename, stamped);
   return stamped;
 }
@@ -551,6 +558,7 @@ app.use('/api', catalogRouter);
 app.use('/api', streamRouter);
 app.use('/api', adminRouter);
 app.use('/api', editorialRouter);
+app.use('/api', artistBioRouter);
 
 // Shared playlist routes (not under /api/playlists)
 app.get('/api/shared-playlists/:shareId', async (req, res) => {

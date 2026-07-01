@@ -85,6 +85,7 @@
         '/api/explore',
         '/api/podcasts',   // public catalogue content; server fences it when the feature flag is off
         '/api/suggestions', // "Similar albums" rail; server fences it when the feature flag is off
+        '/api/artist-bio',  // artist biography; server returns { found:false } when the feature flag is off
         '/api/featured-albums',
         '/api/missing-audio-songs',
         '/api/singles',
