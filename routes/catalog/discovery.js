@@ -5,13 +5,13 @@ import { fmPost, fmFindRecords } from '../../fm-client.js';
 import { albumCache, randomSongsPoolCache } from '../../cache.js';
 import { hasValidAudio, hasValidArtwork, resolvePlayableSrc, resolveArtworkSrc } from '../../lib/track.js';
 import {
-  FM_LAYOUT,
+  FM_LAYOUT, FM_PLAYLIST_ART_LAYOUT,
   firstNonEmpty, AUDIO_FIELD_CANDIDATES, ARTWORK_FIELD_CANDIDATES,
   CATALOGUE_FIELD_CANDIDATES, pickFieldValueCaseInsensitive
 } from '../../lib/fm-fields.js';
 import { fmErrorToHttpStatus } from '../../lib/http.js';
 import { validateQueryString, fmExactMatch } from '../../lib/validators.js';
-import { resolvePlaylistImage } from '../../lib/playlist.js';
+import { resolvePlaylistImage, buildPlaylistArtMap, playlistArtLookup } from '../../lib/playlist.js';
 import { createSwrCache } from '../../lib/swr-cache.js';
 import { createLogger } from '../../lib/logger.js';
 import { parsePositiveInt } from '../../lib/format.js';
@@ -32,6 +32,26 @@ const logAlbum     = createLogger('album');
 // Aggressive TTLs with SWR — serve instantly, refresh in background.
 const PUBLIC_PLAYLISTS_LIST_TTL_MS   = parsePositiveInt(process.env.PUBLIC_PLAYLISTS_LIST_TTL_MS,   60 * 60 * 1000); // 60 min
 const PUBLIC_PLAYLISTS_TRACKS_TTL_MS = parsePositiveInt(process.env.PUBLIC_PLAYLISTS_TRACKS_TTL_MS, 30 * 60 * 1000); // 30 min
+
+// FM-managed playlist covers (API_Playlist_Art). Default OFF — until the layout
+// exists, playlist art keeps resolving from the local files in public/img/playlists.
+// When on, an FM Image_S3_URL overrides the file for that playlist (editors change
+// covers in FileMaker, no deploy). Cached ~10 min; FM outage → last good / files.
+const PLAYLIST_ART_ENABLED = process.env.PLAYLIST_ART_ENABLED === 'true';
+
+async function loadPlaylistArtMap() {
+  if (!PLAYLIST_ART_ENABLED) return new Map();
+  const res = await fmFindRecords(FM_PLAYLIST_ART_LAYOUT, [{ Active: '1' }], { limit: 500 });
+  return buildPlaylistArtMap(res?.data || []); // FM 102 (layout missing) → empty → file fallback
+}
+
+const playlistArtSwr = createSwrCache({
+  ttlMs: 10 * 60 * 1000,
+  max: 2,
+  label: 'playlist-art',
+  name: 'playlistArt',
+  loader: () => loadPlaylistArtMap()
+});
 
 // Cryptographically safe Fisher-Yates shuffle
 function cryptoShuffle(arr) {
@@ -328,10 +348,13 @@ async function loadPlaylistListPayload() {
       if (bHas) return 1;
       return 0;
     });
+  // FM-managed cover (if enabled + present) overrides the file-based one.
+  const artResult = await playlistArtSwr.get('map').catch(() => ({ value: new Map() }));
+  const artMap = artResult.value || new Map();
   const playlists = await Promise.all(
     rawPlaylists.map(async (pl) => ({
       ...pl,
-      imageUrl: await resolvePlaylistImage(pl.name) || null
+      imageUrl: playlistArtLookup(artMap, pl.name) || await resolvePlaylistImage(pl.name) || null
     }))
   );
   log.debug(`${playlists.length} playlists loaded`);
