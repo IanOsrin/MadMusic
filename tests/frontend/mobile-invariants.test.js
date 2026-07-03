@@ -75,3 +75,29 @@ describe('mobile invariant: shared utilities delegate to window.MADHelpers (no r
     });
   }
 });
+
+describe('mobile invariant: the access gate offers the 7-day free trial', () => {
+  // The trial is the mobile acquisition path (2026-07-03 urgent fix): both the
+  // no-token gate (main.js empty state) and the Profile tab must offer it, and
+  // it must hit the same endpoint the desktop gate uses.
+  it('the no-token empty state includes a Start 7-Day Free Trial button', () => {
+    const mainJs = readFileSync(join(mobileDir, 'main.js'), 'utf8');
+    expect(mainJs).toMatch(/Access Token Required[\s\S]*startTrial\(\)/);
+    expect(mainJs).toMatch(/Start 7-Day Free Trial/);
+  });
+
+  it('the Profile tab has the trial button and main.js wires + exposes startTrial', () => {
+    expect(mobileHtml).toMatch(/id="trial-btn"/);
+    const mainJs = readFileSync(join(mobileDir, 'main.js'), 'utf8');
+    expect(mainJs).toMatch(/getElementById\('trial-btn'\)/);
+    expect(mainJs, 'startTrial must be window-exposed for inline onclick').toMatch(/Object\.assign\(window,[\s\S]*startTrial/);
+  });
+
+  it('startTrial posts to /api/payments/trial and stores the token under mass_access_token', () => {
+    const authJs = readFileSync(join(mobileDir, 'auth.js'), 'utf8');
+    const body = extractFn(authJs, 'startTrial');
+    expect(body, 'startTrial exists in auth.js').toBeTruthy();
+    expect(body).toMatch(/\/api\/payments\/trial/);
+    expect(body).toMatch(/mass_access_token/);
+  });
+});

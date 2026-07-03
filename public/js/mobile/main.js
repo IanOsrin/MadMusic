@@ -5,7 +5,9 @@
 import { elements, state } from './state.js';
 import { showToast } from './util.js';
 import { getArtworkUrl, getAudioUrl, getYearField, hasValidArtwork } from './fields.js';
-import { buyAccess, logout, setAccessToken, updateAuthUI } from './auth.js';
+// auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
+// (missing the startTrial export) would break the whole module graph.
+import { buyAccess, logout, setAccessToken, startTrial, updateAuthUI } from './auth.js?v=2';
 import { switchTab } from './nav.js';
 import { renderSearchResults, search } from './search.js';
 import { createPlaylist, loadPlaylists, showAddToPlaylistModal } from './playlists.js';
@@ -30,6 +32,7 @@ import { initRouter } from './router.js';
     // ===== Access Token Authentication =====
 
     // Profile tab event listeners
+    document.getElementById('trial-btn').addEventListener('click', () => startTrial());
     document.getElementById('change-token-btn').addEventListener('click', () => setAccessToken());
     document.getElementById('buy-access-btn').addEventListener('click', () => buyAccess());
     document.getElementById('logout-btn').addEventListener('click', logout);
@@ -67,7 +70,9 @@ import { initRouter } from './router.js';
             <div class="empty-icon">🔑</div>
             <p style="margin-bottom: 8px;"><strong>Access Token Required</strong></p>
             <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">You need an access token to use MASS Mobile</p>
-            <button class="btn btn-primary" onclick="setAccessToken()" style="margin-bottom: 8px;">Enter Access Token</button>
+            <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 8px;">New to MAD Music? Try free for 7 days — no payment required.</p>
+            <button class="btn btn-primary" onclick="startTrial()" style="margin-bottom: 8px;">Start 7-Day Free Trial</button>
+            <button class="btn btn-secondary" onclick="setAccessToken()" style="margin-bottom: 8px;">Enter Access Token</button>
             <button class="btn btn-secondary" onclick="buyAccess()">Buy Access</button>
           </div>
         `;
@@ -418,5 +423,5 @@ import { initRouter } from './router.js';
     // (clear*Filter / selectGenre already self-assign to window above.)
     Object.assign(window, {
       loadNewReleases, loadG100, filterG100Albums, refreshDiscover,
-      buyAccess, setAccessToken, closeModal,
+      buyAccess, setAccessToken, startTrial, closeModal,
     });

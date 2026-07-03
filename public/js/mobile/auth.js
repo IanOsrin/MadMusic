@@ -19,6 +19,10 @@ export function updateAuthUI() {
       const tokenEmail = document.getElementById('token-email');
       const tokenExpiry = document.getElementById('token-expiry');
 
+      // Trial CTA only makes sense while logged out
+      const trialBtn = document.getElementById('trial-btn');
+      if (trialBtn) trialBtn.style.display = state.currentUser ? 'none' : '';
+
       if (state.currentUser) {
         if (tokenEmail) tokenEmail.textContent = state.currentUser.email || '';
         if (tokenStatus) tokenStatus.textContent = 'Access Active';
@@ -55,6 +59,40 @@ export function setAccessToken() {
         localStorage.setItem('mass_access_token', token);
         showToast('Access token saved! Reloading...', 'success');
         setTimeout(() => window.location.reload(), 1000);
+      }
+    }
+
+// 7-day free trial — same endpoint the desktop gate uses. The server enforces
+// one trial per email (409 with a friendly message on repeats).
+export async function startTrial() {
+      const email = prompt('Enter your email address to start your free 7-day trial:');
+      if (!email || !email.includes('@')) {
+        showToast('Please enter a valid email address', 'error');
+        return;
+      }
+
+      showToast('Starting your trial…', 'success');
+
+      try {
+        const response = await fetch('/api/payments/trial', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim() })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.ok && data.token) {
+          localStorage.setItem('mass_access_token', String(data.token).trim());
+          localStorage.setItem('mass_token_email', email.trim().toLowerCase());
+          showToast('Trial started! Reloading…', 'success');
+          setTimeout(() => window.location.reload(), 1000);
+        } else {
+          showToast(data.error || 'Could not start the trial. Please try again.', 'error');
+        }
+      } catch (err) {
+        console.error('[Mobile] Trial error:', err);
+        showToast('Trial service unavailable', 'error');
       }
     }
 
