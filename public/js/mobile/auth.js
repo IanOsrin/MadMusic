@@ -96,6 +96,74 @@ export async function startTrial() {
       }
     }
 
+// ── Guest preview mode (2026-07-05) ─────────────────────────────────────────
+// When the server stamps window.__GUEST_PREVIEW=true, a visitor with no token
+// browses the app freely: rails load from public endpoints, every play is the
+// server-clipped 30 s preview (see player.js playTrack), and this dismissible
+// paywall sheet pops every 5 minutes instead of the blocking key screen.
+const GUEST_POPUP_INTERVAL_MS = 5 * 60 * 1000;
+
+function injectGuestPaywall() {
+  if (document.getElementById('guest-paywall')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'guest-paywall';
+  overlay.className = 'guest-paywall';
+  overlay.innerHTML = `
+    <div class="guest-paywall-card">
+      <button type="button" class="guest-paywall-close" id="guest-paywall-close" aria-label="Close and keep browsing">&times;</button>
+      <div class="guest-paywall-icon">🎧</div>
+      <h3>Enjoying the music?</h3>
+      <p>You're in preview mode — 30 second clips. Get full access to every track.</p>
+      <button class="btn btn-primary" id="guest-paywall-trial">Start 7-Day Free Trial</button>
+      <button class="btn btn-secondary" id="guest-paywall-buy">Buy Access</button>
+      <button class="btn btn-secondary" id="guest-paywall-token">Enter Access Token</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  document.getElementById('guest-paywall-close').addEventListener('click', hideGuestPaywall);
+  document.getElementById('guest-paywall-trial').addEventListener('click', startTrial);
+  document.getElementById('guest-paywall-buy').addEventListener('click', buyAccess);
+  document.getElementById('guest-paywall-token').addEventListener('click', setAccessToken);
+  // Tapping the dimmed backdrop also just closes it — exploring stays easy.
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) hideGuestPaywall(); });
+
+  // Persistent subscribe pill so a convinced guest never has to wait for
+  // the 5-minute popup.
+  const pill = document.createElement('div');
+  pill.id = 'guest-pill';
+  pill.className = 'guest-pill';
+  pill.setAttribute('role', 'button');
+  pill.innerHTML = 'Preview mode &middot; <strong>Subscribe</strong>';
+  pill.addEventListener('click', showGuestPaywall);
+  document.body.appendChild(pill);
+}
+
+export function showGuestPaywall() {
+  const el = document.getElementById('guest-paywall');
+  if (el) el.classList.add('show');
+}
+
+function hideGuestPaywall() {
+  const el = document.getElementById('guest-paywall');
+  if (el) el.classList.remove('show');
+}
+
+export function enterGuestMode() {
+  console.log('[Mobile] Guest preview mode active — browsing without a token');
+  window.__GUEST = true;
+  document.body.classList.add('guest-mode');
+  state.currentUser = null;
+  updateAuthUI();
+  injectGuestPaywall();
+  // The 5-minute subscribe popup. The interval keeps ticking: closing the
+  // sheet just resumes browsing until the next tick.
+  setInterval(() => {
+    const el = document.getElementById('guest-paywall');
+    if (el && !el.classList.contains('show')) showGuestPaywall();
+  }, GUEST_POPUP_INTERVAL_MS);
+}
+
 export async function buyAccess() {
       const email = prompt('Enter your email address for the receipt:');
       if (!email || !email.includes('@')) {

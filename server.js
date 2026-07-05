@@ -27,6 +27,7 @@ import ringtoneRouter from './routes/ringtone.js';
 import telkomRouter from './routes/telkom.js';
 import podcastsRouter from './routes/podcasts.js';
 import suggestionsRouter from './routes/suggestions.js';
+import previewRouter from './routes/preview.js';
 import { initSemanticIndex, semanticIndexStatus } from './lib/semantic-index.js';
 import { initNameIndex, nameIndexStatus } from './lib/name-index.js';
 
@@ -188,6 +189,14 @@ const PODCASTS_ENABLED = process.env.PODCASTS_ENABLED === 'true';
 // be present on disk or downloadable via SUGGEST_DB_URL — see initSemanticIndex).
 const SUGGESTIONS_ENABLED = process.env.SUGGESTIONS_ENABLED === 'true';
 
+// Guest preview mode (2026-07-05): ships dark. When on, visitors WITHOUT an
+// access token can browse the app and play server-clipped ~30 s previews via
+// the public /api/preview/:recordId route (routes/preview.js); the frontend
+// shows a dismissible subscribe popup every 5 minutes instead of the blocking
+// token gate. When off, everything behaves exactly as before (blocking gate,
+// preview path 404s BEFORE the auth middleware — podcasts/suggestions pattern).
+const GUEST_PREVIEW_ENABLED = process.env.GUEST_PREVIEW_ENABLED === 'true';
+
 // ── Catalog metadata source (Postgres mirror migration) ───────────────────────
 // Catalog READS come from either FileMaker (default) or the Postgres mirror of
 // MadStreamer. FileMaker stays the system of record; this only switches the read
@@ -214,6 +223,13 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   if (SUGGESTIONS_ENABLED) return next();
   if (req.path.toLowerCase().startsWith('/api/suggestions')) {
+    return res.status(404).send('Not found');
+  }
+  next();
+});
+app.use((req, res, next) => {
+  if (GUEST_PREVIEW_ENABLED) return next();
+  if (req.path.toLowerCase().startsWith('/api/preview')) {
     return res.status(404).send('Not found');
   }
   next();
@@ -347,6 +363,9 @@ app.use('/api/', async (req, res, next) => {
     '/access/validate', '/wake', '/container', '/random-songs', '/public-playlists',
     '/search', '/album', '/trending', '/explore', '/featured-albums', '/missing-audio-songs',
     '/g100-albums', '/g100-playlists', '/genres', '/singles', '/featured-editorial', '/artist-bio',
+    // Public catalogue content (same class as /trending): the hero rail reads
+    // it on every page load, including guest-mode visits with no token.
+    '/new-releases',
     '/auth', '/payments/initialize', '/payments/subscribe', '/payments/trial', '/payments/callback',
     '/payments/webhook', '/payments/plans', '/payments/subscription-plan',
     '/access/stream-events', '/access/logout', '/access/email/', '/health',
@@ -360,6 +379,9 @@ app.use('/api/', async (req, res, next) => {
     // Similar-albums suggestions are public catalogue content; only skip-listed
     // while enabled (the path is 404'd before this middleware when off).
     ...(SUGGESTIONS_ENABLED ? ['/suggestions'] : []),
+    // Guest previews are server-clipped ~30 s streams — public BY DESIGN, and
+    // only while the feature is on (404'd before this middleware when off).
+    ...(GUEST_PREVIEW_ENABLED ? ['/preview/'] : []),
     '/download/',
     '/ringtone/',
     '/audio-proxy',
@@ -461,17 +483,25 @@ async function loadHtml(filename) {
   if (!AUDIO_LAB_ENABLED) {
     stamped += '\n<style id="audio-lab-disabled">#audioLabWidget,.track-audio-lab-btn,.btn-audio-lab{display:none !important;}</style>\n';
   }
-  // Tell the client whether the editorial hero is live. When false, the hero
-  // skips fetching /api/featured-editorial (which would return empty anyway)
-  // and goes straight to /api/new-releases — one fewer serial request above
-  // the fold. Absence of the flag preserves the original attempt-then-fallback.
-  stamped += `\n<script>window.__EDITORIAL_HERO=${EDITORIAL_HERO_ENABLED ? 'true' : 'false'};</script>\n`;
-  // Tell the client whether "Similar albums" is live, so the album page skips
-  // the /api/suggestions round-trip (which would 404) when the feature is off.
-  stamped += `\n<script>window.__SUGGESTIONS=${SUGGESTIONS_ENABLED ? 'true' : 'false'};</script>\n`;
-  // Tell the client whether artist bios are live, so the artist view skips the
-  // /api/artist-bio round-trip (which returns { found:false }) when the feature is off.
-  stamped += `\n<script>window.__ARTIST_BIO=${ARTIST_BIO_ENABLED ? 'true' : 'false'};</script>\n`;
+  // Feature flags for the client. Injected into <head> (not appended at the
+  // end of the document) so they exist BEFORE any classic <script> executes —
+  // auth.js boots synchronously and reads __GUEST_PREVIEW to decide between
+  // the blocking token gate and guest mode. The individual flags:
+  //   __EDITORIAL_HERO — hero skips the guaranteed-empty /api/featured-editorial
+  //     round-trip when off and goes straight to /api/new-releases.
+  //   __SUGGESTIONS — album page skips the /api/suggestions round-trip (404 when off).
+  //   __ARTIST_BIO — artist view skips the /api/artist-bio round-trip when off.
+  //   __GUEST_PREVIEW — visitors without a token get browse + 30 s previews + a
+  //     dismissible subscribe popup instead of the blocking gate (auth.js/mobile main.js).
+  const flagScript = '<script>'
+    + `window.__EDITORIAL_HERO=${EDITORIAL_HERO_ENABLED ? 'true' : 'false'};`
+    + `window.__SUGGESTIONS=${SUGGESTIONS_ENABLED ? 'true' : 'false'};`
+    + `window.__ARTIST_BIO=${ARTIST_BIO_ENABLED ? 'true' : 'false'};`
+    + `window.__GUEST_PREVIEW=${GUEST_PREVIEW_ENABLED ? 'true' : 'false'};`
+    + '</script>';
+  stamped = /<head[^>]*>/i.test(stamped)
+    ? stamped.replace(/<head[^>]*>/i, (m) => `${m}\n${flagScript}`)
+    : `${flagScript}\n${stamped}`;
   if (!DEV_MODE) _htmlCache.set(filename, stamped);
   return stamped;
 }
@@ -550,6 +580,7 @@ app.use('/api/payments', paymentsRouter);
 if (TELKOM_ENABLED) app.use('/api/telkom', telkomRouter); // ring-fenced: 404'd above when off
 if (PODCASTS_ENABLED) app.use('/api', podcastsRouter);    // dark until PODCASTS_ENABLED=true
 if (SUGGESTIONS_ENABLED) app.use('/api', suggestionsRouter); // dark until SUGGESTIONS_ENABLED=true
+if (GUEST_PREVIEW_ENABLED) app.use('/api', previewRouter);   // dark until GUEST_PREVIEW_ENABLED=true
 app.use('/api/download', downloadRouter);
 app.use('/api/ringtone', ringtoneRouter);
 app.use('/api/playlists', playlistsRouter);

@@ -101,3 +101,46 @@ describe('mobile invariant: the access gate offers the 7-day free trial', () => 
     expect(body).toMatch(/mass_access_token/);
   });
 });
+
+describe('mobile invariant: guest preview mode never leaks a full stream', () => {
+  // Guest playback must route through the server-clipped /api/preview/:recordId
+  // endpoint. If the guest branch in playTrack disappears (or falls through to
+  // the /api/container resolution), token-less visitors get FULL tracks.
+  it('playTrack has a window.__GUEST branch that uses /api/preview/ and never /api/container', () => {
+    const playerJs = readFileSync(join(mobileDir, 'player.js'), 'utf8');
+    const body = extractFn(playerJs, 'playTrack');
+    expect(body, 'playTrack exists in player.js').toBeTruthy();
+    expect(body, 'guest branch missing').toMatch(/window\.__GUEST\b/);
+    expect(body).toMatch(/\/api\/preview\//);
+    // The container resolution must sit in the NON-guest branch: the guest
+    // branch must return/assign before any /api/container use.
+    const guestIdx = body.indexOf('window.__GUEST');
+    const containerIdx = body.indexOf('/api/container');
+    expect(guestIdx, 'guest check must come before container resolution').toBeLessThan(containerIdx);
+  });
+
+  it('main.js boots guest mode only behind window.__GUEST_PREVIEW', () => {
+    const mainJs = readFileSync(join(mobileDir, 'main.js'), 'utf8');
+    expect(mainJs).toMatch(/window\.__GUEST_PREVIEW === true/);
+    expect(mainJs, 'guest boot must call enterGuestMode').toMatch(/enterGuestMode\(\)/);
+  });
+
+  it('the 30 s client stop exists in the timeupdate listener', () => {
+    const mainJs = readFileSync(join(mobileDir, 'main.js'), 'utf8');
+    expect(mainJs).toMatch(/window\.__GUEST && elements\.audio\.currentTime >= 30/);
+  });
+
+  it('the ringtone button is suppressed for guests (it carries the audio src URL)', () => {
+    const fnBody = extractFn(mobileHtml, 'updateRingtoneBtn');
+    expect(fnBody, 'updateRingtoneBtn exists in mobile.html').toBeTruthy();
+    expect(fnBody).toMatch(/window\.__GUEST/);
+  });
+
+  it('auth.js paywall sheet is dismissible and offers trial + buy + token', () => {
+    const authJs = readFileSync(join(mobileDir, 'auth.js'), 'utf8');
+    expect(authJs).toMatch(/guest-paywall-close/);
+    expect(authJs).toMatch(/guest-paywall-trial/);
+    expect(authJs).toMatch(/guest-paywall-buy/);
+    expect(authJs).toMatch(/guest-paywall-token/);
+  });
+});

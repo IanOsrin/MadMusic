@@ -20,19 +20,31 @@ export async function playTrack(track) {
 
       // Get audio URL
       let audioUrl = null;
-      const mp3Field = getAudioUrl(fields);
 
-      if (mp3Field && (mp3Field.startsWith('http') || mp3Field.startsWith('https'))) {
-        audioUrl = `/api/container?u=${encodeURIComponent(mp3Field)}`;
+      // Guest preview mode: EVERY playback becomes the server-clipped ~30 s
+      // preview stream, keyed by recordId. No recordId → no playback: a full
+      // stream must never reach a guest.
+      if (window.__GUEST) {
+        if (!track.recordId) {
+          showToast('Subscribe to play this track', 'error');
+          return;
+        }
+        audioUrl = `/api/preview/${encodeURIComponent(track.recordId)}`;
       } else {
-        try {
-          const response = await fetch(`/api/track/${track.recordId}/container`);
-          const data = await response.json();
-          if (data.url) {
-            audioUrl = `/api/container?u=${encodeURIComponent(data.url)}`;
+        const mp3Field = getAudioUrl(fields);
+
+        if (mp3Field && (mp3Field.startsWith('http') || mp3Field.startsWith('https'))) {
+          audioUrl = `/api/container?u=${encodeURIComponent(mp3Field)}`;
+        } else {
+          try {
+            const response = await fetch(`/api/track/${track.recordId}/container`);
+            const data = await response.json();
+            if (data.url) {
+              audioUrl = `/api/container?u=${encodeURIComponent(data.url)}`;
+            }
+          } catch (err) {
+            console.error('Failed to get audio URL', err);
           }
-        } catch (err) {
-          console.error('Failed to get audio URL', err);
         }
       }
 

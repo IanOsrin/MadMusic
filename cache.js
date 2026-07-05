@@ -106,6 +106,18 @@ export const containerUrlCache = new LRUCache({
   updateAgeOnHas: true
 });
 
+// Guest-preview byte-cap cache — maps audio URL → { capBytes, totalSize }.
+// Computing a cap costs one small ranged head-fetch of the MP3 (routes/preview.js);
+// caching it makes repeat plays and every in-preview Range request a single
+// upstream round-trip. Entries are ~100 B. TTL matches containerUrlCache so a
+// rotated FM container URL naturally ages out with its resolution.
+export const previewCapCache = new LRUCache({
+  max: 8000,
+  ttl: 30 * MINUTE_MS,
+  updateAgeOnGet: true,
+  updateAgeOnHas: true
+});
+
 // Track-record cache — maps "layout::recordId" → full FM record { recordId, modId, fieldData }.
 // Shared read-through cache used by trending, my-stats, and any other endpoint that
 // does fmGetRecordById on track records. Eliminates the N+1 pattern where the same

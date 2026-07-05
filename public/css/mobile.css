@@ -1100,3 +1100,78 @@
       background: transparent;
       color: var(--text-secondary, #aaa);
     }
+
+    /* ── Guest preview mode (2026-07-05) ─────────────────────────────────────
+       Dismissible subscribe sheet shown every 5 minutes to token-less
+       visitors, plus a persistent subscribe pill. Injected by mobile/auth.js
+       (injectGuestPaywall); only ever present while body.guest-mode. */
+    .guest-paywall {
+      position: fixed;
+      inset: 0;
+      z-index: 3000;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+    }
+    .guest-paywall.show { display: flex; }
+    .guest-paywall-card {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+      border-radius: 18px 18px 0 0;
+      background: var(--card-bg, #1c1c22);
+      text-align: center;
+      animation: guest-paywall-up 0.25s ease;
+    }
+    @keyframes guest-paywall-up {
+      from { transform: translateY(30px); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    .guest-paywall-card h3 {
+      margin: 0 0 6px;
+      font-size: 18px;
+    }
+    .guest-paywall-card p {
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: var(--text-muted, #999);
+      line-height: 1.45;
+    }
+    .guest-paywall-card .btn {
+      display: block;
+      width: 100%;
+      margin-bottom: 8px;
+    }
+    .guest-paywall-icon { font-size: 30px; margin-bottom: 6px; }
+    .guest-paywall-close {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--text-muted, #999);
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .guest-pill {
+      position: fixed;
+      right: 12px;
+      bottom: calc(140px + env(safe-area-inset-bottom)); /* clears tab bar + floating player */
+      z-index: 1500;
+      padding: 9px 14px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #7b2ff7, #f107a3);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+      user-select: none;
+      -webkit-user-select: none;
+    }

@@ -89,6 +89,12 @@
         '/api/featured-albums',
         '/api/missing-audio-songs',
         '/api/singles',
+        '/api/new-releases',      // hero rail — public catalogue content
+        '/api/g100-albums',       // G100 view — public catalogue content
+        '/api/g100-playlists',
+        '/api/genres',
+        '/api/featured-editorial',
+        '/api/preview/',          // guest 30 s previews — public by design
         '/api/payments/',    // payment flow must work before token exists
         '/api/download/',    // download purchase flow — token-free by design
         '/api/audio-proxy',  // Audio Lab proxy — no auth needed (key is gated separately)
@@ -137,7 +143,9 @@
               if (isDefinitelyInvalid) {
                 clearAccessToken();
               }
-              showTokenOverlay();
+              // In guest mode a stray token-gated call must NOT pop the
+              // overlay — the 5-minute timer (and explicit CTAs) own that.
+              if (!window.__GUEST) showTokenOverlay();
             }
           }).catch(() => {});
         }
@@ -303,6 +311,14 @@
           // Save email to localStorage for currentUser
           if (data.email) {
             localStorage.setItem('mass_token_email', data.email);
+          }
+
+          // Guest → subscriber: the page booted in preview mode (blocked
+          // fetches, preview playback, popup timer). A clean reload re-boots
+          // it as a normal token session with none of that state.
+          if (window.__GUEST) {
+            window.location.reload();
+            return true;
           }
 
           // Pass Audio Lab entitlement to the gate script
@@ -517,6 +533,69 @@
       });
     }
 
+    // ── Guest preview mode (2026-07-05) ─────────────────────────────────────
+    // When the server stamps window.__GUEST_PREVIEW=true, a visitor with no
+    // token browses the app freely: public rails load, every play is the
+    // server-clipped 30 s preview (see _PLAYER.playTrack in app.html), and the
+    // payment overlay pops every 5 minutes as a DISMISSIBLE popup instead of a
+    // blocking wall. Subscribing/activating a token reloads into a normal
+    // session (see validateToken).
+    const GUEST_POPUP_INTERVAL_MS = 5 * 60 * 1000;
+
+    function showGuestToast(message) {
+      let toast = document.getElementById('guestToast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'guestToast';
+        toast.className = 'guest-toast';
+        document.body.appendChild(toast);
+      }
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(toast._hideTimer);
+      toast._hideTimer = setTimeout(() => toast.classList.remove('show'), 4000);
+    }
+
+    function enterGuestMode() {
+      console.log('[Guest] Preview mode active — browsing without a token');
+      window.__GUEST = true;
+      document.body.classList.add('guest-mode');
+
+      // Persistent CTA pill — lets the visitor subscribe without waiting for
+      // the 5-minute popup.
+      const pill = document.getElementById('guestPill');
+      if (pill) {
+        pill.classList.remove('hidden');
+        pill.addEventListener('click', showTokenOverlay);
+      }
+
+      // Close (×) on the payment overlay — only rendered in guest mode
+      // (display gated on body.guest-mode, see app.css).
+      const closeBtn = document.getElementById('paymentOverlayClose');
+      if (closeBtn) closeBtn.addEventListener('click', hideTokenOverlay);
+
+      // Hooks for the player (app.html _PLAYER wiring).
+      window.__guestPreviewEnded = () => {
+        showGuestToast('Preview ended — subscribe to hear the full track');
+      };
+      window.__guestPreviewDenied = () => {
+        showGuestToast('Subscribe to play this — previews are available from the catalogue');
+      };
+
+      // Let the app do its initial load — the landing rails are public
+      // endpoints. Token-gated calls stay client-blocked by the interceptor.
+      window.massAccessReady = true;
+      window.dispatchEvent(new CustomEvent('mass:access-ready', {
+        detail: { token: null, guest: true }
+      }));
+
+      // The 5-minute subscribe popup. The interval keeps ticking: closing the
+      // popup just resumes browsing until the next tick.
+      setInterval(() => {
+        if (overlay.classList.contains('hidden')) showTokenOverlay();
+      }, GUEST_POPUP_INTERVAL_MS);
+    }
+
     // Check for existing token on page load
     const existingToken = loadAccessToken();
     if (existingToken) {
@@ -529,12 +608,15 @@
           // overlay appears — prevents the expired token being attached to any fetch
           // calls the user triggers immediately (e.g. payment initialisation).
           await clearAccessToken();
-          showTokenOverlay();
+          if (window.__GUEST_PREVIEW === true) enterGuestMode();
+          else showTokenOverlay();
         } else {
           console.log('[Access Token] Existing token valid (event already dispatched)');
           // Note: hideTokenOverlay and event dispatch already handled in validateToken
         }
       });
+    } else if (window.__GUEST_PREVIEW === true) {
+      enterGuestMode();
     } else {
       console.log('[Access Token] No existing token, showing overlay');
       showTokenOverlay();

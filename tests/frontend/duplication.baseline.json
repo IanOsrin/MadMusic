@@ -2,16 +2,16 @@
   "note": "Stable duplication fingerprint of the frontend views. Lower is better. Regenerate with UPDATE_BASELINE=1 npx vitest run tests/frontend/duplication-baseline.test.js",
   "perFile": {
     "app.html": {
-      "totalLines": 6089,
-      "styleBlocks": 3,
-      "cssSignificantLines": 159,
-      "inlineJsSignificantLines": 2932
+      "totalLines": 6939,
+      "styleBlocks": 4,
+      "cssSignificantLines": 174,
+      "inlineJsSignificantLines": 3477
     },
     "mobile.html": {
-      "totalLines": 2588,
-      "styleBlocks": 0,
-      "cssSignificantLines": 0,
-      "inlineJsSignificantLines": 1271
+      "totalLines": 509,
+      "styleBlocks": 1,
+      "cssSignificantLines": 9,
+      "inlineJsSignificantLines": 104
     },
     "audio-lab.html": {
       "totalLines": 4641,
@@ -20,21 +20,21 @@
       "inlineJsSignificantLines": 2385
     },
     "ringtone.html": {
-      "totalLines": 903,
+      "totalLines": 915,
       "styleBlocks": 1,
       "cssSignificantLines": 111,
-      "inlineJsSignificantLines": 404
+      "inlineJsSignificantLines": 412
     }
   },
   "cssDuplication": {
-    "sharedLineKeys": 10,
-    "redundantCopies": 12
+    "sharedLineKeys": 11,
+    "redundantCopies": 13
   },
   "jsDuplication": {
-    "sharedLineKeys": 90,
-    "redundantCopies": 104
+    "sharedLineKeys": 57,
+    "redundantCopies": 68
   },
-  "totalRedundantCopies": 116,
+  "totalRedundantCopies": 81,
   "cssExamples": [
     {
       "files": [
@@ -79,6 +79,13 @@
         "audio-lab.html"
       ],
       "line": "text-overflow: ellipsis;"
+    },
+    {
+      "files": [
+        "app.html",
+        "audio-lab.html"
+      ],
+      "line": "border-radius: 14px;"
     },
     {
       "files": [
@@ -165,42 +172,6 @@
     {
       "files": [
         "app.html",
-        "mobile.html"
-      ],
-      "line": "const data = await response.json();"
-    },
-    {
-      "files": [
-        "app.html",
-        "mobile.html"
-      ],
-      "line": "const items = data.items || [];"
-    },
-    {
-      "files": [
-        "app.html",
-        "mobile.html"
-      ],
-      "line": "if (!items.length) {"
-    },
-    {
-      "files": [
-        "app.html",
-        "mobile.html"
-      ],
-      "line": "const seen = new Set();"
-    },
-    {
-      "files": [
-        "app.html",
-        "mobile.html"
-      ],
-      "line": "async function loadG100Playlists() {"
-    },
-    {
-      "files": [
-        "app.html",
-        "mobile.html",
         "ringtone.html"
       ],
       "line": "const data = await res.json();"
@@ -208,23 +179,59 @@
     {
       "files": [
         "app.html",
-        "mobile.html"
+        "ringtone.html"
       ],
-      "line": "const playlists = data.playlists || [];"
+      "line": "const m = Math.floor(secs / 60);"
     },
     {
       "files": [
         "app.html",
-        "mobile.html"
+        "audio-lab.html"
       ],
-      "line": "if (!playlists.length) {"
+      "line": "requestAnimationFrame(() => {"
     },
     {
       "files": [
         "app.html",
-        "mobile.html"
+        "ringtone.html"
       ],
-      "line": "<div class=\"g100-playlist-art\">"
+      "line": "headers: { 'Content-Type': 'application/json' },"
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html",
+        "ringtone.html"
+      ],
+      "line": "document.addEventListener('DOMContentLoaded', function () {"
+    },
+    {
+      "files": [
+        "app.html",
+        "ringtone.html"
+      ],
+      "line": "}, { passive: true });"
+    },
+    {
+      "files": [
+        "app.html",
+        "ringtone.html"
+      ],
+      "line": "body: JSON.stringify({"
+    },
+    {
+      "files": [
+        "app.html",
+        "ringtone.html"
+      ],
+      "line": "if (!data.ok || !data.authorization_url) {"
+    },
+    {
+      "files": [
+        "app.html",
+        "ringtone.html"
+      ],
+      "line": "if (!src) return '';"
     }
   ]
 }

@@ -40,6 +40,20 @@ Run tests before and after changes:
    `renderAlbums()` still exists and serves the default (non-search) random view.
 3. **Spacing pass** — `.section` margin 2.5rem, `.nr-grid` 1rem gap + scroll-snap +
    hover-shadow padding. Aesthetic only; don't regress these when touching rails.
+4. **Guest preview mode (2026-07-05)** — ships dark behind `GUEST_PREVIEW_ENABLED`
+   (default off). When on, token-less visitors browse freely and every play becomes
+   the SERVER-clipped ~30 s stream `GET /api/preview/:recordId` (public;
+   `routes/preview.js` + byte-cap parser `lib/mp3-preview.js` — no ffmpeg on the web
+   service). A dismissible subscribe popup fires every 5 min (desktop: paymentOverlay
+   + × via `body.guest-mode`; mobile: injected `guest-paywall` sheet in
+   `js/mobile/auth.js`). Enforcement chokepoints — do not bypass: desktop
+   `_PLAYER.playTrack` (app.html) and mobile `playTrack` (js/mobile/player.js) rewrite
+   ALL guest playback to `/api/preview/`; a play without a recordId is refused, and
+   ringtone buttons are suppressed for guests. Guards:
+   `tests/frontend/guest-preview-frontend.test.js`, guest section in
+   `mobile-invariants.test.js`, `tests/integration/preview-{route,ringfence}.test.js`.
+   Feature flags are now injected into `<head>` (loadHtml) because auth.js decides
+   gate-vs-guest synchronously at boot.
 
 The MadMusicV3.1 source tree (reference for further ports: charts/SQLite ingest, admin
 metrics, service worker, search intelligence) lives outside this repo — ask the user for

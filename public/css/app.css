@@ -4268,6 +4268,66 @@
       margin-bottom: 4px;
       text-align: center;
     }
+    /* ── Guest preview mode ─────────────────────────────────────────────── */
+    /* Close (×) on the subscribe popup — guests only. For token-less visitors
+       outside guest mode the overlay stays a blocking wall (no button). */
+    .payment-close {
+      display: none;
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 50%;
+      background: transparent;
+      color: #888;
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .payment-close:hover { background: #f0f0f0; color: #333; }
+    body.guest-mode .payment-close { display: block; }
+    body.guest-mode .payment-modal { position: relative; }
+    /* Persistent "subscribe" pill while browsing as a guest */
+    .guest-pill {
+      position: fixed;
+      right: 16px;
+      bottom: 96px; /* clears the unified player bar */
+      z-index: 1500;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #7b2ff7, #f107a3);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+      user-select: none;
+    }
+    .guest-pill.hidden { display: none; }
+    /* Transient guest nudge (preview ended / play blocked) */
+    .guest-toast {
+      position: fixed;
+      left: 50%;
+      bottom: 140px;
+      transform: translateX(-50%) translateY(12px);
+      z-index: 2100;
+      max-width: min(92vw, 420px);
+      padding: 12px 18px;
+      border-radius: 10px;
+      background: rgba(20, 20, 24, 0.95);
+      color: #fff;
+      font-size: 13px;
+      text-align: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .guest-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
     .payment-modal p {
       font-size: 13px;
       color: #666666;

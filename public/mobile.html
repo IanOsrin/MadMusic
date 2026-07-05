@@ -397,6 +397,9 @@
     }
 
     function updateRingtoneBtn() {
+      // Guests never get the ringtone editor — it carries the audio source
+      // URL, and guests only ever hold the clipped preview stream.
+      if (window.__GUEST) return;
       var audio = document.getElementById('audio');
       var btn   = document.getElementById('mobileRingtoneBtn');
       if (!audio || !btn) return;

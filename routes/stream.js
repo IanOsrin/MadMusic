@@ -115,6 +115,87 @@ function isImmutableUpstream(upstreamUrl) {
   return REGEX_IMMUTABLE_S3.test(upstreamUrl);
 }
 
+// Resolve a track's audio container URL (+ fresh artwork) by recordId.
+// Shared by the token-gated /track/:recordId/container route and the public
+// guest-preview route (routes/preview.js) so both hit the same LRU / FM path.
+// Returns { ok: true, url, field, artworkUrl, _cached? } or
+// { ok: false, reason: 'record_not_found' | 'no_container' }.
+export async function resolveTrackAudio(recordId, layout = FM_LAYOUT, { requestedField = '', candidates = [] } = {}) {
+  // Check cache first to avoid a FileMaker round-trip on repeated plays
+  const cacheKey = `${layout}::${recordId}`;
+  const cached = containerUrlCache.get(cacheKey);
+  if (cached) {
+    return { ok: true, url: cached.url, field: cached.field, artworkUrl: cached.artworkUrl || '', _cached: true };
+  }
+
+  // Read-through fallback (May-17): featured/trending/g100 pre-warm already
+  // pull full FM records into trackRecordCache. The audio container URL we
+  // need is sitting in that record's fieldData. Reading it from there saves
+  // a fresh fmGetRecordById round-trip — which was the cause of the 1-3 s
+  // delay before the first song of any non-pre-warmed-by-this-endpoint
+  // album/playlist. We still cache the resolved URL into containerUrlCache
+  // so the hot path remains a single LRU lookup.
+  let record = trackRecordCache.get(cacheKey)
+    || trackRecordCache.get(`${FM_LAYOUT}::${recordId}`); // legacy key shape
+
+  if (!record) {
+    record = await fmGetRecordById(layout, recordId);
+  }
+
+  if (!record) return { ok: false, reason: 'record_not_found' };
+
+  const fieldData = record.fieldData || {};
+
+  const getFieldValue = (fieldName) => {
+    if (!fieldName) return '';
+    if (!Object.hasOwn(fieldData, fieldName)) return '';
+    const raw = fieldData[fieldName];
+    if (raw === undefined || raw === null) return '';
+    const str = typeof raw === 'string' ? raw.trim() : String(raw).trim();
+    return str;
+  };
+
+  let chosenField = requestedField;
+  let containerUrl = getFieldValue(chosenField);
+
+  const tryCandidates = (list) => {
+    for (const candidate of list) {
+      const value = getFieldValue(candidate);
+      if (value) {
+        chosenField = candidate;
+        containerUrl = value;
+        return true;
+      }
+    }
+    return false;
+  };
+
+  if (!containerUrl && candidates.length) {
+    tryCandidates(candidates);
+  }
+
+  if (!containerUrl) {
+    tryCandidates(AUDIO_FIELD_CANDIDATES);
+  }
+
+  if (!containerUrl) return { ok: false, reason: 'no_container' };
+
+  // Also resolve a fresh artwork URL from the same record. Saved playlist
+  // tracks store absolute FileMaker streaming URLs that expire (401), so
+  // callers re-resolve by recordId to get a working artwork for now-playing.
+  const ARTWORK_CANDIDATES = ['Artwork_S3_URL', 'Tape Files::Artwork_S3_URL', 'Artwork::Picture', 'Artwork Picture', 'Picture'];
+  let artworkUrl = '';
+  for (const candidate of ARTWORK_CANDIDATES) {
+    const value = getFieldValue(candidate);
+    if (value) { artworkUrl = value; break; }
+  }
+
+  // Cache the resolved URLs so repeat plays skip the FileMaker lookup
+  containerUrlCache.set(cacheKey, { url: containerUrl, field: chosenField || requestedField || '', artworkUrl });
+
+  return { ok: true, url: containerUrl, field: chosenField || requestedField || '', artworkUrl };
+}
+
 router.get('/track/:recordId/container', async (req, res) => {
   try {
     const recordId = (req.params?.recordId || '').toString().trim();
@@ -130,86 +211,18 @@ router.get('/track/:recordId/container', async (req, res) => {
       ? candidateParam.split(',').map((value) => value.trim()).filter(Boolean)
       : [];
 
-    // Check cache first to avoid a FileMaker round-trip on repeated plays
-    const cacheKey = `${layout}::${recordId}`;
-    const cached = containerUrlCache.get(cacheKey);
-    if (cached) {
-      res.json({ ok: true, url: cached.url, field: cached.field, artworkUrl: cached.artworkUrl || '', _cached: true });
+    const resolved = await resolveTrackAudio(recordId, layout, { requestedField, candidates });
+
+    if (!resolved.ok) {
+      const message = resolved.reason === 'record_not_found' ? 'Record not found' : 'Container data not found';
+      res.status(404).json({ ok: false, error: message });
       return;
     }
 
-    // Read-through fallback (May-17): featured/trending/g100 pre-warm already
-    // pull full FM records into trackRecordCache. The audio container URL we
-    // need is sitting in that record's fieldData. Reading it from there saves
-    // a fresh fmGetRecordById round-trip — which was the cause of the 1-3 s
-    // delay before the first song of any non-pre-warmed-by-this-endpoint
-    // album/playlist. We still cache the resolved URL into containerUrlCache
-    // so the hot path remains a single LRU lookup.
-    let record = trackRecordCache.get(cacheKey)
-      || trackRecordCache.get(`${FM_LAYOUT}::${recordId}`); // legacy key shape
-
-    if (!record) {
-      record = await fmGetRecordById(layout, recordId);
-    }
-
-    if (!record) {
-      res.status(404).json({ ok: false, error: 'Record not found' });
-      return;
-    }
-
-    const fieldData = record.fieldData || {};
-
-    const getFieldValue = (fieldName) => {
-      if (!fieldName) return '';
-      if (!Object.hasOwn(fieldData, fieldName)) return '';
-      const raw = fieldData[fieldName];
-      if (raw === undefined || raw === null) return '';
-      const str = typeof raw === 'string' ? raw.trim() : String(raw).trim();
-      return str;
-    };
-
-    let chosenField = requestedField;
-    let containerUrl = getFieldValue(chosenField);
-
-    const tryCandidates = (list) => {
-      for (const candidate of list) {
-        const value = getFieldValue(candidate);
-        if (value) {
-          chosenField = candidate;
-          containerUrl = value;
-          return true;
-        }
-      }
-      return false;
-    };
-
-    if (!containerUrl && candidates.length) {
-      tryCandidates(candidates);
-    }
-
-    if (!containerUrl) {
-      tryCandidates(AUDIO_FIELD_CANDIDATES);
-    }
-
-    if (!containerUrl) {
-      res.status(404).json({ ok: false, error: 'Container data not found' });
-      return;
-    }
-
-    // Also resolve a fresh artwork URL from the same record. Saved playlist
-    // tracks store absolute FileMaker streaming URLs that expire (401), so
-    // callers re-resolve by recordId to get a working artwork for now-playing.
-    const ARTWORK_CANDIDATES = ['Artwork_S3_URL', 'Tape Files::Artwork_S3_URL', 'Artwork::Picture', 'Artwork Picture', 'Picture'];
-    let artworkUrl = '';
-    for (const candidate of ARTWORK_CANDIDATES) {
-      const value = getFieldValue(candidate);
-      if (value) { artworkUrl = value; break; }
-    }
-
-    // Cache the resolved URLs so repeat plays skip the FileMaker lookup
-    containerUrlCache.set(cacheKey, { url: containerUrl, field: chosenField || requestedField || '', artworkUrl });
-
-    res.json({ ok: true, url: containerUrl, field: chosenField || requestedField || '', artworkUrl });
+    const { url, field, artworkUrl, _cached } = resolved;
+    res.json(_cached
+      ? { ok: true, url, field, artworkUrl, _cached: true }
+      : { ok: true, url, field, artworkUrl });
   } catch (err) {
     console.error('[MASS] Container refresh failed:', err);
     res.status(500).json({ ok: false, error: 'Failed to refresh container' });
@@ -223,7 +236,7 @@ function setProxyRequestHeaders(headers, req, requiresAuth, fmToken) {
   if (req.headers['if-modified-since']) headers.set('If-Modified-Since', req.headers['if-modified-since']);
 }
 
-async function fetchWithAuthRetry(upstreamUrl, requiresAuth, headers, signal) {
+export async function fetchWithAuthRetry(upstreamUrl, requiresAuth, headers, signal) {
   let upstream = await safeFetch(upstreamUrl, { headers, signal }, { timeoutMs: 45000, retries: 1 });
   if (upstream.status === 401 && requiresAuth) {
     const freshToken = await fmLogin();

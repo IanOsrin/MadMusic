@@ -7,7 +7,7 @@ import { showToast } from './util.js';
 import { getArtworkUrl, getAudioUrl, getYearField, hasValidArtwork } from './fields.js';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, logout, setAccessToken, startTrial, updateAuthUI } from './auth.js?v=2';
+import { buyAccess, enterGuestMode, logout, setAccessToken, startTrial, updateAuthUI } from './auth.js?v=3';
 import { switchTab } from './nav.js';
 import { renderSearchResults, search } from './search.js';
 import { createPlaylist, loadPlaylists, showAddToPlaylistModal } from './playlists.js';
@@ -65,6 +65,14 @@ import { initRouter } from './router.js';
       // Check token exists locally — no server round-trip (avoids session conflict)
       const accessToken = localStorage.getItem('mass_access_token');
       if (!accessToken) {
+        // Guest preview mode: browse freely with 30 s previews + a dismissible
+        // paywall every 5 minutes instead of the blocking key screen.
+        if (window.__GUEST_PREVIEW === true) {
+          enterGuestMode();
+          loadNewReleases();
+          loadPlaylists();
+          return;
+        }
         elements.newReleasesContent.innerHTML = `
           <div class="empty-state">
             <div class="empty-icon">🔑</div>
@@ -291,6 +299,12 @@ import { initRouter } from './router.js';
     });
 
     elements.audio.addEventListener('timeupdate', () => {
+      // Guest preview: hard client stop at 30 s (the server already caps the
+      // stream bytes at ~30 s — this just makes the ending clean + nudges).
+      if (window.__GUEST && elements.audio.currentTime >= 30 && !elements.audio.paused) {
+        elements.audio.pause();
+        showToast('Preview ended — subscribe to hear the full track', 'success');
+      }
       updateProgress();
 
       const now = Date.now();

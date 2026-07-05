@@ -96,8 +96,11 @@
 
     }
 
-    // Show payment modal if no token
+    // Show payment modal if no token. In guest preview mode the overlay is
+    // owned by auth.js (dismissible popup on a 5-minute timer) — this boot-time
+    // wall must NOT fire, or guests get gated the moment plans finish loading.
     function checkAccessToken() {
+      if (window.__GUEST) return;
       if (!accessToken) {
         document.getElementById('paymentOverlay').classList.remove('hidden');
       }

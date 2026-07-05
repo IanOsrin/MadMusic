@@ -40,6 +40,9 @@
   </script>
   <div class="payment-overlay hidden" id="paymentOverlay">
     <div class="payment-modal">
+      <!-- Guest mode only (display gated on body.guest-mode): lets a visitor
+           dismiss the subscribe popup and keep exploring. -->
+      <button type="button" class="payment-close" id="paymentOverlayClose" aria-label="Close and keep browsing">&times;</button>
       <h2>Get Access to MAD Music</h2>
       <p>Choose a plan to start streaming</p>
 
@@ -166,6 +169,11 @@
 
       <div class="payment-error" id="paymentError"></div>
     </div>
+  </div>
+
+  <!-- Guest preview mode: persistent subscribe CTA (auth.js unhides it) -->
+  <div class="guest-pill hidden" id="guestPill" role="button" tabindex="0" aria-label="Subscribe to MAD Music">
+    Preview mode &middot; <strong>Subscribe</strong>
   </div>
 
   <!-- Navigation Header -->
@@ -3786,6 +3794,20 @@
     // ── public API ────────────────────────────────────────────────────────────
     function playTrack(url, meta) {
       if (!url) return Promise.resolve();
+      // Guest preview mode: EVERY playback becomes the server-clipped ~30 s
+      // preview stream — this is the single chokepoint all desktop playback
+      // paths (playSong, album modal, jukebox, shuffle) route through. A play
+      // without a recordId (podcast/descriptor URLs) cannot be clipped
+      // server-side, so it does not play at all: a full stream must never
+      // reach a guest.
+      if (window.__GUEST) {
+        var _rid = meta && meta.recordId;
+        if (!_rid) {
+          if (typeof window.__guestPreviewDenied === 'function') window.__guestPreviewDenied();
+          return Promise.resolve();
+        }
+        url = '/api/preview/' + encodeURIComponent(_rid);
+      }
       _meta = meta || {};
       var player = document.getElementById('player');
       if (!player) return Promise.resolve();
@@ -3846,6 +3868,12 @@
       player.addEventListener('ended', function () { setIcon(false); });
 
       player.addEventListener('timeupdate', function () {
+        // Guest preview: hard client stop at 30 s (the server already caps the
+        // stream bytes at ~30 s — this just makes the ending clean + nudges).
+        if (window.__GUEST && player.currentTime >= 30 && !player.paused) {
+          player.pause();
+          if (typeof window.__guestPreviewEnded === 'function') window.__guestPreviewEnded();
+        }
         if (seeking) return;
         var pct = player.duration ? (player.currentTime / player.duration * 100) : 0;
         if (fill)        fill.style.width      = pct + '%';

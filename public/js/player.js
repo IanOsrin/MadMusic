@@ -661,6 +661,9 @@
   }
 
   function showRingtoneBtn(audioUrl, title, artist, artworkUrl) {
+    // Guests never get the ringtone editor — its URL carries the FULL audio
+    // source, which must not leave the server for token-less visitors.
+    if (window.__GUEST) return;
     var btn = document.getElementById('upRingtoneBtn');
     if (!btn) return;
     btn.href = _ringtoneUrl(audioUrl, title, artist, artworkUrl);

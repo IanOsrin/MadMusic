@@ -21,6 +21,36 @@
       "autoPort": true
     },
     {
+      "name": "gallo-ingest",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/ianosrin/Desktop/GalloIngestV1.1 && PORT=3998 node server.js"
+      ],
+      "port": 3998,
+      "autoPort": true
+    },
+    {
+      "name": "madmusic-guest-live",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "GUEST_PREVIEW_ENABLED=true PORT=3999 NODE_ENV=development node server.js"
+      ],
+      "port": 3999,
+      "autoPort": true
+    },
+    {
+      "name": "madmusic-guest",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "PORT=3996 HOST=127.0.0.1 NODE_ENV=development GUEST_PREVIEW_ENABLED=true FM_HOST=https://fm.invalid FM_DB=TestDB FM_USER=test FM_PASS=test FM_LAYOUT=API_Album_Songs FM_TOKENS_LAYOUT=API_Access_Tokens FM_TIMEZONE_OFFSET=0 AUTH_SECRET=test-auth-secret ADMIN_SECRET=test-admin-secret PAYSTACK_SECRET_KEY=sk_test_dummy PAYSTACK_PUBLIC_KEY=pk_test_dummy EMAIL_HOST=smtp.invalid EMAIL_PORT=587 EMAIL_USER=test@test EMAIL_PASS=test EMAIL_FROM=test@test node server.js"
+      ],
+      "port": 3996,
+      "autoPort": true
+    },
+    {
       "name": "madmusic-preview",
       "runtimeExecutable": "sh",
       "runtimeArgs": [
