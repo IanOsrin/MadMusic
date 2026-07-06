@@ -56,4 +56,13 @@ describe('desktop guest preview mode', () => {
     const body = playerJs.slice(idx, playerJs.indexOf('function hideRingtoneBtn', idx));
     expect(body).toMatch(/window\.__GUEST/);
   });
+
+  it('the SECOND desktop ringtone wiring (app.html updateRingtoneBtn) is also guest-guarded', () => {
+    // app.html has its own updateRingtoneBtn watching the audio element —
+    // found showing the button to guests during share-feature verification.
+    const idx = appHtml.indexOf('function updateRingtoneBtn');
+    expect(idx).toBeGreaterThan(-1);
+    const body = appHtml.slice(idx, appHtml.indexOf('function hideRingtoneBtn', idx));
+    expect(body).toMatch(/window\.__GUEST/);
+  });
 });

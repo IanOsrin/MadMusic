@@ -4,7 +4,7 @@
 
 import { elements, state } from './state.js';
 import { showToast } from './util.js';
-import { getArtworkUrl, getAudioUrl, getYearField, hasValidArtwork } from './fields.js';
+import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
 import { buyAccess, enterGuestMode, logout, setAccessToken, startTrial, updateAuthUI } from './auth.js?v=3';
@@ -15,6 +15,7 @@ import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-dis
 import { filterG100Albums, loadG100 } from './rails-g100.js';
 import { loadNewReleases } from './rails-newreleases.js';
 import { closeModal, playTrack, sendStreamEvent, updatePlayerModal, updateProgress } from './player.js';
+import { showAlbumTracksModal } from './cards.js';
 import { initRouter } from './router.js';
 
 // ===== Tab Navigation =====
@@ -71,6 +72,7 @@ import { initRouter } from './router.js';
           enterGuestMode();
           loadNewReleases();
           loadPlaylists();
+          handleShareDeepLink();
           return;
         }
         elements.newReleasesContent.innerHTML = `
@@ -93,6 +95,32 @@ import { initRouter } from './router.js';
       updateAuthUI();
       loadNewReleases();
       loadPlaylists();
+      handleShareDeepLink();
+    }
+
+    // A visitor arriving via a shared track link (/mobile?t=<recordId>) gets
+    // that track's album opened in the bottom sheet. __SHARE_TRACK is injected
+    // by the server (which already resolved the record for the OG tags), and
+    // /api/album?cat= is public — works for guests and members alike.
+    async function handleShareDeepLink() {
+      const st = window.__SHARE_TRACK;
+      if (!st || !st.catalogue) return;
+      // Clean the URL FIRST so the modal's history entry isn't clobbered.
+      window.history.replaceState({}, document.title, window.location.pathname);
+      try {
+        const r = await fetch(`/api/album?${new URLSearchParams({ cat: st.catalogue })}`);
+        const d = await r.json();
+        if (d.ok && d.items?.length) {
+          showAlbumTracksModal({
+            title: st.album || '',
+            artist: st.albumArtist || st.artist || '',
+            artwork: st.artworkUrl || '/img/placeholder.png',
+            tracks: d.items
+          });
+        }
+      } catch (err) {
+        console.warn('[Share] deep link failed:', err);
+      }
     }
 
     // Function to set access token
@@ -325,6 +353,29 @@ import { initRouter } from './router.js';
       const x = e.clientX - rect.left;
       const percent = x / rect.width;
       elements.audio.currentTime = elements.audio.duration * percent;
+    });
+
+    // Share the current track — native share sheet (Instagram/TikTok/WhatsApp
+    // live there), copy-link fallback. The /?t= URL unfurls via server OG tags
+    // and gives non-subscribers a 30 s guest preview.
+    document.getElementById('share-track-btn')?.addEventListener('click', async () => {
+      const track = state.currentTrack;
+      if (!track?.recordId) { showToast('Nothing playing to share', 'error'); return; }
+      const f = track.fields || {};
+      const title = getTitleField(f) || 'A track';
+      const artist = getArtistField(f) || '';
+      const url = `${window.location.origin}/?t=${encodeURIComponent(track.recordId)}`;
+      const text = `${title}${artist ? ` — ${artist}` : ''} on MAD Music`;
+      if (navigator.share) {
+        try { await navigator.share({ title, text, url }); return; }
+        catch (err) { if (err?.name === 'AbortError') return; }
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast('Link copied — paste it anywhere', 'success');
+      } catch {
+        prompt('Copy this link:', url);
+      }
     });
 
     // Stream events

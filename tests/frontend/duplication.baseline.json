@@ -2,13 +2,13 @@
   "note": "Stable duplication fingerprint of the frontend views. Lower is better. Regenerate with UPDATE_BASELINE=1 npx vitest run tests/frontend/duplication-baseline.test.js",
   "perFile": {
     "app.html": {
-      "totalLines": 6939,
+      "totalLines": 7138,
       "styleBlocks": 4,
       "cssSignificantLines": 174,
-      "inlineJsSignificantLines": 3477
+      "inlineJsSignificantLines": 3582
     },
     "mobile.html": {
-      "totalLines": 509,
+      "totalLines": 513,
       "styleBlocks": 1,
       "cssSignificantLines": 9,
       "inlineJsSignificantLines": 104
@@ -31,10 +31,10 @@
     "redundantCopies": 13
   },
   "jsDuplication": {
-    "sharedLineKeys": 57,
-    "redundantCopies": 68
+    "sharedLineKeys": 58,
+    "redundantCopies": 69
   },
-  "totalRedundantCopies": 81,
+  "totalRedundantCopies": 82,
   "cssExamples": [
     {
       "files": [

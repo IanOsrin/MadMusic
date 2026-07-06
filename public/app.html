@@ -1901,6 +1901,15 @@
       </svg>
       <span class="up-ringtone-label">Ringtone</span>
     </a>
+    <!-- Share button — shown when a track with a recordId is playing -->
+    <button id="upShareBtn" type="button" title="Share this track" aria-label="Share this track">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+      </svg>
+      <span class="up-ringtone-label">Share</span>
+    </button>
     <!-- hidden legacy button -->
     <button id="upAddToPlaylist" style="display:none" aria-hidden="true"></button>
   </div>
@@ -2001,8 +2010,34 @@
       <h3 id="shareModalTitle">Share Playlist</h3>
       <p>Copy this link to share your playlist:</p>
       <input id="shareLinkInput" type="text" readonly />
+      <!-- Social share row — same link, one tap to each platform. On phones the
+           native button opens the OS share sheet (Instagram/TikTok live there). -->
+      <div class="share-social-row" id="shareModalSocial">
+        <button type="button" class="share-social-btn" data-share-native>Share…</button>
+        <button type="button" class="share-social-btn" data-share-to="facebook">Facebook</button>
+        <button type="button" class="share-social-btn" data-share-to="whatsapp">WhatsApp</button>
+        <button type="button" class="share-social-btn" data-share-to="x">X</button>
+      </div>
       <div class="actions">
         <button type="button" id="shareModalClose" class="btn small">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic share popover — desktop fallback when navigator.share is absent -->
+  <div id="sharePopover" class="share-modal-overlay">
+    <div class="share-modal" role="dialog" aria-modal="true" aria-labelledby="sharePopoverTitle">
+      <h3 id="sharePopoverTitle">Share</h3>
+      <p id="sharePopoverText"></p>
+      <input id="sharePopoverLink" type="text" readonly />
+      <div class="share-social-row">
+        <button type="button" class="share-social-btn" data-pop-to="facebook">Facebook</button>
+        <button type="button" class="share-social-btn" data-pop-to="whatsapp">WhatsApp</button>
+        <button type="button" class="share-social-btn" data-pop-to="x">X</button>
+        <button type="button" class="share-social-btn" id="sharePopoverCopy">Copy link</button>
+      </div>
+      <div class="actions">
+        <button type="button" id="sharePopoverClose" class="btn small">Close</button>
       </div>
     </div>
   </div>
@@ -3831,6 +3866,11 @@
           picture:       _meta.artUrl || ''
         });
       }
+      // Stash for the player-bar Share button (single chokepoint — every
+      // playback path passes through here with the track's identity).
+      window.__nowPlayingShare = _meta.recordId
+        ? { recordId: _meta.recordId, title: _meta.title || '', artist: _meta.artist || '' }
+        : null;
 
       return player.play() || Promise.resolve();
     }
@@ -5938,6 +5978,129 @@
   </script>
 
   <!-- Modules: Load in dependency order -->
+  <!-- ── Social share (2026-07-06) ─────────────────────────────────────────────
+       window.MADShare: native share sheet where available (phones — the route
+       to Instagram/TikTok/WhatsApp), #sharePopover fallback on desktop.
+       Track share URLs are /?t=<recordId> — the server injects OG tags there
+       so links unfurl with art on every platform, and guest preview mode makes
+       them playable for visitors with no account. -->
+  <script>
+  (function () {
+    'use strict';
+
+    function trackUrl(recordId) {
+      return window.location.origin + '/?t=' + encodeURIComponent(recordId);
+    }
+
+    function shareTo(platform, url, text) {
+      var u = encodeURIComponent(url), t = encodeURIComponent(text || '');
+      var dest =
+        platform === 'facebook' ? 'https://www.facebook.com/sharer/sharer.php?u=' + u :
+        platform === 'whatsapp' ? 'https://wa.me/?text=' + (t ? t + '%20' : '') + u :
+        platform === 'x'        ? 'https://twitter.com/intent/tweet?url=' + u + (t ? '&text=' + t : '') : '';
+      if (dest) window.open(dest, '_blank', 'noopener,width=640,height=560');
+    }
+
+    function openPopover(url, text) {
+      var pop = document.getElementById('sharePopover');
+      if (!pop) return;
+      var link = document.getElementById('sharePopoverLink');
+      var txt  = document.getElementById('sharePopoverText');
+      if (link) link.value = url;
+      if (txt)  txt.textContent = text || '';
+      pop._shareUrl = url;
+      pop._shareText = text || '';
+      pop.classList.add('open');
+    }
+
+    async function share(payload) {
+      var url = payload.url, text = payload.text || payload.title || '';
+      if (navigator.share) {
+        try { await navigator.share({ title: payload.title || 'MAD Music', text: text, url: url }); return; }
+        catch (e) { if (e && e.name === 'AbortError') return; /* else fall through */ }
+      }
+      openPopover(url, text);
+    }
+
+    window.MADShare = { share: share, shareTo: shareTo, trackUrl: trackUrl };
+
+    document.addEventListener('DOMContentLoaded', function () {
+      // Player-bar Share — appears whenever a track with a recordId plays
+      // (window.__nowPlayingShare is stashed by _PLAYER.playTrack).
+      var btn = document.getElementById('upShareBtn');
+      var player = document.getElementById('player');
+      if (player && btn) {
+        player.addEventListener('play', function () {
+          btn.classList.toggle('visible', !!(window.__nowPlayingShare && window.__nowPlayingShare.recordId));
+        });
+      }
+      if (btn) {
+        btn.addEventListener('click', function () {
+          var np = window.__nowPlayingShare;
+          if (!np || !np.recordId) return;
+          share({
+            url: trackUrl(np.recordId),
+            title: np.title || 'MAD Music',
+            text: (np.title || 'A track') + (np.artist ? ' — ' + np.artist : '') + ' on MAD Music'
+          });
+        });
+      }
+
+      // Fallback popover wiring
+      var pop = document.getElementById('sharePopover');
+      if (pop) {
+        pop.addEventListener('click', function (e) {
+          if (e.target === pop) pop.classList.remove('open');
+          var b = e.target.closest('button');
+          if (!b) return;
+          if (b.id === 'sharePopoverClose') { pop.classList.remove('open'); return; }
+          if (b.id === 'sharePopoverCopy') {
+            var link = document.getElementById('sharePopoverLink');
+            if (link) { link.select(); navigator.clipboard?.writeText(link.value).catch(function () {}); }
+            b.textContent = 'Copied!';
+            setTimeout(function () { b.textContent = 'Copy link'; }, 1500);
+            return;
+          }
+          var platform = b.getAttribute('data-pop-to');
+          if (platform) shareTo(platform, pop._shareUrl || '', pop._shareText || '');
+        });
+      }
+
+      // Playlist share modal — social row under the existing copy-link input
+      var row = document.getElementById('shareModalSocial');
+      if (row) {
+        row.addEventListener('click', function (e) {
+          var b = e.target.closest('button');
+          if (!b) return;
+          var url = (document.getElementById('shareLinkInput') || {}).value || '';
+          if (!url) return;
+          var text = 'Check out this playlist on MAD Music';
+          if (b.hasAttribute('data-share-native')) { share({ url: url, title: 'MAD Music playlist', text: text }); return; }
+          var platform = b.getAttribute('data-share-to');
+          if (platform) shareTo(platform, url, text);
+        });
+      }
+
+      // Share deep link: a visitor arriving via /?t=<recordId> gets the shared
+      // track's album revealed (guest mode included — the reveal flow only
+      // uses public endpoints). __SHARE_TRACK is injected by the server, which
+      // already resolved the record for the OG tags.
+      var st = window.__SHARE_TRACK;
+      if (st && st.catalogue) {
+        var reveal = function () {
+          setTimeout(function () {
+            window.dispatchEvent(new CustomEvent('mad-reveal-album', {
+              detail: { cat: st.catalogue, albumTitle: st.album || '', albumArtist: st.albumArtist || '' }
+            }));
+          }, 700);
+        };
+        if (window.massAccessReady) reveal();
+        else window.addEventListener('mass:access-ready', reveal, { once: true });
+      }
+    });
+  })();
+  </script>
+
   <script src="/js/helpers.js?v=1"></script>
   <script src="/js/auth.js?v=2"></script>
   <script src="/js/player.js?v=1"></script>
@@ -5992,6 +6155,9 @@
     }
 
     function updateRingtoneBtn() {
+      // Guests never get the ringtone editor (mirrors player.js
+      // showRingtoneBtn) — for them the src is only the clipped preview.
+      if (window.__GUEST) return;
       var player = document.getElementById('player');
       var btn    = document.getElementById('upRingtoneBtn');
       if (!player || !btn) return;

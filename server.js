@@ -42,6 +42,8 @@ import { isPgEnabled, closePgPool } from './lib/pg.js';
 import { METADATA_SOURCE } from './lib/metadata-source.js';
 import { loadAccessTokens } from './lib/token-store.js';
 import { loadPlaylistByShareId } from './lib/playlist-store.js';
+import { getTrackShareMeta, buildOgTags, inlineJson } from './lib/share-meta.js';
+import { resolveRequestOrigin } from './lib/http.js';
 import { createPrecompressedStatic } from './lib/precompressed-static.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -616,9 +618,91 @@ app.get('/api/shared-playlists/:shareId', async (req, res) => {
   }
 });
 
+// ── Social share landing (2026-07-06) ────────────────────────────────────────
+// Share URLs are the app itself: /?t=<recordId> (track) and /?share=<shareId>
+// (playlist, pre-existing). Social crawlers don't run JS, so when one of those
+// params is present we inject server-rendered OG/Twitter tags into the app
+// HTML — the link unfurls with art + title on Facebook/WhatsApp/X/iMessage.
+// For humans the same page boots the app (guest mode gives visitors 30 s
+// previews + the subscribe funnel); window.__SHARE_TRACK deep-links the app
+// straight to the shared track's album with zero extra round-trips.
+async function sendShareLanding(req, res, filename) {
+  const trackId = String(req.query?.t || '').trim();
+  const shareId = normalizeShareId(String(req.query?.share || ''));
+  if (!trackId && !shareId) return false;
+
+  let ogBlock = '';
+  let bootstrap = null;
+  try {
+    const origin = resolveRequestOrigin(req) || '';
+    if (trackId) {
+      const meta = await getTrackShareMeta(trackId);
+      if (meta) {
+        ogBlock = buildOgTags({
+          type: 'music.song',
+          url: `${origin}/?t=${encodeURIComponent(meta.recordId)}`,
+          title: meta.artist ? `${meta.title} — ${meta.artist}` : meta.title,
+          description: `Listen to a preview of ${meta.title}${meta.album ? ` from the album ${meta.album}` : ''} on MAD Music — African music, streamed.`,
+          image: meta.artworkUrl,
+          audio: GUEST_PREVIEW_ENABLED ? `${origin}/api/preview/${encodeURIComponent(meta.recordId)}` : ''
+        });
+        bootstrap = { kind: 'track', ...meta };
+      }
+    } else if (shareId) {
+      const playlist = await loadPlaylistByShareId(shareId);
+      if (playlist) {
+        const p = sanitizePlaylistForShare(playlist);
+        const firstArt = (p.tracks || [])
+          .map((t) => t?.artworkUrl || t?.artwork || '')
+          .find((u) => /^https?:\/\//i.test(u)) || '';
+        ogBlock = buildOgTags({
+          type: 'music.playlist',
+          url: `${origin}/?share=${encodeURIComponent(p.shareId)}`,
+          title: `${p.name || 'A playlist'} — playlist on MAD Music`,
+          description: `${(p.tracks || []).length} tracks, shared with you on MAD Music — African music, streamed.`,
+          image: firstArt
+        });
+      }
+    }
+  } catch (err) {
+    // A failed lookup must never break the page — serve the plain app.
+    console.warn('[share] OG build failed:', err?.message || err);
+  }
+
+  if (!ogBlock && !bootstrap) return false; // unknown id → plain app
+
+  let html = await loadHtml(filename);
+  const inject = [
+    ogBlock,
+    bootstrap ? `<script>window.__SHARE_TRACK=${inlineJson(bootstrap)};</script>` : ''
+  ].filter(Boolean).join('\n');
+  html = /<head[^>]*>/i.test(html)
+    ? html.replace(/<head[^>]*>/i, (m) => `${m}\n${inject}`)
+    : `${inject}\n${html}`;
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.send(html);
+  return true;
+}
+
+const MOBILE_UA = /iphone|ipod|android.+mobile|windows phone/i;
+
 // Static site routes — all primary views served from merged app.html
 // sendHtml() serves a pre-processed in-memory copy with deploy-stamped asset URLs
-app.get('/',         (_req, res) => sendHtml(res, 'app.html'));
+app.get('/', async (req, res) => {
+  const t = String(req.query?.t || '').trim();
+  // A shared track opened on a phone belongs in the mobile app. Crawlers
+  // (facebookexternalhit, WhatsApp, Twitterbot) don't match the mobile UA
+  // regex, so they read the OG tags from this URL directly.
+  if (t && MOBILE_UA.test(req.headers['user-agent'] || '')) {
+    return res.redirect(302, `/mobile?t=${encodeURIComponent(t)}`);
+  }
+  if (await sendShareLanding(req, res, 'app.html')) return;
+  sendHtml(res, 'app.html');
+});
 app.get('/modern',   (_req, res) => sendHtml(res, 'app.html'));
 app.get('/albums',   (_req, res) => sendHtml(res, 'app.html'));
 app.get('/classic',  (_req, res) => sendHtml(res, 'app.html'));
@@ -626,7 +710,10 @@ app.get('/jukebox',  (_req, res) => sendHtml(res, 'app.html'));
 app.get('/library',  (_req, res) => sendHtml(res, 'app.html')); // library.html never existed — unified app handles this view
 // Redirect legacy standalone pages to unified app
 app.get('/home',     (_req, res) => res.redirect(301, '/'));
-app.get('/mobile',   (_req, res) => sendHtml(res, 'mobile.html'));
+app.get('/mobile',   async (req, res) => {
+  if (await sendShareLanding(req, res, 'mobile.html')) return;
+  sendHtml(res, 'mobile.html');
+});
 app.get('/m',        (_req, res) => sendHtml(res, 'mobile.html'));
 app.get('/ringtone', (_req, res) => sendHtml(res, 'ringtone.html'));
 app.get('/audio-lab',(_req, res) => sendHtml(res, 'audio-lab.html'));

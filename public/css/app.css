@@ -2397,6 +2397,37 @@
     /* Share/Export/Import Playlist Modals */
     .share-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:150;}
     .share-modal-overlay.open{display:flex;}
+    /* Social share row (playlist share modal + generic share popover) */
+    .share-social-row{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px;}
+    .share-social-btn{
+      flex:1 1 auto;
+      padding:8px 12px;
+      border-radius:8px;
+      border:1px solid var(--border,#333);
+      background:transparent;
+      color:var(--text,#eee);
+      font-size:13px;
+      cursor:pointer;
+    }
+    .share-social-btn:hover{background:rgba(255,255,255,0.08);}
+    /* Player-bar share button — same family as #upRingtoneBtn */
+    #upShareBtn{
+      display:none;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      margin-left:8px;
+      border-radius:8px;
+      border:1px solid rgba(123,47,247,0.55);
+      background:rgba(123,47,247,0.16);
+      color:inherit;
+      font-size:12px;
+      cursor:pointer;
+      text-decoration:none;
+    }
+    #upShareBtn.visible{display:inline-flex;}
+    #upShareBtn:hover{background:rgba(123,47,247,0.3);border-color:rgba(123,47,247,0.85);}
+    #upShareBtn svg{pointer-events:none;}
     #shareEmailModal:not([hidden]){display:flex;}
     .share-modal-close{position:absolute;top:16px;right:16px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:4px 8px;border-radius:6px;transition:color 0.15s,background 0.15s;}
     .share-modal-close:hover{color:var(--fg);background:var(--hover-bg);}
