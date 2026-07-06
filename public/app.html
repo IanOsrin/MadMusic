@@ -2035,6 +2035,8 @@
         <button type="button" class="share-social-btn" data-pop-to="whatsapp">WhatsApp</button>
         <button type="button" class="share-social-btn" data-pop-to="x">X</button>
         <button type="button" class="share-social-btn" id="sharePopoverCopy">Copy link</button>
+        <!-- OS share sheet (Mail/AirDrop/…) — shown only when supported -->
+        <button type="button" class="share-social-btn" id="sharePopoverMore" hidden>More…</button>
       </div>
       <div class="actions">
         <button type="button" id="sharePopoverClose" class="btn small">Close</button>
@@ -6013,11 +6015,25 @@
       pop.classList.add('open');
     }
 
+    // The OS share sheet is only the right tool on PHONES (it's the sole route
+    // to Instagram/TikTok/WhatsApp). Desktop share sheets (macOS/Windows) offer
+    // Mail/AirDrop/Notes — no social targets — so desktop gets our popover with
+    // Facebook/WhatsApp/X buttons, plus a "More…" that opens the OS sheet.
+    var IS_MOBILE_DEVICE = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+
+    async function shareNative(payload) {
+      try {
+        await navigator.share({ title: payload.title || 'MAD Music', text: payload.text || '', url: payload.url });
+        return true;
+      } catch (e) {
+        return !!(e && e.name === 'AbortError'); // user cancelled = handled
+      }
+    }
+
     async function share(payload) {
       var url = payload.url, text = payload.text || payload.title || '';
-      if (navigator.share) {
-        try { await navigator.share({ title: payload.title || 'MAD Music', text: text, url: url }); return; }
-        catch (e) { if (e && e.name === 'AbortError') return; /* else fall through */ }
+      if (IS_MOBILE_DEVICE && navigator.share) {
+        if (await shareNative({ title: payload.title, text: text, url: url })) return;
       }
       openPopover(url, text);
     }
@@ -6049,6 +6065,9 @@
       // Fallback popover wiring
       var pop = document.getElementById('sharePopover');
       if (pop) {
+        // "More…" opens the OS share sheet (Mail/AirDrop/…) where supported.
+        var moreBtn = document.getElementById('sharePopoverMore');
+        if (moreBtn && navigator.share) moreBtn.hidden = false;
         pop.addEventListener('click', function (e) {
           if (e.target === pop) pop.classList.remove('open');
           var b = e.target.closest('button');
@@ -6061,14 +6080,22 @@
             setTimeout(function () { b.textContent = 'Copy link'; }, 1500);
             return;
           }
+          if (b.id === 'sharePopoverMore') {
+            shareNative({ title: 'MAD Music', text: pop._shareText || '', url: pop._shareUrl || '' });
+            return;
+          }
           var platform = b.getAttribute('data-pop-to');
           if (platform) shareTo(platform, pop._shareUrl || '', pop._shareText || '');
         });
       }
 
-      // Playlist share modal — social row under the existing copy-link input
+      // Playlist share modal — social row under the existing copy-link input.
+      // The native "Share…" button only earns its slot on phones (where the OS
+      // sheet reaches Instagram/TikTok); on desktop the row IS the share UI.
       var row = document.getElementById('shareModalSocial');
       if (row) {
+        var nativeBtn = row.querySelector('[data-share-native]');
+        if (nativeBtn && !(IS_MOBILE_DEVICE && navigator.share)) nativeBtn.hidden = true;
         row.addEventListener('click', function (e) {
           var b = e.target.closest('button');
           if (!b) return;
