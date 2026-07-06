@@ -20,6 +20,9 @@
       let shuffleQueue    = [];
       let shuffleQueueIdx = 0;
       let isShuffleActive = false;
+      // Optional async hook: (lastPlayedEntry) => next queue entries. When set,
+      // the shuffle refills instead of stopping at the end of its set.
+      let shuffleRefillFn = null;
       // When true the queue holds resolved track descriptors ({url,title,…})
       // played straight through _PLAYER, instead of recordIds passed to playSong.
       // Used for album shuffle, where the view only has normalised track data.
@@ -495,6 +498,13 @@
         if (!isShuffleActive) return;
         shuffleQueueIdx++;
         if (shuffleQueueIdx >= shuffleQueue.length) {
+          // A registered refill hook makes the shuffle ENDLESS: instead of
+          // stopping at the end of the found set, ask the hook for the next
+          // set (e.g. similar-albums radio seeds from the last-played album).
+          if (typeof shuffleRefillFn === 'function') {
+            _refillShuffleQueue();
+            return;
+          }
           console.log('[Shuffle] Queue complete');
           stopShufflePlay();
           return;
@@ -502,6 +512,29 @@
         console.log('[Shuffle] Advancing to track', shuffleQueueIdx + 1, 'of', shuffleQueue.length);
         if (isDescShuffle) _playDescriptor(shuffleQueue[shuffleQueueIdx]);
         else playSong(shuffleQueue[shuffleQueueIdx]);
+      }
+
+      async function _refillShuffleQueue() {
+        const last = shuffleQueue[shuffleQueue.length - 1];
+        console.log('[Shuffle] Queue exhausted — asking refill hook for the next set');
+        try {
+          const next = await shuffleRefillFn(last);
+          if (!isShuffleActive) return; // user stopped while we were fetching
+          const list = (next || []).filter(t => t && (t.url || t.recordId));
+          if (!list.length) {
+            console.log('[Shuffle] Refill returned nothing — stopping');
+            stopShufflePlay();
+            return;
+          }
+          shuffleQueue    = _randomise(list);
+          shuffleQueueIdx = 0;
+          console.log('[Shuffle] Continuing with a fresh set of', list.length);
+          if (isDescShuffle) _playDescriptor(shuffleQueue[0]);
+          else playSong(shuffleQueue[0]);
+        } catch (e) {
+          console.warn('[Shuffle] Refill failed:', e);
+          stopShufflePlay();
+        }
       }
 
       function startShufflePlay() {
@@ -518,6 +551,7 @@
         shuffleQueueIdx = 0;
         isShuffleActive = true;
         isDescShuffle   = false;
+        shuffleRefillFn = null;
         _updateShuffleBtn();
 
         console.log('[Shuffle] Starting with', shuffleQueue.length, 'tracks');
@@ -529,6 +563,7 @@
         isDescShuffle   = false;
         shuffleQueue    = [];
         shuffleQueueIdx = 0;
+        shuffleRefillFn = null;
         _updateShuffleBtn();
         console.log('[Shuffle] Stopped');
       }
@@ -555,6 +590,7 @@
         shuffleQueueIdx = 0;
         isShuffleActive = true;
         isDescShuffle   = false;
+        shuffleRefillFn = null;
         _updateShuffleBtn();
 
         console.log('[Shuffle] Catalogue shuffle with', shuffleQueue.length, 'tracks');
@@ -568,7 +604,11 @@
       // play straight through _PLAYER. Descriptors: { recordId, url, title,
       // artist, artUrl }. `url` may be empty if only recordId is known; it's then
       // resolved lazily at play time (same fallback as a single track click).
-      function startShuffleTracks(tracks) {
+      // opts.refill: async (lastPlayedDescriptor) => nextDescriptors[] — when
+      // given, the shuffle refills from the hook instead of stopping at the
+      // end of the set (see _refillShuffleQueue). Used by the similar-albums
+      // "Shuffle these" radio to keep flowing from the current album.
+      function startShuffleTracks(tracks, opts) {
         const list = (tracks || []).filter(t => t && (t.url || t.recordId));
         if (!list.length) { console.warn('[Shuffle] No playable tracks in list'); return false; }
 
@@ -576,6 +616,7 @@
         shuffleQueueIdx = 0;
         isShuffleActive = true;
         isDescShuffle   = true;
+        shuffleRefillFn = (opts && typeof opts.refill === 'function') ? opts.refill : null;
         _wireDescEnded();
         _updateShuffleBtn();
 

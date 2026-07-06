@@ -37,7 +37,12 @@ beforeAll(async () => {
   // two Various Artists compilations also close (must NOT be capped).
   const rows = [
     { key: 'seed',   artist: 'Seed Artist',   vec: { 0: 1.0 } },
+    // Closest album of all is by the SEED's artist (as a billing variant) — the
+    // rail must never echo the artist the visitor is already looking at.
+    { key: 'seed2',  artist: 'Seed Artist & Friends', vec: { 0: 0.995, 1: 0.01 } },
     { key: 'rep1',   artist: 'Repeat Artist', vec: { 0: 0.99, 1: 0.02 } },
+    // A billing variant of Repeat Artist — must count toward the same cap.
+    { key: 'repvar', artist: 'Repeat Artist feat. Guest', vec: { 0: 0.985, 1: 0.025 } },
     { key: 'rep2',   artist: 'Repeat Artist', vec: { 0: 0.98, 1: 0.03 } },
     { key: 'rep3',   artist: 'Repeat Artist', vec: { 0: 0.97, 1: 0.04 } },
     { key: 'rep4',   artist: 'Repeat Artist', vec: { 0: 0.96, 1: 0.05 } },
@@ -68,16 +73,34 @@ beforeAll(async () => {
 afterAll(() => fs.rmSync(FIXTURE, { force: true }));
 
 const countByArtist = (items, artist) => items.filter((i) => i.artist === artist).length;
+// Fuzzy count: albums whose artist collapses to the same core identity.
+const countByCore = (items, core) => items.filter((i) => lib.artistCoreKey(i.artist) === core).length;
 
 describe('suggestAlbums per-artist diversity cap', () => {
-  it('default cap = 2 limits a single artist to two albums', () => {
+  it('default cap = 1 limits a single artist to one album, billing variants included', () => {
     const r = lib.suggestAlbums({ cat: 'CAT-1' }, 8); // seed = the "seed" album
-    expect(countByArtist(r.items, 'Repeat Artist')).toBe(2);
+    expect(countByCore(r.items, 'repeat artist')).toBe(1);
+    // The one slot goes to the CLOSEST of the family (rep1, exact name).
+    expect(countByArtist(r.items, 'Repeat Artist')).toBe(1);
+    expect(countByArtist(r.items, 'Repeat Artist feat. Guest')).toBe(0);
+  });
+
+  it('maxPerArtist: 2 shares the two slots across billing variants', () => {
+    const r = lib.suggestAlbums({ cat: 'CAT-1' }, 10, { maxPerArtist: 2 });
+    expect(countByCore(r.items, 'repeat artist')).toBe(2);
   });
 
   it('cap = 1 allows only one album per artist', () => {
     const r = lib.suggestAlbums({ cat: 'CAT-1' }, 8, { maxPerArtist: 1 });
     expect(countByArtist(r.items, 'Repeat Artist')).toBe(1);
+  });
+
+  it("never suggests the seed's own artist — even as a billing variant", () => {
+    // seed2 ("Seed Artist & Friends") is the closest album in the whole index;
+    // without the exclusion it would be the #1 suggestion.
+    const r = lib.suggestAlbums({ cat: 'CAT-1' }, 10);
+    expect(r.items.map((i) => i.album)).not.toContain('seed2');
+    expect(countByCore(r.items, 'seed artist')).toBe(0);
   });
 
   it('default cap allows only one Various Artists compilation', () => {

@@ -44,3 +44,31 @@ describe('Similar-albums frontend wiring', () => {
     expect(serverJs).toContain('window.__SUGGESTIONS=');
   });
 });
+
+describe('Similar-albums endless radio (2026-07-06)', () => {
+  const playerJs = readFileSync(join(root, 'public', 'js', 'player.js'), 'utf8');
+
+  it('player.js supports a refill hook instead of stopping at queue end', () => {
+    expect(playerJs).toMatch(/shuffleRefillFn/);
+    expect(playerJs).toMatch(/_refillShuffleQueue/);
+    // The hook must be consulted BEFORE the stop path in _shuffleAdvance.
+    const adv = playerJs.slice(playerJs.indexOf('function _shuffleAdvance'));
+    expect(adv.indexOf('shuffleRefillFn')).toBeLessThan(adv.indexOf('stopShufflePlay()'));
+  });
+
+  it('non-radio shuffles clear the refill hook (no cross-contamination)', () => {
+    // startShufflePlay / startShuffleFromItems / stopShufflePlay must all reset
+    // the hook, or a random-cards shuffle would inherit the similar-albums refill.
+    const resets = playerJs.match(/shuffleRefillFn = null/g) || [];
+    expect(resets.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('"Shuffle these" registers a refill seeded by the last-played catalogue', () => {
+    expect(appHtml).toMatch(/refillFromSimilar/);
+    expect(appHtml).toMatch(/startShuffleTracks\(descriptors, \{ refill: refillFromSimilar \}\)/);
+    // The refill re-queries suggestions by the LAST descriptor's cat.
+    const refill = appHtml.slice(appHtml.indexOf('async function refillFromSimilar'));
+    expect(refill).toMatch(/last && last\.cat/);
+    expect(refill.slice(0, 900)).toMatch(/\/api\/suggestions\?cat=/);
+  });
+});

@@ -4765,14 +4765,10 @@
         section.hidden = false;
       }
 
-      // Build a queue of one playable track per similar album (fetched by
-      // catalogue, in parallel) and shuffle-play it through the unified player.
-      // Toggles off if a shuffle is already running (mirrors the other buttons).
-      async function shuffleSimilarAlbums(items) {
-        const P = window.MADPlayer;
-        if (!P || typeof P.startShuffleTracks !== 'function') { console.warn('[Shuffle] player not ready'); return; }
-        if (typeof P.isShuffleActive === 'function' && P.isShuffleActive()) { P.stopShufflePlay(); return; }
-
+      // Pick one playable track per album card (fetched by catalogue, in
+      // parallel) as player descriptors. Shared by the initial "Shuffle these"
+      // queue and every radio refill.
+      async function pickTracksFromSimilarAlbums(items) {
         const proxyArt = (u) => (u && u.includes('://')) ? u : (u ? `/api/container?u=${encodeURIComponent(u)}` : '');
         const picks = await Promise.all((items || []).map(async (it) => {
           if (!it || !it.catalogue) return null;
@@ -4799,10 +4795,47 @@
           } catch (e) { console.warn('[Shuffle] similar fetch failed for', it.catalogue, e); }
           return null;
         }));
+        return picks.filter(Boolean);
+      }
 
-        const descriptors = picks.filter(Boolean);
+      // Build a queue of one playable track per similar album and shuffle-play
+      // it through the unified player. Toggles off if a shuffle is already
+      // running (mirrors the other buttons).
+      //
+      // ENDLESS (2026-07-06): when the set runs out, the refill hook seeds
+      // /api/suggestions with the LAST-PLAYED album's catalogue and continues
+      // with ITS similar albums — a radio that drifts through the catalogue
+      // instead of stopping. Already-played albums are skipped until the
+      // neighbourhood is exhausted, then the history resets so the radio
+      // genuinely never ends.
+      async function shuffleSimilarAlbums(items) {
+        const P = window.MADPlayer;
+        if (!P || typeof P.startShuffleTracks !== 'function') { console.warn('[Shuffle] player not ready'); return; }
+        if (typeof P.isShuffleActive === 'function' && P.isShuffleActive()) { P.stopShufflePlay(); return; }
+
+        const descriptors = await pickTracksFromSimilarAlbums(items);
         if (!descriptors.length) { console.warn('[Shuffle] No playable tracks across similar albums'); return; }
-        P.startShuffleTracks(descriptors);
+
+        const playedCats = new Set((items || []).map((it) => it && it.catalogue).filter(Boolean));
+        async function refillFromSimilar(last) {
+          const seedCat = last && last.cat;
+          if (!seedCat) return [];
+          const res = await fetch(`/api/suggestions?cat=${encodeURIComponent(seedCat)}&limit=10`);
+          if (!res.ok) return [];
+          const data = await res.json();
+          const all = ((data && data.items) || []).filter((it) => it.catalogue && it.artworkSrc);
+          let fresh = all.filter((it) => !playedCats.has(it.catalogue));
+          if (!fresh.length && all.length) {
+            // Neighbourhood exhausted — forget history (except the seed) and loop.
+            playedCats.clear();
+            playedCats.add(seedCat);
+            fresh = all.filter((it) => !playedCats.has(it.catalogue));
+          }
+          fresh.forEach((it) => playedCats.add(it.catalogue));
+          return pickTracksFromSimilarAlbums(fresh);
+        }
+
+        P.startShuffleTracks(descriptors, { refill: refillFromSimilar });
       }
 
       // Open a suggested album by its catalogue number via /api/album?cat=, which
