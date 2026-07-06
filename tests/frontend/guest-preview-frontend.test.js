@@ -36,6 +36,27 @@ describe('desktop guest preview mode', () => {
     expect(authJs, 'enterGuestMode must exist').toMatch(/function enterGuestMode\(\)/);
   });
 
+  it('a token holder only becomes a guest on a DEFINITIVE invalid verdict (with retries first)', () => {
+    // Regression (2026-07-06): transient validation failures (network, FM
+    // hiccup, post-payment record lock, in-use-elsewhere) silently dropped
+    // subscribers into preview mode AND wiped their stored token.
+    expect(authJs).toMatch(/function validateTokenAtBoot/);
+    const boot = authJs.slice(authJs.indexOf('async function validateTokenAtBoot'));
+    // Guest entry + token clearing must be gated on the definitive branch.
+    const defIdx = boot.indexOf('failure.definitive');
+    const guestIdx = boot.indexOf('enterGuestMode()');
+    const clearIdx = boot.indexOf('clearAccessToken()');
+    expect(defIdx).toBeGreaterThan(-1);
+    expect(guestIdx).toBeGreaterThan(defIdx);
+    expect(clearIdx).toBeGreaterThan(defIdx);
+    // Transient failures retry, then keep the token and show the overlay.
+    expect(boot).toMatch(/retry/i);
+    expect(boot).toMatch(/keeping token, showing overlay/);
+    // validateToken must classify failures for the boot path.
+    expect(authJs).toMatch(/_lastValidateFailure/);
+    expect(authJs).toMatch(/invalid token\|expired\|disabled\|not found/);
+  });
+
   it('auth.js does not auto-pop the overlay on 403s in guest mode', () => {
     expect(authJs).toMatch(/if \(!window\.__GUEST\) showTokenOverlay\(\);/);
   });

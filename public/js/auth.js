@@ -46,6 +46,10 @@
 
     // Load token from localStorage IMMEDIATELY before anything else
     let currentAccessToken = localStorage.getItem(STORAGE_KEY);
+    // Set by validateToken() on every failure so the boot path can distinguish
+    // a DEFINITIVE server verdict (invalid/expired/disabled → guest mode) from
+    // a transient one (network/FM hiccup/in-use → retry, keep the token).
+    let _lastValidateFailure = null;
     let tokenInfo = null;
     try {
       const infoStr = localStorage.getItem(STORAGE_INFO_KEY);
@@ -299,6 +303,7 @@
             console.log('[Access Token] Token valid but requires email — showing claim modal');
             localStorage.setItem(STORAGE_KEY, normalized);
             currentAccessToken = normalized;
+            _lastValidateFailure = { requiresEmail: true, definitive: false, reason: 'requires_email' };
             showEmailClaimModal(normalized);
             return false; // not "valid for app use" yet
           }
@@ -336,6 +341,13 @@
 
           return true;
         } else {
+          // Classify the failure so the BOOT path can tell "this token is
+          // dead" (drop to guest) from "we couldn't be sure" (keep the token,
+          // retry, never silently downgrade a subscriber to preview mode).
+          const reason = String(data.reason || data.error || '');
+          const definitive = response.status === 401 &&
+            /invalid token|expired|disabled|not found/i.test(reason);
+          _lastValidateFailure = { definitive, requiresEmail: false, reason };
           // Check for "token in use" error
           if (data.reason === 'Token is currently in use on another device') {
             showError('⚠️ This token is already active on another device. Please wait or use a different token.');
@@ -346,6 +358,7 @@
         }
       } catch (err) {
         console.error('[Access Token] Validation error:', err);
+        _lastValidateFailure = { definitive: false, requiresEmail: false, reason: 'network' };
         showError('Failed to validate token. Please try again.');
         return false;
       } finally {
@@ -596,25 +609,53 @@
       }, GUEST_POPUP_INTERVAL_MS);
     }
 
+    // Validate an existing token at boot with retries for TRANSIENT failures.
+    // A paying subscriber must never be silently downgraded to guest preview
+    // mode because of a network blip, an FM hiccup (incl. the record-lock
+    // right after a fresh payment), or an in-use-elsewhere conflict — only a
+    // definitive "invalid/expired/disabled" verdict may do that.
+    async function validateTokenAtBoot(token) {
+      const DELAYS = [1500, 3000];
+      for (let attempt = 0; ; attempt++) {
+        _lastValidateFailure = null;
+        const valid = await validateToken(token);
+        if (valid) return; // session started (event dispatched in validateToken)
+        const failure = _lastValidateFailure || { definitive: false, reason: 'unknown' };
+
+        // Email-claim modal is already up; token stays saved. Nothing to do.
+        if (failure.requiresEmail) return;
+
+        if (failure.definitive) {
+          console.log('[Access Token] Token definitively invalid — clearing');
+          // Await clearAccessToken so currentAccessToken is nulled out before
+          // anything else fires — prevents the dead token being attached to
+          // fetches the user triggers immediately (e.g. payment initialisation).
+          await clearAccessToken();
+          if (window.__GUEST_PREVIEW === true) enterGuestMode();
+          else showTokenOverlay();
+          return;
+        }
+
+        if (attempt < DELAYS.length) {
+          console.warn(`[Access Token] Transient validation failure (${failure.reason}) — retry ${attempt + 1}/${DELAYS.length}`);
+          await new Promise((r) => setTimeout(r, DELAYS[attempt]));
+          continue;
+        }
+
+        // Still uncertain after retries: KEEP the token and show the overlay
+        // (with the error already set by validateToken) so the user can see
+        // what's happening and retry — never guest mode, never a wiped token.
+        console.warn('[Access Token] Validation still failing after retries — keeping token, showing overlay');
+        showTokenOverlay();
+        return;
+      }
+    }
+
     // Check for existing token on page load
     const existingToken = loadAccessToken();
     if (existingToken) {
       console.log('[Access Token] Found existing token, validating...');
-      // Validate the existing token (validateToken will dispatch 'mass:access-ready' if valid)
-      validateToken(existingToken).then(async valid => {
-        if (!valid) {
-          console.log('[Access Token] Existing token invalid, clearing and showing overlay');
-          // Await clearAccessToken so currentAccessToken is nulled out before the
-          // overlay appears — prevents the expired token being attached to any fetch
-          // calls the user triggers immediately (e.g. payment initialisation).
-          await clearAccessToken();
-          if (window.__GUEST_PREVIEW === true) enterGuestMode();
-          else showTokenOverlay();
-        } else {
-          console.log('[Access Token] Existing token valid (event already dispatched)');
-          // Note: hideTokenOverlay and event dispatch already handled in validateToken
-        }
-      });
+      validateTokenAtBoot(existingToken);
     } else if (window.__GUEST_PREVIEW === true) {
       enterGuestMode();
     } else {
