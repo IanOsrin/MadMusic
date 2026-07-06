@@ -348,9 +348,10 @@
           const definitive = response.status === 401 &&
             /invalid token|expired|disabled|not found/i.test(reason);
           _lastValidateFailure = { definitive, requiresEmail: false, reason };
-          // Check for "token in use" error
-          if (data.reason === 'Token is currently in use on another device') {
-            showError('⚠️ This token is already active on another device. Please wait or use a different token.');
+          // Check for "token in use" error (message includes the device count
+          // since the 3-concurrent-sessions policy)
+          if (/currently in use/i.test(data.reason || '')) {
+            showError('⚠️ This token is already active on the maximum number of devices. Log out on one of them, or wait 15 minutes.');
           } else {
             showError(data.reason || data.error || 'Invalid token');
           }

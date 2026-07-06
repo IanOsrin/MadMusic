@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { validateAccessToken, MASS_SESSION_COOKIE, MASS_SESSION_MAX_AGE_SECONDS } from '../lib/auth.js';
+import { validateAccessToken, MASS_SESSION_COOKIE, MASS_SESSION_MAX_AGE_SECONDS, parseSessions, removeSession, serializeSessions } from '../lib/auth.js';
 import { parseCookies, getClientIP } from '../lib/http.js';
 import { formatTimestampUTC, toCleanString, normalizeSeconds, parseFileMakerTimestamp } from '../lib/format.js';
 import { validateSessionId, isStrictEmail, fmExactMatch } from '../lib/validators.js';
@@ -393,23 +393,26 @@ router.post('/logout', async (req, res) => {
     if (result?.data?.length > 0) {
       const tokenData = result.data[0].fieldData;
       const recordId = result.data[0].recordId;
-      console.log(`[MASS LOGOUT] Found token. Current session in FM: "${tokenData.Current_Session_ID}", Incoming: "${sessionId}"`);
+      console.log(`[MASS LOGOUT] Found token. Sessions in FM: "${tokenData.Current_Session_ID}", Incoming: "${sessionId}"`);
 
-      if (tokenData.Current_Session_ID === sessionId) {
+      // Multi-session model (lib/auth.js): remove ONLY this device's session
+      // from the list — other active devices keep their slots.
+      const before = parseSessions(tokenData.Current_Session_ID, tokenData.Session_Last_Activity);
+      if (before.some((s) => s.id === sessionId)) {
+        const remaining = removeSession(tokenData.Current_Session_ID, tokenData.Session_Last_Activity, sessionId);
         const now = new Date();
         const fmTimestamp = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
         await fmUpdateRecord(layout, recordId, {
-          'Current_Session_ID': '',
+          'Current_Session_ID': serializeSessions(remaining),
           'Session_Last_Activity': fmTimestamp,
-          'Session_Device_Info': '',
-          'Session_IP': ''
+          ...(remaining.length === 0 ? { 'Session_Device_Info': '', 'Session_IP': '' } : {})
         });
 
-        console.log(`[MASS LOGOUT] ✅ Session cleared for token ${trimmedCode}`);
+        console.log(`[MASS LOGOUT] ✅ Session removed for token ${trimmedCode} (${remaining.length} still active)`);
         return res.json({ ok: true, message: 'Session cleared successfully' });
       }
-      console.log(`[MASS LOGOUT] ⚠️ Session ID mismatch for token ${trimmedCode} - not clearing (FM has different session)`);
+      console.log(`[MASS LOGOUT] ⚠️ Session ID not in the active list for token ${trimmedCode} - nothing to clear`);
       return res.json({ ok: true, message: 'Session ID mismatch - not current session', warning: true });
     }
     console.log(`[MASS LOGOUT] ⚠️ Token ${trimmedCode} not found in FileMaker`);
