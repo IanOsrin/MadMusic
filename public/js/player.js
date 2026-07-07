@@ -106,7 +106,9 @@
           trackISRC: meta.trackISRC || '',
           positionSec: normalizedPos,
           durationSec: normalizedDur,
-          deltaSec: normalizedDelta
+          deltaSec: normalizedDelta,
+          // Guest plays are 30 s previews — see PlaybackMode in stream events
+          playbackMode: window.__GUEST ? 'PREVIEW' : 'FULL'
         };
 
         try {
@@ -333,11 +335,14 @@
         const { signal } = _playAbortCtrl;
 
         // ── Stop current audio if playing ────────────────────────────────────
+        // No stream event here (audit F4, 2026-07-07): app.min.js owns ALL
+        // stream-event tracking via its native audio listeners — its pause
+        // listener reports the old track when _PLAYER switches src. The END
+        // this block used to send was a duplicate terminal write per switch.
         if (currentAudio && !currentAudio.paused) {
           console.log('[PlaySong] Stopping previous audio');
           isSwitchingTracks = true;
           stopProgressTracking();
-          sendStreamEvent('END');
           isSwitchingTracks = false;
         }
 

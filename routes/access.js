@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { validateAccessToken, MASS_SESSION_COOKIE, MASS_SESSION_MAX_AGE_SECONDS, parseSessions, removeSession, serializeSessions } from '../lib/auth.js';
 import { parseCookies, getClientIP } from '../lib/http.js';
 import { formatTimestampUTC, toCleanString, normalizeSeconds, parseFileMakerTimestamp } from '../lib/format.js';
-import { validateSessionId, isStrictEmail, fmExactMatch } from '../lib/validators.js';
+import { validateSessionId, isStrictEmail, fmExactMatch, validators } from '../lib/validators.js';
+import { getAccessTokensCacheData } from '../lib/token-store.js';
 import { timingSafeEqualStr } from '../lib/crypto-utils.js';
 import { LRUCache } from 'lru-cache';
 import {
@@ -29,12 +30,17 @@ const TOTAL_PLAYED_OVERSHOOT_FACTOR = 1.05;
 
 // In-process accumulator for TotalPlayedSec.
 // The stream-record LRU returns existingFieldData:null on cache hits, so we
-// can't read the accumulated total from FileMaker on every event. This Map
-// shadows TotalPlayedSec locally and is updated after every successful write.
+// can't read the accumulated state from FileMaker on every event. This Map
+// shadows { total, position, lastEventUTC } locally and is updated after
+// every successful write. Shadowing ONLY the total (as this originally did)
+// double-counted play time (audit F8, 2026-07-07): on a cache hit the delta
+// derivation saw position/lastEvent baselines of zero, so a client that sends
+// deltaSec:0 (mobile always does) was credited its full absolute position on
+// EVERY event — totals inflated until the duration cap clamped them.
 // Keyed by "sessionId::trackRecordId" — same format as the LRU.
 // Bounded LRU (was an unbounded Map → memory-leak DoS at 10k-concurrent scale).
 // Entries expire after 6h of inactivity even if a session never sends a
-// terminal event to clear them. get/set/delete are call-site compatible.
+// terminal event to clear them.
 const streamTotalMap = new LRUCache({ max: 50000, ttl: 6 * 60 * 60 * 1000 });
 
 const router = Router();
@@ -524,8 +530,20 @@ function tryEnrichToken(req) {
   if (req.accessToken) return;
   const rawToken = (req.headers['x-access-token'] || req.body?.accessToken || '').toString().trim();
   if (!rawToken) return;
-  const cached = tokenValidationCache.get(rawToken.toUpperCase());
-  if (cached?.data) req.accessToken = cached.data;
+  const normalized = rawToken.toUpperCase();
+  const cached = tokenValidationCache.get(normalized);
+  if (cached?.data) { req.accessToken = cached.data; return; }
+  // Cache miss (e.g. right after a deploy, before the user's next
+  // authenticated call): fall back to the local token store so subscriber
+  // events don't record with an empty Token_Number (audit F5, 2026-07-07).
+  // Attribution only — no validity judgement is made here.
+  try {
+    const tokenData = getAccessTokensCacheData();
+    const match = tokenData?.tokens?.find((t) => t.code?.trim().toUpperCase() === normalized);
+    if (match) {
+      req.accessToken = { code: normalized, email: match.email ? normalizeEmail(match.email) : null };
+    }
+  } catch { /* attribution is best-effort */ }
 }
 
 async function resolveTerminalRecord(normalizedType, hasCachedSession, sessionId, normalizedTrackRecordId, res) {
@@ -596,6 +614,18 @@ router.post('/stream-events', async (req, res) => {
       res.status(400).json({ ok: false, error: 'trackRecordId is required' });
       return;
     }
+    // FM record ids are numeric — reject junk before it becomes an FM record
+    // on a public endpoint (audit F7, 2026-07-07).
+    if (!validators.recordId(normalizedTrackRecordId).valid) {
+      res.status(400).json({ ok: false, error: 'Invalid trackRecordId' });
+      return;
+    }
+
+    // Guest 30 s previews vs full playback (audit F3, 2026-07-07). Client-
+    // declared, sanitized to the two known values; anything else counts as
+    // FULL so royalty filtering (PlaybackMode ≠ PREVIEW) can only UNDER-count
+    // previews, never real streams.
+    const playbackMode = String(req.body?.playbackMode || '').trim().toUpperCase() === 'PREVIEW' ? 'PREVIEW' : 'FULL';
 
     let normalizedTrackISRC = toCleanString(trackISRC);
     const normalizedPosition = normalizeSeconds(positionSec);
@@ -640,6 +670,7 @@ router.post('/stream-events', async (req, res) => {
       UserAgent: userAgent,
       Token_Number: tokenCode,
       Email: issuedTo,
+      PlaybackMode: playbackMode,
       'Track Artist': trackArtist,
       'Track Name': trackName
     };
@@ -663,6 +694,7 @@ router.post('/stream-events', async (req, res) => {
       LastEventUTC: timestamp,
       Token_Number: tokenCode,
       Email: issuedTo,
+      PlaybackMode: playbackMode,
       'Track Artist': trackArtist,
       'Track Name': trackName
     };
@@ -695,13 +727,23 @@ router.post('/stream-events', async (req, res) => {
     const ensureResult = await ensureStreamRecord(sessionId, normalizedTrackRecordId, createFields, { forceNew: forceNewRecord });
     const existingFields = ensureResult.existingFieldData ? { ...ensureResult.existingFieldData } : {};
 
-    // LRU cache hits return existingFieldData:null so we can't read TotalPlayedSec
-    // from FileMaker. Restore it from the in-process accumulator so the total
-    // keeps growing correctly instead of resetting to just this event's delta.
+    // LRU cache hits return existingFieldData:null so we can't read the
+    // accumulated state from FileMaker. Restore total AND the delta baselines
+    // (position, last-event time) from the in-process accumulator — without
+    // the baselines, delta derivation re-credits the full absolute position
+    // (audit F8).
     const streamKey = `${sessionId}::${normalizedTrackRecordId}`;
     if (!ensureResult.existingFieldData && !ensureResult.created) {
       const cached = streamTotalMap.get(streamKey);
-      if (cached !== undefined) existingFields.TotalPlayedSec = cached;
+      if (cached !== undefined) {
+        if (typeof cached === 'object') {
+          existingFields.TotalPlayedSec = cached.total;
+          if (cached.position !== undefined) existingFields[STREAM_TIME_FIELD] = cached.position;
+          if (cached.lastEventUTC) existingFields.LastEventUTC = cached.lastEventUTC;
+        } else {
+          existingFields.TotalPlayedSec = cached; // pre-F8 numeric entry
+        }
+      }
     }
 
     applyExistingFieldsToBase(baseFields, existingFields, normalizedType, timestamp, payloadDelta, normalizedDuration);
@@ -712,8 +754,13 @@ router.post('/stream-events', async (req, res) => {
 
     await fmUpdateRecord(FM_STREAM_EVENTS_LAYOUT, ensureResult.recordId, baseFields);
 
-    // Keep the in-process accumulator in sync with what we just wrote.
-    streamTotalMap.set(streamKey, baseFields.TotalPlayedSec);
+    // Keep the in-process accumulator in sync with what we just wrote —
+    // total plus the baselines the next event's delta derivation needs.
+    streamTotalMap.set(streamKey, {
+      total: baseFields.TotalPlayedSec,
+      position: baseFields[STREAM_TIME_FIELD],
+      lastEventUTC: baseFields.LastEventUTC
+    });
 
     if (STREAM_EVENT_DEBUG) {
       console.info('[MASS] stream event persisted', {

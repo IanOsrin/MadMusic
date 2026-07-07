@@ -65,6 +65,13 @@ describe('desktop guest preview mode', () => {
     expect(authJs).toMatch(/'\/api\/preview\/'/);
   });
 
+  it('the interceptor allowlists stream-events so guest preview plays are tracked', () => {
+    // Regression (2026-07-07): guest plays were silently untracked — the
+    // desktop interceptor blocked the POST before it left the browser, even
+    // though the server accepts tokenless stream events by design.
+    expect(authJs).toMatch(/'\/api\/access\/stream-events'/);
+  });
+
   it('the payment overlay close button exists and is guest-gated in CSS', () => {
     expect(appHtml).toMatch(/id="paymentOverlayClose"/);
     const appCss = readFileSync(join(root, 'public', 'css', 'app.css'), 'utf8');

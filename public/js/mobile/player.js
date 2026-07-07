@@ -142,7 +142,9 @@ export async function sendStreamEvent(eventType) {
             trackISRC: (state.currentTrack?.fields?.['ISRC'] || '').trim(),
             positionSec: currentTime,
             durationSec: duration,
-            deltaSec: 0
+            deltaSec: 0,
+            // Guest plays are 30 s previews — see PlaybackMode in stream events
+            playbackMode: window.__GUEST ? 'PREVIEW' : 'FULL'
           })
         });
         console.log('[Stream Event]', eventType, 'at', currentTime, 'sec');

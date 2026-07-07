@@ -99,6 +99,8 @@
         '/api/genres',
         '/api/featured-editorial',
         '/api/preview/',          // guest 30 s previews — public by design
+        '/api/access/stream-events', // play tracking — server accepts tokenless
+                                     // events (guest preview plays must count)
         '/api/payments/',    // payment flow must work before token exists
         '/api/download/',    // download purchase flow — token-free by design
         '/api/audio-proxy',  // Audio Lab proxy — no auth needed (key is gated separately)
