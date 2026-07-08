@@ -31,6 +31,26 @@
       "autoPort": true
     },
     {
+      "name": "gallo-ingest-test",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/ianosrin/Desktop/GalloIngestV1.1 && PORT=3995 INGEST_ADMIN_SECRET=test-admin-secret node server.js"
+      ],
+      "port": 3995,
+      "autoPort": true
+    },
+    {
+      "name": "madmusic-umami-test",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "PORT=3994 HOST=127.0.0.1 NODE_ENV=development UMAMI_URL=https://umami.example.test UMAMI_WEBSITE_ID=test-website-id FM_HOST=https://fm.invalid FM_DB=TestDB FM_USER=test FM_PASS=test FM_LAYOUT=API_Album_Songs FM_TOKENS_LAYOUT=API_Access_Tokens FM_TIMEZONE_OFFSET=0 AUTH_SECRET=test-auth-secret ADMIN_SECRET=test-admin-secret PAYSTACK_SECRET_KEY=sk_test_dummy PAYSTACK_PUBLIC_KEY=pk_test_dummy EMAIL_HOST=smtp.invalid EMAIL_PORT=587 EMAIL_USER=test@test EMAIL_PASS=test EMAIL_FROM=test@test node server.js"
+      ],
+      "port": 3994,
+      "autoPort": true
+    },
+    {
       "name": "madmusic-guest-live",
       "runtimeExecutable": "sh",
       "runtimeArgs": [

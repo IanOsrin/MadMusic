@@ -119,6 +119,15 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
+// ── Umami analytics (self-hosted, ships dark) ────────────────────────────────
+// Cookieless first-party visitor analytics. The tag only renders when BOTH
+// env vars are set: UMAMI_URL (the Umami service origin, no trailing slash)
+// and UMAMI_WEBSITE_ID (from Umami's dashboard after adding the website).
+// Unset in dev/test → zero behavioural change.
+const UMAMI_URL = (process.env.UMAMI_URL || '').trim().replace(/\/+$/, '');
+const UMAMI_WEBSITE_ID = (process.env.UMAMI_WEBSITE_ID || '').trim();
+const UMAMI_ENABLED = Boolean(UMAMI_URL && UMAMI_WEBSITE_ID);
+
 // Security headers (applied to every response)
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -128,11 +137,12 @@ app.use((req, res, next) => {
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://www.googletagmanager.com",   // inline scripts used in app.html; cdnjs for ringtone lamejs encoder
+      // inline scripts used in app.html; cdnjs for ringtone lamejs encoder; Umami tracker when configured
+      `script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://www.googletagmanager.com${UMAMI_ENABLED ? ` ${UMAMI_URL}` : ''}`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",  // googleapis for Google Fonts CSS
       "img-src 'self' https: data: blob:",    // https: for S3 artwork URLs; blob: for canvas; data: for inline
       "media-src 'self' https: blob:",       // https: for direct S3 audio URLs; blob: for streamed audio
-      "connect-src 'self' http://localhost:8765 http://127.0.0.1:8765 https://ipwho.is https://open.er-api.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com",
+      `connect-src 'self' http://localhost:8765 http://127.0.0.1:8765 https://ipwho.is https://open.er-api.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com${UMAMI_ENABLED ? ` ${UMAMI_URL}` : ''}`,
       "font-src 'self' https:",              // https: for Google Fonts (fonts.gstatic.com)
       "frame-src 'self' https://www.googletagmanager.com",   // 'self' for the in-app ringtone modal iframe; GTM noscript iframe (ns.html)
       "object-src 'none'",
@@ -500,7 +510,11 @@ async function loadHtml(filename) {
     + `window.__SUGGESTIONS=${SUGGESTIONS_ENABLED ? 'true' : 'false'};`
     + `window.__ARTIST_BIO=${ARTIST_BIO_ENABLED ? 'true' : 'false'};`
     + `window.__GUEST_PREVIEW=${GUEST_PREVIEW_ENABLED ? 'true' : 'false'};`
-    + '</script>';
+    + '</script>'
+    // Umami visitor analytics (cookieless; deferred so it never blocks boot).
+    + (UMAMI_ENABLED
+        ? `\n<script defer src="${UMAMI_URL}/script.js" data-website-id="${UMAMI_WEBSITE_ID.replace(/"/g, '')}"></script>`
+        : '');
   stamped = /<head[^>]*>/i.test(stamped)
     ? stamped.replace(/<head[^>]*>/i, (m) => `${m}\n${flagScript}`)
     : `${flagScript}\n${stamped}`;
@@ -698,7 +712,12 @@ app.get('/', async (req, res) => {
   // (facebookexternalhit, WhatsApp, Twitterbot) don't match the mobile UA
   // regex, so they read the OG tags from this URL directly.
   if (t && MOBILE_UA.test(req.headers['user-agent'] || '')) {
-    return res.redirect(302, `/mobile?t=${encodeURIComponent(t)}`);
+    // Forward the whole query string, not just t — share links carry utm_*
+    // params (e.g. from YouTube descriptions) that analytics attributes by.
+    const qs = new URLSearchParams(
+      Object.entries(req.query || {}).map(([k, v]) => [k, String(Array.isArray(v) ? v[0] : v)])
+    ).toString();
+    return res.redirect(302, `/mobile?${qs}`);
   }
   if (await sendShareLanding(req, res, 'app.html')) return;
   sendHtml(res, 'app.html');

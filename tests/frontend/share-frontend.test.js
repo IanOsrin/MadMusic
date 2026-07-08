@@ -60,6 +60,8 @@ describe('server share landing', () => {
   it('injects OG tags for /?t= and /?share= and redirects phones to /mobile', () => {
     expect(serverJs).toMatch(/function sendShareLanding/);
     expect(serverJs).toMatch(/getTrackShareMeta/);
-    expect(serverJs).toMatch(/\/mobile\?t=/);
+    // Phone share links redirect to /mobile carrying the FULL query string —
+    // t plus any utm_* attribution params (not just t).
+    expect(serverJs).toMatch(/redirect\(302, `\/mobile\?\$\{qs\}`\)/);
   });
 });
