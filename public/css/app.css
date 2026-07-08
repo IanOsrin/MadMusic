@@ -1062,10 +1062,12 @@
     .g100-playlist-info {
       padding: 10px 12px;
     }
+    /* The strip's pastel background never changes with theme, so its text
+       must not either — var(--fg) went white in dark mode and vanished. */
     .g100-playlist-name {
       font-size: 13px;
       font-weight: 600;
-      color: var(--fg);
+      color: hsl(var(--pl-hue, 210), 35%, 15%);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1073,7 +1075,7 @@
     }
     .g100-playlist-count {
       font-size: 11px;
-      color: var(--muted);
+      color: hsl(var(--pl-hue, 210), 20%, 38%);
     }
 
     /* ── G100 Page ────────────────────────────────────────────────────────── */
