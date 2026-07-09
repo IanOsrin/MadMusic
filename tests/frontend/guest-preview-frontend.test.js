@@ -31,6 +31,18 @@ describe('desktop guest preview mode', () => {
     expect(appHtml).toMatch(/window\.__GUEST && player\.currentTime >= 30/);
   });
 
+  // The clipped preview stream keeps the FULL track's header, so
+  // player.duration lies (shows e.g. 6:08 for 30 s of audio). The bar/seek
+  // math must use the effective (capped) duration and the label must say
+  // "Preview · 0:30 of <full>" — the honest-upsell display (2026-07-09).
+  it('guest bar/seek math uses effDuration and the label shows Preview · 0:30 of full', () => {
+    expect(appHtml).toMatch(/function effDuration\(\)/);
+    expect(appHtml).toMatch(/Math\.min\(player\.duration, GUEST_PREVIEW_SECS\)/);
+    expect(appHtml).toMatch(/'Preview · ' \+ fmt\(GUEST_PREVIEW_SECS\) \+ ' of ' \+ fmt\(player\.duration\)/);
+    // Seek commits must go through the capped duration, not the raw header one.
+    expect(appHtml).toMatch(/if \(effDuration\(\)\) player\.currentTime = frac \* effDuration\(\)/);
+  });
+
   it('auth.js boots guest mode only behind window.__GUEST_PREVIEW', () => {
     expect(authJs).toMatch(/window\.__GUEST_PREVIEW === true/);
     expect(authJs, 'enterGuestMode must exist').toMatch(/function enterGuestMode\(\)/);

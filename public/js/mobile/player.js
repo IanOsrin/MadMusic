@@ -114,13 +114,22 @@ export function updateProgress() {
       const current = elements.audio.currentTime || 0;
       const total = elements.audio.duration || 0;
 
-      if (total > 0) {
-        const percent = (current / total) * 100;
+      // Guest preview: the clipped stream keeps the FULL track's header, so
+      // audio.duration reads e.g. 6:08 while only ~30 s of audio exists. The
+      // bar fills against the preview length; the label sells the full song.
+      const GUEST_PREVIEW_SECS = 30;
+      const isPreview = window.__GUEST && total > GUEST_PREVIEW_SECS + 1;
+      const effTotal = isPreview ? GUEST_PREVIEW_SECS : total;
+
+      if (effTotal > 0) {
+        const percent = Math.min(100, (current / effTotal) * 100);
         document.getElementById('progress-fill').style.width = `${percent}%`;
       }
 
       document.getElementById('current-time').textContent = formatTime(current);
-      document.getElementById('total-time').textContent = formatTime(total);
+      document.getElementById('total-time').textContent = isPreview
+        ? `${formatTime(GUEST_PREVIEW_SECS)} of ${formatTime(total)}`
+        : formatTime(total);
     }
 
 export async function sendStreamEvent(eventType) {

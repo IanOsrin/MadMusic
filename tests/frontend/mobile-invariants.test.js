@@ -119,6 +119,18 @@ describe('mobile invariant: guest preview mode never leaks a full stream', () =>
     expect(guestIdx, 'guest check must come before container resolution').toBeLessThan(containerIdx);
   });
 
+  // The clipped preview keeps the FULL track's header, so audio.duration
+  // lies for guests. updateProgress must fill the bar against the capped
+  // preview length and label the total honestly ("0:30 of 6:08").
+  it('updateProgress caps the guest bar at the preview length and labels "of full"', () => {
+    const playerJs = readFileSync(join(mobileDir, 'player.js'), 'utf8');
+    const body = extractFn(playerJs, 'updateProgress');
+    expect(body, 'updateProgress exists').toBeTruthy();
+    expect(body).toMatch(/window\.__GUEST && total > GUEST_PREVIEW_SECS/);
+    expect(body).toMatch(/isPreview \? GUEST_PREVIEW_SECS : total/);
+    expect(body).toMatch(/of \$\{formatTime\(total\)\}/);
+  });
+
   it('main.js boots guest mode only behind window.__GUEST_PREVIEW', () => {
     const mainJs = readFileSync(join(mobileDir, 'main.js'), 'utf8');
     expect(mainJs).toMatch(/window\.__GUEST_PREVIEW === true/);

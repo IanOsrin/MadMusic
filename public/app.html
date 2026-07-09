@@ -3909,6 +3909,18 @@
       player.addEventListener('pause', function () { setIcon(false); });
       player.addEventListener('ended', function () { setIcon(false); });
 
+      // Guest preview: the clipped stream keeps the FULL track's header, so
+      // player.duration reads e.g. 6:08 while only ~30 s of audio exists.
+      // All bar/seek math uses this effective duration so the preview bar
+      // fills 0→100% and dies exactly at its own end — while the label
+      // advertises the full length honestly ("Preview · 0:30 of 6:08").
+      var GUEST_PREVIEW_SECS = 30;
+      function effDuration() {
+        return (window.__GUEST && isFinite(player.duration))
+          ? Math.min(player.duration, GUEST_PREVIEW_SECS)
+          : player.duration;
+      }
+
       player.addEventListener('timeupdate', function () {
         // Guest preview: hard client stop at 30 s (the server already caps the
         // stream bytes at ~30 s — this just makes the ending clean + nudges).
@@ -3917,14 +3929,18 @@
           if (typeof window.__guestPreviewEnded === 'function') window.__guestPreviewEnded();
         }
         if (seeking) return;
-        var pct = player.duration ? (player.currentTime / player.duration * 100) : 0;
-        if (fill)        fill.style.width      = pct + '%';
+        var pct = effDuration() ? (player.currentTime / effDuration() * 100) : 0;
+        if (fill)        fill.style.width      = Math.min(100, pct) + '%';
         if (timeEl)      timeEl.textContent    = fmt(player.currentTime);
         if (timeCurrent) timeCurrent.textContent = fmt(player.currentTime);
       });
 
       player.addEventListener('durationchange', function () {
-        if (timeDur) timeDur.textContent = isFinite(player.duration) ? fmt(player.duration) : '0:00';
+        if (!timeDur) return;
+        if (!isFinite(player.duration)) { timeDur.textContent = '0:00'; return; }
+        timeDur.textContent = (window.__GUEST && player.duration > GUEST_PREVIEW_SECS + 1)
+          ? 'Preview · ' + fmt(GUEST_PREVIEW_SECS) + ' of ' + fmt(player.duration)
+          : fmt(player.duration);
       });
 
       // Volume slider
@@ -3979,13 +3995,15 @@
 
         function applySeekFraction(frac) {
           if (fill) fill.style.width = (frac * 100) + '%';
-          var t = frac * (player.duration || 0);
+          var t = frac * (effDuration() || 0);
           if (timeEl)      timeEl.textContent      = fmt(t);
           if (timeCurrent) timeCurrent.textContent = fmt(t);
         }
 
         function commitSeek(frac) {
-          if (player.duration) player.currentTime = frac * player.duration;
+          // effDuration: a guest scrubbing the bar seeks within the 30 s
+          // preview, never into the dead zone past the clipped bytes.
+          if (effDuration()) player.currentTime = frac * effDuration();
         }
 
         // ── Mouse ──
