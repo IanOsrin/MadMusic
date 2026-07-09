@@ -39,6 +39,13 @@ const PUBLIC_PLAYLISTS_TRACKS_TTL_MS = parsePositiveInt(process.env.PUBLIC_PLAYL
 // covers in FileMaker, no deploy). Cached ~10 min; FM outage → last good / files.
 const PLAYLIST_ART_ENABLED = process.env.PLAYLIST_ART_ENABLED === 'true';
 
+// A playlist isn't public until it has a cover (default ON). The cover is the
+// publish switch: editors tag tracks in FM whenever they like, but the playlist
+// only appears once its art exists (FM API_Playlist_Art or a local file) — no
+// more half-dressed playlists on the rails while the art department catches up.
+// Set PLAYLISTS_REQUIRE_ART=false to show artless playlists again.
+const PLAYLISTS_REQUIRE_ART = process.env.PLAYLISTS_REQUIRE_ART !== 'false';
+
 async function loadPlaylistArtMap() {
   if (!PLAYLIST_ART_ENABLED) return new Map();
   const res = await fmFindRecords(FM_PLAYLIST_ART_LAYOUT, [{ Active: '1' }], { limit: 500 });
@@ -351,12 +358,17 @@ async function loadPlaylistListPayload() {
   // FM-managed cover (if enabled + present) overrides the file-based one.
   const artResult = await playlistArtSwr.get('map').catch(() => ({ value: new Map() }));
   const artMap = artResult.value || new Map();
-  const playlists = await Promise.all(
+  const withArt = await Promise.all(
     rawPlaylists.map(async (pl) => ({
       ...pl,
       imageUrl: playlistArtLookup(artMap, pl.name) || await resolvePlaylistImage(pl.name) || null
     }))
   );
+  const playlists = PLAYLISTS_REQUIRE_ART ? withArt.filter(pl => pl.imageUrl) : withArt;
+  const hidden = withArt.length - playlists.length;
+  if (hidden > 0) {
+    log.info(`${hidden} playlist(s) hidden pending artwork: ${withArt.filter(pl => !pl.imageUrl).map(pl => pl.name).join(', ')}`);
+  }
   log.debug(`${playlists.length} playlists loaded`);
   return { ok: true, playlists };
 }

@@ -41,6 +41,16 @@
       "autoPort": true
     },
     {
+      "name": "madmusic-artflag-test",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "PORT=3993 PLAYLIST_ART_ENABLED=true node server.js"
+      ],
+      "port": 3993,
+      "autoPort": true
+    },
+    {
       "name": "madmusic-umami-test",
       "runtimeExecutable": "sh",
       "runtimeArgs": [
