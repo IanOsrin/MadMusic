@@ -41,6 +41,16 @@
       "autoPort": true
     },
     {
+      "name": "madmusic-maddie",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "PORT=3992 MADDIE_ENABLED=true GUEST_PREVIEW_ENABLED=true PLAYLIST_ART_ENABLED=true node server.js"
+      ],
+      "port": 3992,
+      "autoPort": true
+    },
+    {
       "name": "madmusic-artflag-test",
       "runtimeExecutable": "sh",
       "runtimeArgs": [

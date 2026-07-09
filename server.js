@@ -28,6 +28,7 @@ import telkomRouter from './routes/telkom.js';
 import podcastsRouter from './routes/podcasts.js';
 import suggestionsRouter from './routes/suggestions.js';
 import previewRouter from './routes/preview.js';
+import maddieRouter from './routes/maddie.js';
 import { initSemanticIndex, semanticIndexStatus } from './lib/semantic-index.js';
 import { initNameIndex, nameIndexStatus } from './lib/name-index.js';
 
@@ -208,6 +209,9 @@ const SUGGESTIONS_ENABLED = process.env.SUGGESTIONS_ENABLED === 'true';
 // token gate. When off, everything behaves exactly as before (blocking gate,
 // preview path 404s BEFORE the auth middleware — podcasts/suggestions pattern).
 const GUEST_PREVIEW_ENABLED = process.env.GUEST_PREVIEW_ENABLED === 'true';
+// Maddie — the record-shop assistant chat (prototype). Ships dark; needs
+// ANTHROPIC_API_KEY at runtime (the route degrades to a clear 503 without it).
+const MADDIE_ENABLED = process.env.MADDIE_ENABLED === 'true';
 
 // ── Catalog metadata source (Postgres mirror migration) ───────────────────────
 // Catalog READS come from either FileMaker (default) or the Postgres mirror of
@@ -394,6 +398,9 @@ app.use('/api/', async (req, res, next) => {
     // Guest previews are server-clipped ~30 s streams — public BY DESIGN, and
     // only while the feature is on (404'd before this middleware when off).
     ...(GUEST_PREVIEW_ENABLED ? ['/preview/'] : []),
+    // Maddie, the record-shop assistant — public chat over public catalogue
+    // data (rate-limited in the route); path is 404'd when the flag is off.
+    ...(MADDIE_ENABLED ? ['/maddie/'] : []),
     '/download/',
     '/ringtone/',
     '/audio-proxy',
@@ -510,6 +517,7 @@ async function loadHtml(filename) {
     + `window.__SUGGESTIONS=${SUGGESTIONS_ENABLED ? 'true' : 'false'};`
     + `window.__ARTIST_BIO=${ARTIST_BIO_ENABLED ? 'true' : 'false'};`
     + `window.__GUEST_PREVIEW=${GUEST_PREVIEW_ENABLED ? 'true' : 'false'};`
+    + `window.__MADDIE=${MADDIE_ENABLED ? 'true' : 'false'};`
     + '</script>'
     // Umami visitor analytics (cookieless; deferred so it never blocks boot).
     + (UMAMI_ENABLED
@@ -597,6 +605,7 @@ if (TELKOM_ENABLED) app.use('/api/telkom', telkomRouter); // ring-fenced: 404'd 
 if (PODCASTS_ENABLED) app.use('/api', podcastsRouter);    // dark until PODCASTS_ENABLED=true
 if (SUGGESTIONS_ENABLED) app.use('/api', suggestionsRouter); // dark until SUGGESTIONS_ENABLED=true
 if (GUEST_PREVIEW_ENABLED) app.use('/api', previewRouter);   // dark until GUEST_PREVIEW_ENABLED=true
+if (MADDIE_ENABLED) app.use('/api/maddie', maddieRouter);     // dark until MADDIE_ENABLED=true
 app.use('/api/download', downloadRouter);
 app.use('/api/ringtone', ringtoneRouter);
 app.use('/api/playlists', playlistsRouter);
