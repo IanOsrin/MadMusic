@@ -1059,6 +1059,20 @@ if (process.env.PREWARM_CACHES === 'true' && (process.env.WORKER_INDEX || '0') =
   prewarm('G100',             featuredWarmers.g100,        4000);
   prewarm('Public Playlists', publicPlaylistsWarmer,       5000);
   prewarm('Genres',           genresWarmer,                8000);
+  // Maddie's semantic shelves: download the index + load the embedding model
+  // once at boot, off the request path — the first visitor must never pay the
+  // cold start (which 502'd at the proxy and, under concurrent retries,
+  // OOM'd the 512 MB canary).
+  if (MADDIE_ENABLED) {
+    setTimeout(async () => {
+      try {
+        const { warmSemanticShelves } = await import('./lib/semantic-shelves.js');
+        warmSemanticShelves();
+      } catch (err) {
+        console.warn('[MASS] Maddie shelves pre-warm failed:', err?.message || err);
+      }
+    }, 10000);
+  }
 } else {
   console.log('[MASS] Cache pre-warm disabled (set PREWARM_CACHES=true to enable). SWR caches will fill on first request.');
 }
