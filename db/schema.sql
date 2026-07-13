@@ -77,6 +77,18 @@ CREATE INDEX IF NOT EXISTS tracks_trgm_ref_cat      ON tracks USING gin ((raw->>
 CREATE INDEX IF NOT EXISTS tracks_trgm_year          ON tracks USING gin ((raw->>'Year of Release') gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS tracks_trgm_language_code ON tracks USING gin ((raw->>'Language Code')   gin_trgm_ops);
 
+-- Public playlists (/public-playlists): per-name track loads run
+-- lower(raw->>'PublicPlaylist') = $name — one query PER playlist per page
+-- load. Unindexed this seq-scans the whole table; ~20 playlists exhausted the
+-- pool (10-27s responses + connect timeouts, 2026-07-11). The btree serves the
+-- exact-match; the partial index serves the "any playlist tag" list query
+-- (raw->>'PublicPlaylist' IS NOT NULL AND <> '') with an identical predicate.
+CREATE INDEX IF NOT EXISTS tracks_public_playlist_idx
+  ON tracks (lower(raw->>'PublicPlaylist'));
+CREATE INDEX IF NOT EXISTS tracks_public_playlist_set_idx
+  ON tracks ((raw->>'PublicPlaylist'))
+  WHERE raw->>'PublicPlaylist' IS NOT NULL AND raw->>'PublicPlaylist' <> '';
+
 -- Sync watermark + run log (one row per FileMaker layout mirrored).
 CREATE TABLE IF NOT EXISTS sync_state (
   source         text PRIMARY KEY,            -- e.g. 'API_Album_Songs'
