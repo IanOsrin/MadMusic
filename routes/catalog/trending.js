@@ -40,6 +40,13 @@ const TRENDING_LOOKBACK_HOURS = parsePositiveInt(process.env.TRENDING_LOOKBACK_H
 const TRENDING_FETCH_LIMIT    = parsePositiveInt(process.env.TRENDING_FETCH_LIMIT,    400);
 const TRENDING_MAX_LIMIT      = parsePositiveInt(process.env.TRENDING_MAX_LIMIT,      20);
 const TRENDING_TTL_MS         = parsePositiveInt(process.env.TRENDING_CACHE_TTL_MS,   24 * 60 * 60 * 1000);
+// Max tracks from ONE album in the rail (Ian, 2026-07-11): at low traffic a
+// single listener repeating one album filled every slot with the same cover.
+// The rail renders cover cards, so spread beats strict ranking — keep the
+// top-ranked track per album, drop the rest, backfill with other albums.
+// 0 disables the cap. (Deliberate override of the "don't dedup charts"
+// guidance in .claude/skills/mad-fm-dedup-pattern — this rail is visual.)
+const TRENDING_MAX_PER_ALBUM  = parsePositiveInt(process.env.TRENDING_MAX_PER_ALBUM, 1);
 
 // Per-token cache for /my-stats. The handler otherwise runs a 2000-record
 // stream-events _find on every call; a short TTL collapses repeat hits (e.g. a
@@ -90,14 +97,39 @@ function compareTrendingStats(a, b) {
   return b.lastEvent - a.lastEvent;
 }
 
+// Album identity for the per-album cap: catalogue number first (the house
+// principle — one physical release, one identity), title|||album-artist as
+// the fallback. Field names follow the mixed-naming chain in fm-fields.
+function trendingAlbumKey(fields) {
+  const cat = firstNonEmpty(fields, ['Album Catalogue Number', 'Reference Catalogue Number', 'Tape Files::Reference Catalogue Number']);
+  if (cat) return `cat:${cat.toLowerCase().replace(/\s+/g, ' ').trim()}`;
+  const album  = firstNonEmpty(fields, ['Album Title', 'Tape Files::Album Title', 'Tape Files::Album_Title']) || '';
+  const artist = firstNonEmpty(fields, ['Album Artist', 'Tape Files::Album Artist']) || '';
+  if (!album && !artist) return null; // unknowable — don't group unrelated tracks
+  return `ta:${album.toLowerCase().trim()}|||${artist.toLowerCase().trim()}`;
+}
+
 function collectValidResults(fetched, normalizedLimit) {
   const results = [];
+  const perAlbum = new Map();
+  let albumCapSkips = 0;
   for (const { stat, record } of fetched) {
     if (!record) continue;
     const fields = record.fieldData || {};
     if (!recordIsVisible(fields))  continue;
     if (!hasValidAudio(fields))    continue;
     if (!hasValidArtwork(fields))  continue;
+    // Per-album cap: candidates arrive ranked, so the FIRST track we accept
+    // from an album is its top-ranked one; later tracks from the same album
+    // are dropped and their slots backfilled by other albums.
+    if (TRENDING_MAX_PER_ALBUM > 0) {
+      const albumKey = trendingAlbumKey(fields);
+      if (albumKey) {
+        const seen = perAlbum.get(albumKey) || 0;
+        if (seen >= TRENDING_MAX_PER_ALBUM) { albumCapSkips += 1; continue; }
+        perAlbum.set(albumKey, seen + 1);
+      }
+    }
     results.push({
       recordId: record.recordId || stat.trackRecordId,
       modId:    record.modId || '0',
@@ -110,8 +142,12 @@ function collectValidResults(fetched, normalizedLimit) {
     });
     if (results.length >= normalizedLimit) break;
   }
+  if (albumCapSkips > 0) {
+    log.debug(`Trending album cap dropped ${albumCapSkips} same-album tracks (${results.length} unique-album slots filled)`);
+  }
   return results;
 }
+export { collectValidResults, trendingAlbumKey }; // exported for unit tests
 
 async function collectTrendingStats({ limit, lookbackHours, fetchLimit }) {
   const normalizedLimit = Math.max(1, limit || 5);
@@ -138,9 +174,11 @@ async function collectTrendingStats({ limit, lookbackHours, fetchLimit }) {
 
   const sortedStats = Array.from(statsByTrack.values()).sort(compareTrendingStats);
 
-  // Fetch a superset of candidates so that tracks failing visibility/audio/artwork
-  // filters don't leave us short. 3× limit is usually enough.
-  const BATCH_MULTIPLIER = 3;
+  // Fetch a superset of candidates so that tracks failing visibility/audio/
+  // artwork filters — or dropped by the per-album cap — don't leave us short.
+  // 6× because in the album-repeat scenario the TOP of the ranking can be a
+  // dozen tracks of one album; the cap discards all but one of them.
+  const BATCH_MULTIPLIER = TRENDING_MAX_PER_ALBUM > 0 ? 6 : 3;
   const candidates = sortedStats.slice(0, normalizedLimit * BATCH_MULTIPLIER);
 
   // Route through the shared track-record cache so repeat warm-ups and
