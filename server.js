@@ -382,6 +382,9 @@ app.use('/api/', async (req, res, next) => {
     // Public catalogue content (same class as /trending): the hero rail reads
     // it on every page load, including guest-mode visits with no token.
     '/new-releases',
+    // Global Favourites rail (aggregate library-save counts, no user data) —
+    // shown to guests since 2026-07-17 (lives on the G100 page).
+    '/global-favorites',
     '/auth', '/payments/initialize', '/payments/subscribe', '/payments/trial', '/payments/callback',
     '/payments/webhook', '/payments/plans', '/payments/subscription-plan',
     '/access/stream-events', '/access/logout', '/access/email/', '/health',

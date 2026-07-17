@@ -580,22 +580,97 @@
               </div>
             </section>
 
-            <!-- Global Favorites Section (populated from /api/global-favorites; stays hidden until data arrives) -->
-            <section class="section" id="globalFavoritesSection" hidden>
+            <!-- Curated Playlists Section (traded places with Global Favourites,
+                 which now lives on the Gallo 100 page, 2026-07-17). Container id
+                 keeps its legacy g100 name — the loader + contract baseline
+                 reference it. /api/public-playlists is public (auth.js allowlist),
+                 so it loads immediately rather than on view visibility. -->
+            <section class="section" id="publicPlaylistsRailSection">
               <div class="section-header">
                 <div>
-                  <h2 class="section-title">Global Favourites</h2>
-                  <p class="section-subtitle">Albums the world keeps coming back to</p>
+                  <h2 class="section-title">Playlists</h2>
+                  <p class="section-subtitle">Curated collections from the archive</p>
                 </div>
               </div>
               <div class="horizontal-scroll-wrapper">
-                <button class="scroll-arrow scroll-arrow-left" data-target="globalFavoritesContainer" aria-label="Scroll left"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
-                <div id="globalFavoritesContainer" class="nr-grid horizontal-scroll-container">
+                <button class="scroll-arrow scroll-arrow-left" data-target="g100PlaylistsContainer" aria-label="Scroll left"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                <div id="g100PlaylistsContainer" class="horizontal-scroll-container">
                   <div class="loading"><div class="spinner"></div></div>
                 </div>
-                <button class="scroll-arrow scroll-arrow-right visible" data-target="globalFavoritesContainer" aria-label="Scroll right"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+                <button class="scroll-arrow scroll-arrow-right visible" data-target="g100PlaylistsContainer" aria-label="Scroll right"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
               </div>
             </section>
+
+            <script>
+            (function() {
+              async function loadPublicPlaylistsRail() {
+                const container = document.getElementById('g100PlaylistsContainer');
+                if (!container || container.dataset.loaded) return;
+                try {
+                  const res = await fetch('/api/public-playlists');
+                  const data = await res.json();
+                  const playlists = data.playlists || [];
+                  if (!playlists.length) {
+                    container.innerHTML = '<p style="color:var(--muted);padding:20px;">No playlists available</p>';
+                    return;
+                  }
+                  container.innerHTML = playlists.map((pl, i) => {
+                    const hue = (i * 47 + 210) % 360;
+                    return `
+                      <div class="g100-playlist-card" data-name="${encodeURIComponent(pl.name)}" style="--pl-hue:${hue};">
+                        <div class="g100-playlist-art">
+                          ${pl.imageUrl
+                            ? `<img src="${pl.imageUrl}" alt="${pl.name}" loading="lazy">`
+                            : `<svg viewBox="0 0 24 24" fill="currentColor" width="40" height="40" style="opacity:0.6;"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>`
+                          }
+                        </div>
+                        <div class="g100-playlist-info">
+                          <div class="g100-playlist-name">${pl.name}</div>
+                          <div class="g100-playlist-count">${pl.trackCount} track${pl.trackCount !== 1 ? 's' : ''}</div>
+                        </div>
+                      </div>`;
+                  }).join('');
+                  container.dataset.loaded = '1';
+
+                  container.querySelectorAll('.g100-playlist-card').forEach(card => {
+                    card.addEventListener('click', async () => {
+                      const name = decodeURIComponent(card.dataset.name);
+                      try {
+                        const r = await fetch(`/api/public-playlists?name=${encodeURIComponent(name)}`);
+                        const d = await r.json();
+                        if (d.ok && d.tracks?.length) {
+                          const tracks = d.tracks.map(t => ({
+                            name:          t.name          || 'Unknown Track',
+                            artist:        t.trackArtist   || t.albumArtist || '',
+                            album:         t.albumTitle    || '',
+                            audioUrl:      t.resolvedSrc   || t.mp3 || '',
+                            artwork:       t.picture       || t.artwork || '',
+                            artworkUrl:    t.picture       || t.artwork || '',
+                            duration:      t.duration      || '',
+                            trackRecordId: t.trackRecordId || t.recordId || '',
+                            addedAt:       t.addedAt       || '',
+                            playlistId:    name
+                          }));
+                          if (typeof window.showUserPlaylistPage === 'function') {
+                            window.showUserPlaylistPage(name, tracks, name, { readOnly: true });
+                          }
+                        }
+                      } catch (err) {
+                        console.error('[Playlists Rail] Failed to load tracks:', err);
+                      }
+                    });
+                  });
+                } catch (err) {
+                  console.error('[Playlists Rail] Failed to load:', err);
+                  container.innerHTML = '<p style="color:var(--muted);padding:20px;">Failed to load playlists</p>';
+                }
+              }
+
+              // The rail lives on the home view now and /api/public-playlists is
+              // public, so load immediately (no view-visibility gating needed).
+              loadPublicPlaylistsRail();
+            })();
+            </script>
 
             <!-- Singles Section (populated from /api/singles; stays hidden until data arrives) -->
             <section class="section" id="singlesSection" hidden>
@@ -1035,103 +1110,26 @@
       })();
       </script>
 
-      <!-- Curated Playlists Section -->
-      <section class="section">
+      <!-- Global Favorites Section (traded places with Curated Playlists, which
+           now lives on the home page, 2026-07-17). Populated at boot from
+           /api/global-favorites by discovery.js loadGlobalFavorites — it finds
+           the section by id wherever it sits; stays hidden until data arrives. -->
+      <section class="section" id="globalFavoritesSection" hidden>
         <div class="section-header">
           <div>
-            <h2 class="section-title">Playlists</h2>
-            <p class="section-subtitle">Curated collections from the archive</p>
+            <h2 class="section-title">Global Favourites</h2>
+            <p class="section-subtitle">Albums the world keeps coming back to</p>
           </div>
         </div>
         <div class="horizontal-scroll-wrapper">
-          <button class="scroll-arrow scroll-arrow-left" data-target="g100PlaylistsContainer" aria-label="Scroll left">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-          </button>
-          <div id="g100PlaylistsContainer" class="horizontal-scroll-container">
+          <button class="scroll-arrow scroll-arrow-left" data-target="globalFavoritesContainer" aria-label="Scroll left"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+          <div id="globalFavoritesContainer" class="nr-grid horizontal-scroll-container">
             <div class="loading"><div class="spinner"></div></div>
           </div>
-          <button class="scroll-arrow scroll-arrow-right visible" data-target="g100PlaylistsContainer" aria-label="Scroll right">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-          </button>
+          <button class="scroll-arrow scroll-arrow-right visible" data-target="globalFavoritesContainer" aria-label="Scroll right"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
         </div>
       </section>
 
-      <script>
-      (function() {
-        async function loadG100Playlists() {
-          const container = document.getElementById('g100PlaylistsContainer');
-          if (!container || container.dataset.loaded) return;
-          try {
-            const res = await fetch('/api/public-playlists');
-            const data = await res.json();
-            const playlists = data.playlists || [];
-            if (!playlists.length) {
-              container.innerHTML = '<p style="color:var(--muted);padding:20px;">No playlists available</p>';
-              return;
-            }
-            container.innerHTML = playlists.map((pl, i) => {
-              const hue = (i * 47 + 210) % 360;
-              return `
-                <div class="g100-playlist-card" data-name="${encodeURIComponent(pl.name)}" style="--pl-hue:${hue};">
-                  <div class="g100-playlist-art">
-                    ${pl.imageUrl
-                      ? `<img src="${pl.imageUrl}" alt="${pl.name}" loading="lazy">`
-                      : `<svg viewBox="0 0 24 24" fill="currentColor" width="40" height="40" style="opacity:0.6;"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>`
-                    }
-                  </div>
-                  <div class="g100-playlist-info">
-                    <div class="g100-playlist-name">${pl.name}</div>
-                    <div class="g100-playlist-count">${pl.trackCount} track${pl.trackCount !== 1 ? 's' : ''}</div>
-                  </div>
-                </div>`;
-            }).join('');
-            container.dataset.loaded = '1';
-
-            container.querySelectorAll('.g100-playlist-card').forEach(card => {
-              card.addEventListener('click', async () => {
-                const name = decodeURIComponent(card.dataset.name);
-                try {
-                  const r = await fetch(`/api/public-playlists?name=${encodeURIComponent(name)}`);
-                  const d = await r.json();
-                  if (d.ok && d.tracks?.length) {
-                    const tracks = d.tracks.map(t => ({
-                      name:          t.name          || 'Unknown Track',
-                      artist:        t.trackArtist   || t.albumArtist || '',
-                      album:         t.albumTitle    || '',
-                      audioUrl:      t.resolvedSrc   || t.mp3 || '',
-                      artwork:       t.picture       || t.artwork || '',
-                      artworkUrl:    t.picture       || t.artwork || '',
-                      duration:      t.duration      || '',
-                      trackRecordId: t.trackRecordId || t.recordId || '',
-                      addedAt:       t.addedAt       || '',
-                      playlistId:    name
-                    }));
-                    if (typeof window.showUserPlaylistPage === 'function') {
-                      window.showUserPlaylistPage(name, tracks, name, { readOnly: true });
-                    }
-                  }
-                } catch (err) {
-                  console.error('[G100 Playlists] Failed to load tracks:', err);
-                }
-              });
-            });
-          } catch (err) {
-            console.error('[G100 Playlists] Failed to load:', err);
-            container.innerHTML = '<p style="color:var(--muted);padding:20px;">Failed to load playlists</p>';
-          }
-        }
-
-        const observer = new MutationObserver(function() {
-          const g100View = document.getElementById('view-g100');
-          if (g100View && !g100View.hidden) loadG100Playlists();
-        });
-        const g100View = document.getElementById('view-g100');
-        if (g100View) {
-          observer.observe(g100View, { attributes: true, attributeFilter: ['hidden'] });
-          if (!g100View.hidden) loadG100Playlists();
-        }
-      })();
-      </script>
     </div>
   </div>
 
@@ -5732,7 +5730,7 @@
     var searchHeading     = document.getElementById('searchResultsHeading');
     var searchSubtitle    = document.getElementById('searchResultsSubtitle');
     var newReleasesSection = document.getElementById('newReleasesSection');
-    var globalFavoritesSection = document.getElementById('globalFavoritesSection');
+    var publicPlaylistsRailSection = document.getElementById('publicPlaylistsRailSection');
     var singlesSection    = document.getElementById('singlesSection');
     var trendingSection   = document.querySelector('#trendingContainer')?.closest('section.section');
     var discoverSection   = document.querySelector('#randomContainer')?.closest('section.section');
@@ -5747,7 +5745,7 @@
       if (trendingSection)    trendingSection.style.display   = isSearch ? 'none' : '';
       if (discoverSection)    discoverSection.style.display   = isSearch ? 'none' : '';
       if (newReleasesSection) newReleasesSection.style.display = isSearch ? 'none' : '';
-      if (globalFavoritesSection) globalFavoritesSection.style.display = isSearch ? 'none' : '';
+      if (publicPlaylistsRailSection) publicPlaylistsRailSection.style.display = isSearch ? 'none' : '';
       if (singlesSection)     singlesSection.style.display     = isSearch ? 'none' : '';
       if (heroBanner)         heroBanner.style.display        = isSearch ? 'none' : '';
 

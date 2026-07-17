@@ -95,6 +95,8 @@
         '/api/missing-audio-songs',
         '/api/singles',
         '/api/new-releases',      // hero rail — public catalogue content
+        '/api/global-favorites',  // Global Favourites rail (G100 page) — public
+                                  // aggregate counts, shown to guests since 2026-07-17
         '/api/g100-albums',       // G100 view — public catalogue content
         '/api/g100-playlists',
         '/api/genres',

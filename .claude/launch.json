@@ -71,6 +71,16 @@
       "autoPort": true
     },
     {
+      "name": "madmusic-prodlike",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "GUEST_PREVIEW_ENABLED=true METADATA_SOURCE=postgres PLAYLIST_ART_ENABLED=true PORT=3999 NODE_ENV=development node server.js"
+      ],
+      "port": 3999,
+      "autoPort": true
+    },
+    {
       "name": "madmusic-guest-live",
       "runtimeExecutable": "sh",
       "runtimeArgs": [
