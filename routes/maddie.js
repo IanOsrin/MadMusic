@@ -18,7 +18,8 @@
 
 import { Router } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
-import { searchShelves, semanticShelvesAvailable } from '../lib/semantic-shelves.js';
+import { semanticShelvesAvailable, knnRaw } from '../lib/semantic-shelves.js';
+import { answerFromShelves, QUESTION_LINE } from '../lib/maddie-lite.js';
 
 const router = Router();
 
@@ -27,7 +28,7 @@ const router = Router();
 // to a bigger model if her taste ever needs the upgrade.
 const MADDIE_MODEL = process.env.MADDIE_MODEL || 'claude-haiku-4-5';
 const SELF = `http://127.0.0.1:${process.env.PORT || 3000}`;
-const MAX_TOOL_ITERATIONS = 6;
+const MAX_TOOL_ITERATIONS = 8;
 const MAX_HISTORY = 16;          // messages kept per request
 const MAX_MSG_CHARS = 1500;      // per message
 const RATE_LIMIT = { max: 30, windowMs: 10 * 60 * 1000 }; // per IP
@@ -38,8 +39,8 @@ const SYSTEM_PROMPT = `You are Maddie, the assistant behind the counter at MAD M
 Your character: you grew up among these crates. Warm, quick, a little opinionated — the sharp one behind the counter who plays people things instead of describing them. Light South African seasoning in your speech (an "eish" when the shelves let someone down, a "sharp" when they don't) — never so much that a visitor in Stockholm needs a glossary. You serve a 70-year-old asking for Mahlathini and a 25-year-old crate-digger from Berlin with exactly the same respect.
 
 House rules — these are absolute:
-1. PLAY FIRST, TALK SECOND. When you recommend music, ALWAYS call recommend_tracks so the visitor gets press-play cards. At most 3 tracks at a time — a short stack, not the whole shelf.
-2. ONLY THE CATALOGUE. Recommend only tracks you have actually seen in a tool result this conversation. Never invent artists, titles or recordIds. If asked about music in general, steer back to what's on the shelves.
+1. PLAY FIRST, TALK SECOND. When you recommend music, ALWAYS call recommend_tracks so the visitor gets press-play cards. Up to 5 tracks at a time — a good stack, not the whole shelf.
+2. ONLY THE CATALOGUE — but USE YOUR HEAD TO SEARCH IT. You know South African music history: who fronted which band (Ray Phiri → Stimela; Sipho "Hotstix" Mabuse → Harari), who collaborated, what a stage name maps to, which era a scene belongs to. USE that knowledge to translate what the visitor says into the right searches — if they ask for a person, also search the bands and projects that person is known for. Share the connection in one line ("Ray Phiri — that's Stimela's man"). But the hard rule stands: RECOMMEND only tracks you have actually seen in a tool result this conversation, never invent artists, titles or recordIds, and if you're not certain of a connection for a lesser-known name, say so honestly rather than guessing.
 3. HONEST MISSES. If the search comes up empty, say so plainly ("Eish — that one's not on our shelves") and offer the nearest thing that IS here. Never pretend.
 4. ONE LINE OF STORY, not a lecture. If artist_info gives you something interesting, spend it in a sentence.
 5. ASK ONE GOOD QUESTION back when the request is vague ("for dancing or for remembering?") — one question, not an interrogation.
@@ -47,21 +48,34 @@ House rules — these are absolute:
 7. KEEP IT SHORT. Two to four sentences for most replies. This is a chat window, not a letter.
 8. STAY AT THE COUNTER. You only talk about the music here — not other streaming services, not news, not anything else. Deflect gently and bring it back to the shelves.
 
-Tool notes: search_shelves is your main move — try artist/track/album params for specific names and q for moods or free text. If a first search misses, try once more with different terms before declaring a miss. similar_albums works when you have an artist+album to seed from. recordIds must be copied EXACTLY from tool results into recommend_tracks.`;
+Tool notes: you have TWO search moves — use both. search_shelves is exact/lexical (names of artists, tracks, albums). feel_search is the shop's semantic index (62,000+ tracks embedded by meaning) — it finds music by mood, feeling, era, instrument, style, "sounds like", even half-memories; it is usually the stronger opener for anything that isn't a plain name lookup.
+
+DIG DEEP — this is a crate-digging shop, not a search box. For any request beyond a simple name lookup, run AT LEAST two searches from different angles (e.g. feel_search on the mood + search_shelves on a genre or artist it surfaces) before you hand anything over. If results feel thin or obvious, search again with different words. Prefer one more search over a guess, and pick your 5 from the RICHEST pool you gathered. similar_albums works when you have an artist+album to seed from. recordIds (and cat where present) must be copied EXACTLY from tool results into recommend_tracks.`;
 
 // ── tools ────────────────────────────────────────────────────────────────────
 const TOOLS = [
   {
     name: 'search_shelves',
-    description: 'Search the catalogue. Use artist/track/album for specific names, q for free-text or genre-ish queries. Returns up to 10 tracks with recordIds.',
+    description: 'Exact/lexical catalogue search. Use artist/track/album for specific names, q for free-text. Returns up to 20 tracks with recordIds.',
     input_schema: {
       type: 'object',
       properties: {
-        q:      { type: 'string', description: 'free-text query (mood, genre, words from a lyric or title)' },
+        q:      { type: 'string', description: 'free-text query (genre, words from a lyric or title)' },
         artist: { type: 'string' },
         track:  { type: 'string' },
         album:  { type: 'string' },
       },
+    },
+  },
+  {
+    name: 'feel_search',
+    description: 'Semantic search over the whole catalogue BY MEANING — describe a mood, feeling, era, instrument, style, occasion or "sounds like" in a sentence and get the closest tracks. The strongest opener for anything that is not a plain name lookup. Returns up to ~20 tracks with recordIds.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        description: { type: 'string', description: 'natural-language description of what the visitor is after, e.g. "warm 1970s township saxophone jive for remembering a father"' },
+      },
+      required: ['description'],
     },
   },
   {
@@ -92,7 +106,7 @@ const TOOLS = [
   },
   {
     name: 'recommend_tracks',
-    description: 'Hand the visitor playable track cards. Call this EVERY time you recommend specific tracks (max 3). Copy recordId/title/artist exactly from earlier tool results.',
+    description: 'Hand the visitor playable track cards. Call this EVERY time you recommend specific tracks (max 5). Copy recordId/title/artist exactly from earlier tool results.',
     input_schema: {
       type: 'object',
       properties: {
@@ -105,6 +119,8 @@ const TOOLS = [
               title:      { type: 'string' },
               artist:     { type: 'string' },
               album:      { type: 'string' },
+              albumArtist:{ type: 'string' },
+              cat:        { type: 'string', description: 'catalogue number, copied exactly when the tool result had one' },
               year:       { type: 'string' },
               artworkUrl: { type: 'string' },
             },
@@ -133,6 +149,8 @@ function compactTrack(item) {
     title:  pick(f, ['Track Name', 'Tape Files::Track Name']),
     artist: pick(f, ['Track Artist', 'Album Artist', 'Tape Files::Album Artist']),
     album:  pick(f, ['Album Title', 'Tape Files::Album Title']),
+    albumArtist: pick(f, ['Album Artist', 'Tape Files::Album Artist']),
+    cat:    pick(f, ['Reference Catalogue Number', 'Album Catalogue Number']),
     year:   pick(f, ['Year of Release']),
     genre:  pick(f, ['Genre', 'Local Genre']),
     artworkUrl: pick(f, ['Artwork_S3_URL', 'Tape Files::Artwork_S3_URL']),
@@ -148,7 +166,7 @@ async function selfGet(path) {
 async function executeTool(name, input, ctx) {
   switch (name) {
     case 'search_shelves': {
-      const p = new URLSearchParams({ limit: '10' });
+      const p = new URLSearchParams({ limit: '20' });
       for (const k of ['q', 'artist', 'track', 'album']) {
         if (input?.[k]) p.set(k, String(input[k]).slice(0, 100));
       }
@@ -156,7 +174,25 @@ async function executeTool(name, input, ctx) {
       const items = (data.items || []).map(compactTrack).filter(t => t.title);
       return items.length
         ? { found: items.length, tracks: items }
-        : { found: 0, note: 'nothing on the shelves for that — try different terms once, then be honest about the miss', suggestions: data.suggestions || [] };
+        : { found: 0, note: 'nothing on the shelves for that — try different terms (or feel_search) once more, then be honest about the miss', suggestions: data.suggestions || [] };
+    }
+    case 'feel_search': {
+      const hits = await knnRaw(String(input?.description || '').slice(0, 300), 24);
+      if (hits === null) return { found: 0, note: 'semantic index unavailable — use search_shelves instead' };
+      const items = hits.map((h) => ({
+        recordId: h.recordId,
+        title:  h.m.track || '',
+        artist: (h.m.artist || h.m.albumArtist || '').slice(0, 60),
+        album:  h.m.album || '',
+        albumArtist: (h.m.albumArtist || '').slice(0, 60),
+        cat:    h.m.catalogue || '',
+        year:   h.m.year || '',
+        genre:  h.m.genre || h.m.localGenre || '',
+        artworkUrl: h.m.artworkUrl || '',
+      })).filter(t => t.title && t.artist);
+      return items.length
+        ? { found: items.length, tracks: items }
+        : { found: 0, note: 'nothing close by feel — rephrase the description or fall back to search_shelves' };
     }
     case 'similar_albums': {
       const p = new URLSearchParams({ limit: '6' });
@@ -183,7 +219,7 @@ async function executeTool(name, input, ctx) {
       return { playlists: (data.playlists || []).map(pl => ({ name: pl.name, trackCount: pl.trackCount })) };
     }
     case 'recommend_tracks': {
-      const tracks = Array.isArray(input?.tracks) ? input.tracks.slice(0, 3) : [];
+      const tracks = Array.isArray(input?.tracks) ? input.tracks.slice(0, 5) : [];
       const clean = tracks
         .filter(t => t && t.recordId && t.title && t.artist)
         .map(t => ({
@@ -191,6 +227,8 @@ async function executeTool(name, input, ctx) {
           title:    String(t.title).slice(0, 200),
           artist:   String(t.artist).slice(0, 200),
           album:    t.album ? String(t.album).slice(0, 200) : '',
+          albumArtist: t.albumArtist ? String(t.albumArtist).slice(0, 200) : '',
+          cat:      t.cat ? String(t.cat).slice(0, 40) : '',
           year:     t.year ? String(t.year).slice(0, 10) : '',
           artworkUrl: t.artworkUrl ? String(t.artworkUrl).slice(0, 500) : '',
         }));
@@ -215,19 +253,15 @@ function rateLimited(ip) {
 
 // ── Maddie-lite: zero-cost semantic fallback ─────────────────────────────────
 // With no ANTHROPIC_API_KEY, Maddie answers from the local semantic index
-// instead: the visitor's words are embedded IN-PROCESS (no external AI, no
-// per-message cost) and matched against the catalogue. Same panel, same
-// playable cards — just templated lines instead of generated conversation.
-const LITE_HIT_LINES = [
-  'Here’s what the shelves say to that — press play and tell me if I’m close.',
-  'Sharp. Closest things on the shelves — have a listen.',
-  'Off what you said, these came off the shelf first. Not quite it? Give me another word or two — a feeling, a decade, an artist.',
-];
-const LITE_MISS_LINE = 'Eish — the shelves came up quiet on that one. Try me with different words: an artist, a mood, a decade, an instrument.';
+// instead: lib/maddie-lite.js parses the message (genre/tempo/mood/decade/
+// language/artist become hard filters, filler is stripped, only descriptive
+// words are embedded) and asks a clarifying question when the request is
+// vague. Same panel, same playable cards — no external AI, no per-message
+// cost.
 const LITE_SHOP_LINE = 'This is MAD Music — a small shop sitting on a very big vault: the Gallo archive, the deepest collection of South African music anywhere. It’s slowly being brought back out, tape by tape, and you can listen to a taste of anything for free. Tell me what you’re in the mood for.';
 const LITE_HELLO_LINE = 'Hello. Tell me what you’re after — a song, an artist, a feeling, even half a memory — and I’ll check the shelves.';
 
-async function maddieLite(userText) {
+async function maddieLite(userText, prevAssistant, prevUser) {
   const q = String(userText || '').trim();
   if (/^(hi|hello|hey|howzit|hallo|thanks|thank you|sharp)\b/i.test(q) && q.length < 30) {
     return { reply: LITE_HELLO_LINE, tracks: [] };
@@ -235,28 +269,26 @@ async function maddieLite(userText) {
   if (/what.*(is this|place|site|shop)|who are you/i.test(q)) {
     return { reply: LITE_SHOP_LINE, tracks: [] };
   }
-  const hits = await searchShelves(q, 12);
-  if (hits === null) return null; // no index — feature unavailable
-  // Diversity: at most one track per artist in the hand-over stack.
-  const picked = [];
-  const seenArtists = new Set();
-  for (const h of hits) {
-    const key = h.artist.toLowerCase();
-    if (seenArtists.has(key)) continue;
-    seenArtists.add(key);
-    picked.push(h);
-    if (picked.length === 3) break;
+  // Curated-playlists intent: name Kwela's shelves rather than embedding the
+  // word "playlist" (which would just match tracks with playlist-ish titles).
+  if (/playlist|curated|collection/i.test(q)) {
+    try {
+      const data = await selfGet('/api/public-playlists');
+      const names = (data.playlists || []).map((pl) => pl.name.replace(/-/g, ' ')).filter(Boolean);
+      if (names.length) {
+        return {
+          reply: `Kwela stocks those shelves — we've got: ${names.join(', ')}. They're on the home page under Playlists. Or tell me a mood and I'll pull tracks myself.`,
+          tracks: [],
+        };
+      }
+    } catch { /* fall through to semantic search */ }
   }
-  if (!picked.length) return { reply: LITE_MISS_LINE, tracks: [] };
-  let hash = 0;
-  for (const ch of q) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return {
-    reply: LITE_HIT_LINES[hash % LITE_HIT_LINES.length],
-    tracks: picked.map((t) => ({
-      recordId: t.recordId, title: t.title, artist: t.artist,
-      album: t.album, year: t.year, artworkUrl: t.artworkUrl,
-    })),
-  };
+  // If Maddie just asked her clarifying question, read this answer TOGETHER
+  // with what the visitor said before it ("play me something" → "gospel").
+  const text = (prevAssistant === QUESTION_LINE && prevUser)
+    ? `${prevUser} ${q}`
+    : q;
+  return answerFromShelves(text);
 }
 
 // ── chat endpoint ────────────────────────────────────────────────────────────
@@ -265,11 +297,18 @@ router.post('/chat', async (req, res) => {
     if (!process.env.ANTHROPIC_API_KEY) {
       // Free mode: semantic shelves, no LLM, no external calls.
       const incomingLite = Array.isArray(req.body?.messages) ? req.body.messages : [];
-      const lastUser = [...incomingLite].reverse().find(m => m && m.role === 'user' && typeof m.content === 'string');
+      const textOf = (m) => (m && typeof m.content === 'string' ? m.content.slice(0, MAX_MSG_CHARS) : '');
+      const users = incomingLite.filter(m => m && m.role === 'user' && typeof m.content === 'string');
+      const assistants = incomingLite.filter(m => m && m.role === 'assistant' && typeof m.content === 'string');
+      const lastUser = users[users.length - 1];
       if (!lastUser) return res.status(400).json({ error: 'Say something to Maddie first.' });
       const ip0 = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '?';
       if (rateLimited(ip0)) return res.status(429).json({ error: 'Maddie needs a breather — try again in a few minutes.' });
-      const lite = await maddieLite(lastUser.content.slice(0, MAX_MSG_CHARS));
+      const lite = await maddieLite(
+        textOf(lastUser),
+        textOf(assistants[assistants.length - 1]),
+        textOf(users[users.length - 2])
+      );
       if (lite) return res.json(lite);
       return res.status(503).json({ error: 'Maddie is not on shift (no API key and no semantic index).' });
     }

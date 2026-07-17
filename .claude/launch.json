@@ -45,9 +45,19 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": [
         "-c",
-        "PORT=3992 MADDIE_ENABLED=true GUEST_PREVIEW_ENABLED=true PLAYLIST_ART_ENABLED=true node server.js"
+        "PORT=3992 ANTHROPIC_API_KEY= MADDIE_ENABLED=true GUEST_PREVIEW_ENABLED=true PLAYLIST_ART_ENABLED=true METADATA_SOURCE=postgres ARTWORK_THUMBS=true NODE_ENV=development node server.js"
       ],
       "port": 3992,
+      "autoPort": true
+    },
+    {
+      "name": "madmusic-maddie-smart",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "PORT=3990 MADDIE_ENABLED=true GUEST_PREVIEW_ENABLED=true PLAYLIST_ART_ENABLED=true METADATA_SOURCE=postgres ARTWORK_THUMBS=true NODE_ENV=development node server.js"
+      ],
+      "port": 3990,
       "autoPort": true
     },
     {

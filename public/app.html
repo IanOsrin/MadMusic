@@ -7189,15 +7189,22 @@
   if (!window.__MADDIE) return;
 
   var css = ''
-    /* bottom-right is crowded (guest subscribe pill + cookie banner) — Maddie
-       sits higher, above both, and outranks them in z-index */
-    + '#maddieFab{position:fixed;right:22px;bottom:190px;z-index:3000;background:var(--card,#1c1c26);color:var(--fg,#eee);'
-    + 'border:1px solid var(--border,rgba(255,255,255,0.14));border-radius:999px;padding:10px 16px;font:600 13px/1 inherit;'
+    /* Lives INSIDE the New Releases section-header, absolutely centered on the
+       row so it lines up with the heading without adding any height (was its
+       own row, which pushed the rail down — Ian, 2026-07-17). Falls back to
+       the fixed pill on pages without that anchor. */
+    + '#maddieFabRow{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;}'
+    + '#maddieFab{background:var(--card,#1c1c26);color:var(--fg,#eee);'
+    + 'border:1px solid var(--border,rgba(255,255,255,0.14));border-radius:999px;padding:9px 18px;font:600 13.5px/1 inherit;'
     + 'font-family:inherit;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,0.35);display:flex;align-items:center;gap:8px;}'
+    + '#maddieFab.floating{position:fixed;right:22px;bottom:190px;z-index:3000;padding:10px 16px;font-size:13px;}'
     + '#maddieFab:hover{border-color:var(--accent,#8b5cf6);}'
     + '#maddieFab .dot{width:8px;height:8px;border-radius:50%;background:var(--accent,#8b5cf6);}'
-    + '#maddiePanel{position:fixed;right:22px;bottom:246px;z-index:3000;width:370px;max-width:calc(100vw - 44px);'
-    + 'height:520px;max-height:calc(100vh - 300px);background:var(--card,#15151d);border:1px solid var(--border,rgba(255,255,255,0.14));'
+    + '#maddieFab .bell{width:19px;height:19px;color:var(--accent,#8b5cf6);flex:0 0 19px;}'
+    + '#maddieFab.ringing .bell{animation:maddieRing 0.8s ease;}'
+    + '@keyframes maddieRing{0%{transform:rotate(0)}15%{transform:rotate(16deg)}30%{transform:rotate(-13deg)}45%{transform:rotate(9deg)}60%{transform:rotate(-6deg)}75%{transform:rotate(3deg)}100%{transform:rotate(0)}}'
+    + '#maddiePanel{position:fixed;left:50%;transform:translateX(-50%);top:80px;z-index:3000;width:420px;max-width:calc(100vw - 44px);'
+    + 'height:560px;max-height:calc(100vh - 140px);background:var(--card,#15151d);border:1px solid var(--border,rgba(255,255,255,0.14));'
     + 'border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.45);display:none;flex-direction:column;overflow:hidden;}'
     + '#maddiePanel.open{display:flex;}'
     + '#maddieHead{padding:12px 16px;border-bottom:1px solid var(--border,rgba(255,255,255,0.1));display:flex;align-items:center;justify-content:space-between;}'
@@ -7215,6 +7222,9 @@
     + '.maddie-card .m{flex:1;min-width:0;}'
     + '.maddie-card .t{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
     + '.maddie-card .a{font-size:11.5px;color:var(--muted,#999);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+    + '.maddie-card .al{font-size:11px;color:var(--accent,#8b5cf6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+    + 'cursor:pointer;margin-top:2px;}'
+    + '.maddie-card .al:hover{text-decoration:underline;}'
     + '.maddie-card button{background:var(--accent,#8b5cf6);color:#fff;border:none;border-radius:50%;width:32px;height:32px;'
     + 'cursor:pointer;font-size:12px;flex:0 0 32px;}'
     + '#maddieForm{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border,rgba(255,255,255,0.1));}'
@@ -7233,8 +7243,52 @@
 
   var fab = document.createElement('button');
   fab.id = 'maddieFab';
-  fab.innerHTML = '<span class="dot"></span>Ask Maddie';
-  document.body.appendChild(fab);
+  fab.innerHTML = ''
+    + '<svg class="bell" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+    + '<circle cx="12" cy="3" r="1.6"/>'
+    + '<path d="M12 5.2a1 1 0 0 1 1 1v.35A7 7 0 0 1 19 13.5v1H5v-1a7 7 0 0 1 6-6.95v-.35a1 1 0 0 1 1-1z"/>'
+    + '<rect x="3.2" y="16" width="17.6" height="2.6" rx="1.3"/></svg>'
+    + 'Ring the bell for Maddie';
+
+  // The counter bell: a short synthesized "ding" (three decaying partials of a
+  // real desk bell — no audio file, allowed by autoplay rules since it's a
+  // direct response to the click).
+  function dingBell() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      var ctx = dingBell._ctx || (dingBell._ctx = new AC());
+      if (ctx.state === 'suspended') ctx.resume();
+      var now = ctx.currentTime;
+      // [freq, gain, decay s] — a detuned pair on the fundamental gives the
+      // slow "wah" beat of a real brass bell; lower partials ring longest.
+      [[1661, 0.04, 1.4],
+       [2489, 0.22, 2.1], [2493, 0.16, 2.1],
+       [3322, 0.20, 1.5], [4186, 0.12, 1.1], [5588, 0.06, 0.8]].forEach(function (p) {
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine';
+        o.frequency.value = p[0];
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.linearRampToValueAtTime(p[1], now + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + p[2]);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(now); o.stop(now + p[2] + 0.1);
+      });
+    } catch (e) { /* sound is garnish — never let it break the panel */ }
+  }
+  var nrHeader = document.querySelector('#newReleasesSection .section-header');
+  if (nrHeader) {
+    // Same row as the "New Releases" heading — centered on the line, zero
+    // extra height so the rail doesn't move.
+    nrHeader.style.position = 'relative';
+    var fabRow = document.createElement('div');
+    fabRow.id = 'maddieFabRow';
+    fabRow.appendChild(fab);
+    nrHeader.appendChild(fabRow);
+  } else {
+    fab.classList.add('floating');
+    document.body.appendChild(fab);
+  }
 
   var panel = document.createElement('div');
   panel.id = 'maddiePanel';
@@ -7252,7 +7306,16 @@
   var history = []; // {role, content} — text only; capped server-side too
   var greeted = false;
 
-  var GREETING = 'Hello, welcome to the shop. I’m Maddie — I look after the counter here. Behind me is the Gallo vault: about sixty thousand South African recordings, some famous, some that haven’t been played since your parents were dancing. Tell me what you’re in the mood for — or hum me a half-memory, those are my favourite.';
+  // One of these greets each visitor (picked at random per panel-open) — no
+  // fixed catalogue count, the vault grows weekly. Approved set 2026-07-17.
+  var GREETINGS = [
+    'Welcome in. I’m Maddie — I look after the counter at MAD Music. Behind me is the Gallo vault: thousands of South African recordings going back to the 1950s, with more coming off the tapes every week. Tell me what you’re in the mood for and I’ll pull something off the shelves.',
+    'I’m Maddie. Thousands of records behind this counter — gospel, jazz, maskandi, mbaqanga, things that haven’t seen daylight since your parents were dancing. Give me a genre, an artist, a decade, a feeling. I’ll do the digging.',
+    'Welcome to the shop. I’m Maddie — ask me for anything: a name, a song, a mood, a year. If it’s South African and it was ever pressed, there’s a good chance it’s on these shelves — and the shelves grow every week.',
+    'Maddie — behind the counter, at your service. The Gallo vault runs deeper than anyone’s living room collection, and we’re still bringing records out tape by tape. What are we listening to today?',
+    'Welcome in. I’m Maddie. People come here for a song they half-remember — something from a kitchen radio, a wedding, a taxi rank. Describe it however it comes to you: an artist, a feeling, a decade. I’ll check the shelves.',
+    'I’m Maddie — I mind the counter here. Thousands of South African recordings behind me, more every week. What are you in the mood for?'
+  ];
 
   function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -7272,9 +7335,23 @@
     div.className = 'maddie-card';
     div.innerHTML = (t.artworkUrl ? '<img loading="lazy" src="' + esc(t.artworkUrl) + '" alt="">' : '<img alt="">')
       + '<div class="m"><div class="t">' + esc(t.title) + '</div>'
-      + '<div class="a">' + esc(t.artist) + (t.year ? ' · ' + esc(t.year) : '') + '</div></div>'
+      + '<div class="a">' + esc(t.artist) + (t.year ? ' · ' + esc(t.year) : '') + '</div>'
+      + (t.album ? '<div class="al" role="link" tabindex="0" title="Open this album">' + esc(t.album) + ' ↗</div>' : '')
+      + '</div>'
       + '<button type="button" title="Play">▶</button>';
     div.querySelector('button').addEventListener('click', function () { playRec(t); });
+    var albumLink = div.querySelector('.al');
+    if (albumLink) {
+      albumLink.addEventListener('click', function () {
+        // Same path the share deep-links use — opens the album detail view.
+        window.__currentAlbumKey = '';   // clear the re-entry guard so repeat opens work
+        window.dispatchEvent(new CustomEvent('mad-reveal-album', {
+          detail: { albumTitle: t.album, albumArtist: t.albumArtist || t.artist, cat: t.cat || '' },
+        }));
+        panel.classList.remove('open');  // step aside so the visitor sees the album
+        try { window.umami && window.umami.track('maddie-album-open', { album: t.album }); } catch (e) {}
+      });
+    }
     log.appendChild(div);
     log.scrollTop = log.scrollHeight;
   }
@@ -7293,6 +7370,9 @@
     if (window._PLAYER && window._PLAYER.playTrack) {
       // In guest mode playTrack rewrites ANY url to /api/preview/<recordId>.
       window._PLAYER.playTrack(url || '/api/preview/' + encodeURIComponent(t.recordId), meta);
+      // Success metric (Umami, when present): do Maddie sessions play more
+      // previews than non-Maddie sessions?
+      try { window.umami && window.umami.track('maddie-play', { recordId: t.recordId, artist: t.artist }); } catch (e) {}
     }
   }
 
@@ -7331,7 +7411,15 @@
   fab.addEventListener('click', function () {
     panel.classList.toggle('open');
     if (panel.classList.contains('open')) {
-      if (!greeted) { greeted = true; addMsg('maddie', GREETING); }
+      dingBell();
+      fab.classList.remove('ringing');
+      void fab.offsetWidth; // restart the shake animation on rapid re-rings
+      fab.classList.add('ringing');
+      if (!greeted) {
+        greeted = true;
+        addMsg('maddie', GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
+        try { window.umami && window.umami.track('maddie-open'); } catch (e) {}
+      }
       input.focus();
     }
   });

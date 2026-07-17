@@ -123,10 +123,41 @@ function energyText(energy) {
 
 const val = (f, k) => String(f[k] ?? '').trim();
 
+// ── Source-data exceptions (reported for FM cleanup, sanitised in the index) ──
+export const exceptions = [];
+
+// A handful of FM Track Artist fields carry whole bio paragraphs
+// ("The SessionmenProfileGroup initially of British origin…Read More").
+// Never index those: fall back to the Album Artist, else hard-clamp, and
+// report the record so the field can be repaired in FileMaker.
+function saneArtist(f) {
+  const track = val(f, 'Track Artist');
+  const album = val(f, 'Album Artist') || val(f, 'Tape Files::Album Artist');
+  if (track && track.length > 60) {
+    exceptions.push({ recordId: '', kind: 'bio-blob-artist', detail: track.slice(0, 120) });
+    return album && album.length <= 60 ? album : track.slice(0, 60);
+  }
+  return track || album;
+}
+
+// Genres that postdate most of the vault — a track tagged with one but dated
+// long before the genre existed is an FM labelling error worth a human look.
+const GENRE_MIN_YEAR = { amapiano: 2012, kwaito: 1990, 'hip-hop': 1979, 'hip hop': 1979, house: 1984, gqom: 2010 };
+function checkGenreYear(f, recordId) {
+  const y = Number(val(f, 'Year of Release'));
+  if (!y) return;
+  for (const g of [val(f, 'Genre'), val(f, 'Local Genre')]) {
+    const min = GENRE_MIN_YEAR[g.toLowerCase()];
+    if (min && y < min) {
+      exceptions.push({ recordId, kind: 'genre-predates-itself', detail: `${g} tagged on a ${y} track` });
+    }
+  }
+}
+
 function buildDoc(f) {
   const parts = [];
   const track = val(f, 'Track Name');
-  const artist = val(f, 'Track Artist') || val(f, 'Album Artist');
+  const artist = saneArtist(f);
   const album = val(f, 'Album Title') || val(f, 'Tape Files::Album Title');
   const year = val(f, 'Year of Release');
   parts.push(`${track} — ${artist}.`);
@@ -164,7 +195,7 @@ function buildDoc(f) {
 function buildMeta(f) {
   return {
     track: val(f, 'Track Name'),
-    artist: val(f, 'Track Artist') || val(f, 'Album Artist'),
+    artist: saneArtist(f),
     album: val(f, 'Album Title') || val(f, 'Tape Files::Album Title'),
     year: val(f, 'Year of Release'),
     genre: val(f, 'Genre'),
@@ -189,8 +220,11 @@ function buildMeta(f) {
 function keepRow(recordId, f) {
   if (!isVisible(f)) return null;
   if (!hasValidAudio(f)) return null;
+  checkGenreYear(f, String(recordId));
   const doc = buildDoc(f);
   if (!doc || doc.length < 20) return null;
+  // Stamp the recordId onto any exception saneArtist just raised for this row.
+  for (const e of exceptions) if (!e.recordId) e.recordId = String(recordId);
   return { recordId: String(recordId), doc, meta: buildMeta(f), hash: sha1(doc) };
 }
 
@@ -327,3 +361,15 @@ fs.renameSync(tmp, DB_PATH);
 
 const mb = (fs.statSync(DB_PATH).size / 1024 / 1024).toFixed(1);
 console.log(`[ingest] DONE: ${rows.length} tracks (${toEmbed.length} embedded, ${rows.length - toEmbed.length} reused) → ${DB_PATH} (${mb} MB) in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+
+// Exceptions report — FM data problems sanitised in the index but worth
+// fixing at the source (aux artifacts live in ~/Downloads by convention).
+if (exceptions.length) {
+  const dedup = new Map();
+  for (const e of exceptions) dedup.set(`${e.recordId}|${e.kind}`, e);
+  const repPath = path.join(process.env.HOME || '.', 'Downloads', 'madstreamer-index-exceptions.csv');
+  const csv = ['recordId,kind,detail', ...[...dedup.values()].map((e) =>
+    `${e.recordId},${e.kind},"${String(e.detail).replace(/"/g, '""')}"`)].join('\n');
+  fs.writeFileSync(repPath, csv);
+  console.log(`[ingest] ${dedup.size} source-data exceptions → ${repPath}`);
+}
