@@ -47,11 +47,13 @@ export function mapRecord(r) {
   const name = String(f.Artist_Name || '').trim();
   const bio = String(f.Bio || '').trim();
   const titbits = String(f.Titbits || '').trim();
+  const related = String(f['Related Music in Streamer'] || '').trim();
   const keys = [normalizeName(name), ...parseAliases(f.Aliases).map(normalizeName)].filter(Boolean);
   return {
     name,
     bio,
     titbits,
+    related,
     imageUrl: String(f.Image_S3_URL || '').trim() || null,
     country: String(f.Country || '').trim() || null,
     _keys: [...new Set(keys)],
