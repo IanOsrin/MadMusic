@@ -401,9 +401,10 @@ app.use('/api/', async (req, res, next) => {
     // Guest previews are server-clipped ~30 s streams — public BY DESIGN, and
     // only while the feature is on (404'd before this middleware when off).
     ...(GUEST_PREVIEW_ENABLED ? ['/preview/'] : []),
-    // Maddie, the record-shop assistant — public chat over public catalogue
-    // data (rate-limited in the route); path is 404'd when the flag is off.
-    ...(MADDIE_ENABLED ? ['/maddie/'] : []),
+    // Maddie, the record-shop assistant, is SUBSCRIBER-ONLY (2026-07-17):
+    // every /api/maddie/* call must carry a valid access token — each LLM
+    // message costs real money, so guests don't get her. (Path is 404'd
+    // before this middleware when the flag is off.)
     '/download/',
     '/ringtone/',
     '/audio-proxy',

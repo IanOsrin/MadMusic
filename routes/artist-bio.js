@@ -40,14 +40,18 @@ function parseAliases(raw) {
 }
 
 // Map one FM record → the artist bio payload, plus the normalized keys it answers to.
+// `bio` is the writer's article (site display); `titbits` is the internal
+// knowledge field the AI references (separate on purpose — different owners).
 export function mapRecord(r) {
   const f = r.fieldData || {};
   const name = String(f.Artist_Name || '').trim();
   const bio = String(f.Bio || '').trim();
+  const titbits = String(f.Titbits || '').trim();
   const keys = [normalizeName(name), ...parseAliases(f.Aliases).map(normalizeName)].filter(Boolean);
   return {
     name,
     bio,
+    titbits,
     imageUrl: String(f.Image_S3_URL || '').trim() || null,
     country: String(f.Country || '').trim() || null,
     _keys: [...new Set(keys)],
@@ -60,7 +64,9 @@ export function buildIndex(records) {
   const index = new Map();
   for (const rec of records || []) {
     const artist = mapRecord(rec);
-    if (!artist.name || !artist.bio) continue;
+    // Index any record carrying knowledge in EITHER field — a titbits-only
+    // artist (no writer's article yet) must still resolve.
+    if (!artist.name || (!artist.bio && !artist.titbits)) continue;
     for (const key of artist._keys) if (!index.has(key)) index.set(key, artist);
   }
   return index;
@@ -94,6 +100,10 @@ router.get('/artist-bio', async (req, res) => {
     const artist = index.get(name) || null;
     if (!artist) return res.json({ ok: true, enabled: true, found: false });
     const { _keys, ...payload } = artist; // don't leak internal match keys
+    // Site display: the writer's Bio article always wins; where no article
+    // exists (e.g. a titbits-only artist), the titbit fills the page rather
+    // than leaving it blank. Both fields still ship for consumers that care.
+    if (!payload.bio) payload.bio = payload.titbits;
     return res.json({ ok: true, enabled: true, found: true, artist: payload });
   } catch (err) {
     console.warn('[artist-bio] fetch failed:', err.message);

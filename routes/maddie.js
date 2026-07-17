@@ -20,6 +20,7 @@ import { Router } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import { semanticShelvesAvailable, knnRaw } from '../lib/semantic-shelves.js';
 import { answerFromShelves, QUESTION_LINE } from '../lib/maddie-lite.js';
+import { fmFindRecords, fmCreateRecord } from '../fm-client.js';
 
 const router = Router();
 
@@ -41,7 +42,7 @@ Your character: you grew up among these crates. Warm, quick, a little opinionate
 House rules — these are absolute:
 1. PLAY FIRST, TALK SECOND. When you recommend music, ALWAYS call recommend_tracks so the visitor gets press-play cards. Up to 5 tracks at a time — a good stack, not the whole shelf.
 2. ONLY THE CATALOGUE. Recommend only tracks you have actually seen in a tool result this conversation. Never invent artists, titles or recordIds.
-2b. FACTS COME FROM TOOLS, NEVER FROM MEMORY. Do NOT state where an artist is from, what genre they play, who was in which band, or any other biography unless a tool result told you THIS conversation (artist_info, or the genre/year fields on returned tracks). Your own memory of South African music specifics is unreliable, and getting an artist's story wrong in front of someone who loves them is the worst thing that can happen at this counter. You MAY use a hunch silently to pick EXTRA search terms (e.g. also searching a band you think a person played with) — but if the search doesn't confirm it, drop the hunch without ever mentioning it. Asked a factual question you can't ground in a tool result? Say plainly: "I only know what's on the shelves — but let me show you those," and show them.
+2b. FACTS COME FROM TOOLS, NEVER FROM MEMORY. Do NOT state where an artist is from, what genre they play, who was in which band, or any other biography unless a tool result told you THIS conversation (artist_info, or the genre/year fields on returned tracks). Your own memory of South African music specifics is unreliable, and getting an artist's story wrong in front of someone who loves them is the worst thing that can happen at this counter. You MAY use a hunch silently to pick EXTRA search terms (e.g. also searching a band you think a person played with) — but if the search doesn't confirm it, drop the hunch without ever mentioning it. Asked ANYTHING about who an artist IS — what band, where from, their story? Call artist_info for that name EVERY TIME before answering (the shop keeps bio cards for many artists; the visitor's exact question is often answered right there). Always use the BEST spelling you know: if a search corrected the visitor's typo ("morebee" → the shelves say "Morbee"), re-run artist_info with the CORRECTED name — a bio miss on a misspelling proves nothing. Only after artist_info misses on the corrected spelling may you say: "I only know what's on the shelves — but let me show you those," and show them.
 3. HONEST MISSES. If the search comes up empty, say so plainly ("Eish — that one's not on our shelves") and offer the nearest thing that IS here. Never pretend.
 4. ONE LINE OF STORY, not a lecture. If artist_info gives you something interesting, spend it in a sentence.
 5. ASK ONE GOOD QUESTION back when the request is vague ("for dancing or for remembering?") — one question, not an interrogation.
@@ -174,10 +175,26 @@ async function executeTool(name, input, ctx) {
         if (input?.[k]) p.set(k, String(input[k]).slice(0, 100));
       }
       const data = await selfGet(`/api/search?${p}`);
-      const items = (data.items || []).map(compactTrack).filter(t => t.title);
-      return items.length
-        ? { found: items.length, tracks: items }
-        : { found: 0, note: 'nothing on the shelves for that — try different terms (or feel_search) once more, then be honest about the miss', suggestions: data.suggestions || [] };
+      let items = (data.items || []).map(compactTrack).filter(t => t.title);
+      if (items.length) return { found: items.length, tracks: items };
+      // Exact-name miss (likely a typo — "kahn morebee"): the q= path is
+      // fuzzy AND returns did-you-mean candidates, so retry there before
+      // reporting a miss.
+      const typed = ['artist', 'track', 'album'].map(k => input?.[k]).filter(Boolean).join(' ');
+      if (typed) {
+        const fp = new URLSearchParams({ limit: '20', q: typed.slice(0, 100) });
+        const fuzzy = await selfGet(`/api/search?${fp}`);
+        items = (fuzzy.items || []).map(compactTrack).filter(t => t.title);
+        if (items.length || (fuzzy.suggestions || []).length) {
+          return {
+            found: items.length,
+            tracks: items,
+            note: 'the EXACT name missed — these are FUZZY matches for what they typed. If did_you_mean has a clear best candidate, use it (tell the visitor what you corrected to); if candidates differ meaningfully, ask "did you mean X or Y?"',
+            did_you_mean: (fuzzy.suggestions || []).slice(0, 5),
+          };
+        }
+      }
+      return { found: 0, note: 'nothing on the shelves for that — try different terms (or feel_search) once more, then be honest about the miss', did_you_mean: data.suggestions || [] };
     }
     case 'feel_search': {
       const hits = await knnRaw(String(input?.description || '').slice(0, 300), 24);
@@ -213,17 +230,24 @@ async function executeTool(name, input, ctx) {
     case 'artist_info': {
       const data = await selfGet(`/api/artist-bio?name=${encodeURIComponent(String(input?.name || '').slice(0, 100))}`);
       // The route nests the payload under `artist` ({found, artist:{name, bio,
-      // country}}); tolerate the old flat shape too.
+      // titbits, country}}); tolerate the old flat shape too. Titbits is the
+      // AI's own knowledge field — preferred over the writer's Bio article.
       const a = (data && typeof data.artist === 'object' && data.artist) || {};
-      const bio = a.bio || data?.bio;
+      const bio = a.titbits || a.bio || data?.bio;
       if (data?.found && bio) {
         return {
           found: true,
           name: a.name || (typeof data.artist === 'string' ? data.artist : '') || input.name,
           country: a.country || data.country || '',
-          bio: String(bio).slice(0, 1200),
+          // Comprehensive profiles run 2-3k chars — give her the whole card
+          // (facts are front-loaded by convention, so even a clip keeps them).
+          bio: String(bio).slice(0, 3500),
         };
       }
+      // Knowledge gap — feed the self-learning loop (a draft titbit is
+      // proposed AFTER the reply is sent; see suggestTitbitsForGaps).
+      const missName = String(input?.name || '').trim();
+      if (missName && ctx.bioMisses && !ctx.bioMisses.includes(missName)) ctx.bioMisses.push(missName);
       return { found: false };
     }
     case 'list_playlists': {
@@ -303,6 +327,90 @@ async function maddieLite(userText, prevAssistant, prevUser) {
   return answerFromShelves(text);
 }
 
+// ── self-learning loop: gap → AI-drafted titbit → human approval ────────────
+// When a visitor asks about an artist and artist_info finds nothing, the model
+// drafts a titbit AFTER the reply is sent (never delays the visitor) and it is
+// written to FM as an Active=0 record on API_Artist_Bio with a Suggestion_Note.
+// Ian reviews in FileMaker and flips Active to 1 to publish — the machine
+// PROPOSES, a human APPROVES. Nothing self-writes into truth.
+// Disable with MADDIE_LEARN=false. Costs ~1 extra model call per NEW gap,
+// capped per day.
+const LEARN_ENABLED = () => process.env.MADDIE_LEARN !== 'false';
+const MAX_SUGGESTIONS_PER_DAY = 20;
+const _suggest = { day: '', count: 0, inFlight: new Set(), known: null, knownAt: 0 };
+
+const normName = (s) => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+async function knownBioNames() {
+  // Cache the full name list (any Active state — a pending suggestion also
+  // counts as "known") for 10 minutes.
+  if (_suggest.known && Date.now() - _suggest.knownAt < 600_000) return _suggest.known;
+  const res = await fmFindRecords('API_Artist_Bio', [{ Artist_Name: '*' }], { limit: 1000 });
+  const set = new Set();
+  for (const r of res?.data || []) {
+    set.add(normName(r.fieldData.Artist_Name));
+    for (const alias of String(r.fieldData.Aliases || '').split(/[\n|]+/)) {
+      const n = normName(alias);
+      if (n) set.add(n);
+    }
+  }
+  _suggest.known = set;
+  _suggest.knownAt = Date.now();
+  return set;
+}
+
+const DRAFTER_PROMPT = `You draft knowledge-base entries ("titbits") about music artists for MAD Music, a South African record shop sitting on the Gallo vault. A human curator reviews every draft before it is published — but write as if no one checks, because one day someone won't.
+
+Write 80–200 words of flowing prose: who the artist is or was, where from, era, genre, band memberships and collaborations, notable works. Include ONLY facts you are highly confident of. If a detail is plausible but uncertain, either omit it or tag it inline with [UNVERIFIED]. Never guess origins, band line-ups or dates.
+
+The artist is likely (but not certainly) South African or African; the name may be misspelled or genuinely obscure. If you have no reliable knowledge of this specific artist, reply with exactly NO_RELIABLE_KNOWLEDGE and nothing else.`;
+
+async function suggestTitbitsForGaps(gaps, visitorQuestion) {
+  if (!LEARN_ENABLED() || !process.env.ANTHROPIC_API_KEY || !gaps?.length) return;
+  const today = new Date().toISOString().slice(0, 10);
+  if (_suggest.day !== today) { _suggest.day = today; _suggest.count = 0; }
+
+  for (const rawName of gaps.slice(0, 3)) {
+    const name = rawName.slice(0, 80);
+    const key = normName(name);
+    if (!key || key.length < 3) continue;
+    if (_suggest.count >= MAX_SUGGESTIONS_PER_DAY) return;
+    if (_suggest.inFlight.has(key)) continue;
+    _suggest.inFlight.add(key);
+    try {
+      const known = await knownBioNames();
+      if (known.has(key)) continue; // record (or pending suggestion) already exists
+
+      const anthropic = new Anthropic();
+      const draft = await anthropic.messages.create({
+        model: MADDIE_MODEL,
+        max_tokens: 500,
+        system: DRAFTER_PROMPT,
+        messages: [{ role: 'user', content: `Artist: "${name}"\nContext — a visitor asked: "${String(visitorQuestion || '').slice(0, 200)}"` }],
+      });
+      const text = (draft.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+      if (!text || text.includes('NO_RELIABLE_KNOWLEDGE') || text.length < 80) {
+        console.log(`[maddie-learn] no reliable knowledge for "${name}" — gap noted, nothing written`);
+        continue;
+      }
+
+      const res = await fmCreateRecord('API_Artist_Bio', {
+        Artist_Name: name,
+        Titbits: text,
+        Active: '0', // ← the approval gate: invisible everywhere until Ian flips it
+        Suggestion_Note: `AI-drafted (${MADDIE_MODEL}) from visitor question: "${String(visitorQuestion || '').slice(0, 150)}" — ${today}. REVIEW, EDIT, THEN SET Active=1 TO PUBLISH (or delete).`,
+      });
+      _suggest.count += 1;
+      _suggest.known?.add(key);
+      console.log(`[maddie-learn] drafted titbit for "${name}" → API_Artist_Bio recordId ${res?.recordId} (Active=0, pending review; ${_suggest.count}/${MAX_SUGGESTIONS_PER_DAY} today)`);
+    } catch (err) {
+      console.warn(`[maddie-learn] suggestion failed for "${name}":`, err?.message || err);
+    } finally {
+      _suggest.inFlight.delete(key);
+    }
+  }
+}
+
 // ── chat endpoint ────────────────────────────────────────────────────────────
 router.post('/chat', async (req, res) => {
   try {
@@ -339,7 +447,7 @@ router.post('/chat', async (req, res) => {
     }
 
     const anthropic = new Anthropic();
-    const ctx = { recommended: [] };
+    const ctx = { recommended: [], bioMisses: [] };
     const messages = [...history];
     let reply = '';
 
@@ -384,6 +492,12 @@ router.post('/chat', async (req, res) => {
     const tracks = ctx.recommended.filter(t => !seen.has(t.recordId) && seen.add(t.recordId));
 
     res.json({ reply, tracks });
+
+    // Self-learning loop — after the visitor has their answer, propose draft
+    // titbits for any artists the bio card couldn't cover. Fire-and-forget.
+    const lastQuestion = history[history.length - 1]?.content || '';
+    suggestTitbitsForGaps(ctx.bioMisses, lastQuestion)
+      .catch((e) => console.warn('[maddie-learn] loop error:', e?.message || e));
   } catch (err) {
     const status = err?.status || 500;
     console.error('[maddie] chat failed:', err?.message || err);
@@ -396,3 +510,5 @@ router.post('/chat', async (req, res) => {
 });
 
 export default router;
+
+export { suggestTitbitsForGaps };

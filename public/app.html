@@ -7187,6 +7187,11 @@
    plays into 30 s previews automatically. */
 (function () {
   if (!window.__MADDIE) return;
+  // Subscriber-only (2026-07-17): every Maddie message costs real API money,
+  // so guests don't even see the bell. Token presence is known synchronously
+  // at load; if the token later fails validation the server 401s the chat
+  // anyway (this gate is UX, the auth middleware is the enforcement).
+  if (!localStorage.getItem('mass_access_token')) return;
 
   var css = ''
     /* Lives INSIDE the New Releases section-header, absolutely centered on the
