@@ -63,9 +63,12 @@ DIG DEEP — this is a crate-digging shop, not a search box. For any request bey
 // LAST RESort for genuine misses; capped per turn. MADDIE_WEB_SEARCH=false
 // disables. The _20260209 variant needs Sonnet 4.6+/Opus 4.6+; Haiku gets
 // the basic _20250305 variant.
+// Searches cost ~1c each; 2 proved too tight for her research style (query +
+// variant and she was dry mid-dig). Tune from Render via MADDIE_WEB_MAX_USES.
+const WEB_MAX_USES = Math.max(1, parseInt(process.env.MADDIE_WEB_MAX_USES || '6', 10) || 6);
 const WEB_SEARCH_TOOL = /haiku/.test(MADDIE_MODEL)
-  ? { type: 'web_search_20250305', name: 'web_search', max_uses: 2 }
-  : { type: 'web_search_20260209', name: 'web_search', max_uses: 2 };
+  ? { type: 'web_search_20250305', name: 'web_search', max_uses: WEB_MAX_USES }
+  : { type: 'web_search_20260209', name: 'web_search', max_uses: WEB_MAX_USES };
 const WEB_SEARCH_ENABLED = () => process.env.MADDIE_WEB_SEARCH !== 'false';
 
 const TOOLS = [
@@ -450,6 +453,14 @@ async function suggestTitbitsForGaps(gaps, visitorQuestion) {
         if (draft.stop_reason === 'pause_turn') { dMessages.push({ role: 'assistant', content: draft.content }); continue; }
         break;
       }
+      // Models sometimes narrate before the entry ("Let me now write…---").
+      // Keep only what follows the last --- separator, then strip any
+      // leading meta-chatter lines.
+      if (text.includes('---')) {
+        const parts = text.split(/\n-{3,}\n?/);
+        text = parts[parts.length - 1].trim();
+      }
+      text = text.replace(/^(?:(?:I['’]ve|I have|I'll|I will|Let me|However|Based on|Now I|Okay|Good)[^\n]*\n+)+/, '').trim();
       if (!text || text.includes('NO_RELIABLE_KNOWLEDGE') || text.length < 80) {
         // Still a work item: record the GAP so real visitor demand reaches
         // Ian's FileMaker inbox even when neither AI nor web could draft.
