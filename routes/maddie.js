@@ -40,7 +40,7 @@ const SYSTEM_PROMPT = `You are Maddie, the assistant behind the counter at MAD M
 Your character: you grew up among these crates. Warm, quick, a little opinionated — the sharp one behind the counter who plays people things instead of describing them. Light South African seasoning in your speech (an "eish" when the shelves let someone down, a "sharp" when they don't) — never so much that a visitor in Stockholm needs a glossary. You serve a 70-year-old asking for Mahlathini and a 25-year-old crate-digger from Berlin with exactly the same respect.
 
 House rules — these are absolute:
-1. PLAY FIRST, TALK SECOND. When you recommend music, ALWAYS call recommend_tracks so the visitor gets press-play cards. Up to 5 tracks at a time — a good stack, not the whole shelf. A PROMISE NEEDS CARDS: if your words offer music ("here's a taste", "have a listen", naming specific albums as if serving them), you MUST have called recommend_tracks with real recordIds in that SAME turn — words that promise play with no cards behind them are a broken promise at this counter. This applies to who-is questions too: tell the story, then EITHER hand cards immediately or ask what they'd like to hear — never describe "a taste" you haven't actually poured.
+1. PLAY FIRST, TALK SECOND. When you recommend music, ALWAYS call recommend_tracks so the visitor gets press-play cards. Up to 5 tracks for a normal hand-over — a good stack, not the whole shelf; when the visitor EXPLICITLY asks for a big list ("give me 20 gospel songs"), go up to 15. A PROMISE NEEDS CARDS: if your words offer music ("here's a taste", "have a listen", naming specific albums as if serving them), you MUST have called recommend_tracks with real recordIds in that SAME turn — words that promise play with no cards behind them are a broken promise at this counter. This applies to who-is questions too: tell the story, then EITHER hand cards immediately or ask what they'd like to hear — never describe "a taste" you haven't actually poured.
 2. ONLY THE CATALOGUE. Recommend only tracks you have actually seen in a tool result this conversation. Never invent artists, titles or recordIds.
 2b. FACTS COME FROM TOOLS, NEVER FROM MEMORY. Do NOT state where an artist is from, what genre they play, who was in which band, or any other biography unless a tool result told you THIS conversation (artist_info, or the genre/year fields on returned tracks). Your own memory of South African music specifics is unreliable, and getting an artist's story wrong in front of someone who loves them is the worst thing that can happen at this counter. You MAY use a hunch silently to pick EXTRA search terms (e.g. also searching a band you think a person played with) — but if the search doesn't confirm it, drop the hunch without ever mentioning it. Asked ANYTHING about who an artist IS — what band, where from, their story? Call artist_info for that name EVERY TIME before answering (the shop keeps bio cards for many artists; the visitor's exact question is often answered right there). Always use the BEST spelling you know: if a search corrected the visitor's typo ("morebee" → the shelves say "Morbee"), re-run artist_info with the CORRECTED name — a bio miss on a misspelling proves nothing. Only after artist_info misses on the corrected spelling may you say: "I only know what's on the shelves — but let me show you those," and show them.
 3. HONEST MISSES. If the search comes up empty, say so plainly ("Eish — that one's not on our shelves") and offer the nearest thing that IS here. Never pretend.
@@ -74,7 +74,7 @@ const WEB_SEARCH_ENABLED = () => process.env.MADDIE_WEB_SEARCH !== 'false';
 const TOOLS = [
   {
     name: 'search_shelves',
-    description: 'Exact/lexical catalogue search. Use artist/track/album for specific names, q for free-text. Returns up to 20 tracks with recordIds.',
+    description: 'Exact/lexical catalogue search. Use artist/track/album for specific names, q for free-text. Returns tracks with recordIds; set limit up to 50 when the visitor wants breadth.',
     input_schema: {
       type: 'object',
       properties: {
@@ -82,6 +82,7 @@ const TOOLS = [
         artist: { type: 'string' },
         track:  { type: 'string' },
         album:  { type: 'string' },
+        limit:  { type: 'integer', description: 'how many results to fetch (default 25, max 50) — raise it for "everything you have" style requests' },
       },
     },
   },
@@ -92,6 +93,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         description: { type: 'string', description: 'natural-language description of what the visitor is after, e.g. "warm 1970s township saxophone jive for remembering a father"' },
+        count: { type: 'integer', description: 'how many results (default 24, max 50)' },
       },
       required: ['description'],
     },
@@ -124,7 +126,7 @@ const TOOLS = [
   },
   {
     name: 'recommend_tracks',
-    description: 'Hand the visitor playable track cards. Call this EVERY time you recommend specific tracks (max 5). Copy recordId/title/artist exactly from earlier tool results.',
+    description: 'Hand the visitor playable track cards. Call this EVERY time you recommend specific tracks (max 5 normally; up to 15 when the visitor explicitly asked for a big list). Copy recordId/title/artist exactly from earlier tool results.',
     input_schema: {
       type: 'object',
       properties: {
@@ -218,7 +220,8 @@ export async function maddieSelfCheck() {
 async function executeTool(name, input, ctx) {
   switch (name) {
     case 'search_shelves': {
-      const p = new URLSearchParams({ limit: '20' });
+      const lim = Math.max(1, Math.min(50, parseInt(input?.limit, 10) || 25));
+      const p = new URLSearchParams({ limit: String(lim) });
       for (const k of ['q', 'artist', 'track', 'album']) {
         if (input?.[k]) p.set(k, String(input[k]).slice(0, 100));
       }
@@ -230,7 +233,7 @@ async function executeTool(name, input, ctx) {
       // reporting a miss.
       const typed = ['artist', 'track', 'album'].map(k => input?.[k]).filter(Boolean).join(' ');
       if (typed) {
-        const fp = new URLSearchParams({ limit: '20', q: typed.slice(0, 100) });
+        const fp = new URLSearchParams({ limit: String(lim), q: typed.slice(0, 100) });
         const fuzzy = await selfGet(`/api/search?${fp}`);
         items = (fuzzy.items || []).map(compactTrack).filter(t => t.title);
         if (items.length || (fuzzy.suggestions || []).length) {
@@ -245,7 +248,8 @@ async function executeTool(name, input, ctx) {
       return { found: 0, note: 'nothing on the shelves for that — try different terms (or feel_search) once more, then be honest about the miss', did_you_mean: data.suggestions || [] };
     }
     case 'feel_search': {
-      const hits = await knnRaw(String(input?.description || '').slice(0, 300), 24);
+      const kCount = Math.max(1, Math.min(50, parseInt(input?.count, 10) || 24));
+      const hits = await knnRaw(String(input?.description || '').slice(0, 300), kCount);
       if (hits === null) return { found: 0, note: 'semantic index unavailable — use search_shelves instead' };
       const items = hits.map((h) => ({
         recordId: h.recordId,
@@ -306,7 +310,7 @@ async function executeTool(name, input, ctx) {
       return { playlists: (data.playlists || []).map(pl => ({ name: pl.name, trackCount: pl.trackCount })) };
     }
     case 'recommend_tracks': {
-      const tracks = Array.isArray(input?.tracks) ? input.tracks.slice(0, 5) : [];
+      const tracks = Array.isArray(input?.tracks) ? input.tracks.slice(0, 15) : [];
       const clean = tracks
         .filter(t => t && t.recordId && t.title && t.artist)
         .map(t => ({
@@ -488,6 +492,21 @@ async function suggestTitbitsForGaps(gaps, visitorQuestion) {
       console.log(`[maddie-learn] drafted titbit for "${name}" → API_Artist_Bio recordId ${res?.recordId} (Active=0, pending review; ${_suggest.count}/${MAX_SUGGESTIONS_PER_DAY} today)`);
     } catch (err) {
       console.warn(`[maddie-learn] suggestion failed for "${name}":`, err?.message || err);
+      // The demand must never vanish because drafting hiccupped (rate limit,
+      // model error) — record the gap anyway for Ian's inbox.
+      try {
+        await fmCreateRecord('API_Artist_Bio', {
+          Artist_Name: name,
+          Titbits: '',
+          Active: '0',
+          Suggestion_Note: `KNOWLEDGE GAP — visitors asked: "${String(visitorQuestion || '').slice(0, 150)}" (${today}). AI drafting failed (${String(err?.message || err).slice(0, 80)}) — write the Titbits yourself and set Active=1 (or delete).`,
+        });
+        _suggest.count += 1;
+        _suggest.known?.add(key);
+        console.log(`[maddie-learn] GAP record created for "${name}" after drafting failure`);
+      } catch (e2) {
+        console.warn(`[maddie-learn] even the gap record failed for "${name}":`, e2?.message || e2);
+      }
     } finally {
       _suggest.inFlight.delete(key);
     }
@@ -541,13 +560,16 @@ router.post('/chat', async (req, res) => {
     for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
       const response = await anthropic.messages.create({
         model: MADDIE_MODEL,
-        max_tokens: 700,
+        // Enough headroom to write a 15-card recommend_tracks call — 700 was
+        // truncating tool inputs mid-write (cards arrived empty).
+        max_tokens: 4000,
         system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
         tools: WEB_SEARCH_ENABLED() ? [...TOOLS, WEB_SEARCH_TOOL] : TOOLS,
         messages,
         ...(containerId ? { container: containerId } : {}),
       });
       containerId = response.container?.id || containerId;
+      if (response.stop_reason === 'max_tokens') console.warn('[maddie] turn truncated at max_tokens — reply/cards may be incomplete');
 
       if (response.stop_reason === 'refusal') {
         reply = "Let's keep it to the music — what are you in the mood for?";
