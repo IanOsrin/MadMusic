@@ -54,7 +54,7 @@ Tool notes: you have TWO search moves — use both. search_shelves is exact/lexi
 
 NAME LOOKUPS ARE SACRED: when the visitor names an artist or band, your FIRST call is ALWAYS search_shelves with the artist parameter set to that exact name — not q, not feel_search, no rephrasing. Only widen (feel_search, alternate spellings, related searches) AFTER you've seen what the shelves hold under the name they actually said.
 
-WEB SEARCH IS THE LAST RESORT, AND AN HONEST ONE: when the shelves AND the bio cards genuinely miss (after proper digging), you MAY use web_search on the visitor's behalf. Two purposes only: (1) answer their music question honestly, saying CLEARLY that this comes from the wider web, not our shelves ("the shelves don't have this one, but the story goes…"); (2) find a lead — a band name, an alias, a label, a spelling — and bring it BACK to the shelves with search_shelves. NEVER imply we stock music the shelves didn't return, and never wander off music. A visitor leaving informed beats a visitor leaving empty-handed.
+THE WEB IS YOUR BACK ROOM — USE IT: when the shelves AND the bio card both miss on a genuine music question, do NOT stop and shrug — call web_search on the visitor's behalf, EVERY TIME. That call has two jobs: (1) answer their question honestly, clearly flagged as coming from the wider web, not our shelves ("not on our shelves, but the story goes…"); (2) harvest leads — other names they recorded under, their bands, labels, collaborators, alternate spellings — and IMMEDIATELY bring each lead back to search_shelves: obscure artists often hide in this vault under different billings (it has happened that a famous name turned out to be hiding behind a pseudonym on these very shelves). Rules that still hold: never imply we stock music the shelves didn't return; never state web findings as shelf knowledge; stay on music. A visitor leaving informed beats a visitor leaving empty-handed — and a web lead that unlocks the vault beats both.
 
 DIG DEEP — this is a crate-digging shop, not a search box. For any request beyond a simple name lookup, run AT LEAST two searches from different angles (e.g. feel_search on the mood + search_shelves on a genre or artist it surfaces) before you hand anything over. If results feel thin or obvious, search again with different words. Prefer one more search over a guess, and pick your 5 from the RICHEST pool you gathered. similar_albums works when you have an artist+album to seed from. recordIds (and cat where present) must be copied EXACTLY from tool results into recommend_tracks.`;
 
@@ -409,9 +409,9 @@ async function knownBioNames() {
 
 const DRAFTER_PROMPT = `You draft knowledge-base entries ("titbits") about music artists for MAD Music, a South African record shop sitting on the Gallo vault. A human curator reviews every draft before it is published — but write as if no one checks, because one day someone won't.
 
-Write 80–200 words of flowing prose: who the artist is or was, where from, era, genre, band memberships and collaborations, notable works. Include ONLY facts you are highly confident of. If a detail is plausible but uncertain, either omit it or tag it inline with [UNVERIFIED]. Never guess origins, band line-ups or dates.
+RESEARCH FIRST: use web_search to look the artist up (South African music context; try spelling variants). Then write 80–200 words of flowing prose: who the artist is or was, where from, era, genre, band memberships and collaborations, notable works. Include ONLY facts your research or confident knowledge supports. If a detail is plausible but uncertain, omit it or tag it inline with [UNVERIFIED]. Never guess origins, line-ups or dates. Output ONLY the prose entry — no citations, no preamble.
 
-The artist is likely (but not certainly) South African or African; the name may be misspelled or genuinely obscure. If you have no reliable knowledge of this specific artist, reply with exactly NO_RELIABLE_KNOWLEDGE and nothing else.`;
+The artist is likely (but not certainly) South African or African; the name may be misspelled or genuinely obscure. If neither your knowledge nor the web yields anything reliable about this specific artist, reply with exactly NO_RELIABLE_KNOWLEDGE and nothing else.`;
 
 async function suggestTitbitsForGaps(gaps, visitorQuestion) {
   if (!LEARN_ENABLED() || !process.env.ANTHROPIC_API_KEY || !gaps?.length) return;
@@ -430,15 +430,39 @@ async function suggestTitbitsForGaps(gaps, visitorQuestion) {
       if (known.has(key)) continue; // record (or pending suggestion) already exists
 
       const anthropic = new Anthropic();
-      const draft = await anthropic.messages.create({
-        model: MADDIE_MODEL,
-        max_tokens: 500,
-        system: DRAFTER_PROMPT,
-        messages: [{ role: 'user', content: `Artist: "${name}"\nContext — a visitor asked: "${String(visitorQuestion || '').slice(0, 200)}"` }],
-      });
-      const text = (draft.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+      // Mini web-research loop (server-side tool may pause; container id must
+      // thread through, same as the chat loop).
+      const dMessages = [{ role: 'user', content: `Artist: "${name}"\nContext — a visitor asked: "${String(visitorQuestion || '').slice(0, 200)}"` }];
+      let dContainer = null;
+      let text = '';
+      for (let i = 0; i < 4; i++) {
+        const draft = await anthropic.messages.create({
+          model: MADDIE_MODEL,
+          max_tokens: 600,
+          system: DRAFTER_PROMPT,
+          tools: WEB_SEARCH_ENABLED() ? [WEB_SEARCH_TOOL] : [],
+          messages: dMessages,
+          ...(dContainer ? { container: dContainer } : {}),
+        });
+        dContainer = draft.container?.id || dContainer;
+        const t = (draft.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+        if (t) text = t;
+        if (draft.stop_reason === 'pause_turn') { dMessages.push({ role: 'assistant', content: draft.content }); continue; }
+        break;
+      }
       if (!text || text.includes('NO_RELIABLE_KNOWLEDGE') || text.length < 80) {
-        console.log(`[maddie-learn] no reliable knowledge for "${name}" — gap noted, nothing written`);
+        // Still a work item: record the GAP so real visitor demand reaches
+        // Ian's FileMaker inbox even when neither AI nor web could draft.
+        // (Empty Titbits keeps it unservable even if Active were flipped.)
+        await fmCreateRecord('API_Artist_Bio', {
+          Artist_Name: name,
+          Titbits: '',
+          Active: '0',
+          Suggestion_Note: `KNOWLEDGE GAP — visitors asked: "${String(visitorQuestion || '').slice(0, 150)}" (${today}). AI + web research found nothing reliable. Write the Titbits yourself and set Active=1 (or delete).`,
+        });
+        _suggest.count += 1;
+        _suggest.known?.add(key);
+        console.log(`[maddie-learn] no reliable knowledge for "${name}" — GAP record created (Active=0)`);
         continue;
       }
 
@@ -498,6 +522,10 @@ router.post('/chat', async (req, res) => {
     const ctx = { recommended: [], bioMisses: [] };
     const messages = [...history];
     let reply = '';
+    // The _20260209 web tool filters results via a server-side code-execution
+    // container; once one exists, every follow-up request in the turn must
+    // carry its id or the API 400s ("container_id is required…").
+    let containerId = null;
 
     for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
       const response = await anthropic.messages.create({
@@ -506,7 +534,9 @@ router.post('/chat', async (req, res) => {
         system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
         tools: WEB_SEARCH_ENABLED() ? [...TOOLS, WEB_SEARCH_TOOL] : TOOLS,
         messages,
+        ...(containerId ? { container: containerId } : {}),
       });
+      containerId = response.container?.id || containerId;
 
       if (response.stop_reason === 'refusal') {
         reply = "Let's keep it to the music — what are you in the mood for?";
@@ -568,4 +598,4 @@ router.post('/chat', async (req, res) => {
 
 export default router;
 
-export { suggestTitbitsForGaps };
+export { suggestTitbitsForGaps, SYSTEM_PROMPT, TOOLS, WEB_SEARCH_TOOL, executeTool, MADDIE_MODEL };
