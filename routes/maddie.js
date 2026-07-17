@@ -162,9 +162,43 @@ function compactTrack(item) {
 }
 
 async function selfGet(path) {
-  const res = await fetch(`${SELF}${path}`, { headers: { Accept: 'application/json' } });
-  if (!res.ok) return { _httpStatus: res.status };
-  return res.json();
+  // Fail fast (10 s) and LOUD — a silent tool failure surfaces to the visitor
+  // as Maddie apologising about "the shelves", with nothing in the logs.
+  try {
+    const res = await fetch(`${SELF}${path}`, {
+      // x-forwarded-proto satisfies the production force-HTTPS middleware —
+      // without it, loopback self-fetches get 301'd to https://127.0.0.1
+      // (nothing speaks TLS there → ERR_SSL_PACKET_LENGTH_TOO_LONG), which
+      // silently killed EVERY self-fetch tool in prod while feel_search
+      // (in-process) masked it. Reproduced + fixed 2026-07-17.
+      headers: { Accept: 'application/json', 'x-forwarded-proto': 'https' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      console.warn(`[maddie-tools] self-fetch ${path} → HTTP ${res.status}`);
+      return { _httpStatus: res.status };
+    }
+    return res.json();
+  } catch (err) {
+    console.warn(`[maddie-tools] self-fetch ${path} FAILED: ${err?.cause?.code || err?.name || ''} ${err?.message || err}`);
+    throw err;
+  }
+}
+
+/** Boot-time self-diagnostic: exercise the exact internal path the tools use
+ *  and print the verdict to the logs, so a broken loopback/auth/config is
+ *  visible within seconds of deploy instead of surfacing as Maddie apologies. */
+export async function maddieSelfCheck() {
+  for (const p of ['/api/search?artist=Lucky%20Dube&limit=1', '/api/artist-bio?name=Ken%20Espen', '/api/public-playlists']) {
+    const t0 = Date.now();
+    try {
+      const data = await selfGet(p);
+      const note = data?._httpStatus ? `HTTP ${data._httpStatus}` : `ok (${JSON.stringify(data).length} bytes)`;
+      console.log(`[maddie-selfcheck] ${p} → ${note} in ${Date.now() - t0}ms`);
+    } catch (err) {
+      console.error(`[maddie-selfcheck] ${p} → FAILED in ${Date.now() - t0}ms: ${err?.message}`);
+    }
+  }
 }
 
 async function executeTool(name, input, ctx) {
@@ -478,6 +512,7 @@ router.post('/chat', async (req, res) => {
         try {
           result = await executeTool(tu.name, tu.input, ctx);
         } catch (err) {
+          console.warn(`[maddie-tools] ${tu.name}(${JSON.stringify(tu.input).slice(0, 120)}) failed: ${err?.message || err}`);
           result = { error: `tool failed: ${err.message}` };
         }
         results.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(result) });

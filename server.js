@@ -1075,6 +1075,15 @@ if (process.env.PREWARM_CACHES === 'true' && (process.env.WORKER_INDEX || '0') =
       } catch (err) {
         console.warn('[MASS] Maddie shelves pre-warm failed:', err?.message || err);
       }
+      // Self-diagnostic: exercise the exact internal path Maddie's tools use
+      // (loopback self-fetch). Doubles as a pre-warm for the artist-bio and
+      // search caches, and prints a per-endpoint verdict to the logs.
+      try {
+        const { maddieSelfCheck } = await import('./routes/maddie.js');
+        await maddieSelfCheck();
+      } catch (err) {
+        console.warn('[MASS] Maddie self-check failed to run:', err?.message || err);
+      }
     }, 10000);
   }
 } else {
