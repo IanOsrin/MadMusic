@@ -32,15 +32,23 @@ export async function playTrack(track) {
         audioUrl = `/api/preview/${encodeURIComponent(track.recordId)}`;
       } else {
         const mp3Field = getAudioUrl(fields);
+        const isS3 = (u) => /\.s3[.-]/.test(u || '');
+        const isFmUrl = (u) => /RCType=|\/Streaming_SSL\//i.test(u || '');
 
-        if (mp3Field && (mp3Field.startsWith('http') || mp3Field.startsWith('https'))) {
+        if (mp3Field && isS3(mp3Field) && !isFmUrl(mp3Field)) {
+          // S3 URLs are stable and the bucket is public — play DIRECT, no
+          // proxy hop, no resolution round-trip. Nothing plays from FileMaker.
+          audioUrl = mp3Field;
+        } else if (mp3Field && /^https?:/.test(mp3Field) && !isFmUrl(mp3Field)) {
           audioUrl = `/api/container?u=${encodeURIComponent(mp3Field)}`;
         } else {
+          // Missing or session-scoped FM streaming URL → re-resolve by
+          // recordId (PG-mirror-backed server-side).
           try {
             const response = await fetch(`/api/track/${track.recordId}/container`);
             const data = await response.json();
             if (data.url) {
-              audioUrl = `/api/container?u=${encodeURIComponent(data.url)}`;
+              audioUrl = isS3(data.url) ? data.url : `/api/container?u=${encodeURIComponent(data.url)}`;
             }
           } catch (err) {
             console.error('Failed to get audio URL', err);
@@ -161,3 +169,21 @@ export async function sendStreamEvent(eventType) {
         console.warn('[Stream Event] Failed:', err);
       }
     }
+
+
+// ── Buffering feedback (2026-07-18, focus-group finding: long silent waits) ──
+// Surface fetch state on the player modal title so a slow network never looks
+// dead. Class toggles on <body>; CSS lives in css/mobile.css.
+(function wireBuffering() {
+  const audio = elements?.audio || document.getElementById('audio');
+  if (!audio) return;
+  const on = () => document.body.classList.add('audio-buffering');
+  const off = () => document.body.classList.remove('audio-buffering');
+  audio.addEventListener('loadstart', on);
+  audio.addEventListener('waiting', on);
+  audio.addEventListener('stalled', on);
+  audio.addEventListener('playing', off);
+  audio.addEventListener('canplay', off);
+  audio.addEventListener('pause', off);
+  audio.addEventListener('error', off);
+})();

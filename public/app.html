@@ -1672,6 +1672,14 @@
       text-overflow: ellipsis;
       line-height: 1.3;
     }
+    /* Buffering feedback (2026-07-18, focus-group finding: 16 s silent
+       wait): while the audio element is fetching, the bar says so. */
+    #unifiedPlayer.up-buffering #upTitle::after {
+      content: ' · loading…';
+      color: var(--accent, #8b5cf6);
+      animation: upPulse 1s ease-in-out infinite;
+    }
+    @keyframes upPulse { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
     #upArtist {
       font-size: 11px;
       color: #9ca3af;
@@ -3826,6 +3834,23 @@
       return null;
     }
 
+    // Buffering feedback: the audio element tells us when it's fetching vs
+    // playing — surface that on the bar so a slow network never looks dead.
+    (function wireBuffering() {
+      var audio = document.getElementById('player');
+      var bar = document.getElementById('unifiedPlayer');
+      if (!audio || !bar) return;
+      var on  = function () { bar.classList.add('up-buffering'); };
+      var off = function () { bar.classList.remove('up-buffering'); };
+      audio.addEventListener('loadstart', on);
+      audio.addEventListener('waiting', on);
+      audio.addEventListener('stalled', on);
+      audio.addEventListener('playing', off);
+      audio.addEventListener('canplay', off);
+      audio.addEventListener('pause', off);
+      audio.addEventListener('error', off);
+    })();
+
     // ── public API ────────────────────────────────────────────────────────────
     function playTrack(url, meta) {
       if (!url) return Promise.resolve();
@@ -5359,9 +5384,15 @@
       var song = _librarySongs.get(libId);
       if (!song) { console.warn('[Library] Song not found:', libId); return; }
 
-      var audioUrl = '';
+      // S3 URLs are stable — play them DIRECTLY, no resolution round-trip
+      // (nothing ever plays from FileMaker). Re-resolve by recordId ONLY when
+      // the stored URL is missing or is a session-scoped FM streaming URL.
+      var stored = song.S3_URL || song.mp3 || '';
+      var storedIsS3 = /\.s3[.-]/.test(stored);
+      var storedIsFm = /RCType=|\/Streaming_SSL\//i.test(stored);
+      var audioUrl = (storedIsS3 && !storedIsFm) ? stored : '';
       var freshArt = '';
-      if (song.trackRecordId) {
+      if (!audioUrl && song.trackRecordId) {
         try {
           const r = await fetch('/api/track/' + song.trackRecordId + '/container');
           const d = await r.json();
@@ -5369,8 +5400,7 @@
           if (d.artworkUrl) freshArt = d.artworkUrl;
         } catch (e) { console.warn('[Library] container re-resolve failed', e); }
       }
-      // Fallback to stored URL only when no recordId / re-resolve failed
-      if (!audioUrl) audioUrl = song.S3_URL || song.mp3 || '';
+      if (!audioUrl && !storedIsFm) audioUrl = stored;
       if (!audioUrl) { console.warn('[Library] No audio URL for:', song.name); return; }
 
       // Proxy non-S3 HTTPS URLs through the container endpoint (adds auth headers)

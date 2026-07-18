@@ -138,6 +138,22 @@ export async function resolveTrackAudio(recordId, layout = FM_LAYOUT, { requeste
   let record = trackRecordCache.get(cacheKey)
     || trackRecordCache.get(`${FM_LAYOUT}::${recordId}`); // legacy key shape
 
+  // Postgres mirror first (2026-07-18): every track's S3 URL lives in the
+  // mirror's raw fieldData, ~5ms away — FileMaker is the LAST resort, never
+  // the play path. (Mirror only holds the main layout; other layouts still
+  // go to FM.)
+  if (!record && layout === FM_LAYOUT) {
+    try {
+      const { isPgEnabled, query: pgQuery } = await import('../lib/pg.js');
+      if (isPgEnabled()) {
+        const { rows } = await pgQuery('SELECT raw FROM tracks WHERE fm_record_id = $1 LIMIT 1', [String(recordId)]);
+        if (rows?.[0]?.raw) record = { fieldData: rows[0].raw };
+      }
+    } catch (err) {
+      console.warn('[stream] PG resolve failed, falling back to FM:', err?.message);
+    }
+  }
+
   if (!record) {
     record = await fmGetRecordById(layout, recordId);
   }

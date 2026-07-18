@@ -1175,3 +1175,12 @@
       user-select: none;
       -webkit-user-select: none;
     }
+
+/* Buffering feedback (2026-07-18): pulsing "loading…" on the player title
+   while the audio element fetches — a slow network must never look dead. */
+body.audio-buffering #player-title::after {
+  content: ' · loading…';
+  color: var(--g100-gold, #c9a86a);
+  animation: mobPulse 1s ease-in-out infinite;
+}
+@keyframes mobPulse { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
