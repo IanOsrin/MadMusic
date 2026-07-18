@@ -363,13 +363,33 @@ const mb = (fs.statSync(DB_PATH).size / 1024 / 1024).toFixed(1);
 console.log(`[ingest] DONE: ${rows.length} tracks (${toEmbed.length} embedded, ${rows.length - toEmbed.length} reused) → ${DB_PATH} (${mb} MB) in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
 
 // Exceptions report — FM data problems sanitised in the index but worth
-// fixing at the source (aux artifacts live in ~/Downloads by convention).
+// fixing at the source. Written to ~/Downloads on a workstation (Ian's
+// convention), falling back to data/ on headless hosts (the Render cron
+// has no ~/Downloads — writing there killed the 2026-07-17 cron run).
+// A report failure must NEVER fail the build.
 if (exceptions.length) {
-  const dedup = new Map();
-  for (const e of exceptions) dedup.set(`${e.recordId}|${e.kind}`, e);
-  const repPath = path.join(process.env.HOME || '.', 'Downloads', 'madstreamer-index-exceptions.csv');
-  const csv = ['recordId,kind,detail', ...[...dedup.values()].map((e) =>
-    `${e.recordId},${e.kind},"${String(e.detail).replace(/"/g, '""')}"`)].join('\n');
-  fs.writeFileSync(repPath, csv);
-  console.log(`[ingest] ${dedup.size} source-data exceptions → ${repPath}`);
+  try {
+    const dedup = new Map();
+    for (const e of exceptions) dedup.set(`${e.recordId}|${e.kind}`, e);
+    const csv = ['recordId,kind,detail', ...[...dedup.values()].map((e) =>
+      `${e.recordId},${e.kind},"${String(e.detail).replace(/"/g, '""')}"`)].join('\n');
+    const candidates = [
+      path.join(process.env.HOME || '.', 'Downloads'),
+      path.dirname(DB_PATH),
+    ];
+    let written = false;
+    for (const dir of candidates) {
+      try {
+        if (!fs.existsSync(dir)) continue;
+        const repPath = path.join(dir, 'madstreamer-index-exceptions.csv');
+        fs.writeFileSync(repPath, csv);
+        console.log(`[ingest] ${dedup.size} source-data exceptions → ${repPath}`);
+        written = true;
+        break;
+      } catch { /* try the next candidate */ }
+    }
+    if (!written) console.log(`[ingest] ${dedup.size} source-data exceptions (no writable report dir — logging only)`);
+  } catch (err) {
+    console.warn(`[ingest] exceptions report failed (build unaffected): ${err.message}`);
+  }
 }
