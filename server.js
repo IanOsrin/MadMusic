@@ -1039,6 +1039,8 @@ if (process.env.PREWARM_CACHES === 'true' && (process.env.WORKER_INDEX || '0') =
   const { trendingWarmer }          = await import('./routes/catalog/trending.js');
   const { genresWarmer }            = await import('./routes/catalog/genres.js');
   const { publicPlaylistsWarmer }   = await import('./routes/catalog/discovery.js');
+  const { exploreWarmer }           = await import('./routes/catalog/search.js');
+  const { usePostgresMetadata }     = await import('./lib/metadata-source.js');
 
   const workerJitter = Math.floor(Math.random() * 2000); // 0–2s per-worker jitter
 
@@ -1062,7 +1064,21 @@ if (process.env.PREWARM_CACHES === 'true' && (process.env.WORKER_INDEX || '0') =
   prewarm('Global Favorites', featuredWarmers.globalFavorites, 3750);
   prewarm('G100',             featuredWarmers.g100,        4000);
   prewarm('Public Playlists', publicPlaylistsWarmer,       5000);
+  prewarm('Explore decades',  exploreWarmer,               6000);
   prewarm('Genres',           genresWarmer,                8000);
+
+  // The albums home view requests a RANDOM decade per load, so all 8 explore
+  // entries must stay warm — the hour hard-TTL would otherwise evict them on
+  // quiet sites and the next visitor pays the full cold load for the grid.
+  // Re-warm just inside the 10-min soft TTL so entries are always fresh.
+  // Postgres-mode only: with the year index each decade is milliseconds, but
+  // in FileMaker mode this would be 8 recurring FM finds we don't need (the
+  // boot-time warm above still runs everywhere).
+  if (usePostgresMetadata()) {
+    setInterval(() => {
+      exploreWarmer().catch((err) => console.warn('[MASS] Explore re-warm failed:', err?.message || err));
+    }, 9 * 60 * 1000).unref();
+  }
   // Maddie's semantic shelves: download the index + load the embedding model
   // once at boot, off the request path — the first visitor must never pay the
   // cold start (which 502'd at the proxy and, under concurrent retries,

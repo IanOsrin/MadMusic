@@ -397,6 +397,24 @@ const exploreSwr = createSwr({
 });
 registerSwrCache('explore', { cache: exploreCache, ttlMs: EXPLORE_TTL_MS, label: 'explore' });
 
+// Pre-warm every decade the frontend's random-album view can request
+// (loadRandomAlbums picks one of these 8 at random with limit=150 on EVERY
+// page load — a cold decade was an 8-11s wait for the album grid, measured on
+// prod 2026-07-19). Key/params must mirror the /explore handler exactly.
+const EXPLORE_WARM_DECADES = [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020];
+export async function exploreWarmer() {
+  for (const start of EXPLORE_WARM_DECADES) {
+    const end = start + 9;
+    const params = { start, end, limit: 150, offset: 0 };
+    const cacheKey = `explore:v1:${start}:${end}:150:0`;
+    try {
+      await exploreSwr(cacheKey, params);
+    } catch (err) {
+      logExplore.warn(`decade warm ${start}s failed: ${err?.message || err}`);
+    }
+  }
+}
+
 router.get('/explore', async (req, res) => {
   try {
     const start  = Number.parseInt(req.query.start  || '0',    10);

@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { randomInt } from 'node:crypto';
 import { fmPost, fmFindRecords } from '../../fm-client.js';
 import { albumCache, randomSongsPoolCache } from '../../cache.js';
-import { hasValidAudio, hasValidArtwork, resolvePlayableSrc, resolveArtworkSrc } from '../../lib/track.js';
+import { hasValidAudio, hasValidArtwork, resolvePlayableSrc, resolveArtworkSrc, thumbArtworkUrl } from '../../lib/track.js';
 import {
   FM_LAYOUT, FM_PLAYLIST_ART_LAYOUT,
   firstNonEmpty, AUDIO_FIELD_CANDIDATES, ARTWORK_FIELD_CANDIDATES,
@@ -359,10 +359,17 @@ async function loadPlaylistListPayload() {
   const artResult = await playlistArtSwr.get('map').catch(() => ({ value: new Map() }));
   const artMap = artResult.value || new Map();
   const withArt = await Promise.all(
-    rawPlaylists.map(async (pl) => ({
-      ...pl,
-      imageUrl: playlistArtLookup(artMap, pl.name) || await resolvePlaylistImage(pl.name) || null
-    }))
+    rawPlaylists.map(async (pl) => {
+      const masterUrl = playlistArtLookup(artMap, pl.name) || await resolvePlaylistImage(pl.name) || null;
+      // Rail cards need ~300px, but the masters are 2–2.5MB JPEGs (the 14-cover
+      // rail was 31MB per fresh load, measured 2026-07-19). Serve the resized/
+      // derivative; keep the master in imageUrlFull for any hero-size consumer.
+      return {
+        ...pl,
+        imageUrl: process.env.ARTWORK_THUMBS === 'true' ? thumbArtworkUrl(masterUrl, 300) : masterUrl,
+        imageUrlFull: masterUrl
+      };
+    })
   );
   const playlists = PLAYLISTS_REQUIRE_ART ? withArt.filter(pl => pl.imageUrl) : withArt;
   const hidden = withArt.length - playlists.length;

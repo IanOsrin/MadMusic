@@ -77,6 +77,16 @@ CREATE INDEX IF NOT EXISTS tracks_trgm_ref_cat      ON tracks USING gin ((raw->>
 CREATE INDEX IF NOT EXISTS tracks_trgm_year          ON tracks USING gin ((raw->>'Year of Release') gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS tracks_trgm_language_code ON tracks USING gin ((raw->>'Language Code')   gin_trgm_ops);
 
+-- /explore decade browse: pgFind's a..b range emits
+--   (raw->>'Year of Release' ~ '^[0-9]+$' AND (raw->>'Year of Release')::int BETWEEN a AND b)
+-- Without this expression index every cold decade is a full seq scan of the
+-- jsonb table (measured 8-11s per decade on prod, 2026-07-19 — and the albums
+-- home view picks a random decade on every load). The partial predicate matches
+-- the emitted regex guard exactly so the planner can prove the implication.
+CREATE INDEX IF NOT EXISTS tracks_year_int_idx
+  ON tracks (((raw->>'Year of Release')::int))
+  WHERE raw->>'Year of Release' ~ '^[0-9]+$';
+
 -- Public playlists (/public-playlists): per-name track loads run
 -- lower(raw->>'PublicPlaylist') = $name — one query PER playlist per page
 -- load. Unindexed this seq-scans the whole table; ~20 playlists exhausted the
