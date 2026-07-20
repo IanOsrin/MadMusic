@@ -125,7 +125,7 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": [
         "-c",
-        "PORT=3991 NODE_ENV=development METADATA_SOURCE=postgres ARTWORK_THUMBS=true PREWARM_CACHES=true PLAYLIST_ART_ENABLED=true GUEST_PREVIEW_ENABLED=true node server.js"
+        "PORT=3991 NODE_ENV=development METADATA_SOURCE=postgres ARTWORK_THUMBS=true PREWARM_CACHES=true PLAYLIST_ART_ENABLED=true GUEST_PREVIEW_ENABLED=true MADDIE_ENABLED=true node server.js"
       ],
       "port": 3991,
       "autoPort": true
