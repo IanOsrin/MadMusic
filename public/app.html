@@ -23,8 +23,8 @@
        the page must never flash white-with-purple-links. Inline floor styles keep
        a failed render dark, and the onerror retries the sheet once it recovers. -->
   <style>html{background:#0b0b10;color:#e8e8ee}body{background:#0b0b10}a{color:inherit}</style>
-  <link rel="stylesheet" href="/css/app.css?v=10"
-        onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/app.css?v=10&r='+Date.now();},1500)">
+  <link rel="stylesheet" href="/css/app.css?v=11"
+        onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/app.css?v=11&r='+Date.now();},1500)">
 </head>
 <body>
   <!-- Google Tag Manager (noscript) -->
@@ -4510,6 +4510,7 @@
           trackList.innerHTML = album.tracks.map((track, index) => `
             <div class="playlist-track-item album-track-item" data-track-index="${index}" data-audio-url="${track.S3_URL || track.resolvedSrc || track.audioUrl || ''}" data-record-id="${track.recordId || ''}" data-download-price="${track.Download_Price || track.downloadPrice || ''}">
               <span class="playlist-track-number">${index + 1}.</span>
+              <button class="track-play-btn" data-track-index="${index}" title="Play ${(track.name || 'track').replace(/"/g, '&quot;')}" aria-label="Play ${(track.name || 'track').replace(/"/g, '&quot;')}">▶</button>
               <span class="playlist-track-name">${track.name || 'Unknown Track'}</span>
               <span class="playlist-track-duration">${track.duration || ''}</span>
               <div class="playlist-track-actions">
