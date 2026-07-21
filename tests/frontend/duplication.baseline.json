@@ -2,15 +2,15 @@
   "note": "Stable duplication fingerprint of the frontend views. Lower is better. Regenerate with UPDATE_BASELINE=1 npx vitest run tests/frontend/duplication-baseline.test.js",
   "perFile": {
     "app.html": {
-      "totalLines": 7138,
-      "styleBlocks": 4,
-      "cssSignificantLines": 174,
-      "inlineJsSignificantLines": 3582
+      "totalLines": 7537,
+      "styleBlocks": 5,
+      "cssSignificantLines": 182,
+      "inlineJsSignificantLines": 3875
     },
     "mobile.html": {
-      "totalLines": 513,
-      "styleBlocks": 1,
-      "cssSignificantLines": 9,
+      "totalLines": 516,
+      "styleBlocks": 2,
+      "cssSignificantLines": 10,
       "inlineJsSignificantLines": 104
     },
     "audio-lab.html": {
@@ -27,15 +27,22 @@
     }
   },
   "cssDuplication": {
-    "sharedLineKeys": 11,
-    "redundantCopies": 13
+    "sharedLineKeys": 12,
+    "redundantCopies": 14
   },
   "jsDuplication": {
     "sharedLineKeys": 58,
     "redundantCopies": 69
   },
-  "totalRedundantCopies": 82,
+  "totalRedundantCopies": 83,
   "cssExamples": [
+    {
+      "files": [
+        "app.html",
+        "mobile.html"
+      ],
+      "line": "html{background:#0b0b10;color:#e8e8ee}body{background:#0b0b10}a{color:inherit}"
+    },
     {
       "files": [
         "app.html",

@@ -19,7 +19,12 @@
   <link rel="preconnect" href="https://mass-music-audio-files.s3.eu-north-1.amazonaws.com">
   <link rel="dns-prefetch" href="https://mass-music-audio-files.s3.eu-north-1.amazonaws.com">
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/app.css?v=10">
+  <!-- Naked-render guard: if the stylesheet request fails (server mid-restart),
+       the page must never flash white-with-purple-links. Inline floor styles keep
+       a failed render dark, and the onerror retries the sheet once it recovers. -->
+  <style>html{background:#0b0b10;color:#e8e8ee}body{background:#0b0b10}a{color:inherit}</style>
+  <link rel="stylesheet" href="/css/app.css?v=10"
+        onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/app.css?v=10&r='+Date.now();},1500)">
 </head>
 <body>
   <!-- Google Tag Manager (noscript) -->

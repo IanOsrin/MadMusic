@@ -20,7 +20,10 @@
   <link rel="preconnect" href="https://mass-music-audio-files.s3.eu-north-1.amazonaws.com">
   <link rel="dns-prefetch" href="https://mass-music-audio-files.s3.eu-north-1.amazonaws.com">
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/mobile.css?v=2">
+  <!-- Naked-render guard — see app.html: never flash unstyled white mid-restart. -->
+  <style>html{background:#0b0b10;color:#e8e8ee}body{background:#0b0b10}a{color:inherit}</style>
+  <link rel="stylesheet" href="/css/mobile.css?v=2"
+        onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/mobile.css?v=2&r='+Date.now();},1500)">
   <!-- Shared field/format helpers (window.MADHelpers); loaded before body scripts
        so mobile's utilities can delegate to the single canonical source. -->
   <script src="/js/helpers.js?v=1"></script>
