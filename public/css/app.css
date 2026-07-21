@@ -1323,24 +1323,45 @@
       height: 100%;
       border-right: 1px solid var(--border);
       background: var(--card);
-      scrollbar-width: thin;                         /* Firefox: always-visible slim bar */
-      scrollbar-color: rgba(255,255,255,0.28) rgba(255,255,255,0.04);
+      /* Prominent theme-purple scrollbar (2026-07-21) — the column must read
+         as scrollable at a glance. NOTE: scrollbar-color/width live in the
+         Firefox-only block below — in Chrome they'd disable the always-visible
+         ::-webkit-scrollbar styling. */
     }
-    .playlist-albums-list::-webkit-scrollbar {
-      width: 10px;
+    .playlist-albums-list::-webkit-scrollbar,
+    .playlist-page-albums::-webkit-scrollbar,
+    .playlist-album-detail::-webkit-scrollbar,
+    .playlist-page-detail::-webkit-scrollbar {
+      width: 12px;
     }
-    .playlist-albums-list::-webkit-scrollbar-track {
-      background: rgba(255,255,255,0.04);
-    }
-    .playlist-albums-list::-webkit-scrollbar-thumb {
-      background: rgba(255,255,255,0.26);
+    .playlist-albums-list::-webkit-scrollbar-track,
+    .playlist-page-albums::-webkit-scrollbar-track,
+    .playlist-album-detail::-webkit-scrollbar-track,
+    .playlist-page-detail::-webkit-scrollbar-track {
+      background: rgba(139, 92, 246, 0.12);
       border-radius: 6px;
-      border: 2px solid transparent;
-      background-clip: content-box;
     }
-    .playlist-albums-list::-webkit-scrollbar-thumb:hover {
-      background: rgba(255,255,255,0.40);
-      background-clip: content-box;
+    .playlist-albums-list::-webkit-scrollbar-thumb,
+    .playlist-page-albums::-webkit-scrollbar-thumb,
+    .playlist-album-detail::-webkit-scrollbar-thumb,
+    .playlist-page-detail::-webkit-scrollbar-thumb {
+      background: var(--accent, #8b5cf6);
+      border-radius: 6px;
+    }
+    .playlist-albums-list::-webkit-scrollbar-thumb:hover,
+    .playlist-page-albums::-webkit-scrollbar-thumb:hover,
+    .playlist-album-detail::-webkit-scrollbar-thumb:hover,
+    .playlist-page-detail::-webkit-scrollbar-thumb:hover {
+      background: #a78bfa;
+    }
+    @supports (-moz-appearance: none) {
+      .playlist-albums-list,
+      .playlist-page-albums,
+      .playlist-album-detail,
+      .playlist-page-detail {
+        scrollbar-width: auto;
+        scrollbar-color: var(--accent, #8b5cf6) rgba(139, 92, 246, 0.12);
+      }
     }
     /* Sticky count header so the size of the list is obvious */
     .playlist-albums-count {
@@ -1427,13 +1448,8 @@
       overflow-y: auto;
       height: 100%;
     }
-    .playlist-album-detail::-webkit-scrollbar {
-      width: 6px;
-    }
-    .playlist-album-detail::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 3px;
-    }
+    /* (legacy 6px grey scrollbar removed — themed rules live with the
+       .playlist-albums-list scrollbar block) */
     .playlist-detail-header {
       display: flex;
       flex-direction: row;
