@@ -117,7 +117,7 @@ const buildRelaxedQueries = (q) => {
 // failure so the SWR layer does NOT cache it and the route can map the code to
 // the right HTTP status. The returned object is the exact response shape the
 // frontend expects (do not change without checking pagination/genreOffset).
-async function runSearch({ q, artist, album, track, genres, limit, uiOff0, fmOff }) {
+async function runSearch({ q, artist, album, track, genres, yearRange, limit, uiOff0, fmOff }) {
   const fmLimit = Math.min(500, limit * 10);
 
   // One FM _find + the post-filters (genre false-positive prune, audio/artwork
@@ -126,7 +126,14 @@ async function runSearch({ q, artist, album, track, genres, limit, uiOff0, fmOff
   async function fetchFiltered(queries) {
     let rawData, foundCount;
     if (usePostgresMetadata()) {
-      const result = await pgFind(queries, { limit: fmLimit, offset: fmOff });
+      // Decade filter ANDs natively into every OR clause (uses the partial
+      // year expression index). The FM path skips this — 'Year of Release'
+      // may be absent from the layout and would fail the whole _find — and
+      // relies on the uniform post-filter below instead.
+      const pgQueries = yearRange
+        ? queries.map(qo => ({ ...qo, 'Year of Release': `${yearRange.start}..${yearRange.end}` }))
+        : queries;
+      const result = await pgFind(pgQueries, { limit: fmLimit, offset: fmOff });
       rawData = result.data;
       foundCount = result.foundCount;
     } else {
@@ -167,6 +174,15 @@ async function runSearch({ q, artist, album, track, genres, limit, uiOff0, fmOff
       if (rawData.length < before) {
         logSearch.debug(`genre post-filter: FM returned ${before}, kept ${rawData.length} — removed ${before - rawData.length} false positive(s) for genre(s): ${genres.join(', ')}`);
       }
+    }
+
+    // Decade post-filter — the real filter on the FM path, a harmless no-op on
+    // Postgres (records already match the ANDed year range).
+    if (yearRange) {
+      rawData = rawData.filter(r => {
+        const y = Number.parseInt((r.fieldData || {})['Year of Release'], 10);
+        return Number.isFinite(y) && y >= yearRange.start && y <= yearRange.end;
+      });
     }
 
     const validRecords = rawData.filter(r => hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
@@ -274,8 +290,16 @@ router.get('/search', async (req, res) => {
     const uiOff0 = Math.max(0, Number.parseInt(req.query.offset || '0', 10));
     const fmOff = uiOff0 + 1;
 
-    const cacheKey = `search:v2:${q}:${artist}:${album}:${track}:${genres.sort().join('|')}:${limit}:${uiOff0}`;
-    const { value, state } = await searchSwr(cacheKey, { q, artist, album, track, genres, limit, uiOff0, fmOff });
+    // Decade filter — the frontend sends "1980s"-style values from the
+    // #searchDecade dropdown; anything else is ignored (never an error, so a
+    // malformed value degrades to the unfiltered search).
+    const decadeMatch = (req.query.decade || '').toString().trim().match(/^(\d{4})s$/);
+    const yearRange = decadeMatch
+      ? { start: Number.parseInt(decadeMatch[1], 10), end: Number.parseInt(decadeMatch[1], 10) + 9 }
+      : null;
+
+    const cacheKey = `search:v2:${q}:${artist}:${album}:${track}:${genres.sort().join('|')}:${limit}:${uiOff0}` + (yearRange ? `:d${yearRange.start}` : '');
+    const { value, state } = await searchSwr(cacheKey, { q, artist, album, track, genres, yearRange, limit, uiOff0, fmOff });
 
     res.setHeader('X-Cache-State', state);
     res.setHeader('X-Cache-Hit', state === 'fresh' || state === 'stale' ? 'true' : 'false');
@@ -341,13 +365,6 @@ async function tryYearField(field, start, end, limit, offset) {
 }
 
 async function fetchRecordsForYearRange(start, end, limit, offset) {
-  if (usePostgresMetadata()) {
-    const { data } = await pgFind(
-      [{ 'Year of Release': `${start}..${end}` }],
-      { limit: Math.min(500, limit + offset + 1) }
-    );
-    return data;
-  }
   // Fast path — try the cached working field first.
   if (cachedYearField) {
     const result = await tryYearField(cachedYearField, start, end, limit, offset);
@@ -371,9 +388,42 @@ async function fetchRecordsForYearRange(start, end, limit, offset) {
   return [];
 }
 
-async function runExplore({ start, end, limit, offset }) {
-  const rawData = await fetchRecordsForYearRange(start, end, limit, offset);
+async function runExplore({ start, end, limit, offset, genre = '' }) {
+  if (usePostgresMetadata()) {
+    // True offset pagination: fetch `limit` raw rows at `offset` and use the
+    // real match count, so hasMore/nextOffset walk the WHOLE decade (and
+    // decade+genre) pool. The old shape fetched one capped window with no
+    // offset — total maxed out at ~500 raw rows and "load more" dead-ended
+    // after the first page. Genre ANDs natively (trgm index on Local Genre).
+    const query = { 'Year of Release': `${start}..${end}` };
+    if (genre) query['Local Genre'] = `*${genre}*`;
+    const { data, foundCount } = await pgFind(
+      [query],
+      { limit: Math.min(500, limit), offset: offset + 1 } // pgFind offset is FM-style 1-based
+    );
+    const valid = data.filter(r => hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
+    const consumed = offset + data.length;
+    const hasMore = consumed < foundCount;
+    return {
+      items:      valid.map(d => ({ recordId: d.recordId, modId: d.modId, fields: applyArtworkThumbs({ ...(d.fieldData || {}) }, 300) })),
+      total:      foundCount, // raw match count — frontend advances exploreOffset via nextOffset, not this
+      hasMore,
+      nextOffset: hasMore ? consumed : null
+    };
+  }
+
+  // Legacy FileMaker path — single capped fetch, valid-slice pagination.
+  let rawData = await fetchRecordsForYearRange(start, end, limit, offset);
   logExplore.debug(`Total raw records: ${rawData.length}`);
+
+  // Genre post-filter (the year-field candidate probing can't safely AND an
+  // extra field into the FM query). Same contains semantics as /search.
+  if (genre) {
+    const g = genre.toLowerCase();
+    rawData = rawData.filter(r =>
+      GENRE_FIELDS.some(field => (((r.fieldData || {})[field]) || '').toLowerCase().includes(g))
+    );
+  }
 
   const valid = rawData.filter(r => hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
   const total = valid.length;
@@ -427,12 +477,26 @@ router.get('/explore', async (req, res) => {
       return res.status(400).json({ error: 'Invalid start year' });
     }
 
-    const cacheKey = `explore:v1:${start}:${end}:${limit}:${offset}`;
+    // Optional genre filter (decade + genre combined browse). Sanitized like
+    // the /search inputs; an invalid value is a 400, an absent one a plain
+    // decade browse. Key suffix only when present so the exploreWarmer's
+    // pre-warmed no-genre keys keep matching.
+    let genre = '';
+    const genreRaw = (req.query.genre || '').toString().trim();
+    if (genreRaw) {
+      const check = validators.searchQuery(genreRaw);
+      if (!check.valid) {
+        return res.status(400).json({ error: `Invalid genre: ${check.error}` });
+      }
+      genre = check.value;
+    }
+
+    const cacheKey = `explore:v1:${start}:${end}:${limit}:${offset}` + (genre ? `:g:${genre.toLowerCase()}` : '');
     // ?refresh=1 forces a fresh load: drop the cached entry so the SWR getter
     // takes the synchronous miss path instead of serving a stale value.
     if (refresh) exploreCache.delete(cacheKey);
 
-    const { value, state } = await exploreSwr(cacheKey, { start, end, limit, offset });
+    const { value, state } = await exploreSwr(cacheKey, { start, end, limit, offset, genre });
     res.setHeader('X-Cache-State', state);
     res.setHeader('X-Cache-Hit', state === 'fresh' || state === 'stale' ? 'true' : 'false');
     res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');

@@ -859,7 +859,7 @@
             </div>
             <div id="loadMoreContainer" style="text-align: center; padding: 20px;" hidden>
               <button id="loadMoreBtn" class="btn" style="padding: 12px 24px; font-size: 14px;">
-                Next Page →
+                Load More Albums
               </button>
               <div style="margin-top: 8px; color: var(--muted); font-size: 12px;" id="loadMoreInfo"></div>
             </div>
@@ -2215,7 +2215,7 @@
     });
   })();
   </script>
-  <script defer src="/app.min.js?v=104&t=1782800000"></script>
+  <script defer src="/app.min.js?v=106&t=1782800000"></script>
   <script>
   // ── Genre dropdown — populated dynamically from /api/genres ─────────────────
   // The select#searchGenre contains only the "All Genres" placeholder; we fetch
@@ -2551,9 +2551,15 @@
             if (searchAlbumEl) searchAlbumEl.value = '';
             if (searchTrackEl) searchTrackEl.value = '';
             if (searchFieldsEl) searchFieldsEl.hidden = false;
+            const decadeSel = (searchDecadeEl?.value || '').trim().match(/^(\d{4})s$/);
             if (q) {
-              // Text + genre → combined search (text results filtered by genre)
+              // Text + genre → combined search (text results filtered by genre;
+              // doSearch also forwards the decade, which /api/search now honors)
               if (typeof window.run === 'function') window.run(q, { genre: searchGenreEl.value });
+            } else if (decadeSel && typeof window.runExplore === 'function') {
+              // Genre + decade → combined explore. runExplore reads this genre
+              // dropdown itself and sends it to /api/explore alongside the years.
+              window.runExplore(parseInt(decadeSel[1], 10));
             } else if (typeof window.runGenreExplore === 'function') {
               // Genre only → browse-by-genre pagination
               window.runGenreExplore(searchGenreEl.value);
@@ -2561,9 +2567,14 @@
               console.error('[Genre Change] window.runGenreExplore is not a function!');
             }
           } else {
-            // Genre cleared: re-run the text search if there is one, otherwise reset
+            // Genre cleared: re-run the text search if there is one, then fall
+            // back to a plain decade browse if a decade is still selected,
+            // otherwise reset to the featured view.
+            const decadeSel = (searchDecadeEl?.value || '').trim().match(/^(\d{4})s$/);
             if (q) {
               if (typeof window.run === 'function') window.run(q, {});
+            } else if (decadeSel && typeof window.runExplore === 'function') {
+              window.runExplore(parseInt(decadeSel[1], 10));
             } else if (typeof window.clear === 'function') {
               window.clear();
             }
@@ -2571,7 +2582,8 @@
         });
       }
 
-      // Note: decade dropdown is handled by app.min.js (calls runExplore → /api/explore).
+      // Note: decade dropdown is handled by app.min.js (calls runExplore → /api/explore;
+      // since 2026-07-22 runExplore reads #searchGenre too, so decade+genre combine).
       // A listener here used to conflict by routing to /api/search (which ignores decade).
       // Removed — app.min.js owns decade change events.
 
