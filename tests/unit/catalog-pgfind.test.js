@@ -56,6 +56,16 @@ describe('pgFind — FileMaker _find → SQL translation', () => {
     expect(params).toContain('%dube%');
   });
 
+  it('REGRESSION: starred phrase "*Afro Folk*" is ONE whole-phrase contains', async () => {
+    // Genre filters build `*${genre}*` around the WHOLE genre name. This used
+    // to fall through to the prefix fallback, which kept the leading star as a
+    // literal (ILIKE '*Afro Folk%') → zero rows for every multi-word genre.
+    await pgFind([{ 'Local Genre': '*Afro Folk*' }]);
+    const params = lastCall()[1];
+    expect(params).toContain('%Afro Folk%');
+    expect(params.some((p) => typeof p === 'string' && p.startsWith('*'))).toBe(false);
+  });
+
   it('REGRESSION: multi-word begins "phrase*" is ONE whole-prefix, not split', async () => {
     // begins("Soul Brothers") = "Soul Brothers*" — must NOT become %Soul% AND Brothers%
     await pgFind([{ 'Album Artist': 'Soul Brothers*' }]);
