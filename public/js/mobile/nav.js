@@ -29,7 +29,8 @@ export function switchTab(tabName) {
         }
       } else if (tabName === 'g100') {
         if (!state.g100Loaded || wasAlreadyActive) loadG100(wasAlreadyActive);
-        if (!state.g100PlaylistsLoaded) loadG100Playlists();
+      } else if (tabName === 'madabout') {
+        if (!state.g100PlaylistsLoaded || wasAlreadyActive) loadG100Playlists();
       } else if (tabName === 'discover') {
         // Refresh if tapping active tab, genre is selected, or first load
         if (wasAlreadyActive || state.selectedGenre !== 'All' || state.randomTracks.length === 0) {
