@@ -1231,6 +1231,11 @@
         const playlistView = document.getElementById('view-user-playlist');
         if (!playlistView) return;
         playlistView.hidden = false;
+        // Always open a playlist at the top — otherwise the window keeps its
+        // prior scroll (e.g. from clicking a rail low on the page) and the
+        // playlist appears scrolled partway/into the bottom of the track list.
+        window.scrollTo(0, 0);
+        playlistView.scrollTop = 0;
         if (window.MADRouter) window.MADRouter.pushOverlay('user-playlist', playlistId);
 
         // Update nav state
