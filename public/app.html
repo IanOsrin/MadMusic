@@ -549,6 +549,9 @@
               <div id="publicPlaylistHero" class="public-playlist-hero" hidden>
                 <img id="publicPlaylistArt" alt="Playlist artwork" loading="lazy" decoding="async" />
               </div>
+              <!-- Artist biography — populated by loadArtistBio() for MAD-About-<artist>
+                   playlists when a matching bio exists (else stays hidden). -->
+              <div class="artist-bio" id="publicPlaylistBio" hidden></div>
               <ul id="publicPlaylistTracks" class="tracks public-playlist-tracks"></ul>
               <div id="publicPlaylistEmpty" class="playlist-empty" hidden>No tracks in this playlist.</div>
             </section>
@@ -1191,7 +1194,7 @@
               <div class="playlist-page-artwork" style="position:relative;">
                 <img id="userPlaylistArtwork" src="/img/placeholder.jpg" alt="Album artwork">
                 <div id="userPlaylistNowPlayingBadge" hidden
-                     style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.72);color:#fff;font-size:10px;font-weight:700;letter-spacing:0.08em;padding:4px 8px;border-radius:4px;display:flex;align-items:center;gap:5px;">
+                     style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.72);color:#fff;font-size:10px;font-weight:700;letter-spacing:0.08em;padding:4px 8px;border-radius:4px;display:none;align-items:center;gap:5px;">
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                   NOW PLAYING
                 </div>
@@ -1202,6 +1205,9 @@
                 <span id="userPlaylistTrackCount"></span>
               </div>
             </div>
+            <!-- Artist biography — below the now-playing card, for MAD-About-<artist>
+                 pages when a bio matches (loadArtistBio hides it otherwise). -->
+            <div class="artist-bio" id="userPlaylistBio" hidden style="margin:12px 0 0;"></div>
             <div class="playlist-page-tracks" id="userPlaylistTracks">
               <!-- Tracks will be populated here -->
             </div>
@@ -1237,6 +1243,17 @@
         // Update header
         const titleEl = document.getElementById('userPlaylistTitle');
         if (titleEl) titleEl.textContent = playlistName;
+
+        // Artist biography for MAD-About-<artist> playlists — non-blocking, and
+        // only where a bio actually matches (loadArtistBio hides the box otherwise).
+        try {
+          const bioArtist = (typeof window.artistFromMadAbout === 'function') ? window.artistFromMadAbout(playlistName) : '';
+          const bioBox = document.getElementById('userPlaylistBio');
+          if (bioBox) {
+            if (bioArtist && typeof window.loadArtistBio === 'function') window.loadArtistBio(bioArtist, 'userPlaylistBio');
+            else { bioBox.hidden = true; bioBox.innerHTML = ''; }
+          }
+        } catch (e) { /* bio is a nice-to-have; never block the page */ }
 
         // ── Flat sequential track list (no album grouping) ──────────────────
         // Render all tracks in left column, each with its own album thumbnail.
@@ -1274,7 +1291,31 @@
           if (albumTitleEl) albumTitleEl.textContent = track.name   || '';
           if (albumArtistEl) albumArtistEl.textContent = track.artist || '';
           if (trackCountEl) trackCountEl.textContent = track.album  || '';
-          if (badge)  badge.hidden = !isPlaying;
+          // The badge carries an inline display:flex, so [hidden] alone can't
+          // hide it — toggle display directly. Only shown when actually playing.
+          if (badge) { badge.hidden = !isPlaying; badge.style.display = isPlaying ? 'flex' : 'none'; }
+        }
+
+        // Keep the NOW PLAYING badge honest: it reflects the shared player's
+        // real state for the track shown in the detail panel — hides on pause /
+        // end, reappears on resume. (Cleaned up per playlist open.)
+        const _plPlayer = document.getElementById('player');
+        if (_plPlayer && window._playlistBadgeSync) {
+          _plPlayer.removeEventListener('play', window._playlistBadgeSync);
+          _plPlayer.removeEventListener('pause', window._playlistBadgeSync);
+          _plPlayer.removeEventListener('ended', window._playlistBadgeSync);
+        }
+        window._playlistBadgeSync = function () {
+          const b = document.getElementById('userPlaylistNowPlayingBadge');
+          const p = document.getElementById('player');
+          if (!b || !p) return;
+          const on = !p.paused && !p.ended && currentTrackIdx >= 0;
+          b.hidden = !on; b.style.display = on ? 'flex' : 'none';
+        };
+        if (_plPlayer) {
+          _plPlayer.addEventListener('play', window._playlistBadgeSync);
+          _plPlayer.addEventListener('pause', window._playlistBadgeSync);
+          _plPlayer.addEventListener('ended', window._playlistBadgeSync);
         }
 
         // Wire up left-column track items
@@ -1296,7 +1337,7 @@
                     const audioEl = document.getElementById('player');
                     if (audioEl) { audioEl.pause(); audioEl.src = ''; }
                     const badge = document.getElementById('userPlaylistNowPlayingBadge');
-                    if (badge) badge.hidden = true;
+                    if (badge) { badge.hidden = true; badge.style.display = 'none'; }
                   }
                   // Re-index remaining items
                   albumsList.querySelectorAll('.playlist-page-album-item').forEach((el, i) => {
@@ -2215,7 +2256,7 @@
     });
   })();
   </script>
-  <script defer src="/app.min.js?v=106&t=1782800000"></script>
+  <script defer src="/app.min.js?v=107&t=1782800000"></script>
   <script>
   // ── Genre dropdown — populated dynamically from /api/genres ─────────────────
   // The select#searchGenre contains only the "All Genres" placeholder; we fetch
@@ -4168,8 +4209,8 @@
       // Fetch + render the artist biography above the album grid. No-op when the
       // feature is off (window.__ARTIST_BIO === false) or no bio exists — graceful
       // absence. Resets on every open so a stale bio never lingers between artists.
-      async function loadArtistBio(artistName) {
-        const box = document.getElementById('artistBio');
+      async function loadArtistBio(artistName, targetId = 'artistBio') {
+        const box = document.getElementById(targetId);
         if (!box) return;
         box.hidden = true; box.innerHTML = ''; box.classList.remove('expanded');
         if (window.__ARTIST_BIO === false) return;
@@ -4206,6 +4247,14 @@
           });
         } catch (e) { /* silent — no bio is a fine default */ }
       }
+      window.loadArtistBio = loadArtistBio;
+
+      // "MAD-About-Oliver-Mtukudzi" / "MAD About Stimela" → "Oliver Mtukudzi" / "Stimela".
+      // Returns '' for any playlist that isn't a MAD-About-<artist> one.
+      window.artistFromMadAbout = function (name) {
+        const m = String(name || '').match(/^\s*MAD[\s-]*About[\s-]+(.+)$/i);
+        return m ? m[1].replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
+      };
 
       window.showAlbumDetailView = async function(album, relatedAlbums = []) {
         if (window.MADRouter) window.MADRouter.pushOverlay('album', album && album.recordId);

@@ -5,6 +5,13 @@ import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, hasValidAudio
 import { showAlbumTracksModal } from './cards.js';
 import { closeModal, playTrack } from './player.js';
 import { pushOverlay } from './router.js';
+import { loadArtistBioMobile } from './search.js';
+
+// "MAD-About-Oliver-Mtukudzi" → "Oliver Mtukudzi"; '' for non-MAD-About names.
+function artistFromMadAbout(name) {
+  const m = String(name || '').match(/^\s*MAD[\s-]*About[\s-]+(.+)$/i);
+  return m ? m[1].replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
+}
 
 export async function loadG100(forceRefresh = false) {
       const container = elements.g100Content;
@@ -219,6 +226,7 @@ export async function showG100PlaylistTracks(playlistName) {
 
         elements.bottomSheet.innerHTML = `
           <div class="bottom-sheet-header">${escapeHtml(playlistName)}</div>
+          <div class="mobile-artist-bio" hidden></div>
           <p style="text-align:center;color:var(--text-secondary);margin-bottom:16px;">${tracks.length} track${tracks.length !== 1 ? 's' : ''}</p>
           ${tracks.map((t, idx) => {
             const fields = t.fields;
@@ -226,6 +234,12 @@ export async function showG100PlaylistTracks(playlistName) {
           }).join('')}
           <button class="btn btn-secondary" style="width:100%;margin-top:16px;" onclick="closeModal()">Close</button>
         `;
+
+        // Artist biography for MAD-About-<artist> playlists — only where a bio
+        // matches (loadArtistBioMobile leaves the box hidden otherwise).
+        const bioArtist = artistFromMadAbout(playlistName);
+        const bioBox = elements.bottomSheet.querySelector('.mobile-artist-bio');
+        if (bioArtist && bioBox && window.__ARTIST_BIO !== false) loadArtistBioMobile(bioArtist, bioBox);
 
         elements.bottomSheet.querySelectorAll('[data-idx]').forEach(btn => {
           btn.addEventListener('click', () => {

@@ -87,7 +87,7 @@ function maybeShowArtistBio(albums) {
   loadArtistBioMobile(top, box);
 }
 
-async function loadArtistBioMobile(name, box) {
+export async function loadArtistBioMobile(name, box) {
   try {
     const r = await fetch('/api/artist-bio?name=' + encodeURIComponent(name));
     if (!r.ok) return;
