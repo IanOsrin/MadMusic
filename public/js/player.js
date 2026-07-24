@@ -353,6 +353,10 @@
 
         // ── Store track info for stream event reporting ───────────────────────
         currentTrackInfo = { title, artist, album, artworkUrl, recordId: item.recordId, isrc };
+        // Queue ownership: card plays are claimed centrally by the capture
+        // listener in app.html (window.MADQueue) — nothing to do here. Do NOT
+        // write MADQueue in this function: it runs after the claim and would
+        // stomp it.
         updateNowPlayingCard(recordId);
 
         // ── Reset stream tracking state ───────────────────────────────────────
@@ -402,7 +406,7 @@
         // ── Delegate actual playback to _PLAYER (it owns <audio id="player">)
         // Pass recordId so _PLAYER can call massSetCurrentTrack, giving app.min.js's
         // stream-event listeners the correct trackRecordId before play fires.
-        window._PLAYER.playTrack(audioUrl, { title, artist, artUrl: artworkUrl, recordId: item.recordId })
+        window._PLAYER.playTrack(audioUrl, { title, artist, artUrl: artworkUrl, recordId: item.recordId, leadSilence: parseFloat(item.fields?.['AI_LeadSilence']) || 0 })
           .then(() => {
             if (signal.aborted) return;
             console.log(`[PlaySong] ✓ Now playing: ${title} by ${artist}`);
@@ -519,6 +523,21 @@
         else playSong(shuffleQueue[shuffleQueueIdx]);
       }
 
+      // Manual "previous" for the shuffle/radio queue (player-bar ⏮ button).
+      // Before the first track it just restarts the current one.
+      function _shuffleBack() {
+        if (!isShuffleActive) return;
+        if (shuffleQueueIdx > 0) shuffleQueueIdx--;
+        console.log('[Shuffle] Back to track', shuffleQueueIdx + 1, 'of', shuffleQueue.length);
+        if (isDescShuffle) _playDescriptor(shuffleQueue[shuffleQueueIdx]);
+        else playSong(shuffleQueue[shuffleQueueIdx]);
+      }
+
+      // Player-bar ⏭/⏮ during shuffle/radio: the bar checks isShuffleActive
+      // and calls these; card/list surfaces go through window.MADQueue instead.
+      function _barNext() { if (isShuffleActive) _shuffleAdvance(); }
+      function _barPrev() { if (isShuffleActive) _shuffleBack(); }
+
       async function _refillShuffleQueue() {
         const last = shuffleQueue[shuffleQueue.length - 1];
         console.log('[Shuffle] Queue exhausted — asking refill hook for the next set');
@@ -632,7 +651,11 @@
 
       async function _playDescriptor(d) {
         if (!d) return;
+        // Shuffle owns the skip buttons while active; release any playlist-page
+        // queue so it can't hijack them after the shuffle stops.
+        window.MADQueue = null;
         let url = d.url || '';
+        let leadSilence = parseFloat(d.leadSilence) || 0;
         // Resolve a fresh streaming URL by recordId when we don't have one — the
         // stable key is recordId; any stored absolute FM URL may have expired.
         if (!url && d.recordId) {
@@ -640,6 +663,7 @@
             const r = await fetch(`/api/track/${d.recordId}/container`);
             const j = await r.json();
             if (j && j.url) url = j.url;
+            if (j && j.leadSilence) leadSilence = parseFloat(j.leadSilence) || leadSilence;
           } catch (e) { console.warn('[Shuffle] URL resolve failed:', e); }
         }
         // Route non-S3 HTTPS URLs through the proxy (adds auth headers).
@@ -648,7 +672,7 @@
         }
         if (!url) { console.warn('[Shuffle] No URL for track, skipping'); _shuffleAdvance(); return; }
 
-        window._PLAYER.playTrack(url, { title: d.title || 'Unknown Track', artist: d.artist || '', artUrl: d.artUrl || '', recordId: d.recordId || '' });
+        window._PLAYER.playTrack(url, { title: d.title || 'Unknown Track', artist: d.artist || '', artUrl: d.artUrl || '', recordId: d.recordId || '', leadSilence });
         showRingtoneBtn(url, d.title || '', d.artist || '', d.artUrl || '');
 
         // Let the UI follow the music: ask the page to reveal the album now
@@ -764,7 +788,11 @@
     startShuffleFromItems,
     startShuffleTracks,
     stopShufflePlay,
-    isShuffleActive: () => isShuffleActive
+    isShuffleActive: () => isShuffleActive,
+    // Player-bar ⏭/⏮: shuffle/radio queue if active, else advance the grid.
+    // Return true when handled so app.html can fall through to the list player.
+    next: _barNext,
+    prev: _barPrev
   };
 
   // Keep direct window assignments for HTML onclick compatibility

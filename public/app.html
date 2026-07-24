@@ -1381,6 +1381,9 @@
                   const player = document.getElementById('player');
                   if (player) { player.src = src; player.play().catch(() => {}); }
                 }
+                // Claim the player-bar ⏭/⏮ for this playlist (playTrackAtIndex
+                // is hoisted in this scope; it re-registers as it advances).
+                window.MADQueue = { idx: idx, playAt: playTrackAtIndex };
                 renderTrackDetail(idx);
               }
               albumsList.querySelectorAll('.playlist-page-album-item').forEach(a => a.classList.remove('selected'));
@@ -1439,6 +1442,9 @@
             window._PLAYER.playTrack(src, meta);
           }
           currentTrackIdx = idx;
+          // Claim the player-bar ⏭/⏮ for this playlist (see MADQueue in the
+          // unified-player block). Re-registered on every play so idx tracks.
+          window.MADQueue = { idx: idx, playAt: playTrackAtIndex };
           renderTrackDetail(idx);
           // Highlight the active row
           if (albumsList) {
@@ -2261,7 +2267,7 @@
     });
   })();
   </script>
-  <script defer src="/app.min.js?v=107&t=1782800000"></script>
+  <script defer src="/app.min.js?v=111&t=1782800000"></script>
   <script>
   // ── Genre dropdown — populated dynamically from /api/genres ─────────────────
   // The select#searchGenre contains only the "All Genres" placeholder; we fetch
@@ -4066,26 +4072,111 @@
         });
       }
 
-      // Skip prev — restart if past 3 s, otherwise trigger previous row
+      // ═══ window.MADQueue — THE now-playing queue (single authority) ═══════
+      // The app renders playable tracks on five surfaces (home grid, rails,
+      // album tracks modal / songs mode, search-opened album pages, playlist
+      // pages, my-playlists detail). Historically each played in its own
+      // closure with no shared queue, so ⏭/⏮ had nothing to advance — the root
+      // cause of the dead skip buttons. Consolidation rule:
+      //
+      //   EVERY surface CLAIMS window.MADQueue when it starts a track.
+      //   The skip buttons and end-of-track auto-advance read ONLY the queue
+      //   (shuffle/radio, checked first, is the one deliberate exception).
+      //
+      // Queue contract — either shape:
+      //   { idx, playAt(i), autoEnded? }   playAt plays index i and re-registers
+      //   { next(), prev(), autoEnded? }   surface supplies its own steppers
+      // autoEnded: true → when a track ends, the bar advances the queue (for
+      // surfaces without their own ended chain, e.g. album pages).
+      //
+      // Claimants: card surfaces (grid/rails/hero) are claimed centrally by the
+      // capture listener below; album pages + playlist pages register inline
+      // (this file); my-playlists detail registers in catalog.js; album-modal /
+      // songs lists claim in app.min.js handlePlay. A new surface needs exactly
+      // one line: claim the queue when it plays.
+      function _queueAdvance(dir) {
+        var q = window.MADQueue;
+        if (!q) return false;
+        if (dir > 0 && typeof q.next === 'function') { q.next(); return true; }
+        if (dir < 0 && typeof q.prev === 'function') { q.prev(); return true; }
+        if (typeof q.playAt === 'function') { q.playAt(q.idx + dir); return true; }
+        return false;
+      }
+
+      // ── Central claim for CARD surfaces (grid, rails, hero) ──────────────
+      // Cards play via window.playSong(recordId) from many containers with
+      // varying markup (data-record-id, or the id only inside an inline
+      // onclick). One capture-phase listener claims the queue for whichever
+      // container was clicked, so card surfaces never need their own wiring.
+      function _extractPlaySongId(el) {
+        var oc = (el && el.getAttribute && el.getAttribute('onclick')) || '';
+        var m = oc.match(/playSong\(\s*['"]([^'"]+)['"]/);
+        return m ? m[1] : null;
+      }
+      function _cardId(card) {
+        if (!card) return null;
+        var id = (card.getAttribute && card.getAttribute('data-record-id')) || _extractPlaySongId(card);
+        if (id) return id;
+        var inner = card.querySelector && card.querySelector('[data-record-id],[onclick*="playSong"]');
+        if (inner) return (inner.getAttribute('data-record-id')) || _extractPlaySongId(inner);
+        return null;
+      }
+      document.addEventListener('click', function (e) {
+        try {
+          // Ignore non-play affordances (open album, add-to-playlist, save, …)
+          if (e.target.closest('[data-album-view],[data-album-search],.card-album-btn,.card-playlist-btn,.card-library-btn,.track-action-btn,#upSkipNext,#upSkipPrev')) return;
+          // Row surfaces (.playlist-track-item etc.) claim for themselves.
+          if (e.target.closest('.playlist-track-item, li.playlist-track, li.track')) return;
+          var card = e.target.closest('[data-record-id], [onclick*="playSong"]');
+          if (!card) return;
+          var id = _cardId(card);
+          if (!id) return;
+          var item = card.closest('[data-record-id]') || card.closest('.random-card, .trending-card, .highlight-card') || card;
+          var container = item.parentElement;
+          if (!container) return;
+          var ids = [];
+          Array.prototype.forEach.call(container.children, function (ch) { var cid = _cardId(ch); if (cid) ids.push(cid); });
+          ids = ids.filter(function (v, i) { return ids.indexOf(v) === i; });
+          var idx = ids.indexOf(id);
+          if (!ids.length || idx === -1) return;
+          var q = { idx: idx, autoEnded: false };
+          q.playAt = function (i) {
+            if (i < 0 || i >= ids.length) return;
+            q.idx = i;
+            if (typeof window.playSong === 'function') window.playSong(ids[i]);
+          };
+          window.MADQueue = q;
+        } catch (err) { /* never break a click */ }
+      }, true);
+
+      // ── The ONLY skip logic ──────────────────────────────────────────────
       if (skipPrev) {
         skipPrev.addEventListener('click', function () {
-          if (player.currentTime > 3) {
-            player.currentTime = 0;
-          } else {
-            var prev = window.currentRow && window.currentRow.previousElementSibling;
-            if (prev && prev._btn && !prev._btn.disabled) prev._btn.click();
-            else if (player.currentTime > 0) player.currentTime = 0;
-          }
+          // Restart if >3 s in (press again to actually go back a track)
+          if (player.currentTime > 3) { player.currentTime = 0; return; }
+          var MP = window.MADPlayer;
+          if (MP && MP.isShuffleActive && MP.isShuffleActive()) { if (MP.prev) MP.prev(); return; }
+          if (_queueAdvance(-1)) return;
+          if (player.currentTime > 0) player.currentTime = 0;
+        });
+      }
+      if (skipNext) {
+        skipNext.addEventListener('click', function () {
+          var MP = window.MADPlayer;
+          if (MP && MP.isShuffleActive && MP.isShuffleActive()) { if (MP.next) MP.next(); return; }
+          _queueAdvance(1);
         });
       }
 
-      // Skip next — trigger next row's play button
-      if (skipNext) {
-        skipNext.addEventListener('click', function () {
-          var next = window.currentRow && window.currentRow.nextElementSibling;
-          if (next && next._btn && !next._btn.disabled) next._btn.click();
-        });
-      }
+      // ── End-of-track auto-advance for queues that opt in (autoEnded) ─────
+      // Surfaces with their own ended chains (album modal, playlist pages,
+      // shuffle) don't set autoEnded, so this never double-advances.
+      player.addEventListener('ended', function () {
+        var MP = window.MADPlayer;
+        if (MP && MP.isShuffleActive && MP.isShuffleActive()) return;
+        var q = window.MADQueue;
+        if (q && q.autoEnded) _queueAdvance(1);
+      });
 
       // Toggle play / pause
       if (toggle) {
@@ -4632,6 +4723,19 @@
               // Mark as playing
               trackList.querySelectorAll('.playlist-track-item').forEach(t => t.classList.remove('playing'));
               item.classList.add('playing');
+
+              // Claim the unified queue (see MADQueue in the player-bar block):
+              // ⏭/⏮ + end-of-track auto-advance step through this album's rows.
+              // playAt re-clicks row i, which re-runs this handler (fresh URL
+              // resolution) and re-registers with the new index.
+              window.MADQueue = {
+                idx: trackIndex,
+                autoEnded: true,
+                playAt: (i) => {
+                  const rows = trackList.querySelectorAll('.playlist-track-item');
+                  if (rows[i]) rows[i].click();
+                }
+              };
             });
 
             // + Playlist button
@@ -6285,9 +6389,9 @@
 
   <script src="/js/helpers.js?v=1"></script>
   <script src="/js/auth.js?v=2"></script>
-  <script src="/js/player.js?v=1"></script>
+  <script src="/js/player.js?v=5"></script>
   <script src="/js/playlists.js?v=1"></script>
-  <script src="/js/catalog.js?v=1"></script>
+  <script src="/js/catalog.js?v=3"></script>
   <script src="/js/currency.js?v=2"></script>
   <script src="/js/discovery.js?v=5"></script>
 

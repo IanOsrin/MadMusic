@@ -258,6 +258,13 @@
                 });
               }
               player.play().catch(err => console.warn('[Playlist] play error', err));
+              // Claim the player-bar ⏭/⏮ for this list (see MADQueue in
+              // app.html). playAt clicks row i, which re-registers the new idx.
+              window.MADQueue = {
+                idx: trackIndex,
+                autoEnded: true,
+                playAt: (i) => { const r = trackList.querySelectorAll('.playlist-track-item')[i]; if (r) r.click(); }
+              };
             }
           }
           trackList.querySelectorAll('.playlist-track-item').forEach(t => t.classList.remove('playing'));
@@ -341,6 +348,13 @@
                   });
                 }
                 player.play().catch(err => console.warn('[Playlist] play error', err));
+                // Claim the player-bar ⏭/⏮ for this album's list (see MADQueue
+                // in app.html). playAt clicks row i → re-registers the new idx.
+                window.MADQueue = {
+                  idx: trackIndex,
+                  autoEnded: true,
+                  playAt: (i) => { const r = trackList.querySelectorAll('.playlist-track-item')[i]; if (r) r.click(); }
+                };
               }
             }
             trackList.querySelectorAll('.playlist-track-item').forEach(t => t.classList.remove('playing'));
