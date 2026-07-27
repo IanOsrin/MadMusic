@@ -7183,13 +7183,38 @@
   (function () {
     const SCROLL_AMOUNT = 320;
 
+    // Deactivating an arrow while the cursor is still ON it turns it into a
+    // ghost (base state is pointer-events:none) and the user's next click
+    // falls through to the album card underneath — the "last click opens the
+    // last album" bug. So: show immediately, but only HIDE once the pointer
+    // has left the button; until then it stays visible-but-inert (a click on
+    // an at-the-end arrow is a harmless scrollBy no-op).
+    function setArrowVisible(btn, on) {
+      if (!btn) return;
+      if (on) {
+        btn._pendingHide = false;
+        btn.classList.add('visible');
+        return;
+      }
+      if (btn.matches(':hover')) {
+        btn._pendingHide = true;
+        if (!btn._hideOnLeaveArmed) {
+          btn._hideOnLeaveArmed = true;
+          btn.addEventListener('mouseleave', function () {
+            btn._hideOnLeaveArmed = false;
+            if (btn._pendingHide) { btn._pendingHide = false; btn.classList.remove('visible'); }
+          }, { once: true });
+        }
+        return;
+      }
+      btn.classList.remove('visible');
+    }
+
     function updateArrows(container) {
       const wrapper = container.closest('.horizontal-scroll-wrapper');
       if (!wrapper) return;
-      const leftBtn  = wrapper.querySelector('.scroll-arrow-left');
-      const rightBtn = wrapper.querySelector('.scroll-arrow-right');
-      if (leftBtn)  leftBtn.classList.toggle('visible',  container.scrollLeft > 0);
-      if (rightBtn) rightBtn.classList.toggle('visible', container.scrollLeft + container.clientWidth < container.scrollWidth - 1);
+      setArrowVisible(wrapper.querySelector('.scroll-arrow-left'),  container.scrollLeft > 0);
+      setArrowVisible(wrapper.querySelector('.scroll-arrow-right'), container.scrollLeft + container.clientWidth < container.scrollWidth - 1);
     }
 
     // Click delegation — handles all data-target scroll arrows on the page
