@@ -1659,14 +1659,9 @@
     .playlist-track-item.playing {
       background: rgba(139,92,246,0.06);
     }
-    .playlist-track-item.playing .playlist-track-number::after {
-      content: '▶';
-      font-size: 10px;
-      color: var(--accent);
-    }
-    .playlist-track-item.playing .playlist-track-number {
-      font-size: 0; /* hide the digit, show ▶ only */
-    }
+    /* No number→▶ swap here: since 1a3cbc9 every row carries an always-visible
+       .track-play-btn, and the legacy playing-indicator made a second play
+       glyph on the active row. Highlight + accent name mark the playing row. */
     .playlist-track-item.playing .playlist-track-name {
       color: var(--accent);
     }
