@@ -61,6 +61,14 @@ export async function playTrack(track) {
         return;
       }
 
+      // Music gets its OWN S3 origin (path-style URL) so it never queues
+      // behind the artwork burst on the shared per-origin connection limit —
+      // same fix as desktop playTrack ("songs hang", 2026-07-27).
+      audioUrl = audioUrl.replace(
+        /^https:\/\/mass-music-audio-files\.s3\.eu-north-1\.amazonaws\.com\//,
+        'https://s3.eu-north-1.amazonaws.com/mass-music-audio-files/'
+      );
+
       // Play audio. play() rejects on a rapid src switch (AbortError — benign)
       // or a load failure; catch it so it isn't an unhandled rejection. Real
       // load failures still surface via the audio 'error' listener (toast +

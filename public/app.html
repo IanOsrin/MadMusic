@@ -3977,6 +3977,15 @@
         }
         url = '/api/preview/' + encodeURIComponent(_rid);
       }
+      // Music gets its OWN S3 origin (path-style URL). Artwork loads from the
+      // virtual-hosted origin and a fresh page can have 50+ covers in flight —
+      // they occupy all 6 of the browser's per-origin connections and the song
+      // queues behind them ("songs hang", 2026-07-27). A separate origin means
+      // a dedicated connection pool for audio. Same bucket, same object.
+      url = url.replace(
+        /^https:\/\/mass-music-audio-files\.s3\.eu-north-1\.amazonaws\.com\//,
+        'https://s3.eu-north-1.amazonaws.com/mass-music-audio-files/'
+      );
       _meta = meta || {};
       var player = document.getElementById('player');
       if (!player) return Promise.resolve();
