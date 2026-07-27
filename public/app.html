@@ -43,79 +43,91 @@
       }
     })();
   </script>
+  <!-- The access gate. A full-page, on-theme experience (also served standalone
+       at /access) rather than a white dialog. STRUCTURE CONTRACT: every element
+       ID here is wired by auth.js + discovery.js (and the tutorial recording
+       rig) — restyle freely, but do not rename IDs. -->
   <div class="payment-overlay hidden" id="paymentOverlay">
+    <div class="gate-ambient" aria-hidden="true"></div>
     <div class="payment-modal">
       <!-- Guest mode only (display gated on body.guest-mode): lets a visitor
            dismiss the subscribe popup and keep exploring. -->
       <button type="button" class="payment-close" id="paymentOverlayClose" aria-label="Close and keep browsing">&times;</button>
-      <h2>Get Access to MAD Music</h2>
-      <p>Choose a plan to start streaming</p>
+
+      <div class="gate-brand">
+        <img src="/img/Madmusiclogonew-dark.png" alt="MAD — Music Africa Direct">
+      </div>
+      <h2>The vault is open.</h2>
+      <p class="gate-sub">A hundred years of South African music — digitised from the
+      original master tapes. Browsing is free; your first 7 days of full listening are on us.</p>
+
+      <!-- Tabs. These ARE the section toggles discovery.js already wires by ID:
+           #showPurchase reveals purchaseSection, #showTokenInput reveals tokenSection.
+           Active-tab styling is CSS-only via :has() on the section states. -->
+      <div class="gate-tabs" role="tablist">
+        <button type="button" class="gate-tab" id="showPurchase" role="tab">Start listening</button>
+        <button type="button" class="gate-tab" id="showTokenInput" role="tab">I have an access code</button>
+      </div>
 
       <!-- Purchase New Token Section -->
       <div class="payment-plans-section" id="purchaseSection">
-        <div class="payment-plans" id="paymentPlans">
-          <!-- One-time plans loaded here by discovery.js -->
-        </div>
 
-        <div class="payment-divider" style="margin:12px 0;">OR</div>
-
-        <!-- Subscription option -->
-        <div class="subscription-option" id="subscriptionOption">
-          <div class="plan-option" id="subscriptionPlanCard" data-plan-type="subscription" style="cursor:pointer;">
-            <div class="plan-info">
-              <div class="plan-name">Monthly Subscription</div>
-              <div class="plan-duration">Unlimited streaming, renews automatically</div>
-            </div>
-            <div class="plan-price" id="subscriptionPlanPrice">Monthly</div>
-          </div>
-        </div>
-
-        <input
-          type="email"
-          class="payment-email"
-          id="paymentEmail"
-          placeholder="Enter your email address"
-          required
-        >
-
-        <button class="payment-btn" id="paymentSubmit">
-          Continue to Payment
-        </button>
-
-        <div class="payment-divider" style="margin:12px 0;">OR</div>
-
-        <!-- Trial — standalone button, not part of plan selection -->
-        <div id="trialSection">
-          <p style="text-align:center; color:#888; font-size:13px; margin:0 0 8px;">New to MAD Music? Try free for 7 days — no payment required.</p>
-          <button class="payment-btn" id="trialSubmit" style="background:#444;">
+        <!-- Trial-first: the free path is the hero, not a footnote -->
+        <div class="gate-card" id="trialSection">
+          <div class="gate-badge">7 DAYS FREE &middot; NO CARD NEEDED</div>
+          <input
+            type="email"
+            class="payment-email"
+            id="paymentEmail"
+            placeholder="your@email.com"
+            autocomplete="email"
+            required
+          >
+          <button class="payment-btn gate-cta" id="trialSubmit">
             Start 7-Day Free Trial
           </button>
           <div class="payment-error" id="trialError" style="display:none;"></div>
+          <div class="gate-trust">No card. No catch. Your access code arrives by email —
+          it works on up to 3 devices.</div>
         </div>
 
-        <div class="payment-divider">OR</div>
-
-        <div class="toggle-link" id="showTokenInput">
-          Already have a token? Enter it here
+        <!-- Passes — informative, secondary. Same selection logic as before. -->
+        <div class="gate-passes">
+          <div class="gate-passes-label">After your trial — passes from R2.50</div>
+          <div class="payment-plans" id="paymentPlans">
+            <!-- One-time plans loaded here by discovery.js -->
+          </div>
+          <div class="subscription-option" id="subscriptionOption">
+            <div class="plan-option" id="subscriptionPlanCard" data-plan-type="subscription">
+              <div class="plan-info">
+                <div class="plan-name">Monthly Subscription</div>
+                <div class="plan-duration">Renews automatically</div>
+              </div>
+              <div class="plan-price" id="subscriptionPlanPrice">Monthly</div>
+            </div>
+          </div>
+          <button class="payment-btn gate-ghost" id="paymentSubmit">
+            Continue to Payment
+          </button>
+          <div class="gate-note">Passes use the email above &middot; browsing stays free, always</div>
         </div>
       </div>
 
       <!-- Enter Existing Token Section -->
       <div class="token-input-section" id="tokenSection">
-        <input
-          type="text"
-          class="token-input"
-          id="tokenInput"
-          placeholder="Enter your access token"
-          required
-        >
-
-        <button class="payment-btn" id="tokenSubmit">
-          Activate Token
-        </button>
-
-        <div class="toggle-link" id="showPurchase">
-          Don't have a token? Purchase one
+        <div class="gate-card">
+          <div class="gate-badge">WELCOME BACK</div>
+          <input
+            type="text"
+            class="token-input"
+            id="tokenInput"
+            placeholder="Your access code"
+            required
+          >
+          <button class="payment-btn gate-cta" id="tokenSubmit">
+            Activate Token
+          </button>
+          <div class="gate-trust">The code from your email — it works on up to 3 devices.</div>
         </div>
       </div>
 
@@ -125,7 +137,7 @@
            code, which used to orphan the data permanently. -->
       <div class="email-claim-section" id="emailClaimSection" hidden>
         <h3 style="margin:0 0 6px;">One more step</h3>
-        <p style="color:#888;font-size:13px;margin:0 0 14px;line-height:1.45;">
+        <p style="color:rgba(255,255,255,.6);font-size:13px;margin:0 0 14px;line-height:1.45;">
           Your token isn't linked to an email yet. Add one so your playlists and
           saved albums stay with you across devices.
         </p>
@@ -147,7 +159,7 @@
 
         <!-- Step 2: enter the code we sent -->
         <div id="emailClaimStep2" hidden>
-          <p style="color:#aaa;font-size:13px;margin:0 0 10px;">
+          <p style="color:rgba(255,255,255,.65);font-size:13px;margin:0 0 10px;">
             We sent a 6-digit code to <strong id="emailClaimAddress"></strong>.
             Enter it below. The code expires in 10 minutes.
           </p>

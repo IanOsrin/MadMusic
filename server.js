@@ -736,6 +736,7 @@ app.get('/', async (req, res) => {
   sendHtml(res, 'app.html');
 });
 app.get('/modern',   (_req, res) => sendHtml(res, 'app.html'));
+app.get('/access',   (_req, res) => sendHtml(res, 'app.html')); // standalone access page (auth.js keys off the path)
 app.get('/albums',   (_req, res) => sendHtml(res, 'app.html'));
 app.get('/classic',  (_req, res) => sendHtml(res, 'app.html'));
 app.get('/jukebox',  (_req, res) => sendHtml(res, 'app.html'));

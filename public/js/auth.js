@@ -26,6 +26,18 @@
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
+    // ── /access — the standalone access page ─────────────────────────────────
+    // The same gate served as a full-page destination: linkable from emails
+    // and marketing. `/access?token=CODE` prefills the code and validates it
+    // (the Paystack ?payment=success&token= combo is already consumed above,
+    // so a plain token param here is unambiguous).
+    const IS_ACCESS_PAGE = window.location.pathname === '/access';
+    const accessPagePrefill = IS_ACCESS_PAGE ? (_cbp.get('token') || '').trim() : '';
+    if (accessPagePrefill) {
+      // Don't leave the code sitting in the address bar / browser history.
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     // Generate or retrieve unique session ID for this device/browser
     function getSessionId() {
       let sessionId = localStorage.getItem(SESSION_ID_KEY);
@@ -327,6 +339,13 @@
           // it as a normal token session with none of that state.
           if (window.__GUEST) {
             window.location.reload();
+            return true;
+          }
+
+          // On the standalone /access page a successful validation means the
+          // page's job is done — hand over to the app proper.
+          if (IS_ACCESS_PAGE) {
+            window.location.replace('/');
             return true;
           }
 
@@ -658,7 +677,25 @@
 
     // Check for existing token on page load
     const existingToken = loadAccessToken();
-    if (existingToken) {
+    if (IS_ACCESS_PAGE) {
+      // The access page IS the gate — no guest mode, no app boot behind it.
+      if (accessPagePrefill) {
+        // Deep link from the access email: show the code tab filled in and
+        // validate. On success we're a signed-in user — the page's job is done.
+        showTokenOverlay();
+        const purchaseSection = document.getElementById('purchaseSection');
+        const tokenSection = document.getElementById('tokenSection');
+        if (purchaseSection) purchaseSection.classList.add('hidden');
+        if (tokenSection) tokenSection.classList.add('active');
+        if (input) input.value = accessPagePrefill;
+        validateToken(accessPagePrefill); // success redirects home (see validateToken)
+      } else if (existingToken) {
+        // Already signed in — nothing to do here.
+        window.location.replace('/');
+      } else {
+        showTokenOverlay();
+      }
+    } else if (existingToken) {
       console.log('[Access Token] Found existing token, validating...');
       validateTokenAtBoot(existingToken);
     } else if (window.__GUEST_PREVIEW === true) {
