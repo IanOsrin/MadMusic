@@ -1,9 +1,12 @@
 # Artwork resize — one-shot S3 derivative generator
 
-> ⚠️ **Render Cron Job: create exactly ONE, built from `main`.** Do NOT add a
-> second cron from `live` or the maintenance runs twice. The `live` web service
-> never executes these scripts (start = `node cluster.js`), so the files being on
-> both branches is harmless — only a duplicate *Cron Job service* would double-run.
+> ⚠️ **The nightly cron now lives in `render.yaml`** (`madmusic-artwork-resize`,
+> 03:00 UTC, `--since=48`, branch `live` — added 2026-07-27 after a week of new
+> covers shipped with no derivatives). Do NOT create another Cron Job in the
+> dashboard or the maintenance runs twice (idempotent, so duplicate runs waste
+> money rather than corrupt anything). The `live` web service never executes
+> these scripts (start = `node cluster.js`), so the files being on both branches
+> is harmless — only a duplicate *Cron Job service* would double-run.
 
 Your album artwork is stored at the Ingrooves **3000×3000** master spec, but the app
 renders it in ~150px cards and ~600px detail views. That means the home page can ship

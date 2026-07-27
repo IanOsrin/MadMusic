@@ -68,6 +68,32 @@ services:
       - key: AWS_REGION
         value: eu-north-1
 
+  # ── Artwork resize (nightly catch-up) ──────────────────────────────────────
+  # Generates the _300/_800 WebP derivatives for artwork uploaded/replaced in
+  # the last 48h (masters never touched; idempotent — a double-run is harmless).
+  # Without this, new covers 403 in the app until someone runs the script by
+  # hand — that's what broke Paul Ndlovu / Sister H on 2026-07-26. Low
+  # concurrency on purpose: a 3000² JPEG decode is ~36 MB, and this runs on the
+  # starter (512 MB) plan.
+  - type: cron
+    name: madmusic-artwork-resize
+    runtime: node
+    plan: starter
+    region: frankfurt
+    branch: live               # same branch the other crons deploy from
+    schedule: "0 3 * * *"      # 03:00 UTC = 05:00 SAST — after the other jobs
+    buildCommand: cd scripts/artwork-resize && npm install
+    startCommand: cd scripts/artwork-resize && node resize-artwork.mjs --since=48
+    envVars:
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        value: eu-north-1
+      - key: ART_CONCURRENCY
+        value: "2"
+
   # ── Similar-albums index rebuild (Docker — Node + embed model) ─────────────
   # Reads the catalogue (incl. AI_BPM/AI_Key) from Postgres, re-embeds changed
   # tracks (incremental), rebuilds the album index + musical features, and
