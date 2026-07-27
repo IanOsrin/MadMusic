@@ -242,7 +242,7 @@
           const track = tracks[trackIndex];
           if (track && track.audioUrl) {
             let src = track.audioUrl;
-            if (src && /^https?:\/\//i.test(src) && !/\.s3[.-]/.test(src) && !src.includes('/api/container?')) {
+            if (src && /^https?:\/\//i.test(src) && !/\.s3[.-]/.test(src) && !(window.__MEDIA_CDN && src.includes('//' + window.__MEDIA_CDN + '/')) && !src.includes('/api/container?')) {
               src = `/api/container?u=${encodeURIComponent(src)}`;
             }
             const player = document.getElementById('player');

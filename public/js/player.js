@@ -666,8 +666,8 @@
             if (j && j.leadSilence) leadSilence = parseFloat(j.leadSilence) || leadSilence;
           } catch (e) { console.warn('[Shuffle] URL resolve failed:', e); }
         }
-        // Route non-S3 HTTPS URLs through the proxy (adds auth headers).
-        if (url && /^https?:\/\//i.test(url) && !/\.s3[.-]/.test(url) && !url.includes('/api/container?')) {
+        // Route non-S3/non-CDN HTTPS URLs through the proxy (adds auth headers).
+        if (url && /^https?:\/\//i.test(url) && !/\.s3[.-]/.test(url) && !(window.__MEDIA_CDN && url.includes('//' + window.__MEDIA_CDN + '/')) && !url.includes('/api/container?')) {
           url = `/api/container?u=${encodeURIComponent(url)}`;
         }
         if (!url) { console.warn('[Shuffle] No URL for track, skipping'); _shuffleAdvance(); return; }

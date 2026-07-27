@@ -32,7 +32,8 @@ export async function playTrack(track) {
         audioUrl = `/api/preview/${encodeURIComponent(track.recordId)}`;
       } else {
         const mp3Field = getAudioUrl(fields);
-        const isS3 = (u) => /\.s3[.-]/.test(u || '');
+        // "direct-playable": bucket S3 or the media CDN that fronts it
+        const isS3 = (u) => /\.s3[.-]/.test(u || '') || !!(window.__MEDIA_CDN && (u || '').includes('//' + window.__MEDIA_CDN + '/'));
         const isFmUrl = (u) => /RCType=|\/Streaming_SSL\//i.test(u || '');
 
         if (mp3Field && isS3(mp3Field) && !isFmUrl(mp3Field)) {
@@ -61,12 +62,15 @@ export async function playTrack(track) {
         return;
       }
 
-      // Music gets its OWN S3 origin (path-style URL) so it never queues
-      // behind the artwork burst on the shared per-origin connection limit —
-      // same fix as desktop playTrack ("songs hang", 2026-07-27).
+      // Music never plays from the bucket host directly: CDN host when
+      // configured (window.__MEDIA_CDN), else the path-style S3 origin whose
+      // connection pool artwork can't saturate — same rules as desktop
+      // playTrack ("songs hang", 2026-07-27).
       audioUrl = audioUrl.replace(
         /^https:\/\/mass-music-audio-files\.s3\.eu-north-1\.amazonaws\.com\//,
-        'https://s3.eu-north-1.amazonaws.com/mass-music-audio-files/'
+        window.__MEDIA_CDN
+          ? 'https://' + window.__MEDIA_CDN + '/'
+          : 'https://s3.eu-north-1.amazonaws.com/mass-music-audio-files/'
       );
 
       // Play audio. play() rejects on a rapid src switch (AbortError — benign)

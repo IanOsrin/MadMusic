@@ -1375,7 +1375,7 @@
               const track = tracks[idx];
               if (!track) return;
               let src = track.audioUrl || '';
-              if (src && /^https?:\/\//i.test(src) && !/\.s3[.-]/.test(src) && !src.includes('/api/container?')) {
+              if (src && /^https?:\/\//i.test(src) && !/\.s3[.-]/.test(src) && !(window.__MEDIA_CDN && src.includes('//' + window.__MEDIA_CDN + '/')) && !src.includes('/api/container?')) {
                 src = `/api/container?u=${encodeURIComponent(src)}`;
               }
               if (src) {
@@ -1414,7 +1414,7 @@
           const first = tracks[0];
           if (!first || !first.audioUrl) return;
           let src = first.audioUrl;
-          if (/^https?:\/\//i.test(src) && !/\.s3[.-]/.test(src) && !src.includes('/api/container?')) {
+          if (/^https?:\/\//i.test(src) && !/\.s3[.-]/.test(src) && !(window.__MEDIA_CDN && src.includes('//' + window.__MEDIA_CDN + '/')) && !src.includes('/api/container?')) {
             src = '/api/container?u=' + encodeURIComponent(src);
           }
           const audioEl = document.getElementById('player');
@@ -3977,14 +3977,16 @@
         }
         url = '/api/preview/' + encodeURIComponent(_rid);
       }
-      // Music gets its OWN S3 origin (path-style URL). Artwork loads from the
-      // virtual-hosted origin and a fresh page can have 50+ covers in flight —
-      // they occupy all 6 of the browser's per-origin connections and the song
-      // queues behind them ("songs hang", 2026-07-27). A separate origin means
-      // a dedicated connection pool for audio. Same bucket, same object.
+      // Music never plays from the bucket host directly. With a media CDN
+      // configured (window.__MEDIA_CDN) S3 URLs — including stale stored ones —
+      // rewrite onto the CDN edge. Without it, fall back to the path-style S3
+      // origin: a separate hostname whose connection pool artwork can't
+      // saturate ("songs hang", 2026-07-27). Same bucket, same object.
       url = url.replace(
         /^https:\/\/mass-music-audio-files\.s3\.eu-north-1\.amazonaws\.com\//,
-        'https://s3.eu-north-1.amazonaws.com/mass-music-audio-files/'
+        window.__MEDIA_CDN
+          ? 'https://' + window.__MEDIA_CDN + '/'
+          : 'https://s3.eu-north-1.amazonaws.com/mass-music-audio-files/'
       );
       _meta = meta || {};
       var player = document.getElementById('player');

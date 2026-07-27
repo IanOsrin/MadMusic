@@ -30,6 +30,27 @@ function getFieldValue(fields, fieldNames) {
  * @param {Object} fields - The record fields object
  * @returns {string|null} The artwork URL or null if not found
  */
+/**
+ * Media-CDN awareness (MEDIA_CDN_HOST / window.__MEDIA_CDN):
+ *  - isDirectMedia: URL is safe to load straight from the browser (S3 bucket
+ *    or the CloudFront host that fronts it) — never send these through the
+ *    container proxy.
+ *  - toMediaCdn: swap a canonical S3 bucket URL onto the CDN host. Applied at
+ *    the URL-issuing helpers so stale stored S3 URLs (old playlists, caches)
+ *    also benefit. No-op when the CDN flag is off or the URL isn't bucket S3.
+ */
+function isDirectMedia(url) {
+  if (typeof url !== 'string') return false;
+  if (/^https?:\/\/.*\.s3[.-]/.test(url) || /^https?:\/\/s3[.-]/.test(url)) return true;
+  const cdn = typeof window !== 'undefined' && window.__MEDIA_CDN;
+  return !!(cdn && url.indexOf('//' + cdn + '/') !== -1);
+}
+function toMediaCdn(url) {
+  const cdn = typeof window !== 'undefined' && window.__MEDIA_CDN;
+  if (!cdn || typeof url !== 'string') return url;
+  return url.replace(/^https:\/\/mass-music-audio-files\.s3\.eu-north-1\.amazonaws\.com\//, 'https://' + cdn + '/');
+}
+
 function getArtworkUrl(fields) {
   const artworkFields = ['Artwork_S3_URL', 'Tape Files::Artwork_S3_URL', 'Artwork::Picture', 'Artwork Picture', 'Picture'];
   const artwork = getFieldValue(fields, artworkFields);
@@ -38,9 +59,9 @@ function getArtworkUrl(fields) {
   // Handle FileMaker container URLs
   if (typeof artwork === 'string') {
     if (artwork.startsWith('http')) {
-      // Check if it's an S3 URL - return directly without proxying
-      if (/^https?:\/\/.*\.s3[.-]/.test(artwork) || /^https?:\/\/s3[.-]/.test(artwork)) {
-        return artwork;
+      // S3/CDN URLs load directly — never proxied
+      if (isDirectMedia(artwork)) {
+        return toMediaCdn(artwork);
       }
       return `/api/container?u=${encodeURIComponent(artwork)}`;
     }
@@ -64,9 +85,9 @@ function getAudioUrl(fields, recordId) {
   if (!audio) return null;
 
   if (typeof audio === 'string' && audio.startsWith('http')) {
-    // Check if it's an S3 URL - return directly without proxying
-    if (/^https?:\/\/.*\.s3[.-]/.test(audio) || /^https?:\/\/s3[.-]/.test(audio)) {
-      return audio;
+    // S3/CDN URLs load directly — never proxied
+    if (isDirectMedia(audio)) {
+      return toMediaCdn(audio);
     }
     return `/api/container?u=${encodeURIComponent(audio)}`;
   }
@@ -272,6 +293,8 @@ function toMasterArtwork(url) {
 
 // Export to window.MADHelpers namespace
 window.MADHelpers.getFieldValue = getFieldValue;
+window.MADHelpers.isDirectMedia = isDirectMedia;
+window.MADHelpers.toMediaCdn = toMediaCdn;
 window.MADHelpers.getArtworkUrl = getArtworkUrl;
 window.MADHelpers.getAudioUrl = getAudioUrl;
 window.MADHelpers.getTitleField = getTitleField;

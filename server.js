@@ -212,6 +212,13 @@ const GUEST_PREVIEW_ENABLED = process.env.GUEST_PREVIEW_ENABLED === 'true';
 // Maddie — the record-shop assistant chat (prototype). Ships dark; needs
 // ANTHROPIC_API_KEY at runtime (the route degrades to a clear 503 without it).
 const MADDIE_ENABLED = process.env.MADDIE_ENABLED === 'true';
+// CloudFront host for bucket media (e.g. d1abc234.cloudfront.net — host only,
+// no scheme). When set, /api JSON responses and the client playback/artwork
+// paths swap the S3 bucket host for this one, so songs and covers serve from
+// edge locations instead of Stockholm ("songs hang" incident, 2026-07-27).
+// Unset = exact previous behavior; unsetting it again is the instant rollback.
+const MEDIA_CDN_HOST = (process.env.MEDIA_CDN_HOST || '').trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+const S3_MEDIA_HOST = 'mass-music-audio-files.s3.eu-north-1.amazonaws.com';
 
 // ── Catalog metadata source (Postgres mirror migration) ───────────────────────
 // Catalog READS come from either FileMaker (default) or the Postgres mirror of
@@ -374,6 +381,31 @@ function validateAccessTokenDeduped(accessToken, cacheKey) {
   return p;
 }
 
+// ── Media CDN rewrite (MEDIA_CDN_HOST) ────────────────────────────────────────
+// One choke point for every media URL the client ever sees: swap the S3 bucket
+// host for the CloudFront host in /api JSON responses. FM data keeps canonical
+// S3 URLs (system of record untouched); only the wire format changes. Server-
+// side consumers (mp3-preview, streamer sync, resize cron) read the FM values
+// directly and never pass through here.
+if (MEDIA_CDN_HOST) {
+  const S3_HOST_RE = new RegExp(`https://${S3_MEDIA_HOST.replace(/\./g, '\\.')}/`, 'g');
+  const CDN_PREFIX = `https://${MEDIA_CDN_HOST}/`;
+  app.use('/api/', (req, res, next) => {
+    const origJson = res.json.bind(res);
+    res.json = (body) => {
+      try {
+        const s = JSON.stringify(body);
+        if (s && s.includes(S3_MEDIA_HOST)) {
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          return res.send(s.replace(S3_HOST_RE, CDN_PREFIX));
+        }
+      } catch (e) { /* circular/BigInt surprise → fall through to plain json */ }
+      return origJson(body);
+    };
+    next();
+  });
+}
+
 app.use('/api/', async (req, res, next) => {
   const skipPaths = [
     '/access/validate', '/wake', '/container', '/random-songs', '/public-playlists',
@@ -522,6 +554,11 @@ async function loadHtml(filename) {
     + `window.__ARTIST_BIO=${ARTIST_BIO_ENABLED ? 'true' : 'false'};`
     + `window.__GUEST_PREVIEW=${GUEST_PREVIEW_ENABLED ? 'true' : 'false'};`
     + `window.__MADDIE=${MADDIE_ENABLED ? 'true' : 'false'};`
+    //   __MEDIA_CDN — CloudFront host for bucket media (false = serve S3 direct).
+    //   The client treats this host as direct-playable (no container proxy) and
+    //   playTrack/artwork paths rewrite S3 URLs onto it. Set MEDIA_CDN_HOST on
+    //   Render once the distribution is live; unset to roll back instantly.
+    + `window.__MEDIA_CDN=${MEDIA_CDN_HOST ? `'${MEDIA_CDN_HOST}'` : 'false'};`
     + '</script>'
     // Umami visitor analytics (cookieless; deferred so it never blocks boot).
     + (UMAMI_ENABLED
