@@ -751,7 +751,7 @@
                   var title  = field(f, ['Track Name', 'Song Title']) || 'Untitled';
                   var artist = field(f, ['Track Artist', 'Album Artist', 'Artist']) || 'Unknown Artist';
                   return '<div class="random-card mad-single-card" data-record-id="' + esc(it.recordId) + '">' +
-                           '<div class="random-artwork"><img src="' + esc(artUrl(f)) + '" alt="' + esc(title) + '" loading="lazy" onerror="this.src=\'/img/default-album.svg\'"></div>' +
+                           '<div class="random-artwork"><img src="' + esc(artUrl(f)) + '" alt="' + esc(title) + '" loading="lazy" onerror="this.onerror=null;this.src=\'/img/default-album.svg\'"></div>' +
                            '<div class="random-info"><div class="random-title">' + esc(title) + '</div><div class="random-artist">' + esc(artist) + '</div></div>' +
                          '</div>';
                 }).join('');
@@ -1101,7 +1101,7 @@
               const artwork = f['Artwork_S3_URL'] || f['Tape Files::Artwork_S3_URL'] || f['Artwork::Picture'] || '/img/default-album.svg';
               return `
                 <div class="random-card" data-album="${encodeURIComponent(album)}" data-artist="${encodeURIComponent(artist)}" style="cursor:pointer;">
-                  <div class="random-artwork"><img src="${artwork}" alt="${album}" onerror="this.src='/img/default-album.svg'"></div>
+                  <div class="random-artwork"><img src="${artwork}" alt="${album}" onerror="this.onerror=null;this.src='/img/default-album.svg'"></div>
                   <div class="random-info">
                     <div class="random-title">${album}</div>
                     <div class="random-artist">${artist}</div>

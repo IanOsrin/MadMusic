@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">
+  <!-- Fallback album tile: referenced by onerror handlers in app.html.
+       This file 404ing once caused an infinite onerror retry storm
+       (2026-07-28 office incident) — keep it existing. -->
+  <rect width="300" height="300" fill="#1c1c26"/>
+  <circle cx="150" cy="150" r="92" fill="none" stroke="#2e2e3c" stroke-width="10"/>
+  <circle cx="150" cy="150" r="34" fill="#2e2e3c"/>
+  <circle cx="150" cy="150" r="10" fill="#1c1c26"/>
+  <path d="M186 96v72a22 22 0 1 1-8-17V110l-44 10v62a22 22 0 1 1-8-17v-69z" fill="#8b5cf6" opacity="0.85"/>
+</svg>
