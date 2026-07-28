@@ -6,6 +6,7 @@ import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, 
 import { switchTab } from './nav.js';
 import { closeModal, playTrack } from './player.js';
 import { pushOverlay } from './router.js';
+import { createAlbumTile } from './cards.js';
 
 export async function loadPlaylists() {
       try {
@@ -31,35 +32,31 @@ export function renderPlaylists() {
         return;
       }
 
+      // Tile grid — same visual family as New Releases / G100. A playlist's
+      // "cover" is its first track's artwork; empty playlists get the default
+      // album tile.
       elements.playlistsContent.innerHTML = '';
+      const grid = document.createElement('div');
+      grid.className = 'nr-album-grid';
       state.playlists.forEach(playlist => {
-        const trackCount = playlist.tracks?.length || 0;
-        const card = document.createElement('div');
-        card.className = 'track-card';
-        card.style.cursor = 'pointer';
-        card.innerHTML = `
-          <div class="track-info">
-            <div class="track-title">${escapeHtml(playlist.name)}</div>
-            <div class="track-artist">${trackCount} track${trackCount !== 1 ? 's' : ''}</div>
-          </div>
-          <button class="btn-icon play-playlist-btn" title="Play playlist">▶</button>
-        `;
-
-        // Tap card body → show track list
-        card.querySelector('.track-info').addEventListener('click', () => {
-          showPlaylistTracks(playlist);
-        });
-
-        // Tap ▶ → play from first track
-        card.querySelector('.play-playlist-btn').addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (trackCount === 0) { showToast('Playlist is empty', 'error'); return; }
-          state.playlistContext = { tracks: playlist.tracks, currentIndex: 0, playFn: playPlaylistTrack };
-          playPlaylistTrack(playlist.tracks[0]);
-        });
-
-        elements.playlistsContent.appendChild(card);
+        const tracks = playlist.tracks || [];
+        const firstArt = tracks.map(t => t.artworkUrl || t.artwork || getArtworkUrl(t.fields || {})).find(u => u && /^https?:/.test(u));
+        const albumShape = {
+          title: playlist.name,
+          artist: 'My playlist',
+          artwork: firstArt || '/img/default-album.svg',
+          tracks
+        };
+        grid.appendChild(createAlbumTile(albumShape, {
+          onOpen: () => showPlaylistTracks(playlist),
+          onPlay: () => {
+            if (tracks.length === 0) { showToast('Playlist is empty', 'error'); return; }
+            state.playlistContext = { tracks, currentIndex: 0, playFn: playPlaylistTrack };
+            playPlaylistTrack(tracks[0]);
+          }
+        }));
       });
+      elements.playlistsContent.appendChild(grid);
     }
 
 export function showPlaylistTracks(playlist) {

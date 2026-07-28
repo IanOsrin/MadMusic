@@ -2,7 +2,7 @@
 
 import { elements, state } from './state.js';
 import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, hasValidAudio } from './fields.js';
-import { showAlbumTracksModal } from './cards.js';
+import { showAlbumTracksModal, renderAlbumTileGrid } from './cards.js';
 import { closeModal, playTrack } from './player.js';
 import { pushOverlay } from './router.js';
 import { loadArtistBioMobile } from './search.js';
@@ -84,56 +84,12 @@ export function renderG100Albums(filter = '') {
         return;
       }
 
-      const grid = document.createElement('div');
-      grid.className = 'nr-album-grid';
-
-      albums.forEach(album => {
-        const card = document.createElement('div');
-        card.className = 'nr-album-card';
-
-        const trackCount = album.tracks.length;
-        const trackLabel = trackCount === 1 ? 'track' : 'tracks';
-        const playSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
-
-        card.innerHTML = `
-          <img class="nr-album-artwork" src="${escapeHtml(album.artwork)}" alt="${escapeHtml(album.title)}" loading="lazy" onerror="this.src='/img/placeholder.png'">
-          <span class="g100-badge">G100</span>
-          <div class="nr-card-overlay">
-            <div class="nr-overlay-title">${escapeHtml(album.title)}</div>
-            <div class="nr-overlay-artist">${escapeHtml(album.artist)}</div>
-            <div class="nr-overlay-actions">
-              <span class="nr-track-count">${trackCount} ${trackLabel}</span>
-              ${trackCount > 0 ? `<button class="nr-play-btn" style="background:var(--g100-gold);" title="Play">${playSVG}</button>` : ''}
-            </div>
-          </div>
-        `;
-
-        card.addEventListener('click', (e) => {
-          if (e.target.closest('.nr-play-btn')) return;
-          if (!card.classList.contains('overlay-active')) {
-            document.querySelectorAll('.nr-album-card.overlay-active').forEach(c => c.classList.remove('overlay-active'));
-            card.classList.add('overlay-active');
-            e.stopPropagation();
-          } else if (album.tracks.length > 0) {
-            showAlbumTracksModal(album);
-          }
-        });
-
-        const playBtn = card.querySelector('.nr-play-btn');
-        if (playBtn) {
-          playBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            state.playlistContext = { tracks: album.tracks, currentIndex: 0, playFn: playTrack };
-            playTrack(album.tracks[0]);
-            card.classList.remove('overlay-active');
-          });
-        }
-
-        grid.appendChild(card);
-      });
-
       container.innerHTML = '';
-      container.appendChild(grid);
+      renderAlbumTileGrid(container, albums, () => ({
+        badge: 'G100',
+        badgeClass: 'g100-badge',
+        playBtnStyle: 'background:var(--g100-gold);'
+      }));
     }
 
 export async function loadG100Playlists() {

@@ -7,43 +7,91 @@ import { search } from './search.js';
 import { closeModal, playTrack } from './player.js';
 import { pushOverlay } from './router.js';
 
-export function createAlbumCard(album) {
+// ── Shared album tile (the New Releases / G100 look) ─────────────────────────
+// One square-cover tile: first tap reveals the title/artist overlay, second tap
+// opens the tracks modal (or a custom onOpen), the ▶ plays with the album as
+// the queue (or a custom onPlay). Every album surface uses THIS so the app has
+// one visual language — don't hand-roll new card markups.
+let _tileDismissArmed = false;
+function armTileOverlayDismiss() {
+      if (_tileDismissArmed) return;
+      _tileDismissArmed = true;
+      // Dismiss open overlays when tapping OUTSIDE any tile. Must ignore taps
+      // on tiles themselves: this runs in the capture phase (before the tile's
+      // own handler), and the old version stripped overlay-active from the very
+      // card being tapped — which silently broke second-tap-opens-tracks on
+      // New Releases/G100 (every tap registered as a first tap).
+      document.addEventListener('click', (e) => {
+        if (e.target.closest && e.target.closest('.nr-album-card')) return;
+        document.querySelectorAll('.nr-album-card.overlay-active').forEach(c => c.classList.remove('overlay-active'));
+      }, { capture: true });
+    }
+
+export function createAlbumTile(album, opts = {}) {
+      const { badge = '', badgeClass = 'nr-new-badge', playBtnStyle = '', countBadgeKey = null, onOpen = null, onPlay = null } = opts;
+      armTileOverlayDismiss();
+
       const card = document.createElement('div');
-      card.className = 'track-card';
+      card.className = 'nr-album-card';
 
       const trackCount = album.tracks.length;
       const trackLabel = trackCount === 1 ? 'track' : 'tracks';
+      const playSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
 
       card.innerHTML = `
-        <img class="track-artwork" src="${escapeHtml(album.artwork)}" alt="${escapeHtml(album.title)}" loading="lazy" onerror="this.src='/img/placeholder.png'">
-        <div class="track-info">
-          <div class="track-title">${escapeHtml(album.title)}</div>
-          <div class="track-artist">${escapeHtml(album.artist)} • ${trackCount} ${trackLabel}</div>
-        </div>
-        <div class="track-actions">
-          <button class="btn-icon view-btn">📋</button>
-          <button class="btn-icon play-btn">▶</button>
+        <img class="nr-album-artwork" src="${escapeHtml(album.artwork)}" alt="${escapeHtml(album.title)}" loading="lazy" onerror="this.onerror=null;this.src='/img/placeholder.png'">
+        ${badge ? `<span class="${badgeClass}">${escapeHtml(badge)}</span>` : ''}
+        <div class="nr-card-overlay">
+          <div class="nr-overlay-title">${escapeHtml(album.title)}</div>
+          <div class="nr-overlay-artist">${escapeHtml(album.artist)}</div>
+          <div class="nr-overlay-actions">
+            <span class="nr-track-count"${countBadgeKey ? ` data-album-key="${escapeHtml(countBadgeKey)}"` : ''}><span class="nr-count-num">${trackCount}</span> ${trackLabel}</span>
+            ${trackCount > 0 || onPlay ? `<button class="nr-play-btn"${playBtnStyle ? ` style="${playBtnStyle}"` : ''} title="Play">${playSVG}</button>` : ''}
+          </div>
         </div>
       `;
 
-      card.querySelector('.play-btn').addEventListener('click', () => {
-        if (album.tracks.length > 0) {
-          state.playlistContext = { tracks: album.tracks, currentIndex: 0, playFn: playTrack };
-          playTrack(album.tracks[0]);
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.nr-play-btn')) return;
+        if (!card.classList.contains('overlay-active')) {
+          document.querySelectorAll('.nr-album-card.overlay-active').forEach(c => c.classList.remove('overlay-active'));
+          card.classList.add('overlay-active');
+          e.stopPropagation();
+        } else {
+          (onOpen || showAlbumTracksModal)(album);
         }
       });
 
-      card.querySelector('.view-btn').addEventListener('click', () => showAlbumTracksModal(album));
+      const playBtn = card.querySelector('.nr-play-btn');
+      if (playBtn) {
+        playBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (onPlay) onPlay(album);
+          else if (album.tracks.length > 0) {
+            state.playlistContext = { tracks: album.tracks, currentIndex: 0, playFn: playTrack };
+            playTrack(album.tracks[0]);
+          }
+          card.classList.remove('overlay-active');
+        });
+      }
 
-      // The whole card is the tap target — cover, title, anywhere. Search
-      // results looked dead because only the two small buttons had handlers
-      // and every natural tap (on the artwork/name) did nothing.
-      card.addEventListener('click', (e) => {
-        if (e.target.closest('.btn-icon')) return; // buttons keep their own actions
-        showAlbumTracksModal(album);
+      // Artist name in the open overlay → offer "all albums by this artist"
+      // (carried over from the old Discover cards, now on every surface)
+      card.querySelector('.nr-overlay-artist').addEventListener('click', (e) => {
+        if (!album.artist || album.artist === 'My playlist') return;
+        e.stopPropagation();
+        showMobileArtistPrompt(album.artist);
       });
 
       return card;
+    }
+
+export function renderAlbumTileGrid(container, albums, optsFor = () => ({})) {
+      const grid = document.createElement('div');
+      grid.className = 'nr-album-grid';
+      albums.forEach(album => grid.appendChild(createAlbumTile(album, optsFor(album))));
+      container.appendChild(grid);
+      return grid;
     }
 
 export function showAlbumTracksModal(album) {
@@ -140,93 +188,6 @@ async function appendMobileSuggestions(sheet, album) {
     if (rail.isConnected) rail.remove();
   }
 }
-
-export function createDiscoverTrackCard(track, albumCtx) {
-      const card = document.createElement('div');
-      card.className = 'track-card';
-
-      const fields    = track.fields || {};
-      const artwork   = getArtworkUrl(fields);
-      const title     = getTitleField(fields);
-      const artist    = getArtistField(fields);
-      const genre     = getGenreField(fields);
-      // Discover returns one track per album — show placeholder count until prefetch completes
-      const initCount = albumCtx ? albumCtx.tracks.length : 1;
-      const albumKey  = albumCtx
-        ? `${albumCtx.title}|||${albumCtx.artist}`.toLowerCase()
-        : null;
-
-      // Disc SVG (concentric circles — matches desktop card-album-btn)
-      const discSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>`;
-
-      card.innerHTML = `
-        <img class="track-artwork" src="${escapeHtml(artwork)}" alt="${escapeHtml(title)}" loading="lazy" onerror="this.src='/img/placeholder.png'">
-        <div class="track-info">
-          <div class="track-title">${escapeHtml(title)}</div>
-          <div class="track-artist">${escapeHtml(artist)}</div>
-          ${genre ? `<span class="track-genre-tag">${escapeHtml(genre)}</span>` : ''}
-        </div>
-        <div class="track-actions">
-          <button class="album-count-btn" data-album-key="${escapeHtml(albumKey || '')}" title="View full album">${discSVG}<span class="album-badge-count">…</span></button>
-          <button class="btn-icon play-btn" title="Play">▶</button>
-        </div>
-      `;
-
-      // Album badge → fetch full album (or use cache) then open modal
-      card.querySelector('.album-count-btn').addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (!albumCtx) return;
-        const btn = e.currentTarget;
-
-        // Use already-fetched data if available
-        const cached = state.discoverAlbumCache.get(albumKey);
-        if (cached) { showAlbumTracksModal(cached); return; }
-
-        // First tap: fetch now (prefetch may not have reached this one yet)
-        btn.disabled = true;
-        btn.querySelector('.album-badge-count').textContent = '…';
-        try {
-          const params = new URLSearchParams({ title: albumCtx.title, artist: albumCtx.artist });
-          const res  = await fetch(`/api/album?${params}`);
-          const data = await res.json();
-          if (data.ok && data.items?.length) {
-            const fullAlbum = { ...albumCtx, tracks: data.items };
-            state.discoverAlbumCache.set(albumKey, fullAlbum);
-            btn.querySelector('.album-badge-count').textContent = data.items.length;
-            showAlbumTracksModal(fullAlbum);
-          } else {
-            showAlbumTracksModal(albumCtx); // fallback to what we have
-          }
-        } catch {
-          showAlbumTracksModal(albumCtx);
-        } finally {
-          btn.disabled = false;
-        }
-      });
-
-      // Play → set the whole Discover feed as the queue so now-playing prev/next
-      // move through the feed (each card is one album's representative track).
-      card.querySelector('.play-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        const feed = state.discoverFeed || [];
-        const idx = feed.findIndex(t => (t.recordId || t) === (track.recordId || track));
-        state.playlistContext = {
-          tracks: feed.length ? feed : [track],
-          currentIndex: idx >= 0 ? idx : 0,
-          playFn: playTrack
-        };
-        playTrack(track);
-      });
-
-      // Artwork tap → ask if user wants all albums by this artist
-      card.querySelector('.track-artwork').addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (!artist) return;
-        showMobileArtistPrompt(artist);
-      });
-
-      return card;
-    }
 
 export function showMobileArtistPrompt(artistName) {
       document.getElementById('mobileArtistPrompt')?.remove();

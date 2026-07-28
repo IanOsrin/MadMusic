@@ -2,7 +2,7 @@
 
 import { elements, state } from './state.js';
 import { groupTracksByAlbum, hasValidArtwork, hasValidAudio, escapeHtml } from './fields.js';
-import { createAlbumCard } from './cards.js';
+import { renderAlbumTileGrid } from './cards.js';
 
 export async function search(query) {
       try {
@@ -43,13 +43,10 @@ export function renderSearchResults() {
         return;
       }
 
-      // Group search results by album
+      // Group search results by album — rendered as the same tile grid as
+      // New Releases / G100 so every album surface shares one look
       const albums = groupTracksByAlbum(validResults);
-
-      albums.forEach(album => {
-        const card = createAlbumCard(album);
-        elements.searchResults.appendChild(card);
-      });
+      renderAlbumTileGrid(elements.searchResults, albums);
 
       // Artist biography above the albums — shown only when the search clearly
       // resolves to one dominant artist (i.e. an artist search, not a keyword).

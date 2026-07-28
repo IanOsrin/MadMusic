@@ -2,8 +2,7 @@
 
 import { elements, state } from './state.js';
 import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField, hasValidArtwork, hasValidAudio } from './fields.js';
-import { showAlbumTracksModal } from './cards.js';
-import { playTrack } from './player.js';
+import { renderAlbumTileGrid } from './cards.js';
 
 export async function loadNewReleases(forceRefresh = false) {
       const container = elements.newReleasesContent;
@@ -71,63 +70,6 @@ export function renderNewReleases() {
       });
 
       const albums = [...albumMap.values()];
-      const grid = document.createElement('div');
-      grid.className = 'nr-album-grid';
-
-      // Dismiss any open overlay when tapping outside
-      document.addEventListener('click', () => {
-        document.querySelectorAll('.nr-album-card.overlay-active').forEach(c => c.classList.remove('overlay-active'));
-      }, { capture: true, once: false });
-
-      albums.forEach(album => {
-        const card = document.createElement('div');
-        card.className = 'nr-album-card';
-
-        const trackCount = album.tracks.length;
-        const trackLabel = trackCount === 1 ? 'track' : 'tracks';
-        const playSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
-
-        card.innerHTML = `
-          <img class="nr-album-artwork" src="${escapeHtml(album.artwork)}" alt="${escapeHtml(album.title)}" loading="lazy" onerror="this.src='/img/placeholder.png'">
-          <span class="nr-new-badge">NEW</span>
-          <div class="nr-card-overlay">
-            <div class="nr-overlay-title">${escapeHtml(album.title)}</div>
-            <div class="nr-overlay-artist">${escapeHtml(album.artist)}</div>
-            <div class="nr-overlay-actions">
-              <span class="nr-track-count">${trackCount} ${trackLabel}</span>
-              <button class="nr-play-btn" title="Play album">${playSVG}</button>
-            </div>
-          </div>
-        `;
-
-        // First tap → reveal overlay; second tap on overlay → open track modal
-        card.addEventListener('click', (e) => {
-          if (e.target.closest('.nr-play-btn')) return; // handled below
-
-          if (!card.classList.contains('overlay-active')) {
-            // Close any other open overlays first
-            document.querySelectorAll('.nr-album-card.overlay-active').forEach(c => c.classList.remove('overlay-active'));
-            card.classList.add('overlay-active');
-            e.stopPropagation();
-          } else {
-            // Already open — tapping overlay area opens track list
-            showAlbumTracksModal(album);
-          }
-        });
-
-        // Play button → play immediately
-        card.querySelector('.nr-play-btn').addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (album.tracks.length > 0) {
-            state.playlistContext = { tracks: album.tracks, currentIndex: 0, playFn: playTrack };
-            playTrack(album.tracks[0]);
-          }
-          card.classList.remove('overlay-active');
-        });
-
-        grid.appendChild(card);
-      });
-
       container.innerHTML = '';
-      container.appendChild(grid);
+      renderAlbumTileGrid(container, albums, () => ({ badge: 'NEW' }));
     }

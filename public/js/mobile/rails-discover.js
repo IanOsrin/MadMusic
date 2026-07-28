@@ -3,7 +3,8 @@
 import { elements, state } from './state.js';
 import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getGenreField, hasValidArtwork, hasValidAudio } from './fields.js';
 import { search } from './search.js';
-import { createDiscoverTrackCard } from './cards.js';
+import { createAlbumTile, showAlbumTracksModal } from './cards.js';
+import { playTrack } from './player.js';
 
 export async function refreshDiscover() {
       // Clear the album cache so fresh counts are fetched after reload
@@ -146,17 +147,45 @@ export function renderDiscoverTracks() {
         }
       });
 
-      // Render one card per album (limit to 100). The rendered list is the
-      // Discover "feed" — now-playing prev/next navigate it (see play handler).
+      // Render one TILE per album (limit to 100) — same grid as New Releases /
+      // G100. The rendered list is still the Discover "feed": now-playing
+      // prev/next navigate it via the tile's play handler.
       const displayLimit = 100;
       state.discoverFeed = deduped.slice(0, displayLimit);
+      const grid = document.createElement('div');
+      grid.className = 'nr-album-grid';
       state.discoverFeed.forEach(track => {
         const fields = track.fields || {};
         const key = `${getAlbumField(fields)}|||${getAlbumArtist(fields)}`.toLowerCase();
         const albumCtx = albumMap.get(key);
-        const card = createDiscoverTrackCard(track, albumCtx);
-        elements.discoverContent.appendChild(card);
+        grid.appendChild(createAlbumTile(albumCtx, {
+          countBadgeKey: key,
+          // open → full album from cache (prefetch) or a fetch-on-demand,
+          // exactly like the old album-count button
+          onOpen: async () => {
+            const cached = state.discoverAlbumCache.get(key);
+            if (cached) { showAlbumTracksModal(cached); return; }
+            try {
+              const res = await fetch(`/api/album?${new URLSearchParams({ title: albumCtx.title, artist: albumCtx.artist })}`);
+              const data = await res.json();
+              if (data.ok && data.items?.length) {
+                const fullAlbum = { ...albumCtx, tracks: data.items };
+                state.discoverAlbumCache.set(key, fullAlbum);
+                updateDiscoverBadgeCounts(key, data.items.length);
+                showAlbumTracksModal(fullAlbum);
+              } else showAlbumTracksModal(albumCtx);
+            } catch { showAlbumTracksModal(albumCtx); }
+          },
+          // play → the whole feed is the queue (prev/next step through Discover)
+          onPlay: () => {
+            const feed = state.discoverFeed || [];
+            const idx = feed.findIndex(t => (t.recordId || t) === (track.recordId || track));
+            state.playlistContext = { tracks: feed.length ? feed : [track], currentIndex: idx >= 0 ? idx : 0, playFn: playTrack };
+            playTrack(track);
+          }
+        }));
       });
+      elements.discoverContent.appendChild(grid);
 
       console.log('[Render Discover] Rendered', Math.min(displayLimit, deduped.length), 'cards from', filteredTracks.length, 'tracks');
 
@@ -190,6 +219,8 @@ export async function prefetchDiscoverAlbums(albumMap) {
     }
 
 export function updateDiscoverBadgeCounts(albumKey, count) {
-      document.querySelectorAll(`.album-count-btn[data-album-key="${CSS.escape(albumKey)}"] .album-badge-count`)
-        .forEach(el => { el.textContent = count; });
+      document.querySelectorAll(
+        `.album-count-btn[data-album-key="${CSS.escape(albumKey)}"] .album-badge-count, ` +
+        `.nr-track-count[data-album-key="${CSS.escape(albumKey)}"] .nr-count-num`
+      ).forEach(el => { el.textContent = count; });
     }
