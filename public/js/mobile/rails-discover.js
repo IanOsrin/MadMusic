@@ -26,27 +26,23 @@ export async function loadDiscover() {
         let response, data;
 
         if (state.selectedDecade) {
-          // Fetch tracks by decade
+          // Fetch tracks by decade — WITH the genre when one is selected.
+          // /api/explore queries FM server-side for the combination; the old
+          // client-side includes() filter over a 300-track decade sample
+          // missed label variants and niche genres entirely ("decades and
+          // genres do not work well together", 2026-07-28).
           const params = new URLSearchParams({
             start: state.selectedDecade.start,
             end: state.selectedDecade.start + 9,
             limit: 300
           });
-          console.log('[Load Discover] Fetching decade:', state.selectedDecade.label);
+          if (state.selectedGenre !== 'All') params.set('genre', state.selectedGenre);
+          console.log('[Load Discover] Fetching decade:', state.selectedDecade.label,
+            state.selectedGenre !== 'All' ? `+ genre: ${state.selectedGenre}` : '');
           response = await fetch(`/api/explore?${params}`);
           data = await response.json();
-          console.log('[Load Discover] Decade results:', data.total || 0, 'tracks found');
+          console.log('[Load Discover] Results:', (data.items || []).length, 'tracks');
           state.randomTracks = data.items || [];
-
-          // Apply genre filter if selected
-          if (state.selectedGenre !== 'All') {
-            console.log('[Load Discover] Applying genre filter:', state.selectedGenre);
-            state.randomTracks = state.randomTracks.filter(track => {
-              const genre = getGenreField(track.fields);
-              return genre.toLowerCase().includes(state.selectedGenre.toLowerCase());
-            });
-            console.log('[Load Discover] After genre filter:', state.randomTracks.length, 'tracks');
-          }
         } else if (state.selectedGenre !== 'All') {
           // Fetch tracks by genre only (no decade filter)
           console.log('[Load Discover] Fetching genre:', state.selectedGenre);
