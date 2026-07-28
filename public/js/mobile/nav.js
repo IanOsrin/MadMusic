@@ -49,20 +49,42 @@ export function switchTab(tabName) {
       if (!wasAlreadyActive && !isRestoring()) pushTab(tabName);
     }
 
+// Genres come from /api/genres — distinct values scanned from ACTUAL catalogue
+// records — so every button is guaranteed to have music behind it. The static
+// GENRES list is only the instant first paint + offline fallback: it renders
+// immediately, then the live list replaces it as soon as the fetch lands.
+let _liveGenres = null;
+async function fetchLiveGenres() {
+      if (_liveGenres) return _liveGenres;
+      try {
+        const res = await fetch('/api/genres');
+        const data = await res.json();
+        if (Array.isArray(data.genres) && data.genres.length) {
+          _liveGenres = ['All', ...data.genres];
+        }
+      } catch { /* keep fallback */ }
+      return _liveGenres;
+    }
+
 export function renderGenres() {
       const container = document.getElementById('genres-content');
-      container.innerHTML = '';
 
-      GENRES.forEach(genre => {
-        const btn = document.createElement('button');
-        btn.className = 'genre-btn';
-        btn.textContent = genre;
-        if (state.selectedGenre === genre) {
-          btn.classList.add('active');
-        }
-        btn.addEventListener('click', () => selectGenre(genre));
-        container.appendChild(btn);
-      });
+      const paint = (list) => {
+        container.innerHTML = '';
+        list.forEach(genre => {
+          const btn = document.createElement('button');
+          btn.className = 'genre-btn';
+          btn.textContent = genre;
+          if (state.selectedGenre === genre) {
+            btn.classList.add('active');
+          }
+          btn.addEventListener('click', () => selectGenre(genre));
+          container.appendChild(btn);
+        });
+      };
+
+      paint(_liveGenres || GENRES);
+      if (!_liveGenres) fetchLiveGenres().then(live => { if (live) paint(live); });
     }
 
 window.selectGenre = function(genre) {
