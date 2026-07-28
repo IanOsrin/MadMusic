@@ -2898,41 +2898,42 @@
       -webkit-appearance: none;
     }
 
-    /* Filters toggle button (reveals Genre/Decade) */
-    .filters-toggle {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
+    /* Genre / Decades toolbar buttons (native selects styled as pills —
+       replaced the Filters toggle + hidden panel, 2026-07-28). The select
+       shows its active value as the button label; a chosen value lights the
+       pill in the accent colour via :has(). */
+    .toolbar-filter {
+      appearance: none;
+      -webkit-appearance: none;
       height: 37px;
-      padding: 0 0.9rem;
+      padding: 0 1.9rem 0 0.9rem;
       border: 1.5px solid var(--border);
       border-radius: 50px;
-      background: var(--bg-card);
+      background-color: var(--bg-card);
+      background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.8rem center;
       color: var(--text-secondary);
       font-size: 0.8rem;
       font-weight: 600;
       font-family: 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif;
       cursor: pointer;
       white-space: nowrap;
+      max-width: 130px;
+      overflow: hidden;
+      text-overflow: ellipsis;
       transition: border-color 0.15s ease, color 0.15s ease;
     }
-    .filters-toggle:hover { border-color: var(--accent); color: var(--accent); }
-    .filters-toggle[aria-expanded="true"],
-    .filters-toggle.has-active-filter {
+    .toolbar-filter:hover { border-color: var(--accent); color: var(--accent); }
+    .toolbar-filter:has(option:checked:not([value=""])) {
       border-color: var(--accent);
       color: var(--accent);
     }
-
-    /* Filters panel: drops onto its own row inside the flex bar */
-    .filters-panel {
-      flex: 1 1 100%;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-      margin-top: 8px;
+    .toolbar-filter option {
+      background: var(--bg-card, #1c1c26);
+      color: var(--text-primary, #eee);
+      font-weight: 400;
     }
-    .filters-panel[hidden] { display: none; }
 
     /* ── Hero banner (editorial carousel + new-release fallback) ───────────────
        Image discipline per docs/banners.md:
