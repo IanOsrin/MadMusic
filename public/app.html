@@ -735,6 +735,7 @@
                 if (!a) return '/img/default-album.svg';
                 if (a.indexOf('http') === 0) {
                   if (/^https?:\/\/(?:[^/]*\.)?s3[.-]/i.test(a)) return a;
+                  if (window.__MEDIA_CDN && a.includes('//' + window.__MEDIA_CDN + '/')) return a;
                   return '/api/container?u=' + encodeURIComponent(a);
                 }
                 return a;
@@ -1438,7 +1439,7 @@
           const nextTrack = tracks[idx];
           if (!nextTrack) return;
           let src = nextTrack.audioUrl || '';
-          if (src && /^https?:\/\//i.test(src) && !/\.s3[.-]/.test(src) && !src.includes('/api/container?')) {
+          if (src && /^https?:\/\//i.test(src) && !/\.s3[.-]/.test(src) && !(window.__MEDIA_CDN && src.includes('//' + window.__MEDIA_CDN + '/')) && !src.includes('/api/container?')) {
             src = `/api/container?u=${encodeURIComponent(src)}`;
           }
           if (!src) { playTrackAtIndex(idx + 1); return; }
@@ -3603,7 +3604,7 @@
               } catch (e) { console.warn('[PublicPlaylist] container fetch failed', e); }
             }
 
-            if (audioUrl && /^https?:\/\//i.test(audioUrl) && !/\.s3[.-]/.test(audioUrl) && !audioUrl.includes('/api/container?')) {
+            if (audioUrl && /^https?:\/\//i.test(audioUrl) && !/\.s3[.-]/.test(audioUrl) && !(window.__MEDIA_CDN && audioUrl.includes('//' + window.__MEDIA_CDN + '/')) && !audioUrl.includes('/api/container?')) {
               audioUrl = `/api/container?u=${encodeURIComponent(audioUrl)}`;
             }
 
@@ -4724,8 +4725,8 @@
                 }
               }
 
-              // Resolve non-S3 HTTPS URLs through the container proxy (adds auth headers)
-              if (audioUrl && /^https?:\/\//i.test(audioUrl) && !/\.s3[.-]/.test(audioUrl) && !audioUrl.includes('/api/container?')) {
+              // Resolve non-S3/non-CDN HTTPS URLs through the container proxy (adds auth headers)
+              if (audioUrl && /^https?:\/\//i.test(audioUrl) && !/\.s3[.-]/.test(audioUrl) && !(window.__MEDIA_CDN && audioUrl.includes('//' + window.__MEDIA_CDN + '/')) && !audioUrl.includes('/api/container?')) {
                 audioUrl = `/api/container?u=${encodeURIComponent(audioUrl)}`;
               }
 
@@ -5638,8 +5639,8 @@
       if (!audioUrl && !storedIsFm) audioUrl = stored;
       if (!audioUrl) { console.warn('[Library] No audio URL for:', song.name); return; }
 
-      // Proxy non-S3 HTTPS URLs through the container endpoint (adds auth headers)
-      if (/^https?:\/\//i.test(audioUrl) && !/\.s3[.-]/.test(audioUrl) && !audioUrl.includes('/api/container?')) {
+      // Proxy non-S3/non-CDN HTTPS URLs through the container endpoint (adds auth headers)
+      if (/^https?:\/\//i.test(audioUrl) && !/\.s3[.-]/.test(audioUrl) && !(window.__MEDIA_CDN && audioUrl.includes('//' + window.__MEDIA_CDN + '/')) && !audioUrl.includes('/api/container?')) {
         audioUrl = '/api/container?u=' + encodeURIComponent(audioUrl);
       }
 
@@ -6622,6 +6623,7 @@
       a = a.replace('/resized/', '/').replace(/_\d+\.webp(\?.*)?$/i, '.jpg$1');
       if (a.indexOf('http') === 0) {
         if (/^https?:\/\/.*\.s3[.-]/.test(a) || /^https?:\/\/s3[.-]/.test(a)) return a;
+        if (window.__MEDIA_CDN && a.includes('//' + window.__MEDIA_CDN + '/')) return a;
         return '/api/container?u=' + encodeURIComponent(a);
       }
       return a;
