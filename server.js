@@ -270,6 +270,13 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Access-Token', 'X-No-Compression']
 }));
 
+// Cloudflare refuses to cache any response whose Vary header names anything
+// beyond Accept-Encoding (non-Enterprise plans) — and cors() above stamps
+// "Vary: Origin" on EVERYTHING, which silently blocked all edge caching of
+// /img/ assets (cf-cache-status: DYNAMIC, found 2026-07-28). Static images
+// are origin-agnostic; strip the header so the cache-images rule can work.
+app.use('/img', (_req, res, next) => { res.removeHeader('Vary'); next(); });
+
 // Compression
 app.use(compression({
   level: 6,
