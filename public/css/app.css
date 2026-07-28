@@ -2863,9 +2863,9 @@
       position: relative;
       display: flex;
       align-items: center;
-      flex: 1 1 320px;
+      flex: 1 1 280px;
       min-width: 180px;
-      max-width: 520px;
+      max-width: 420px; /* trimmed so the Genre/Decades pills get room to breathe */
     }
     .unified-search__icon {
       position: absolute;
@@ -2902,34 +2902,51 @@
        replaced the Filters toggle + hidden panel, 2026-07-28). The select
        shows its active value as the button label; a chosen value lights the
        pill in the accent colour via :has(). */
-    .toolbar-filter {
+    .searchbar select.toolbar-filter {
       appearance: none;
       -webkit-appearance: none;
       height: 37px;
-      padding: 0 1.9rem 0 0.9rem;
-      border: 1.5px solid var(--border);
-      border-radius: 50px;
-      background-color: var(--bg-card);
-      background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 0.8rem center;
-      color: var(--text-secondary);
+      padding: 0 1.9rem 0 1rem;
+      border: none;
+      border-radius: 7px;
+      background-color: transparent;
+      background-image:
+        url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23ffffff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"),
+        linear-gradient(135deg, var(--btn-gradient-start), var(--btn-gradient-end));
+      background-repeat: no-repeat, no-repeat;
+      background-position: right 0.8rem center, center;
+      background-size: 10px 6px, cover;
+      color: var(--btn-text);
+      box-shadow: 0 6px 18px var(--btn-shadow);
       font-size: 0.8rem;
       font-weight: 600;
       font-family: 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif;
       cursor: pointer;
       white-space: nowrap;
-      max-width: 130px;
+      max-width: 140px;
       overflow: hidden;
       text-overflow: ellipsis;
-      transition: border-color 0.15s ease, color 0.15s ease;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
-    .toolbar-filter:hover { border-color: var(--accent); color: var(--accent); }
-    .toolbar-filter:has(option:checked:not([value=""])) {
-      border-color: var(--accent);
+    /* Breathing room between Search and the two browse buttons */
+    #searchGenre { margin-left: 14px; }
+    .searchbar select.toolbar-filter:hover {
+      background-image:
+        url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238b5cf6' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"),
+        linear-gradient(#ffffff, #ffffff);
       color: var(--accent);
+      box-shadow: none;
     }
-    .toolbar-filter option {
+    /* An active value: white-filled pill with accent text, so the chosen
+       genre/decade reads as a pressed state among the purple pills */
+    .searchbar select.toolbar-filter:has(option:checked:not([value=""])) {
+      background-image:
+        url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238b5cf6' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"),
+        linear-gradient(#ffffff, #ffffff);
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .searchbar select.toolbar-filter option {
       background: var(--bg-card, #1c1c26);
       color: var(--text-primary, #eee);
       font-weight: 400;
