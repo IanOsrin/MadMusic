@@ -35,6 +35,14 @@ export function createAlbumCard(album) {
 
       card.querySelector('.view-btn').addEventListener('click', () => showAlbumTracksModal(album));
 
+      // The whole card is the tap target — cover, title, anywhere. Search
+      // results looked dead because only the two small buttons had handlers
+      // and every natural tap (on the artwork/name) did nothing.
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.btn-icon')) return; // buttons keep their own actions
+        showAlbumTracksModal(album);
+      });
+
       return card;
     }
 
