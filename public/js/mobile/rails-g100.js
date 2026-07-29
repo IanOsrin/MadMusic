@@ -200,7 +200,7 @@ export async function showG100PlaylistTracks(playlistName) {
         elements.bottomSheet.querySelectorAll('[data-idx]').forEach(btn => {
           btn.addEventListener('click', () => {
             const idx = parseInt(btn.dataset.idx);
-            state.playlistContext = { tracks, currentIndex: idx, playFn: playTrack };
+            state.playlistContext = { tracks, currentIndex: idx, name: playlistName, playFn: playTrack };
             playTrack(tracks[idx]);
             closeModal();
           });

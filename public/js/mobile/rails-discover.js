@@ -4,7 +4,7 @@ import { elements, state } from './state.js';
 import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getGenreField, hasValidArtwork, hasValidAudio } from './fields.js';
 import { search } from './search.js';
 import { createAlbumTile, showAlbumTracksModal } from './cards.js';
-import { playTrack } from './player.js';
+import { playTrack, renderPlayerQueue } from './player.js';
 
 export async function refreshDiscover() {
       // Clear the album cache so fresh counts are fetched after reload
@@ -12,13 +12,15 @@ export async function refreshDiscover() {
       const btn = document.getElementById('discover-refresh-btn');
       if (btn) btn.classList.add('spinning');
       try {
-        await loadDiscover();
+        // fresh=true → the server rotates its random pool instead of
+        // reshuffling the same cached 600-track window
+        await loadDiscover(true);
       } finally {
         if (btn) btn.classList.remove('spinning');
       }
     }
 
-export async function loadDiscover() {
+export async function loadDiscover(fresh = false) {
       // Show loading indicator
       elements.discoverContent.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>Loading tracks...</p></div>';
 
@@ -59,7 +61,7 @@ export async function loadDiscover() {
           state.randomTracks = items;
         } else {
           // Fetch random tracks (no filters)
-          response = await fetch('/api/random-songs?count=50');
+          response = await fetch(`/api/random-songs?count=50${fresh ? '&fresh=1' : ''}`);
           data = await response.json();
           state.randomTracks = data.items || [];
         }
@@ -172,12 +174,30 @@ export function renderDiscoverTracks() {
               } else showAlbumTracksModal(albumCtx);
             } catch { showAlbumTracksModal(albumCtx); }
           },
-          // play → the whole feed is the queue (prev/next step through Discover)
-          onPlay: () => {
-            const feed = state.discoverFeed || [];
-            const idx = feed.findIndex(t => (t.recordId || t) === (track.recordId || track));
-            state.playlistContext = { tracks: feed.length ? feed : [track], currentIndex: idx >= 0 ? idx : 0, playFn: playTrack };
+          // play → the ALBUM is the queue (was the whole Discover feed, which
+          // made next/prev wander across albums — Ian, 2026-07-29). Play the
+          // tapped track immediately, then swap in the full album context once
+          // it's resolved (cache or fetch) so skips stay inside the record.
+          onPlay: async () => {
+            state.playlistContext = { tracks: [track], currentIndex: 0, name: albumCtx.title, playFn: playTrack };
             playTrack(track);
+            let album = state.discoverAlbumCache.get(key);
+            if (!album) {
+              try {
+                const res = await fetch(`/api/album?${new URLSearchParams({ title: albumCtx.title, artist: albumCtx.artist })}`);
+                const data = await res.json();
+                if (data.ok && data.items?.length) {
+                  album = { ...albumCtx, tracks: data.items };
+                  state.discoverAlbumCache.set(key, album);
+                  updateDiscoverBadgeCounts(key, data.items.length);
+                }
+              } catch { /* keep the single-track context */ }
+            }
+            const tracks = album?.tracks;
+            if (!tracks || !tracks.length) return;
+            const idx = tracks.findIndex(t => t.recordId === track.recordId);
+            state.playlistContext = { tracks, currentIndex: idx >= 0 ? idx : 0, name: albumCtx.title, playFn: playTrack };
+            renderPlayerQueue();
           }
         }));
       });

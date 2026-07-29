@@ -14,9 +14,10 @@ import { createPlaylist, loadPlaylists, showAddToPlaylistModal } from './playlis
 import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js';
 import { filterG100Albums, loadG100 } from './rails-g100.js';
 import { loadNewReleases } from './rails-newreleases.js';
-import { closeModal, playTrack, sendStreamEvent, updatePlayerModal, updateProgress } from './player.js';
+import { closeModal, playTrack, sendStreamEvent, stepQueue, updatePlayerModal, updateProgress } from './player.js';
 import { showAlbumTracksModal } from './cards.js';
 import { initRouter } from './router.js';
+import { initMaddie } from './maddie.js';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {
@@ -186,86 +187,25 @@ import { initRouter } from './router.js';
     // Set an artwork <img> src with a placeholder fallback if it fails to load
     // (e.g. a track with no real cover — a malformed/empty S3 artwork URL).
 
-    // Floating player drag functionality
-    let isDragging = false;
-    let dragStartX = 0;
-    let dragStartY = 0;
-    let dragStartTime = 0;
-
-    elements.floatingPlayer.addEventListener('touchstart', (e) => {
-      isDragging = false;
-      const touch = e.touches[0];
-      dragStartX = touch.clientX;
-      dragStartY = touch.clientY;
-      dragStartTime = Date.now();
-      elements.floatingPlayer.style.transition = 'none';
-    });
-
-    elements.floatingPlayer.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      const touch = e.touches[0];
-      const deltaX = Math.abs(touch.clientX - dragStartX);
-      const deltaY = Math.abs(touch.clientY - dragStartY);
-
-      // If moved more than 10px, it's a drag
-      if (deltaX > 10 || deltaY > 10) {
-        isDragging = true;
-      }
-
-      if (isDragging) {
-        const newX = touch.clientX - 30; // Center of bubble
-        const newY = touch.clientY - 30;
-
-        // Constrain to viewport
-        const maxX = window.innerWidth - 60;
-        const maxY = window.innerHeight - 60 - 64; // Minus tab bar
-
-        const constrainedX = Math.max(0, Math.min(newX, maxX));
-        const constrainedY = Math.max(0, Math.min(newY, maxY));
-
-        elements.floatingPlayer.style.left = `${constrainedX}px`;
-        elements.floatingPlayer.style.top = `${constrainedY}px`;
-        elements.floatingPlayer.style.right = 'auto';
-        elements.floatingPlayer.style.bottom = 'auto';
-      }
-    });
-
-    elements.floatingPlayer.addEventListener('touchend', (e) => {
-      const touch = e.changedTouches[0];
-      const deltaTime = Date.now() - dragStartTime;
-
-      elements.floatingPlayer.style.transition = 'all 0.3s ease';
-
-      if (isDragging) {
-        // Snap to nearest corner
-        const centerX = window.innerWidth / 2;
-        const centerY = (window.innerHeight - 64) / 2;
-
-        const currentLeft = parseInt(elements.floatingPlayer.style.left || 0);
-        const currentTop = parseInt(elements.floatingPlayer.style.top || 0);
-
-        const snapLeft = currentLeft < centerX ? '20px' : 'auto';
-        const snapRight = currentLeft >= centerX ? '20px' : 'auto';
-        const snapTop = currentTop < centerY ? '20px' : 'auto';
-        const snapBottom = currentTop >= centerY ? `calc(${64}px + 20px + env(safe-area-inset-bottom))` : 'auto';
-
-        elements.floatingPlayer.style.left = snapLeft;
-        elements.floatingPlayer.style.right = snapRight;
-        elements.floatingPlayer.style.top = snapTop;
-        elements.floatingPlayer.style.bottom = snapBottom;
-      } else {
-        // It's a tap — let the click handler open the modal to avoid double-fire
-      }
-
-      isDragging = false;
-    });
-
-    // Open player modal on click (covers desktop and browsers where touchend alone is unreliable)
-    elements.floatingPlayer.addEventListener('click', () => {
+    // Mini player bar: tap anywhere (except its two buttons) to open the full
+    // player. The old draggable-bubble machinery is gone — the bar is fixed
+    // above the tab bar so the playing area is always in the same place.
+    elements.floatingPlayer.addEventListener('click', (e) => {
+      if (e.target.closest('.mini-btn')) return;
       state.playerModal.visible = true;
       elements.playerModal.classList.add('show');
       updatePlayerModal();
     });
+
+    document.getElementById('mini-play-pause').addEventListener('click', () => {
+      if (elements.audio.paused) {
+        elements.audio.play();
+      } else {
+        elements.audio.pause();
+      }
+    });
+
+    document.getElementById('mini-next').addEventListener('click', () => stepQueue(1));
 
     // Close player modal
     document.getElementById('player-close').addEventListener('click', () => {
@@ -283,45 +223,26 @@ import { initRouter } from './router.js';
     });
 
     // Prev / Next — step through playlist context if active
-    document.getElementById('prev-btn').addEventListener('click', () => {
-      const ctx = state.playlistContext;
-      if (!ctx || !ctx.tracks || ctx.tracks.length === 0) return;
-      const newIdx = Math.max(0, ctx.currentIndex - 1);
-      if (newIdx !== ctx.currentIndex) {
-        ctx.currentIndex = newIdx;
-        (ctx.playFn || playTrack)(ctx.tracks[newIdx]);
-      }
-    });
-
-    document.getElementById('next-btn').addEventListener('click', () => {
-      const ctx = state.playlistContext;
-      if (!ctx || !ctx.tracks || ctx.tracks.length === 0) return;
-      const newIdx = Math.min(ctx.tracks.length - 1, ctx.currentIndex + 1);
-      if (newIdx !== ctx.currentIndex) {
-        ctx.currentIndex = newIdx;
-        (ctx.playFn || playTrack)(ctx.tracks[newIdx]);
-      }
-    });
+    document.getElementById('prev-btn').addEventListener('click', () => stepQueue(-1));
+    document.getElementById('next-btn').addEventListener('click', () => stepQueue(1));
 
     // Auto-advance to next track on end (works for both album and playlist contexts)
     elements.audio.addEventListener('ended', () => {
       sendStreamEvent('END');
-      const ctx = state.playlistContext;
-      if (ctx && ctx.tracks && ctx.currentIndex < ctx.tracks.length - 1) {
-        ctx.currentIndex += 1;
-        (ctx.playFn || playTrack)(ctx.tracks[ctx.currentIndex]);
-      }
+      stepQueue(1);
     });
 
     // Audio events
     elements.audio.addEventListener('play', () => {
       document.getElementById('play-pause-btn').textContent = '⏸';
+      document.getElementById('mini-play-pause').textContent = '⏸';
       elements.floatingPlayer.classList.add('playing');
       sendStreamEvent('PLAY');
     });
 
     elements.audio.addEventListener('pause', () => {
       document.getElementById('play-pause-btn').textContent = '▶';
+      document.getElementById('mini-play-pause').textContent = '▶';
       elements.floatingPlayer.classList.remove('playing');
       sendStreamEvent('PAUSE');
     });
@@ -393,6 +314,9 @@ import { initRouter } from './router.js';
     // Wire browser Back/Forward history (after init's synchronous payment-URL cleanup,
     // so the seed re-stamps the real starting tab).
     initRouter();
+
+    // Maddie (shop assistant) — no-op unless window.__MADDIE
+    initMaddie();
 
     // Decade filtering functionality
     (function() {

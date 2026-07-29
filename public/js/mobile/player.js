@@ -2,7 +2,7 @@
 
 import { elements, state } from './state.js';
 import { formatTime, generateSessionId, showToast } from './util.js';
-import { getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField } from './fields.js';
+import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField } from './fields.js';
 
 export function closeModal() {
       elements.modalOverlay.classList.remove('show');
@@ -104,6 +104,63 @@ export function updateFloatingPlayer() {
 
       const fields = state.currentTrack.fields || {};
       setArtwork('floating-artwork', getArtworkUrl(fields));
+      const titleEl = document.getElementById('mini-title');
+      const artistEl = document.getElementById('mini-artist');
+      if (titleEl) titleEl.textContent = getTitleField(fields);
+      if (artistEl) artistEl.textContent = getArtistField(fields);
+    }
+
+// Step the now-playing queue (state.playlistContext) by ±1. Shared by the
+// modal's prev/next, the mini bar's next, and auto-advance on 'ended'.
+export function stepQueue(dir) {
+      const ctx = state.playlistContext;
+      if (!ctx || !ctx.tracks || ctx.tracks.length === 0) return;
+      const newIdx = Math.min(ctx.tracks.length - 1, Math.max(0, ctx.currentIndex + dir));
+      if (newIdx !== ctx.currentIndex) {
+        ctx.currentIndex = newIdx;
+        (ctx.playFn || playTrack)(ctx.tracks[newIdx]);
+      }
+    }
+
+// The tracklist inside the player modal: the album/playlist being played,
+// with the current row highlighted (animated EQ) and tap-to-jump.
+export function renderPlayerQueue() {
+      const box = document.getElementById('player-queue');
+      if (!box) return;
+      const ctx = state.playlistContext;
+      if (!ctx || !ctx.tracks || ctx.tracks.length < 2) {
+        box.innerHTML = '';
+        box.style.display = 'none';
+        return;
+      }
+      const name = ctx.name || getAlbumField(state.currentTrack?.fields || {}) || 'Queue';
+      box.style.display = 'block';
+      box.innerHTML = `<div class="pq-header">Playing from <span>${escapeHtml(name)}</span></div>` +
+        ctx.tracks.map((t, i) => {
+          const f = t.fields || {};
+          // Stored playlist tracks have no FM fields — they carry {name, albumArtist}
+          const title = (t.fields && getTitleField(f)) || t.name || 'Unknown';
+          const artist = (t.fields && getArtistField(f)) || t.albumArtist || t.albumTitle || '';
+          const playing = i === ctx.currentIndex;
+          return `<button class="pq-row${playing ? ' playing' : ''}" data-qi="${i}">
+            <span class="pq-num">${playing ? '<span class="pq-eq"><span></span><span></span><span></span></span>' : i + 1}</span>
+            <span class="pq-titles">
+              <span class="pq-title">${escapeHtml(title)}</span>
+              <span class="pq-artist">${escapeHtml(artist)}</span>
+            </span>
+          </button>`;
+        }).join('');
+      box.querySelectorAll('.pq-row').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const i = parseInt(btn.dataset.qi, 10);
+          ctx.currentIndex = i;
+          (ctx.playFn || playTrack)(ctx.tracks[i]);
+        });
+      });
+      const cur = box.querySelector('.pq-row.playing');
+      if (cur && elements.playerModal.classList.contains('show')) {
+        cur.scrollIntoView({ block: 'nearest' });
+      }
     }
 
 export function updatePlayerModal() {
@@ -128,6 +185,8 @@ export function updatePlayerModal() {
       } else {
         yearElement.style.display = 'none';
       }
+
+      renderPlayerQueue();
     }
 
 export function updateProgress() {
@@ -144,6 +203,8 @@ export function updateProgress() {
       if (effTotal > 0) {
         const percent = Math.min(100, (current / effTotal) * 100);
         document.getElementById('progress-fill').style.width = `${percent}%`;
+        const mini = document.getElementById('mini-progress-fill');
+        if (mini) mini.style.width = `${percent}%`;
       }
 
       document.getElementById('current-time').textContent = formatTime(current);

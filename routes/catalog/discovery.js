@@ -189,6 +189,15 @@ router.get('/random-songs', async (req, res) => {
     const genreStr = genres.length ? ` (genres: ${genres.join(', ')})` : '';
     logRandom.debug(`requesting ${count} songs${genreStr}`);
 
+    // fresh=1 → a MANUAL refresh: rotate the pool now instead of serving the
+    // 60 s-cached window. Without this, refresh reshuffled the same ~600-track
+    // pool (page-sampled, so album-clumped) and users saw the same deck
+    // ("refresh does not load new albums", 2026-07-29). The inflight map still
+    // dedups concurrent fresh requests, so this can't stampede the store.
+    if (req.query.fresh === '1') {
+      randomSongsPoolCache.delete(genres.length ? `genre:${[...genres].sort().join(',')}` : 'all');
+    }
+
     let data = [];
 
     if (genres.length > 0) {

@@ -58,6 +58,13 @@
     <!-- Dark-mode variant: blue/purple pin retained, text white for the dark header
          (mobile is dark-only; the original dark-text logo was illegible here). -->
     <div class="logo"><img src="/img/Madmusiclogonew-dark.png" alt="MAD Music"></div>
+    <!-- Ring the bell for Maddie — shown only when window.__MADDIE (see js/mobile/maddie.js) -->
+    <button id="maddie-bell" aria-label="Ask Maddie, our shop assistant" hidden>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+    </button>
     <div class="user-badge" id="user-badge">Guest</div>
   </header>
 
@@ -325,9 +332,19 @@
     </button>
   </nav>
 
-  <!-- Floating Player -->
+  <!-- Mini player bar — docked above the tab bar (Spotify/Apple-style).
+       Replaces the old draggable corner bubble: the playing area must be
+       obvious and always in the same place. Tap anywhere (except the two
+       buttons) to open the full player modal. -->
   <div id="floating-player">
+    <div class="mini-progress"><div id="mini-progress-fill"></div></div>
     <img id="floating-artwork" src="/img/placeholder.png" alt="Now Playing">
+    <div class="mini-info">
+      <div class="mini-title" id="mini-title">&nbsp;</div>
+      <div class="mini-artist" id="mini-artist"></div>
+    </div>
+    <button class="mini-btn mini-play" id="mini-play-pause" aria-label="Play or pause">▶</button>
+    <button class="mini-btn" id="mini-next" aria-label="Next track">⏭</button>
   </div>
 
   <!-- Player Modal -->
@@ -355,6 +372,9 @@
         <button class="player-control-btn play-pause" id="play-pause-btn">▶</button>
         <button class="player-control-btn" id="next-btn">⏭</button>
       </div>
+      <!-- Queue: the album/playlist being played, current track highlighted.
+           Filled by renderPlayerQueue() in js/mobile/player.js. -->
+      <div class="player-queue" id="player-queue"></div>
       <!-- Make Ringtone — opens /ringtone with the current track pre-loaded.
            Hidden until a track is playing (see mobile-ringtone-wiring script). -->
       <a id="mobileRingtoneBtn" class="btn btn-secondary"
@@ -375,6 +395,20 @@
            art via server-side OG tags and plays a 30 s preview for guests. -->
       <button class="btn btn-secondary" style="width: 100%; max-width: 320px;" id="share-track-btn">Share this Track</button>
     </div>
+  </div>
+
+  <!-- Maddie chat sheet (full-screen, gated on window.__MADDIE — js/mobile/maddie.js) -->
+  <div id="maddie-sheet">
+    <div class="maddie-sheet-head">
+      <div class="maddie-sheet-title"><b>MADDIE</b><span>behind the counter at MAD Music</span></div>
+      <button id="maddie-close" aria-label="Close">×</button>
+    </div>
+    <div id="maddie-log"></div>
+    <form id="maddie-form">
+      <input id="maddie-input" type="text" maxlength="500" autocomplete="off"
+             placeholder="Ask for a song, an artist, a mood…">
+      <button id="maddie-send" type="submit">Send</button>
+    </form>
   </div>
 
   <!-- Toast Container -->

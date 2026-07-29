@@ -51,7 +51,7 @@ export function renderPlaylists() {
           onOpen: () => showPlaylistTracks(playlist),
           onPlay: () => {
             if (tracks.length === 0) { showToast('Playlist is empty', 'error'); return; }
-            state.playlistContext = { tracks, currentIndex: 0, playFn: playPlaylistTrack };
+            state.playlistContext = { tracks, currentIndex: 0, name: playlist.name, playFn: playPlaylistTrack };
             playPlaylistTrack(tracks[0]);
           }
         }));
@@ -77,7 +77,7 @@ export function showPlaylistTracks(playlist) {
       elements.bottomSheet.querySelectorAll('[data-index]').forEach(btn => {
         btn.addEventListener('click', () => {
           const idx = parseInt(btn.dataset.index);
-          state.playlistContext = { tracks, currentIndex: idx, playFn: playPlaylistTrack };
+          state.playlistContext = { tracks, currentIndex: idx, name: playlist.name, playFn: playPlaylistTrack };
           playPlaylistTrack(tracks[idx]);
           closeModal();
         });

@@ -156,3 +156,29 @@ describe('mobile invariant: guest preview mode never leaks a full stream', () =>
     expect(authJs).toMatch(/guest-paywall-token/);
   });
 });
+
+describe('mobile invariant: album playback keeps skips inside the album (2026-07-29)', () => {
+  // Discover tiles once queued the WHOLE feed as playlistContext, so the
+  // player's next/prev wandered across albums. The queue for an album play
+  // must be the album's tracks.
+  it('rails-discover never sets the feed as the playlist context', () => {
+    const src = readFileSync(join(mobileDir, 'rails-discover.js'), 'utf8');
+    expect(src, 'discover onPlay must queue the album, not state.discoverFeed')
+      .not.toMatch(/playlistContext\s*=\s*\{\s*tracks:\s*feed/);
+  });
+
+  it('prev/next/ended all step the queue through the shared stepQueue()', () => {
+    const mainJs = readFileSync(join(mobileDir, 'main.js'), 'utf8');
+    expect(mainJs).toMatch(/'prev-btn'\)\.addEventListener\('click', \(\) => stepQueue\(-1\)\)/);
+    expect(mainJs).toMatch(/'next-btn'\)\.addEventListener\('click', \(\) => stepQueue\(1\)\)/);
+    const playerJs = readFileSync(join(mobileDir, 'player.js'), 'utf8');
+    expect(playerJs).toMatch(/export function stepQueue/);
+  });
+
+  it('the mini player bar and the modal queue exist in the markup', () => {
+    expect(mobileHtml).toMatch(/id="mini-play-pause"/);
+    expect(mobileHtml).toMatch(/id="mini-next"/);
+    expect(mobileHtml).toMatch(/id="player-queue"/);
+    expect(mobileHtml).toMatch(/id="mini-progress-fill"/);
+  });
+});

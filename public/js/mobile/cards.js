@@ -4,7 +4,7 @@ import { elements, state } from './state.js';
 import { escapeHtml, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js';
 import { switchTab } from './nav.js';
 import { search } from './search.js';
-import { closeModal, playTrack } from './player.js';
+import { closeModal, playTrack, renderPlayerQueue } from './player.js';
 import { pushOverlay } from './router.js';
 
 // ── Shared album tile (the New Releases / G100 look) ─────────────────────────
@@ -68,8 +68,9 @@ export function createAlbumTile(album, opts = {}) {
           e.stopPropagation();
           if (onPlay) onPlay(album);
           else if (album.tracks.length > 0) {
-            state.playlistContext = { tracks: album.tracks, currentIndex: 0, playFn: playTrack };
+            state.playlistContext = { tracks: album.tracks, currentIndex: 0, name: album.title, playFn: playTrack };
             playTrack(album.tracks[0]);
+            upgradeQueueToFullAlbum(album, album.tracks[0]);
           }
           card.classList.remove('overlay-active');
         });
@@ -84,6 +85,30 @@ export function createAlbumTile(album, opts = {}) {
       });
 
       return card;
+    }
+
+// Feed-built album objects often carry only the feed's SUBSET of the album's
+// tracks (new releases ships ~1 track per album), which left the player queue
+// one track deep and skips dead. After playback starts, swap the queue for the
+// real album from /api/album — silently, without interrupting the audio.
+const fullAlbumCache = new Map();
+export async function upgradeQueueToFullAlbum(album, playingTrack) {
+      const key = `${album.title}|||${album.artist}`.toLowerCase();
+      let full = fullAlbumCache.get(key);
+      if (!full) {
+        try {
+          const res = await fetch(`/api/album?${new URLSearchParams({ title: album.title, artist: album.artist })}`);
+          const data = await res.json();
+          full = (data.ok && data.items?.length) ? { ...album, tracks: data.items } : album;
+        } catch { full = album; }
+        fullAlbumCache.set(key, full);
+      }
+      // Only swap if the user is still on the track this play started
+      if (state.currentTrack !== playingTrack) return;
+      if (!full.tracks || full.tracks.length <= (state.playlistContext?.tracks?.length || 0)) return;
+      const idx = full.tracks.findIndex(t => t.recordId === playingTrack.recordId);
+      state.playlistContext = { tracks: full.tracks, currentIndex: idx >= 0 ? idx : 0, name: album.title, playFn: playTrack };
+      renderPlayerQueue();
     }
 
 export function renderAlbumTileGrid(container, albums, optsFor = () => ({})) {
@@ -116,8 +141,9 @@ export function showAlbumTracksModal(album) {
       elements.bottomSheet.querySelectorAll('[data-track-index]').forEach(btn => {
         btn.addEventListener('click', () => {
           const trackIndex = parseInt(btn.dataset.trackIndex);
-          state.playlistContext = { tracks: album.tracks, currentIndex: trackIndex, playFn: playTrack };
+          state.playlistContext = { tracks: album.tracks, currentIndex: trackIndex, name: album.title, playFn: playTrack };
           playTrack(album.tracks[trackIndex]);
+          upgradeQueueToFullAlbum(album, album.tracks[trackIndex]);
           closeModal();
         });
       });
