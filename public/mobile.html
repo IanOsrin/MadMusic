@@ -12,7 +12,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>MASS Mobile</title>
+  <title>MAD — Music Africa Direct | South African Music on Your Phone</title>
+  <!-- SEO + social defaults (share links get their own OG tags injected first
+       in <head> by sendShareLanding — these are the fallbacks). -->
+  <meta name="description" content="Stream a hundred years of South African music on your phone — gospel, jazz, mbaqanga, maskandi, bubblegum and kwaito from the original Gallo masters. Free previews of every track.">
+  <link rel="canonical" href="https://musicafricadirect.com/mobile">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="MAD — Music Africa Direct">
+  <meta property="og:title" content="Music Africa Direct — 100 years of South African music">
+  <meta property="og:description" content="The Gallo vault, streamed: gospel, jazz, mbaqanga, maskandi, bubblegum and kwaito from the original masters. Much of it exists nowhere else.">
+  <meta property="og:image" content="https://musicafricadirect.com/img/og-share.png">
+  <meta property="og:url" content="https://musicafricadirect.com/mobile">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Warm the audio/artwork S3 connection at page load so the first play
@@ -33,6 +44,8 @@
   <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-W4LLH7XT"
   height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <!-- End Google Tag Manager (noscript) -->
+  <!-- Crawlable page heading (visually hidden — the app shell has no static H1) -->
+  <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;margin:0">Music Africa Direct — stream South African music on your phone</h1>
   <!-- Desktop User Notice -->
   <script>
     (function() {

@@ -80,10 +80,12 @@ describe('GET /?t=<recordId> (track share landing)', () => {
     expect(res.text).toContain('window.__SHARE_TRACK=');
   });
 
-  it('leaves the plain / route untouched (no OG block, no bootstrap)', async () => {
+  it('leaves the plain / route untouched (no share OG injection, no bootstrap)', async () => {
     const res = await request(app).get('/');
     expect(res.status).toBe(200);
-    expect(res.text).not.toContain('og:site_name');
+    // The page carries STATIC OG defaults since the SEO pass (2026-07-30) —
+    // what must NOT appear on the plain route is the share-specific injection.
+    expect(res.text).not.toContain('music.song');
     expect(res.text).not.toContain('window.__SHARE_TRACK=');
   });
 });
