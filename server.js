@@ -614,6 +614,38 @@ function cacheControlFor(filePath) {
   return 'no-cache';
 }
 
+// ── Sitemap (registered BEFORE the static layer so it always wins) ────────────
+// Flag off → the static three-URL map. Flag on → a generated index over the
+// whole catalogue (artists/albums/genres from the slug index, PG mirror).
+const CATALOG_PAGES_ENABLED = process.env.CATALOG_PAGES_ENABLED === 'true';
+app.get('/sitemap.xml', async (_req, res) => {
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+  const urlTag = (loc, priority = '0.6') => `<url><loc>${loc}</loc><priority>${priority}</priority></url>`;
+  const staticUrls = [
+    urlTag('https://musicafricadirect.com/', '1.0'),
+    urlTag('https://musicafricadirect.com/mobile', '0.8'),
+    urlTag('https://musicafricadirect.com/access', '0.5'),
+  ];
+  let urls = staticUrls;
+  if (CATALOG_PAGES_ENABLED) {
+    try {
+      const { getIndex } = await import('./lib/catalog-slugs.js');
+      const idx = await getIndex();
+      urls = [
+        ...staticUrls,
+        urlTag('https://musicafricadirect.com/browse', '0.9'),
+        ...[...idx.genres.keys()].map((s) => urlTag(`https://musicafricadirect.com/genre/${s}`, '0.8')),
+        ...[...idx.artists.keys()].map((s) => urlTag(`https://musicafricadirect.com/artist/${s}`, '0.7')),
+        ...[...idx.albums.keys()].map((s) => urlTag(`https://musicafricadirect.com/album/${s}`)),
+      ];
+    } catch (err) {
+      console.warn('[sitemap] catalogue index unavailable, serving static map:', err?.message || err);
+    }
+  }
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>`);
+});
+
 // Serve boot-time brotli-q11 / gzip-9 copies of static text assets ahead of
 // express.static. Production only: in dev we want fresh disk reads on every
 // edit, so this layer is skipped and express.static (with on-the-fly q4) serves.
@@ -654,6 +686,17 @@ if (PODCASTS_ENABLED) app.use('/api', podcastsRouter);    // dark until PODCASTS
 if (SUGGESTIONS_ENABLED) app.use('/api', suggestionsRouter); // dark until SUGGESTIONS_ENABLED=true
 if (GUEST_PREVIEW_ENABLED) app.use('/api', previewRouter);   // dark until GUEST_PREVIEW_ENABLED=true
 if (MADDIE_ENABLED) app.use('/api/maddie', maddieRouter);     // dark until MADDIE_ENABLED=true
+if (CATALOG_PAGES_ENABLED) {                                  // dark until CATALOG_PAGES_ENABLED=true
+  // Public server-rendered catalogue pages (SEO tier 2): /browse, /artist/:slug,
+  // /album/:slug, /genre/:slug. Marketing surfaces outside the app — previews only.
+  const { default: catalogPagesRouter } = await import('./routes/catalog-pages.js');
+  app.use(catalogPagesRouter);
+  // Warm the slug index at boot — the cold build is a ~30s PG aggregation and
+  // must never land on a visitor's (or Googlebot's) first request.
+  import('./lib/catalog-slugs.js')
+    .then((m) => m.getIndex())
+    .catch((e) => console.warn('[catalog-pages] index warm-up failed (will retry on demand):', e?.message || e));
+}
 app.use('/api/download', downloadRouter);
 app.use('/api/ringtone', ringtoneRouter);
 app.use('/api/playlists', playlistsRouter);

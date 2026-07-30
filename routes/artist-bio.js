@@ -113,4 +113,20 @@ router.get('/artist-bio', async (req, res) => {
   }
 });
 
+// Programmatic lookup for other server-side consumers (the public catalogue
+// pages, SEO tier 2). Same SWR cache, same display rule as the route above.
+export async function getArtistBio(name) {
+  if (!ENABLED) return null;
+  try {
+    const result = await bioSwr.get('default');
+    const artist = (result.value || new Map()).get(normalizeName(name)) || null;
+    if (!artist) return null;
+    const { _keys, ...payload } = artist;
+    if (!payload.bio) payload.bio = payload.titbits;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
 export default router;
