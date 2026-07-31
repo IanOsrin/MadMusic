@@ -2391,8 +2391,17 @@
   });
   </script>
   <script>
-  // Override search to use separate fields
-  window.addEventListener('load', () => {
+  // Override search to use separate fields.
+  // Runs once the DOM is parsed — NOT on window 'load'. Deferred scripts
+  // (app.min.js) execute before DOMContentLoaded, so the bundle is guaranteed
+  // present either way, but 'load' also waits for every image on the page:
+  // with slow artwork that left search (and the album view below) undefined
+  // for 20+ seconds while the page looked ready (2026-07-31).
+  const __whenParsed = (fn) => {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true });
+    else fn();
+  };
+  __whenParsed(() => {
     const searchArtistEl = document.getElementById('searchArtist');
     const searchAlbumEl = document.getElementById('searchAlbum');
     const searchTrackEl = document.getElementById('searchTrack');
@@ -4340,8 +4349,16 @@
   (function() {
     'use strict';
 
-    // Wait for app.min.js to load
-    window.addEventListener('load', function() {
+    // Wait for app.min.js — but NOT for window 'load'. app.min.js is deferred,
+    // so it has always executed by DOMContentLoaded; 'load' additionally waits
+    // for every image, which left showAlbumDetailView/openAlbumDirect undefined
+    // for 20+ seconds on slow artwork — album clicks silently did nothing on a
+    // slow connection (found while chasing the G100 rail bug, 2026-07-31).
+    const whenParsed = (fn) => {
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true });
+      else fn();
+    };
+    whenParsed(function() {
       // Store reference to original openTracksModal if it exists
       const originalOpenTracksModal = window.openTracksModal;
 
