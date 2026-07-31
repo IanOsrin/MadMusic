@@ -19,6 +19,11 @@ import { pgFind } from '../lib/catalog-store-pg.js';
 import { getArtistBio } from './artist-bio.js';
 import { recordIsVisible } from '../lib/fm-fields.js';
 import { thumbArtworkUrl } from '../lib/track.js';
+// JSON.stringify does NOT escape '<', so a catalogue value containing
+// '</script>' breaks out of the ld+json block and executes. inlineJson escapes
+// it. The realistic injection path is the artist bio, which Maddie drafts from
+// visitor-influenced input — human approval is the only thing in between.
+import { inlineJson } from '../lib/share-meta.js';
 
 const router = Router();
 const ORIGIN = 'https://musicafricadirect.com';
@@ -47,7 +52,7 @@ function pageShell({ title, description, canonicalPath, jsonLd, body, ogImage })
   <meta property="og:image" content="${esc(ogImage || ORIGIN + '/img/og-share.png')}">
   <meta property="og:url" content="${ORIGIN}${esc(canonicalPath)}">
   <meta name="twitter:card" content="summary_large_image">
-  ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>` : ''}
+  ${jsonLd ? `<script type="application/ld+json">${inlineJson(jsonLd)}</script>` : ''}
   <style>
     :root{--bg:#0b0b10;--card:#16161f;--border:#26263a;--text:#e8e8ee;--muted:#8f8fa3;--accent:#8b5cf6;--accent2:#cbbcf7}
     *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Barlow,Helvetica,Arial,sans-serif;line-height:1.5}
@@ -184,7 +189,14 @@ router.get('/album/:slug', async (req, res, next) => {
     const album = idx.albums.get(String(req.params.slug || '').toLowerCase());
     if (!album) return notFound(res, 'album');
 
-    const { data } = await pgFind([{ 'Album Title': album.title, 'Album Artist': album.artist }], { limit: 200 });
+    // '==' forces an exact whole-value match. A plain multi-word value falls
+    // through to conditionSql's phrase-PREFIX ILIKE, so "Greatest Hits" also
+    // matched "Greatest Hits Vol. 2" by the same artist — the public album page
+    // and its JSON-LD numTracks/tracklist listed another album's tracks.
+    const { data } = await pgFind(
+      [{ 'Album Title': `==${album.title}`, 'Album Artist': `==${album.artist}` }],
+      { limit: 200 }
+    );
     const tracks = (data || [])
       .filter((r) => recordIsVisible(r.fieldData))
       .map((r) => ({
