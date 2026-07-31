@@ -61,3 +61,50 @@ describe('album tracks render in album order', () => {
     expect(span[0]).toContain('index + 1');
   });
 });
+
+describe('mobile album lists share the same ordering logic', () => {
+  // Mobile has its own playback engine and its own album grouping in FOUR
+  // places. It showed the same scrambled order as desktop, just without visible
+  // track numbers to make it obvious.
+  let helpers, mobileFields;
+
+  beforeAll(async () => {
+    helpers = await readFile(path.resolve('public/js/helpers.js'), 'utf8');
+    mobileFields = await readFile(path.resolve('public/js/mobile/fields.js'), 'utf8');
+  });
+
+  it('the canonical implementation lives in MADHelpers', () => {
+    expect(helpers).toMatch(/function getTrackSeq\(/);
+    expect(helpers).toMatch(/function sortTracksBySeq\(/);
+    expect(helpers).toMatch(/window\.MADHelpers\.getTrackSeq\s*=/);
+    expect(helpers).toMatch(/window\.MADHelpers\.sortTracksBySeq\s*=/);
+  });
+
+  it('mobile delegates rather than growing a local copy', () => {
+    // CLAUDE.md invariant: mobile field helpers are thin delegations. A local
+    // reimplementation is how the two apps drifted apart before.
+    expect(mobileFields).toMatch(/export function sortTracksBySeq\(tracks\)\s*\{\s*return window\.MADHelpers\.sortTracksBySeq\(tracks\);/);
+    expect(mobileFields).toMatch(/export function getTrackSeq\(fields\)\s*\{\s*return window\.MADHelpers\.getTrackSeq\(fields\);/);
+  });
+
+  it('every mobile album-grouping site sorts its tracks', async () => {
+    const sites = [
+      'public/js/mobile/fields.js',          // groupTracksByAlbum (shared)
+      'public/js/mobile/rails-discover.js',
+      'public/js/mobile/rails-newreleases.js',
+      'public/js/mobile/rails-g100.js',
+    ];
+    for (const site of sites) {
+      const code = await readFile(path.resolve(site), 'utf8');
+      expect(code, `${site} must sort album tracks`).toMatch(/sortTracksBySeq\(/);
+    }
+  });
+
+  it('sorts in place so data-track-index and playlistContext stay aligned', () => {
+    // Returning a sorted COPY would leave rendered rows and the now-playing
+    // queue pointing at the old order (mobile invariant 4).
+    const fn = helpers.slice(helpers.indexOf('function sortTracksBySeq('), helpers.indexOf('function sortTracksBySeq(') + 700);
+    expect(fn).toMatch(/tracks\.sort\(/);
+    expect(fn).not.toMatch(/\[\.\.\.tracks\]|tracks\.slice\(\)/);
+  });
+});

@@ -135,6 +135,51 @@ function getAlbumField(fields) {
 }
 
 /**
+ * The track's position on its album, or null when the record has none.
+ *
+ * 'Sequence Number' is the live field name (verified against the API); the rest
+ * mirror lib/fm-fields.js TRACK_SEQUENCE_FIELDS in case a layout differs.
+ * Returns null rather than 0 for "absent" so callers can tell a genuinely
+ * missing number from track zero and fall back to row position.
+ *
+ * @param {Object} fields - A FileMaker record's fieldData
+ * @returns {number|null}
+ */
+function getTrackSeq(fields) {
+  const raw = getFieldValue(fields || {}, [
+    'Sequence Number', 'Sequence_Number', 'Track Number', 'TrackNumber',
+    'Tape Files::Track Number', 'Track No', 'Track #', 'Sequence', 'Seq'
+  ]);
+  const n = parseInt(String(raw == null ? '' : raw).trim(), 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Sort a list of FM track records into album running order, IN PLACE.
+ *
+ * In place is deliberate: rendered rows carry data-track-index values that index
+ * straight back into this same array, and playlistContext is set to it for
+ * next/prev. Sorting a copy would leave those pointing at the old order.
+ *
+ * /api/search returns tracks sorted by RELEVANCE to the query, never by album
+ * position, so any album list built from it needs this. Tracks with no sequence
+ * keep their relative order and sit at the end.
+ *
+ * @param {Array} tracks - FM records ({fields}) or plain objects with .seq
+ * @returns {Array} the same array, sorted
+ */
+function sortTracksBySeq(tracks) {
+  if (!Array.isArray(tracks)) return tracks;
+  const seqOf = (t) => {
+    if (!t) return Infinity;
+    if (Number.isFinite(t.seq) && t.seq > 0) return t.seq;
+    const s = getTrackSeq(t.fields || t.fieldData || t);
+    return s === null ? Infinity : s;
+  };
+  return tracks.sort((a, b) => seqOf(a) - seqOf(b));
+}
+
+/**
  * Format seconds into MM:SS format
  * @param {number} secs - The duration in seconds
  * @returns {string} The formatted duration (e.g., "3:45")
@@ -301,6 +346,8 @@ window.MADHelpers.getTitleField = getTitleField;
 window.MADHelpers.getArtistField = getArtistField;
 window.MADHelpers.getAlbumArtist = getAlbumArtist;
 window.MADHelpers.getAlbumField = getAlbumField;
+window.MADHelpers.getTrackSeq = getTrackSeq;
+window.MADHelpers.sortTracksBySeq = sortTracksBySeq;
 window.MADHelpers.formatDuration = formatDuration;
 window.MADHelpers.displayDuration = displayDuration;
 window.MADHelpers.toMasterArtwork = toMasterArtwork;

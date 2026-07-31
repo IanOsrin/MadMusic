@@ -69,6 +69,9 @@ export function renderNewReleases() {
         albumMap.get(key).tracks.push(track);
       });
 
+      // Album running order — the feed arrives sorted by relevance, not position.
+      albumMap.forEach(a => window.MADHelpers.sortTracksBySeq(a.tracks));
+
       const albums = [...albumMap.values()];
       container.innerHTML = '';
       renderAlbumTileGrid(container, albums, () => ({ badge: 'NEW' }));
