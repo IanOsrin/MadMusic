@@ -50,3 +50,7 @@ test-results/
 playwright-report/
 blob-report/
 .playwright/
+
+# Security audit docs — keep OUT of the repo while it is public.
+# They enumerate unfixed findings; that is an attack map, not documentation.
+AUDIT_*.md

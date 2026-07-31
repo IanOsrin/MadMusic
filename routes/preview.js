@@ -136,8 +136,11 @@ router.get('/preview/:recordId', async (req, res) => {
       return;
     }
 
-    const layout = (req.query?.layout || FM_LAYOUT || '').toString().trim() || FM_LAYOUT;
-    const resolved = await resolveTrackAudio(recordId, layout);
+    // Layout is NOT client-controllable here — this route is public. The
+    // resolver only consults the Postgres mirror for the main layout, so
+    // letting a caller vary it sends uncached reads straight to FileMaker and
+    // evicts the hot container/preview entries. Keep it pinned.
+    const resolved = await resolveTrackAudio(recordId, FM_LAYOUT);
     if (!resolved.ok) {
       res.status(404).json({ ok: false, error: 'Track not found' });
       return;

@@ -5,8 +5,6 @@ import http2 from 'node:http2';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { Readable } from 'node:stream';
-import dns from 'node:dns/promises';
-import net from 'node:net';
 import compression from 'compression';
 import cors from 'cors';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
@@ -46,6 +44,8 @@ import { loadPlaylistByShareId } from './lib/playlist-store.js';
 import { getTrackShareMeta, buildOgTags, inlineJson } from './lib/share-meta.js';
 import { resolveRequestOrigin } from './lib/http.js';
 import { createPrecompressedStatic } from './lib/precompressed-static.js';
+import { hostnameResolvesPrivate } from './lib/ssrf-guard.js';
+import { resolveClientIp } from './lib/cloudflare-ips.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -326,7 +326,14 @@ const skipInTest = () => TEST_MODE;
 // it; direct-to-origin traffic (no CF) falls back to req.ip as before.
 // ipKeyGenerator normalizes IPv6 to its /56 so one visitor can't rotate
 // addresses within their allocation to dodge the limit.
-const clientIpKey = (req) => ipKeyGenerator(req.headers['cf-connecting-ip'] || req.ip || '');
+// ...but ONLY when the request demonstrably arrived through Cloudflare. An
+// origin is not always reached through its CDN, and any client on the other
+// route can set CF-Connecting-IP freely — rotating it for an unlimited budget,
+// or aiming it at a victim to burn theirs. Under trust proxy=1 req.ip is the
+// peer the platform observed (Cloudflare in normal operation), and it appends
+// to X-Forwarded-For rather than replacing it, so that position is not
+// client-controllable. Verify it, then trust the header.
+const clientIpKey = (req) => ipKeyGenerator(resolveClientIp(req) || '');
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -422,7 +429,7 @@ if (MEDIA_CDN_HOST) {
           res.setHeader('Content-Type', 'application/json; charset=utf-8');
           return res.send(s.replace(S3_HOST_RE, CDN_PREFIX));
         }
-      } catch (e) { /* circular/BigInt surprise → fall through to plain json */ }
+      } catch { /* circular/BigInt surprise → fall through to plain json */ }
       return origJson(body);
     };
     next();
@@ -889,52 +896,9 @@ app.post('/api/audio-lab/validate-key', async (req, res) => {
 });
 
 // ── SSRF guard ───────────────────────────────────────────────────────────────
-// Decide whether a resolved IP address belongs to a private/internal range.
-// Uses net.isIP + numeric checks so decimal/octal/hex/IPv4-mapped-IPv6 literals
-// can't slip past a string regex.
-function _ipIsPrivate(ip) {
-  if (!ip) return true;
-  const fam = net.isIP(ip);
-  if (fam === 4) {
-    const o = ip.split('.').map(Number);
-    if (o.length !== 4 || o.some(n => Number.isNaN(n) || n < 0 || n > 255)) return true;
-    if (o[0] === 10) return true;                          // 10.0.0.0/8
-    if (o[0] === 172 && o[1] >= 16 && o[1] <= 31) return true; // 172.16.0.0/12
-    if (o[0] === 192 && o[1] === 168) return true;         // 192.168.0.0/16
-    if (o[0] === 169 && o[1] === 254) return true;         // link-local
-    if (o[0] === 127) return true;                         // loopback
-    if (o[0] === 0) return true;                           // 0.0.0.0/8
-    if (o[0] >= 224) return true;                          // multicast/reserved
-    return false;
-  }
-  if (fam === 6) {
-    const low = ip.toLowerCase();
-    if (low === '::1' || low === '::') return true;
-    if (low.startsWith('fe80') || low.startsWith('fc') || low.startsWith('fd')) return true;
-    // IPv4-mapped IPv6 (::ffff:a.b.c.d) — re-check the embedded v4 address.
-    const m = low.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (m) return _ipIsPrivate(m[1]);
-    return false;
-  }
-  return true; // not a valid IP literal → treat as unsafe
-}
-
-// Resolve a hostname and return true if ANY resolved address is private/internal.
-// This defeats DNS-rebinding (attacker domain → 169.254.169.254) and alternate
-// IP encodings that a hostname-string regex would miss.
-async function _hostnameResolvesPrivate(hostname) {
-  if (!hostname) return true;
-  const h = hostname.replace(/^\[|\]$/g, '').toLowerCase();
-  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.internal')) return true;
-  if (net.isIP(h)) return _ipIsPrivate(h);
-  try {
-    const records = await dns.lookup(h, { all: true });
-    if (!records.length) return true;
-    return records.some(r => _ipIsPrivate(r.address));
-  } catch {
-    return true; // unresolvable → block
-  }
-}
+// Moved to lib/ssrf-guard.js so the container proxy (routes/stream.js) uses the
+// same DNS-resolving implementation instead of its own hostname regex.
+const _hostnameResolvesPrivate = hostnameResolvesPrivate;
 
 // ── Audio Lab proxy ── fetches a remote audio URL server-side to bypass CORS ──
 app.get('/api/audio-proxy', async (req, res) => {
