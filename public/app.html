@@ -4450,6 +4450,37 @@
         return m ? m[1].replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
       };
 
+      // The album's own running order. /api/search returns tracks sorted by
+      // RELEVANCE to the query, never by position on the record, and nothing here
+      // used to read the sequence field at all — so the album view listed tracks
+      // in search order and numbered them 1..n by row. Both are wrong for an
+      // album: track 7 could appear first, labelled "1". (2026-07-31)
+      //
+      // 'Sequence Number' is the live field name (verified against the API); the
+      // others are fallbacks from lib/fm-fields.js TRACK_SEQUENCE_FIELDS in case a
+      // layout differs. Returns null when absent so callers can fall back to row
+      // position rather than inventing a 0.
+      const _trackSeq = (f) => {
+        const raw = f['Sequence Number'] ?? f['Track Number'] ?? f['Tape Files::Track Number']
+                 ?? f['Track No'] ?? f['Track #'] ?? f['Sequence'] ?? '';
+        const n = parseInt(String(raw).trim(), 10);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      };
+
+      // Sort a track array into album order IN PLACE. In place matters: the
+      // rendered rows carry data-track-index values that index straight back into
+      // this same array, so sorting a copy would mis-wire every play button.
+      // Tracks with no sequence keep their relative order and sit at the end.
+      const _sortByTrackSeq = (tracks) => {
+        if (!Array.isArray(tracks)) return tracks;
+        tracks.sort((a, b) => {
+          const as = Number.isFinite(a?.seq) ? a.seq : Infinity;
+          const bs = Number.isFinite(b?.seq) ? b.seq : Infinity;
+          return as - bs;
+        });
+        return tracks;
+      };
+
       window.showAlbumDetailView = async function(album, relatedAlbums = []) {
         if (window.MADRouter) window.MADRouter.pushOverlay('album', album && album.recordId);
         const playlistView = document.getElementById('playlistView');
@@ -4511,6 +4542,7 @@
                 const _t = (v) => (v !== undefined && v !== null) ? String(v).trim() : '';
                 const audioTest = String(f['songfiles:Audio Test'] || f['Songfiles::Audio Test'] || f['songfiles::Audio Test'] || f['Audio Test'] || '').toLowerCase();
                 albumsMap.get(albumTitle).tracks.push({
+                  seq:            _trackSeq(f),
                   name:           f['Track Name'] || 'Unknown Track',
                   trackArtist:    f['Track Artist'] || f['Tape Files::Track Artist'] || '',
                   artist:         f['Track Artist'] || f['Tape Files::Track Artist'] || '',
@@ -4580,6 +4612,7 @@
                 clickedEntry.tracks = items.map((it) => {
                   const f = it.fields || {};
                   return {
+                    seq:         _trackSeq(f),
                     name:        f['Track Name'] || f['Tape Files::Track Name'] || 'Unknown Track',
                     trackArtist: f['Track Artist'] || f['Tape Files::Track Artist'] || '',
                     artist:      f['Track Artist'] || f['Tape Files::Track Artist'] || '',
@@ -4652,6 +4685,10 @@
 
       // Function to show album details in the right panel
       window.showAlbumDetailPanel = async function(album) {
+        // Put the tracks in album order before ANY consumer in here reads them —
+        // the rendered list, the play queue and shuffle all index into this array.
+        if (album && Array.isArray(album.tracks)) _sortByTrackSeq(album.tracks);
+
         const artwork = document.getElementById('playlistDetailArtwork');
         const title = document.getElementById('playlistDetailTitle');
         const artist = document.getElementById('playlistDetailArtist');
@@ -4776,7 +4813,7 @@
         if (trackList && album.tracks && album.tracks.length > 0) {
           trackList.innerHTML = album.tracks.map((track, index) => `
             <div class="playlist-track-item album-track-item" data-track-index="${index}" data-audio-url="${track.S3_URL || track.resolvedSrc || track.audioUrl || ''}" data-record-id="${track.recordId || ''}" data-download-price="${track.Download_Price || track.downloadPrice || ''}">
-              <span class="playlist-track-number">${index + 1}.</span>
+              <span class="playlist-track-number">${Number.isFinite(track.seq) && track.seq > 0 ? track.seq : index + 1}.</span>
               <button class="track-play-btn" data-track-index="${index}" title="Play ${(track.name || 'track').replace(/"/g, '&quot;')}" aria-label="Play ${(track.name || 'track').replace(/"/g, '&quot;')}">▶</button>
               <span class="playlist-track-name">${track.name || 'Unknown Track'}</span>
               <span class="playlist-track-duration">${track.duration || ''}</span>
