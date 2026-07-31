@@ -131,6 +131,10 @@ export function renderDiscoverTracks() {
         albumMap.get(key).tracks.push(track);
       });
 
+      // Album running order — the feed arrives sorted by relevance, not position.
+      // Also makes the "first track seen" below the album's ACTUAL first track.
+      albumMap.forEach(a => window.MADHelpers.sortTracksBySeq(a.tracks));
+
       // Deduplicate to one representative track per album (first track seen).
       // Decade and genre searches return every track, so without this the list
       // floods with duplicates from the same album.

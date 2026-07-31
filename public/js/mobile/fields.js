@@ -99,6 +99,12 @@ export function groupTracksByAlbum(tracks) {
     albums.get(albumKey).tracks.push(track);
   });
 
+  // Put every album's tracks in running order. /api/search sorts by RELEVANCE to
+  // the query, never by album position, so without this the track list runs in
+  // search order (verified: one album came back 7,11,12,3,10,1,...). Sorted in
+  // place — rendered rows index straight back into these arrays.
+  albums.forEach(album => window.MADHelpers.sortTracksBySeq(album.tracks));
+
   // Convert to array, filter out albums with no real cover art, sort by track count
   return Array.from(albums.values())
     .filter(album => album.artwork && album.artwork !== '/img/placeholder.png')
@@ -107,4 +113,13 @@ export function groupTracksByAlbum(tracks) {
 
 export function getGenreField(fields) {
   return window.MADHelpers.getGenreField(fields);
+}
+
+// Album running order. Thin delegations — do NOT re-grow local copies here.
+export function getTrackSeq(fields) {
+  return window.MADHelpers.getTrackSeq(fields);
+}
+
+export function sortTracksBySeq(tracks) {
+  return window.MADHelpers.sortTracksBySeq(tracks);
 }

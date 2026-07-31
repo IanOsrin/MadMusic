@@ -57,6 +57,9 @@ export async function loadG100(forceRefresh = false) {
           }
         });
 
+        // Album running order — the feed arrives sorted by relevance, not position.
+        albumMap.forEach(a => window.MADHelpers.sortTracksBySeq(a.tracks));
+
         state.g100Albums = [...albumMap.values()].filter(a => a.tracks.length > 0 || a.artwork !== '/img/placeholder.png');
         state.g100Loaded = true;
         renderG100Albums('');
