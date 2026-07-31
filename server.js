@@ -426,7 +426,21 @@ app.use((req, res, next) => {
 });
 
 // Token validation cache and middleware
-const TOKEN_CACHE_TTL_MS = 5 * 60 * 1000;
+// 20 min, raised from 5 (2026-07-31). At 5 min every active token forced a
+// FileMaker _find twelve times an hour — ~33 finds/sec at 10k subscribers,
+// against a queue that manages 10-40 ops/sec in total and is shared with
+// playback resolution and payments. Token churn alone could starve the app.
+//
+// The trade-off, stated plainly: a token cached as VALID is served from cache
+// without re-checking FileMaker until it expires, so revoking access now takes
+// effect within 20 minutes rather than 5. That only affects tokens already
+// judged valid — a definitive denial still deletes the entry on the spot, and
+// the 24h stale-grace path is unchanged. For a music subscription, up to 20
+// extra minutes for a lapsed account is a fair price for 4x less FM load; if a
+// revocation ever needs to be immediate, POST the admin cache flush.
+//
+// Tunable per environment via TOKEN_CACHE_TTL_MS.
+const TOKEN_CACHE_TTL_MS = Number.parseInt(process.env.TOKEN_CACHE_TTL_MS || '', 10) || 20 * 60 * 1000;
 
 // Concurrent-validation dedup. On a cold start the per-process tokenValidationCache
 // is empty, and the SPA fires a burst of /api/* calls at once. Without this map,
@@ -1215,28 +1229,41 @@ if (process.env.PREWARM_CACHES === 'true' && (process.env.WORKER_INDEX || '0') =
 // GRACEFUL SHUTDOWN HANDLERS
 // ============================================================================
 
-process.on('SIGTERM', async () => {
-  console.log('[MASS] SIGTERM received, shutting down gracefully...');
-  if (server) {
-    server.close(() => {
-      console.log('[MASS] HTTP server closed');
-    });
-  }
-  await closeFmPool();
-  await closePgPool();
-  process.exit(0);
-});
+// Drain in-flight requests before tearing anything down.
+//
+// This used to fire server.close() without awaiting it and then close the FM and
+// PG pools immediately, so every deploy cut live audio streams mid-response and
+// pulled the pools out from under queries that were still running. server.close()
+// stops accepting NEW connections and calls back once existing ones finish, so it
+// has to be awaited — with a ceiling, because a long-lived audio stream would
+// otherwise hold the process open past the platform's own kill timeout.
+const SHUTDOWN_DRAIN_MS = Number.parseInt(process.env.SHUTDOWN_DRAIN_MS || '', 10) || 10000;
 
-process.on('SIGINT', async () => {
-  console.log('[MASS] SIGINT received, shutting down gracefully...');
+let shuttingDown = false;
+
+async function shutdown(signal) {
+  if (shuttingDown) return;          // a second SIGTERM must not race the first
+  shuttingDown = true;
+  console.log(`[MASS] ${signal} received, shutting down gracefully...`);
+
   if (server) {
-    server.close(() => {
-      console.log('[MASS] HTTP server closed');
+    const drained = await new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        console.warn(`[MASS] drain timeout after ${SHUTDOWN_DRAIN_MS}ms — closing anyway`);
+        resolve(false);
+      }, SHUTDOWN_DRAIN_MS);
+      timer.unref?.();
+      server.close(() => { clearTimeout(timer); resolve(true); });
     });
+    console.log(drained ? '[MASS] HTTP server closed cleanly' : '[MASS] HTTP server closed with requests still in flight');
   }
+
   await closeFmPool();
   await closePgPool();
   process.exit(0);
-});
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 } // end of if (MASS_NO_LISTEN !== 'true')
