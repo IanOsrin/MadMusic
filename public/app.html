@@ -4407,6 +4407,18 @@
 
         if (!playlistView || !layoutGrid) return;
 
+        // #playlistView lives INSIDE #view-albums, so opening it from a rail on
+        // another page (G100's Global Favourites, Podcasts, …) rendered it into
+        // a hidden parent: tracks and bio loaded, nothing appeared, the click
+        // looked dead ("nothing literally nothing happens", 2026-07-31).
+        // Switch to the albums view first whenever we're not already on it, and
+        // start at the top — a rail click happens far down the page.
+        const albumsView = document.getElementById('view-albums');
+        if (albumsView && albumsView.hidden && typeof window.showView === 'function') {
+          window.showView('albums');
+        }
+        window.scrollTo({ top: 0, behavior: 'auto' });
+
         // Update title to album title
         if (playlistTitle) playlistTitle.textContent = album.artist || 'Album';
         if (playlistSubtitle) playlistSubtitle.textContent = 'Artist';
