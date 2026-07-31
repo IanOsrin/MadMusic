@@ -16,7 +16,11 @@ services:
     region: frankfurt          # matches the Postgres instance (Frankfurt)
     branch: live               # ⚠️ the branch Service B + this cron deploy from
     schedule: "0 1 * * *"      # 01:00 UTC = 03:00 SAST — nightly, low traffic
-    buildCommand: npm install
+    # npm ci, not npm install: installs exactly what package-lock.json pins and
+    # verifies each tarball's sha512 integrity hash. `npm install` may resolve a
+    # newer version inside a semver range, so a tampered republish could land on
+    # a rebuild without the lockfile ever being consulted. (2026-07-31)
+    buildCommand: npm ci
     startCommand: npm run sync:catalog
     envVars:
       # Internal Postgres URL (same region → private networking).
@@ -82,7 +86,7 @@ services:
     region: frankfurt
     branch: live               # same branch the other crons deploy from
     schedule: "0 3 * * *"      # 03:00 UTC = 05:00 SAST — after the other jobs
-    buildCommand: cd scripts/artwork-resize && npm install
+    buildCommand: cd scripts/artwork-resize && npm ci   # lockfile-exact + integrity-verified
     startCommand: cd scripts/artwork-resize && node resize-artwork.mjs --since=48
     envVars:
       - key: AWS_ACCESS_KEY_ID
