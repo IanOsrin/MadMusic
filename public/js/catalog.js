@@ -400,15 +400,27 @@
 
       // Show search fields when Search button is clicked
       if (goBtn && searchFieldsEl) {
-        console.log('[MASS] Attaching search button handler to:', goBtn);
-
-        // CRITICAL: Remove all existing handlers from the button first
-        // Clone the button to remove all listeners, then replace it
-        const newGoBtn = goBtn.cloneNode(true);
-        goBtn.parentNode.replaceChild(newGoBtn, goBtn);
-        goBtn = newGoBtn; // Update reference for Enter key handler below
-
-        // Now attach our handler to the fresh button
+        // Do NOT clone/replace the button to "clear" its listeners.
+        //
+        // This used to do:
+        //     const newGoBtn = goBtn.cloneNode(true);
+        //     goBtn.parentNode.replaceChild(newGoBtn, goBtn);
+        //
+        // which ran on DOMContentLoaded — AFTER the deferred app.min.js bundle had
+        // already attached the real search handler to #go, and after app.html's
+        // doSearch override attached its own. Cloning drops every listener, so the
+        // button left in the DOM had nothing but the capture handler below, which
+        // deliberately does nothing once the fields are visible. Net effect: the
+        // Search button did nothing when clicked.
+        //
+        // Enter kept working and hid the bug: app.min.js binds Enter on the input
+        // and calls goEl.click() on ITS OWN captured reference — the original,
+        // now-detached node, which still carried its listener. So the same search
+        // ran from the keyboard and not from the mouse.
+        //
+        // This handler is capture-phase and additive; it never needed a clean
+        // button. If you ever need to drop a listener here, remove that specific
+        // listener — never replace the node other code holds references to.
         goBtn.addEventListener('click', (e) => {
           console.log('[MASS] Search button clicked, searchFieldsEl.hidden:', searchFieldsEl.hidden);
 
