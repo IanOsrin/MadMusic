@@ -9,7 +9,7 @@ import dns from 'node:dns/promises';
 import net from 'node:net';
 import compression from 'compression';
 import cors from 'cors';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { fileURLToPath } from 'node:url';
 
 // Import routes
@@ -317,19 +317,34 @@ const isDevelopment = (process.env.NODE_ENV === 'development' || process.env.HOS
 const TEST_MODE = process.env.MASS_NO_LISTEN === 'true';
 const skipInTest = () => TEST_MODE;
 
+// Cloudflare has fronted the site since 2026-07-27, so the connecting peer —
+// and therefore req.ip under trust proxy=1 — is a Cloudflare edge address
+// that's the SAME for every visitor routed through it. Keyed that way, ALL
+// users shared one per-IP budget and the site 429'd for everyone under normal
+// load ("clicking does nothing", 2026-07-31). Key by the real client instead:
+// CF-Connecting-IP is stamped by Cloudflare itself and can't be forged through
+// it; direct-to-origin traffic (no CF) falls back to req.ip as before.
+// ipKeyGenerator normalizes IPv6 to its /56 so one visitor can't rotate
+// addresses within their allocation to dodge the limit.
+const clientIpKey = (req) => ipKeyGenerator(req.headers['cf-connecting-ip'] || req.ip || '');
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: isDevelopment ? 1000 : 100,
+  // 100/15min was also simply too small for this app — a single G100 page
+  // view fires ~20 API calls. 600 ≈ 40/min sustained per real visitor.
+  max: isDevelopment ? 1000 : 600,
   message: { error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: clientIpKey,
   skip: skipInTest
 });
 
 const expensiveLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
-  max: isDevelopment ? 500 : 20,
+  max: isDevelopment ? 500 : 40,
   message: { error: 'Rate limit exceeded for this endpoint' },
+  keyGenerator: clientIpKey,
   skip: skipInTest
 });
 
@@ -337,6 +352,7 @@ const paymentLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: { error: 'Too many payment requests, please try again later' },
+  keyGenerator: clientIpKey,
   skip: skipInTest
 });
 
