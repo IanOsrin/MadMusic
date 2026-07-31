@@ -2749,36 +2749,56 @@
       });
     }
 
-    // If window.run is already available (deferred script loaded), setup immediately
-    // Otherwise poll for it (should be very quick with defer)
-    if (typeof window.run === 'function') {
-      console.log('[MASS] window.run already available, setting up immediately');
+    // Install the search override as soon as app.min.js has defined window.run.
+    //
+    // The Search button's click handler is registered INSIDE setupSearchOverride,
+    // so if this never runs the button has no handler at all and clicking it does
+    // nothing. The previous version polled for window.run and gave up after 2s —
+    // but app.min.js is deferred, 307KB, and defines window.run near its end, so
+    // any slow connection or cold origin blew that budget and killed search for
+    // the whole page load (a reload "fixed" it because the bundle was then
+    // cached, which is what made it look intermittent).
+    //
+    // Deferred scripts are GUARANTEED to have executed by DOMContentLoaded, so
+    // that is the deterministic signal. The poll is kept only to install slightly
+    // sooner on fast loads, and nothing gives up on a timer. Same reasoning as
+    // the whenParsed() fix for the album view (2026-07-31).
+    let searchSetupDone = false;
+    const trySetupSearch = () => {
+      if (searchSetupDone) return true;                       // never double-bind
+      if (typeof window.run !== 'function') return false;
+      searchSetupDone = true;
       const shouldAutoSearch = setupSearchOverride();
       if (shouldAutoSearch) {
-        // Wait even longer to ensure everything is ready
         setTimeout(() => {
           console.log('[MASS] Delayed auto-search trigger');
           triggerAutoSearch();
         }, 500);
       }
+      return true;
+    };
+
+    if (trySetupSearch()) {
+      console.log('[MASS] window.run already available, search override installed');
     } else {
-      console.log('[MASS] Polling for window.run...');
       const checkInterval = setInterval(() => {
-        if (typeof window.run === 'function') {
-          clearInterval(checkInterval);
-          console.log('[MASS] window.run detected, setting up');
-          const shouldAutoSearch = setupSearchOverride();
-          if (shouldAutoSearch) {
-            // Wait even longer to ensure everything is ready
-            setTimeout(() => {
-              console.log('[MASS] Delayed auto-search trigger after polling');
-              triggerAutoSearch();
-            }, 500);
-          }
+        if (trySetupSearch()) clearInterval(checkInterval);
+      }, 25);
+
+      const readyHandler = () => {
+        if (!trySetupSearch()) {
+          // Only reachable if app.min.js failed to load or threw — surface it
+          // instead of leaving a dead button with no explanation.
+          console.error('[MASS] app.min.js did not define window.run — search is unavailable');
         }
-      }, 10);
-      // Fallback timeout
-      setTimeout(() => clearInterval(checkInterval), 2000);
+        clearInterval(checkInterval);
+      };
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', readyHandler, { once: true });
+      } else {
+        readyHandler();
+      }
     }
 
     // ── Search inputs: Enter key + album-view guard ──────────────────────────
