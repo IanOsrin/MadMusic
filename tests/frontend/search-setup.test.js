@@ -59,6 +59,48 @@ describe('desktop search override installation', () => {
   });
 });
 
+describe('the Search button must keep its handlers', () => {
+  // The real "Search button is inactive" bug (2026-07-31).
+  //
+  // catalog.js ran this on DOMContentLoaded:
+  //     const newGoBtn = goBtn.cloneNode(true);
+  //     goBtn.parentNode.replaceChild(newGoBtn, goBtn);
+  //
+  // By then the deferred app.min.js bundle had already attached the real search
+  // handler to #go, and app.html's override had attached its own. Cloning drops
+  // every listener, so the button left in the DOM had only catalog.js's own
+  // capture handler — which deliberately does nothing once the fields are
+  // visible. Clicking Search did nothing.
+  //
+  // Enter kept working and masked it: app.min.js binds Enter on the input and
+  // calls goEl.click() on its OWN captured reference — the original, detached
+  // node, which still had its listener. Keyboard worked, mouse didn't.
+  //
+  // Reproduced in a browser before the fix (Enter -> 2 /api/search requests,
+  // click -> 0) and after (click -> 2, Enter -> 1).
+
+  let catalogCode;
+
+  beforeAll(async () => {
+    const raw = await readFile(path.resolve('public/js/catalog.js'), 'utf8');
+    // Strip comments before asserting — the fix documents the old code verbatim,
+    // and we're testing what executes, not what's written about it.
+    catalogCode = raw
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+  });
+
+  it('does not clone or replace the #go button', () => {
+    // Anything that swaps the node silently unbinds every other module's handler.
+    expect(catalogCode).not.toMatch(/goBtn\s*\.\s*cloneNode/);
+    expect(catalogCode).not.toMatch(/replaceChild\s*\(\s*newGoBtn/);
+  });
+
+  it('attaches its handler to the live button rather than a replacement', () => {
+    expect(catalogCode).toMatch(/goBtn\.addEventListener\(\s*'click'/);
+  });
+});
+
 describe('deep-link searches must not collapse to the landing page', () => {
   // The G100 rail bug (2026-07-31) was the same root cause as the dead Search
   // button, via a longer path:
