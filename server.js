@@ -45,7 +45,7 @@ import { getTrackShareMeta, buildOgTags, inlineJson } from './lib/share-meta.js'
 import { resolveRequestOrigin } from './lib/http.js';
 import { createPrecompressedStatic } from './lib/precompressed-static.js';
 import { hostnameResolvesPrivate } from './lib/ssrf-guard.js';
-import { resolveClientIp } from './lib/cloudflare-ips.js';
+import { resolveClientIp, isCloudflareIp } from './lib/cloudflare-ips.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -333,7 +333,43 @@ const skipInTest = () => TEST_MODE;
 // peer the platform observed (Cloudflare in normal operation), and it appends
 // to X-Forwarded-For rather than replacing it, so that position is not
 // client-controllable. Verify it, then trust the header.
-const clientIpKey = (req) => ipKeyGenerator(resolveClientIp(req) || '');
+//
+// 2026-07-31, SECOND incident: verifying the peer against Cloudflare's ranges
+// (below) did NOT work on this topology — req.ip is evidently not the CF edge
+// address, so isCloudflareIp() returned false for real traffic, the header was
+// ignored, and visitors collapsed into per-edge shared buckets. Symptom: album
+// clicks 429'd on /api/search and fell through to the home page. Reverted to
+// the working behaviour until we know what req.ip actually is in production —
+// logClientIpShape() below samples it. Re-enabling the check without that data
+// will break the site again.
+const VERIFY_CF_PEER = process.env.VERIFY_CF_PEER === 'true';
+
+const clientIpKey = (req) => {
+  if (VERIFY_CF_PEER) return ipKeyGenerator(resolveClientIp(req) || '');
+  logClientIpShape(req);
+  return ipKeyGenerator(req.headers['cf-connecting-ip'] || req.ip || '');
+};
+
+// Diagnostic: log the address shape once a minute so we can see what the proxy
+// chain actually delivers, without spamming logs or exposing per-request data.
+let _ipShapeLoggedAt = 0;
+function logClientIpShape(req) {
+  const now = Date.now();
+  if (now - _ipShapeLoggedAt < 60_000) return;
+  _ipShapeLoggedAt = now;
+  const xff = String(req.headers['x-forwarded-for'] || '');
+  console.log('[ip-shape]', JSON.stringify({
+    reqIp: req.ip,
+    reqIpIsCloudflare: isCloudflareIp(req.ip),
+    xffCount: xff ? xff.split(',').length : 0,
+    xffRightmost: xff ? xff.split(',').pop().trim() : null,
+    xffRightmostIsCloudflare: xff ? isCloudflareIp(xff.split(',').pop().trim()) : null,
+    socket: req.socket?.remoteAddress,
+    hasCfConnectingIp: !!req.headers['cf-connecting-ip'],
+    hasCfRay: !!req.headers['cf-ray'],
+    trustProxy: app.get('trust proxy')
+  }));
+}
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
