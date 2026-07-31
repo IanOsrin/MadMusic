@@ -1137,9 +1137,26 @@
                 </div>`;
             }).join('');
 
+            // Open the album the same way every OTHER rail does (Global Favourites,
+            // trending, new releases — see setupAlbumViewDelegation in discovery.js):
+            // hand the album straight to openAlbumDirect, which routes to
+            // showAlbumDetailView.
+            //
+            // This rail used to call navigateToAlbum(), which was the only rail that
+            // opened an album by driving the UI: switch to the Albums view, clear the
+            // search box, fill the hidden album/artist fields, then click Search. That
+            // depended on the search override being installed — and when it wasn't, the
+            // bundle's own #go handler read the emptied box and called run(''), whose
+            // first branch is showLanding(). Clicking an album dumped you on the home
+            // page. openAlbumDirect has no such dependency.
+            //
+            // dataset values stay ENCODED here on purpose: openAlbumDirect
+            // decodeURIComponent's them itself, exactly as the other rails rely on.
             container.querySelectorAll('.random-card').forEach(card => {
               card.addEventListener('click', () => {
-                navigateToAlbum(decodeURIComponent(card.dataset.album), decodeURIComponent(card.dataset.artist));
+                if (typeof window.openAlbumDirect === 'function') {
+                  window.openAlbumDirect(card.dataset.album, card.dataset.artist);
+                }
               });
             });
           } catch (err) {
