@@ -18,9 +18,10 @@
 
 import { Router } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
-import { semanticShelvesAvailable, knnRaw } from '../lib/semantic-shelves.js';
+import { knnRaw } from '../lib/semantic-shelves.js';
 import { answerFromShelves, QUESTION_LINE } from '../lib/maddie-lite.js';
 import { fmFindRecords, fmCreateRecord } from '../fm-client.js';
+import { resolveClientIp } from '../lib/cloudflare-ips.js';
 
 const router = Router();
 
@@ -334,14 +335,34 @@ async function executeTool(name, input, ctx) {
   }
 }
 
-// ── rate limiting (simple in-memory per IP) ──────────────────────────────────
+// ── rate limiting (simple in-memory, per subscriber) ─────────────────────────
+// Keyed on the ACCESS TOKEN, not on a header. Maddie is subscriber-only, so the
+// token is the stable identity — and every turn costs real money (up to
+// MAX_TOOL_ITERATIONS model calls plus MADDIE_WEB_MAX_USES web searches). The
+// previous key was the left-most X-Forwarded-For entry, which is supplied by
+// the client in full: one subscriber could mint a fresh bucket per request and
+// drive unbounded Anthropic spend. IP is only a fallback, and a verified one.
 const rateBuckets = new Map();
-function rateLimited(ip) {
+
+function rateLimitKey(req) {
+  const recordId = req.accessToken?.recordId;
+  if (recordId) return `token:${recordId}`;
+  return `ip:${resolveClientIp(req) || '?'}`;
+}
+
+function rateLimited(key) {
   const now = Date.now();
-  let b = rateBuckets.get(ip);
-  if (!b || now > b.reset) { b = { count: 0, reset: now + RATE_LIMIT.windowMs }; rateBuckets.set(ip, b); }
+  let b = rateBuckets.get(key);
+  if (!b || now > b.reset) { b = { count: 0, reset: now + RATE_LIMIT.windowMs }; rateBuckets.set(key, b); }
   b.count += 1;
-  if (rateBuckets.size > 5000) rateBuckets.clear(); // crude memory guard
+  // Evict only EXPIRED buckets. The old guard cleared the whole map at 5000
+  // entries, which reset every subscriber's budget at once — and could be
+  // triggered deliberately to wipe the limiter for everyone.
+  if (rateBuckets.size > 5000) {
+    for (const [k, v] of rateBuckets) {
+      if (now > v.reset) rateBuckets.delete(k);
+    }
+  }
   return b.count > RATE_LIMIT.max;
 }
 
@@ -527,8 +548,7 @@ router.post('/chat', async (req, res) => {
       const assistants = incomingLite.filter(m => m && m.role === 'assistant' && typeof m.content === 'string');
       const lastUser = users[users.length - 1];
       if (!lastUser) return res.status(400).json({ error: 'Say something to Maddie first.' });
-      const ip0 = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '?';
-      if (rateLimited(ip0)) return res.status(429).json({ error: 'Maddie needs a breather — try again in a few minutes.' });
+      if (rateLimited(rateLimitKey(req))) return res.status(429).json({ error: 'Maddie needs a breather — try again in a few minutes.' });
       const lite = await maddieLite(
         textOf(lastUser),
         textOf(assistants[assistants.length - 1]),
@@ -537,8 +557,7 @@ router.post('/chat', async (req, res) => {
       if (lite) return res.json(lite);
       return res.status(503).json({ error: 'Maddie is not on shift (no API key and no semantic index).' });
     }
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '?';
-    if (rateLimited(ip)) {
+    if (rateLimited(rateLimitKey(req))) {
       return res.status(429).json({ error: 'Maddie needs a breather — try again in a few minutes.' });
     }
 

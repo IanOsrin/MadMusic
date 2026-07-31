@@ -3,26 +3,31 @@ import { fmGetRecordById, ensureToken, safeFetch, fmLogin } from '../fm-client.j
 import { validators } from '../lib/validators.js';
 import { AUDIO_FIELD_CANDIDATES, FM_LAYOUT, FM_HOST } from '../lib/fm-fields.js';
 import { containerUrlCache, trackRecordCache } from '../cache.js';
+import { hostnameResolvesPrivate, isSameOrigin } from '../lib/ssrf-guard.js';
 
 const router = Router();
 const REGEX_HTTP_HTTPS = /^https?:\/\//i;
 
-const PRIVATE_IP_PATTERNS = [
-  /^10\./,
-  /^172\.(1[6-9]|2\d|3[01])\./,
-  /^192\.168\./,
-  /^169\.254\./,
-  /^::1$/,
-  /^fe80:/i,
-  /^fc00:/i
-];
+// Media origins we are willing to 302 the browser to. Anything else that is
+// public and passes the SSRF guard is still served, but proxied through us
+// rather than redirected — so this endpoint can't be used as an open redirect
+// to bounce victims off our domain.
+//
+// Both S3 host forms are listed on purpose: audio uses the path-style origin
+// (its own connection pool — see the 2026-07-27 "songs hang" incident) while
+// artwork uses the virtual-hosted form.
+const MEDIA_CDN_HOST = (process.env.MEDIA_CDN_HOST || '').trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+const REDIRECT_HOST_ALLOWLIST = new Set([
+  'mass-music-audio-files.s3.eu-north-1.amazonaws.com',
+  's3.eu-north-1.amazonaws.com',
+  ...(MEDIA_CDN_HOST ? [MEDIA_CDN_HOST] : [])
+].map(h => h.toLowerCase()));
 
-function isPrivateHostname(hostname) {
-  if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
-  return PRIVATE_IP_PATTERNS.some(p => p.test(hostname));
+function isRedirectableHost(hostname) {
+  return REDIRECT_HOST_ALLOWLIST.has(String(hostname || '').toLowerCase());
 }
 
-function resolveContainerUpstream(req) {
+async function resolveContainerUpstream(req) {
   const rid    = (req.query.rid   || '').toString().trim();
   const field  = (req.query.field || '').toString().trim();
   const rep    = (req.query.rep   || '1').toString().trim();
@@ -50,30 +55,42 @@ function resolveContainerUpstream(req) {
       String(req.query.proxy || '').toLowerCase()
     );
     if (REGEX_HTTP_HTTPS.test(direct)) {
+      let hostname;
       try {
-        const { hostname } = new URL(direct);
-        if (isPrivateHostname(hostname)) {
-          return { error: { status: 403, body: { error: 'forbidden', detail: 'Access to private/internal IPs not allowed' } } };
-        }
-        // Public S3/CDN URLs — redirect the browser directly instead of proxying.
-        // This eliminates the server round-trip and lets the browser cache the image itself.
-        const isFmUrl = FM_HOST && direct.startsWith(FM_HOST);
-        if (!isFmUrl && !forceProxy) {
-          return { redirect: direct };
-        }
-        // forceProxy or FM URL: stream the upstream bytes through. requiresAuth
-        // stays true only for FM URLs — public S3 doesn't need our FM token.
-        return { upstreamUrl: direct, requiresAuth: !!isFmUrl };
+        ({ hostname } = new URL(direct));
       } catch {
         return { error: { status: 400, body: { error: 'invalid_input', detail: 'Invalid URL format' } } };
       }
+
+      // This decides whether we attach the FM bearer token, so it MUST be an
+      // origin comparison — see isSameOrigin. Do not "simplify" it back to a
+      // prefix/startsWith test: that leaks a live FileMaker session.
+      const isFmUrl = isSameOrigin(direct, FM_HOST);
+
+      // DNS-resolving SSRF guard. A hostname regex is not enough — several
+      // public naming tricks and alternate literal forms resolve to internal
+      // addresses without ever looking internal as a string. Skipped for FM
+      // (a known-good origin) so playback never depends on a DNS round-trip.
+      if (!isFmUrl && await hostnameResolvesPrivate(hostname)) {
+        return { error: { status: 403, body: { error: 'forbidden', detail: 'Access to private/internal IPs not allowed' } } };
+      }
+
+      // Known media origins — redirect the browser directly instead of
+      // proxying. Saves the server round-trip and lets the browser cache.
+      if (!isFmUrl && !forceProxy && isRedirectableHost(hostname)) {
+        return { redirect: direct };
+      }
+
+      // Everything else streams through us. requiresAuth stays true only for
+      // FM URLs — public S3 doesn't need (and must never receive) our token.
+      return { upstreamUrl: direct, requiresAuth: isFmUrl };
     }
     // Non-HTTP direct path — must be joined with FM_HOST to form a valid URL.
     if (!FM_HOST) {
       return { error: { status: 503, body: { error: 'not_configured', detail: 'FileMaker host not configured' } } };
     }
     const upstreamUrl = `${FM_HOST.replace(/\/?$/, '')}/${direct.replace(/^\//, '')}`;
-    return { upstreamUrl, requiresAuth: upstreamUrl.startsWith(FM_HOST) };
+    return { upstreamUrl, requiresAuth: isSameOrigin(upstreamUrl, FM_HOST) };
   }
 
   return { error: { status: 400, body: { error: 'invalid_input', detail: 'Missing rid/field or u parameter.' } } };
@@ -120,7 +137,30 @@ function isImmutableUpstream(upstreamUrl) {
 // guest-preview route (routes/preview.js) so both hit the same LRU / FM path.
 // Returns { ok: true, url, field, artworkUrl, _cached? } or
 // { ok: false, reason: 'record_not_found' | 'no_container' }.
+// Layouts and fields a CLIENT may name. This resolver returns the raw value of
+// whatever field it is pointed at, so leaving either open makes it a general
+// read primitive over every table the FM account can reach — including ones
+// holding credentials and customer data, not just audio. Callers pass query
+// params straight in, so both are allowlisted here (defence in depth) as well
+// as rejected at the route. Keep both lists closed.
+const ALLOWED_LAYOUTS = new Set([FM_LAYOUT].filter(Boolean));
+const ALLOWED_FIELDS = new Set(AUDIO_FIELD_CANDIDATES);
+
+export function isAllowedLayout(layout) {
+  return ALLOWED_LAYOUTS.has(String(layout || '').trim());
+}
+
+export function isAllowedAudioField(field) {
+  return ALLOWED_FIELDS.has(String(field || '').trim());
+}
+
 export async function resolveTrackAudio(recordId, layout = FM_LAYOUT, { requestedField = '', candidates = [] } = {}) {
+  // Defence in depth: never let an unexpected layout/field reach FileMaker,
+  // even if a future caller forgets to validate at the route.
+  if (!isAllowedLayout(layout)) layout = FM_LAYOUT;
+  if (requestedField && !isAllowedAudioField(requestedField)) requestedField = '';
+  candidates = candidates.filter(isAllowedAudioField);
+
   // Check cache first to avoid a FileMaker round-trip on repeated plays
   const cacheKey = `${layout}::${recordId}`;
   const cached = containerUrlCache.get(cacheKey);
@@ -227,6 +267,18 @@ router.get('/track/:recordId/container', async (req, res) => {
       ? candidateParam.split(',').map((value) => value.trim()).filter(Boolean)
       : [];
 
+    // Reject rather than silently coerce, so a caller asking for something it
+    // shouldn't gets a clear 400 instead of a confusing audio URL.
+    if (!isAllowedLayout(layout)) {
+      res.status(400).json({ ok: false, error: 'Unsupported layout' });
+      return;
+    }
+    const badField = [requestedField, ...candidates].find(f => f && !isAllowedAudioField(f));
+    if (badField) {
+      res.status(400).json({ ok: false, error: 'Unsupported field' });
+      return;
+    }
+
     const resolved = await resolveTrackAudio(recordId, layout, { requestedField, candidates });
 
     if (!resolved.ok) {
@@ -296,7 +348,7 @@ function sendUpstreamError(res, upstream, upstreamUrl) {
 }
 
 router.get('/container', async (req, res) => {
-  const resolved = resolveContainerUpstream(req);
+  const resolved = await resolveContainerUpstream(req);
   if (resolved.error) {
     const { status, body } = resolved.error;
     res.status(status).json(body);
