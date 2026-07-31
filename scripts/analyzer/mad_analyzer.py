@@ -83,6 +83,7 @@ def load_config():
                 "energy": fields_file.get("energy", "AI_Energy"),
                 "quality_score": fields_file.get("quality_score", "AI_QualityScore"),
                 "quality_notes": fields_file.get("quality_notes", "AI_QualityNotes"),
+                "lead_silence": fields_file.get("lead_silence", "AI_LeadSilence"),
             },
         },
         "s3": {
@@ -169,6 +170,16 @@ class FileMakerAPI:
     def find_unanalysed(self, bpm_field, limit):
         """Records whose AI_BPM is empty ('=' matches empty in FM)."""
         body = {"query": [{bpm_field: "="}], "limit": int(limit)}
+        return self._find(body)
+
+    def find_missing_silence(self, silence_field, limit):
+        """Backfill targets: AI_LeadSilence empty. No AI_BPM condition — the
+        head-download decode works on anything with a filename, including
+        tracks the full analyzer hasn't reached yet."""
+        body = {"query": [{silence_field: "="}], "limit": int(limit)}
+        return self._find(body)
+
+    def _find(self, body):
         try:
             r = self._request("POST", f"{self.base}/layouts/{self.layout}/_find", json=body)
         except requests.HTTPError as e:
@@ -181,6 +192,10 @@ class FileMakerAPI:
             raise
         data = r.json()["response"]
         return data.get("data", [])
+
+    def get_record(self, record_id):
+        r = self._request("GET", f"{self.base}/layouts/{self.layout}/records/{record_id}")
+        return r.json()["response"]["data"][0]
 
     def update_record(self, record_id, fields):
         r = self._request(
@@ -208,6 +223,14 @@ class S3Downloader:
         key = f"{self.prefix}/{filename}" if self.prefix else filename
         self.client.download_file(self.bucket, key, dest_path)
 
+    def download_head(self, filename, dest_path, max_bytes=1_500_000):
+        """First chunk only — plenty to measure lead silence, ~10x faster than
+        a full download. A truncated MP3 decodes fine (frames are standalone)."""
+        key = f"{self.prefix}/{filename}" if self.prefix else filename
+        obj = self.client.get_object(Bucket=self.bucket, Key=key, Range=f"bytes=0-{max_bytes - 1}")
+        with open(dest_path, "wb") as f:
+            f.write(obj["Body"].read())
+
 
 # ── Essentia analysis (unchanged from the working local tool) ───────────────────
 def pool_get(pool, key, default=None):
@@ -217,6 +240,41 @@ def pool_get(pool, key, default=None):
         return default
     except Exception:
         return default
+
+
+SILENCE_DB = -45.0        # RMS below this (dBFS) counts as silence
+SILENCE_CAP = 20.0        # sanity cap — never report (or skip) more than this
+SILENCE_FRAME = 0.02      # 20 ms analysis frames
+SILENCE_MIN_RUN = 2       # consecutive loud frames required (rejects clicks/pops)
+
+def measure_lead_silence(audio_path):
+    """Seconds of leading silence: first sustained frame whose RMS exceeds
+    SILENCE_DB. Returns a float rounded to 0.1s, capped at SILENCE_CAP."""
+    try:
+        import numpy as np
+        import essentia.standard as es
+        sr = 44100
+        audio = es.MonoLoader(filename=audio_path, sampleRate=sr)()
+        if audio is None or len(audio) == 0:
+            return None
+        frame_len = int(sr * SILENCE_FRAME)
+        threshold = 10 ** (SILENCE_DB / 20.0)
+        n_frames = min(len(audio) // frame_len, int(SILENCE_CAP / SILENCE_FRAME) + SILENCE_MIN_RUN)
+        run = 0
+        for i in range(n_frames):
+            frame = audio[i * frame_len:(i + 1) * frame_len]
+            rms = float(np.sqrt(np.mean(frame.astype("float64") ** 2)))
+            if rms > threshold:
+                run += 1
+                if run >= SILENCE_MIN_RUN:
+                    start = (i - SILENCE_MIN_RUN + 1) * SILENCE_FRAME
+                    return round(min(max(start, 0.0), SILENCE_CAP), 1)
+            else:
+                run = 0
+        return SILENCE_CAP  # nothing loud in the first 20s — cap it
+    except Exception as e:
+        log.warning(f"  lead-silence error: {e}")
+        return None
 
 
 def analyze_audio(audio_path):
@@ -245,9 +303,11 @@ def analyze_audio(audio_path):
         mood = _classify_mood(energy, danceability, spectral_complexity)
         quality_score, quality_notes = _assess_quality(features)
 
+        lead = measure_lead_silence(audio_path)
         return {
             "bpm": bpm, "key": key_str, "mood": mood, "energy": energy,
             "quality_score": quality_score, "quality_notes": quality_notes,
+            "lead_silence": lead,
         }
     except Exception as e:
         log.warning(f"  Essentia error: {e}")
@@ -299,7 +359,73 @@ def build_fm_fields(analysis, cfg):
     if analysis["quality_score"] is not None:
         fm[fc["quality_score"]] = analysis["quality_score"]
         fm[fc["quality_notes"]] = analysis["quality_notes"]
+    if analysis.get("lead_silence") is not None:
+        fm[fc["lead_silence"]] = analysis["lead_silence"]
     return fm
+
+
+def run_silence_backfill(fm, s3, cfg, limit, dry_run):
+    """--backfill-silence: measure ONLY lead silence for records missing it,
+    using a ranged S3 download (first ~1.5MB). Verifies the very first write
+    by reading the record back — FM silently discards writes to fields that
+    aren't on the layout."""
+    fields = cfg["filemaker"]["fields"]
+    silence_field = fields["lead_silence"]
+    filename_field = cfg["filemaker"]["filename_field"]
+    done = failed = 0
+    verified = False
+
+    records = fm.find_missing_silence(silence_field, limit)
+    log.info(f"{len(records)} tracks need lead-silence (limit {limit}){' [DRY RUN]' if dry_run else ''}")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        for rec in records:
+            rid = rec["recordId"]
+            filename = (rec["fieldData"].get(filename_field) or "").strip()
+            if not filename:
+                if not dry_run:
+                    try: fm.update_record(rid, {silence_field: FAIL_SENTINEL})
+                    except Exception: pass
+                failed += 1
+                continue
+
+            name = filename + ".mp3"
+            local = os.path.join(tmp, os.path.basename(name))
+            try:
+                s3.download_head(name, local)
+            except Exception as e:
+                log.warning(f"  S3 miss {name}: {e}")
+                if not dry_run:
+                    try: fm.update_record(rid, {silence_field: FAIL_SENTINEL})
+                    except Exception: pass
+                failed += 1
+                continue
+
+            lead = measure_lead_silence(local)
+            try: os.remove(local)
+            except OSError: pass
+
+            if lead is None:
+                if not dry_run:
+                    try: fm.update_record(rid, {silence_field: FAIL_SENTINEL})
+                    except Exception: pass
+                failed += 1
+                continue
+
+            log.info(f"  {name}: lead silence {lead}s")
+            if not dry_run:
+                fm.update_record(rid, {silence_field: lead})
+                if not verified:
+                    back = fm.get_record(rid)["fieldData"].get(silence_field)
+                    if back in (None, ""):
+                        log.error(f"READ-BACK FAILED: {silence_field} wrote but came back empty — "
+                                  "field missing from the layout? Aborting.")
+                        sys.exit(1)
+                    log.info(f"  read-back OK ({silence_field}={back})")
+                    verified = True
+            done += 1
+            time.sleep(0.05)
+    log.info(f"Backfill done — measured {done}, failed/skipped {failed}")
 
 
 # ── Main ────────────────────────────────────────────────────────────────────
@@ -307,6 +433,8 @@ def main():
     ap = argparse.ArgumentParser(description="MAD Music Analyzer (Render-ready)")
     ap.add_argument("--limit", type=int, default=300, help="Max tracks per run (default 300)")
     ap.add_argument("--dry-run", action="store_true", help="Analyse but don't write to FileMaker")
+    ap.add_argument("--backfill-silence", action="store_true",
+                    help="Only measure AI_LeadSilence for records missing it (ranged S3 download, fast)")
     args = ap.parse_args()
 
     cfg = load_config()
@@ -321,6 +449,13 @@ def main():
     fm = FileMakerAPI(cfg)
     fm.login()
     s3 = S3Downloader(cfg)
+
+    if args.backfill_silence:
+        try:
+            run_silence_backfill(fm, s3, cfg, args.limit, args.dry_run)
+        finally:
+            fm.logout()
+        return
 
     fields = cfg["filemaker"]["fields"]
     bpm_field = fields["bpm"]

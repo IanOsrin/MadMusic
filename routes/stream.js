@@ -125,7 +125,7 @@ export async function resolveTrackAudio(recordId, layout = FM_LAYOUT, { requeste
   const cacheKey = `${layout}::${recordId}`;
   const cached = containerUrlCache.get(cacheKey);
   if (cached) {
-    return { ok: true, url: cached.url, field: cached.field, artworkUrl: cached.artworkUrl || '', _cached: true };
+    return { ok: true, url: cached.url, field: cached.field, artworkUrl: cached.artworkUrl || '', leadSilence: cached.leadSilence || 0, _cached: true };
   }
 
   // Read-through fallback (May-17): featured/trending/g100 pre-warm already
@@ -206,10 +206,17 @@ export async function resolveTrackAudio(recordId, layout = FM_LAYOUT, { requeste
     if (value) { artworkUrl = value; break; }
   }
 
-  // Cache the resolved URLs so repeat plays skip the FileMaker lookup
-  containerUrlCache.set(cacheKey, { url: containerUrl, field: chosenField || requestedField || '', artworkUrl });
+  // Lead-silence skip (2026-07-18): analyzer-measured seconds of dead air at
+  // the head of the file (AI_LeadSilence). Players seek to (value − 1s) when
+  // > 1s. Sentinel −1 (measure failed) and the 20s cap value are passed as-is;
+  // the frontend clamps.
+  const leadRaw = Number.parseFloat(fieldData['AI_LeadSilence']);
+  const leadSilence = Number.isFinite(leadRaw) && leadRaw > 0 && leadRaw <= 20 ? leadRaw : 0;
 
-  return { ok: true, url: containerUrl, field: chosenField || requestedField || '', artworkUrl };
+  // Cache the resolved URLs so repeat plays skip the FileMaker lookup
+  containerUrlCache.set(cacheKey, { url: containerUrl, field: chosenField || requestedField || '', artworkUrl, leadSilence });
+
+  return { ok: true, url: containerUrl, field: chosenField || requestedField || '', artworkUrl, leadSilence };
 }
 
 router.get('/track/:recordId/container', async (req, res) => {
@@ -235,10 +242,10 @@ router.get('/track/:recordId/container', async (req, res) => {
       return;
     }
 
-    const { url, field, artworkUrl, _cached } = resolved;
+    const { url, field, artworkUrl, leadSilence, _cached } = resolved;
     res.json(_cached
-      ? { ok: true, url, field, artworkUrl, _cached: true }
-      : { ok: true, url, field, artworkUrl });
+      ? { ok: true, url, field, artworkUrl, leadSilence: leadSilence || 0, _cached: true }
+      : { ok: true, url, field, artworkUrl, leadSilence: leadSilence || 0 });
   } catch (err) {
     console.error('[MASS] Container refresh failed:', err);
     res.status(500).json({ ok: false, error: 'Failed to refresh container' });
