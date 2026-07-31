@@ -58,3 +58,31 @@ describe('desktop search override installation', () => {
     expect(html).toContain('app.min.js did not define window.run');
   });
 });
+
+describe('deep-link searches must not collapse to the landing page', () => {
+  // The G100 rail bug (2026-07-31) was the same root cause as the dead Search
+  // button, via a longer path:
+  //
+  //   .random-card click -> navigateToAlbum() -> clears #search, sets the hidden
+  //   searchAlbum/searchArtist fields -> #go.click()
+  //
+  // With the override installed, its handler calls run(q || ' '). Without it,
+  // only app.min.js's own #go handler runs, which reads the now-empty box and
+  // calls run(''). app.min.js's run() starts `if(!q){ showLanding(); return; }`
+  // — so clicking an album on G100 landed you on the home page.
+  //
+  // The space placeholder is load-bearing, not a curiosity. Deleting it silently
+  // reintroduces the bug for every deep-link entry point (G100 rail, artist
+  // drill-down, ?album=&artist= links).
+
+  it('the override passes a space placeholder rather than an empty query', () => {
+    expect(html).toMatch(/window\.run\(\s*q\s*\|\|\s*' '\s*,/);
+  });
+
+  it('navigateToAlbum still drives the search button (its only search path)', () => {
+    const fn = html.slice(html.indexOf('function navigateToAlbum'), html.indexOf('function navigateToAlbum') + 900);
+    expect(fn).toContain('searchAlbum.value');
+    expect(fn).toContain('searchArtist.value');
+    expect(fn).toContain('goBtn.click()');
+  });
+});
