@@ -95,31 +95,41 @@ export function renderG100Albums(filter = '') {
       }));
     }
 
+// The rail a playlist appears on is decided by its FM Category, so the same
+// loader serves every rail and a playlist can never land on two of them.
+// Mirrors the desktop loader in app.html — keep the two in step.
 export async function loadG100Playlists() {
-      const container = elements.g100PlaylistsContent;
+      await loadPlaylistRail('Artist', elements.g100PlaylistsContent);
+      state.g100PlaylistsLoaded = true;
+    }
+
+export async function loadScenes() {
+      await loadPlaylistRail('Scene', elements.scenesContent);
+      state.scenesLoaded = true;
+    }
+
+async function loadPlaylistRail(category, container) {
+      if (!container) return;
       try {
-        // ?category=Artist — MAD About only (see the desktop rail in app.html).
-        const res  = await fetch('/api/public-playlists?category=Artist');
+        const res  = await fetch(`/api/public-playlists?category=${encodeURIComponent(category)}`);
         const data = await res.json();
         const playlists = data.playlists || [];
 
         if (!playlists.length) {
           container.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><p>No playlists available</p></div>`;
-          state.g100PlaylistsLoaded = true;
           return;
         }
 
-        state.g100Playlists = playlists;
-        state.g100PlaylistsLoaded = true;
-        renderG100Playlists(playlists);
+        if (category === 'Artist') state.g100Playlists = playlists;
+        renderG100Playlists(playlists, container);
       } catch (err) {
-        console.error('[G100 Playlists] Failed to load', err);
+        console.error(`[G100 Playlists:${category}] Failed to load`, err);
         container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>Failed to load playlists</p></div>`;
       }
     }
 
-export function renderG100Playlists(playlists) {
-      const container = elements.g100PlaylistsContent;
+export function renderG100Playlists(playlists, target) {
+      const container = target || elements.g100PlaylistsContent;
       const grid = document.createElement('div');
       grid.className = 'g100-playlist-grid';
 
