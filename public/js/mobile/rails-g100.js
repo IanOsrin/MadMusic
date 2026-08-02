@@ -98,7 +98,8 @@ export function renderG100Albums(filter = '') {
 export async function loadG100Playlists() {
       const container = elements.g100PlaylistsContent;
       try {
-        const res  = await fetch('/api/public-playlists');
+        // ?category=Artist — MAD About only (see the desktop rail in app.html).
+        const res  = await fetch('/api/public-playlists?category=Artist');
         const data = await res.json();
         const playlists = data.playlists || [];
 

@@ -655,7 +655,9 @@
                 const container = document.getElementById('g100PlaylistsContainer');
                 if (!container || container.dataset.loaded) return;
                 try {
-                  const res = await fetch('/api/public-playlists');
+                  // ?category=Artist — this is the MAD About rail; Scene/Decade/Theme
+                  // playlists have their own rails and must not leak into this one.
+                  const res = await fetch('/api/public-playlists?category=Artist');
                   const data = await res.json();
                   const playlists = data.playlists || [];
                   if (!playlists.length) {
