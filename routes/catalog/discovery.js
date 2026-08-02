@@ -11,7 +11,8 @@ import {
 } from '../../lib/fm-fields.js';
 import { fmErrorToHttpStatus } from '../../lib/http.js';
 import { validateQueryString, fmExactMatch } from '../../lib/validators.js';
-import { resolvePlaylistImage, buildPlaylistArtMap, playlistArtLookup } from '../../lib/playlist.js';
+import { resolvePlaylistImage, buildPlaylistArtMap, playlistArtLookup,
+         buildPlaylistCategoryMap, playlistCategoryLookup } from '../../lib/playlist.js';
 import { createSwrCache } from '../../lib/swr-cache.js';
 import { createLogger } from '../../lib/logger.js';
 import { parsePositiveInt } from '../../lib/format.js';
@@ -46,10 +47,13 @@ const PLAYLIST_ART_ENABLED = process.env.PLAYLIST_ART_ENABLED === 'true';
 // Set PLAYLISTS_REQUIRE_ART=false to show artless playlists again.
 const PLAYLISTS_REQUIRE_ART = process.env.PLAYLISTS_REQUIRE_ART !== 'false';
 
+// Returns BOTH maps from the one find — the art URL and the Category that
+// decides the rail — so a rail filter costs no extra FM round trip.
 async function loadPlaylistArtMap() {
-  if (!PLAYLIST_ART_ENABLED) return new Map();
+  if (!PLAYLIST_ART_ENABLED) return { art: new Map(), category: new Map() };
   const res = await fmFindRecords(FM_PLAYLIST_ART_LAYOUT, [{ Active: '1' }], { limit: 500 });
-  return buildPlaylistArtMap(res?.data || []); // FM 102 (layout missing) → empty → file fallback
+  const records = res?.data || [];      // FM 102 (layout missing) → empty → file fallback
+  return { art: buildPlaylistArtMap(records), category: buildPlaylistCategoryMap(records) };
 }
 
 const playlistArtSwr = createSwrCache({
@@ -365,8 +369,9 @@ async function loadPlaylistListPayload() {
       return 0;
     });
   // FM-managed cover (if enabled + present) overrides the file-based one.
-  const artResult = await playlistArtSwr.get('map').catch(() => ({ value: new Map() }));
-  const artMap = artResult.value || new Map();
+  const artResult = await playlistArtSwr.get('map').catch(() => ({ value: null }));
+  const artMap = artResult.value?.art      || new Map();
+  const catMap = artResult.value?.category || new Map();
   const withArt = await Promise.all(
     rawPlaylists.map(async (pl) => {
       const masterUrl = playlistArtLookup(artMap, pl.name) || await resolvePlaylistImage(pl.name) || null;
@@ -375,6 +380,7 @@ async function loadPlaylistListPayload() {
       // derivative; keep the master in imageUrlFull for any hero-size consumer.
       return {
         ...pl,
+        category: playlistCategoryLookup(catMap, pl.name),
         imageUrl: process.env.ARTWORK_THUMBS === 'true' ? thumbArtworkUrl(masterUrl, 300) : masterUrl,
         imageUrlFull: masterUrl
       };
@@ -426,6 +432,23 @@ router.get('/public-playlists', async (req, res) => {
     if (bustCache) publicPlaylistListSwr.cache.delete(key);
     const { value, state } = await publicPlaylistListSwr.get(key);
     res.setHeader('X-Cache-State', state);
+
+    // ?category=Artist|Scene|Decade|Theme — one cached list, many rails.
+    // Filtering here rather than per-rail in the frontend means a playlist can
+    // only ever appear on the rail its Category names. Without it every rail
+    // showed EVERY playlist, and the MAD About rail silently absorbed the first
+    // Scene playlists the moment they were given covers.
+    const categoryParam = (req.query.category || '').toString().trim();
+    if (categoryParam && Array.isArray(value.playlists)) {
+      const want = categoryParam.toLowerCase();
+      // Bridge: playlists predating the Category field are uncategorised, and
+      // the MAD-About-<artist> naming already states the answer. Drop this once
+      // every playlist carries a Category.
+      const legacyArtist = (pl) => !pl.category && want === 'artist' && /^MAD[\s_-]*About/i.test(pl.name || '');
+      const filtered = value.playlists.filter(pl =>
+        String(pl.category || '').toLowerCase() === want || legacyArtist(pl));
+      return res.json({ ...value, playlists: filtered.slice(0, limit) });
+    }
     // Apply limit to the list view (tracks view already respects fm limit in the query).
     if (Array.isArray(value.playlists) && value.playlists.length > limit) {
       return res.json({ ...value, playlists: value.playlists.slice(0, limit) });
