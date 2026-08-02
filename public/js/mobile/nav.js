@@ -4,18 +4,30 @@ import { DECADES, GENRES } from './data.js';
 import { state } from './state.js';
 import { loadPlaylists } from './playlists.js';
 import { loadDiscover } from './rails-discover.js';
-import { loadG100, loadG100Playlists } from './rails-g100.js';
+import { loadG100, loadG100Playlists, loadScenes } from './rails-g100.js';
 import { loadNewReleases } from './rails-newreleases.js';
 import { pushTab, isRestoring } from './router.js';
+
+// Tabs reached through the Browse hub rather than the bottom bar. They keep
+// the bar at four thumb-reachable items — a new rail gets a Browse card, not a
+// fifth, sixth, seventh bottom-bar slot.
+export const BROWSE_TABS = ['g100', 'discover', 'genres', 'decades', 'scenes', 'madabout'];
 
 export function switchTab(tabName) {
       const wasAlreadyActive = state.currentTab === tabName;
       state.currentTab = tabName;
 
-      // Update tab buttons
+      // Inside a Browse sub-tab the bar highlights Browse, so the user can see
+      // where they are. 'profile' lights nothing — it lives in the header badge.
+      const navTab = BROWSE_TABS.includes(tabName) ? 'browse' : tabName;
       document.querySelectorAll('.tab-button').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === tabName);
+        btn.classList.toggle('active', btn.dataset.tab === navTab);
       });
+
+      // …and the sub-tab gets an explicit way back up, so nobody is stranded
+      // if they don't use the system back gesture.
+      const back = document.getElementById('browse-back');
+      if (back) back.hidden = !BROWSE_TABS.includes(tabName);
 
       // Update tab content
       document.querySelectorAll('.tab-content').forEach(content => {
@@ -29,6 +41,8 @@ export function switchTab(tabName) {
         }
       } else if (tabName === 'g100') {
         if (!state.g100Loaded || wasAlreadyActive) loadG100(wasAlreadyActive);
+      } else if (tabName === 'scenes') {
+        if (!state.scenesLoaded || wasAlreadyActive) loadScenes();
       } else if (tabName === 'madabout') {
         if (!state.g100PlaylistsLoaded || wasAlreadyActive) loadG100Playlists();
       } else if (tabName === 'discover') {

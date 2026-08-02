@@ -611,6 +611,26 @@
                 <button id="sharedPlaylistCopy" type="button" class="btn small">Copy share link</button>
               </div>
             </section>
+            <!-- Scenes Section — playlists whose FM Category is 'Scene': a sound,
+                 a place and a moment (Mbaqanga, Maskandi, Cape Jazz…), as opposed
+                 to the artist collections in the Playlists rail below. Same card
+                 markup and loader as that rail; only the category differs. -->
+            <section class="section" id="scenesRailSection" hidden>
+              <div class="section-header">
+                <div>
+                  <h2 class="section-title">Scenes</h2>
+                  <p class="section-subtitle">The sounds that made South Africa</p>
+                </div>
+              </div>
+              <div class="horizontal-scroll-wrapper">
+                <button class="scroll-arrow scroll-arrow-left" data-target="scenesPlaylistsContainer" aria-label="Scroll left"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                <div id="scenesPlaylistsContainer" class="horizontal-scroll-container">
+                  <div class="loading"><div class="spinner"></div></div>
+                </div>
+                <button class="scroll-arrow scroll-arrow-right visible" data-target="scenesPlaylistsContainer" aria-label="Scroll right"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+              </div>
+            </section>
+
             <!-- New Releases Section -->
             <section class="section" id="newReleasesSection" hidden>
               <div class="section-header">
@@ -651,19 +671,26 @@
 
             <script>
             (function() {
-              async function loadPublicPlaylistsRail() {
-                const container = document.getElementById('g100PlaylistsContainer');
+              // One loader, one card design, many rails — the rail a playlist
+              // appears on is decided by its FM Category and nothing else, so a
+              // playlist can never show up on two rails or on the wrong one.
+              async function loadPublicPlaylistsRail(containerId, category, sectionId) {
+                const container = document.getElementById(containerId);
                 if (!container || container.dataset.loaded) return;
+                const section = sectionId ? document.getElementById(sectionId) : null;
                 try {
-                  // ?category=Artist — this is the MAD About rail; Scene/Decade/Theme
-                  // playlists have their own rails and must not leak into this one.
-                  const res = await fetch('/api/public-playlists?category=Artist');
+                  const res = await fetch(`/api/public-playlists?category=${encodeURIComponent(category)}`);
                   const data = await res.json();
                   const playlists = data.playlists || [];
                   if (!playlists.length) {
-                    container.innerHTML = '<p style="color:var(--muted);padding:20px;">No playlists available</p>';
+                    // An empty category is a normal state while playlists are still
+                    // being tagged — hide the whole section rather than show a rail
+                    // with an apology in it.
+                    if (section) section.hidden = true;
+                    else container.innerHTML = '<p style="color:var(--muted);padding:20px;">No playlists available</p>';
                     return;
                   }
+                  if (section) section.hidden = false;
                   container.innerHTML = playlists.map((pl, i) => {
                     const hue = (i * 47 + 210) % 360;
                     return `
@@ -707,19 +734,23 @@
                           }
                         }
                       } catch (err) {
-                        console.error('[Playlists Rail] Failed to load tracks:', err);
+                        console.error(`[Playlists Rail:${category}] Failed to load tracks:`, err);
                       }
                     });
                   });
                 } catch (err) {
-                  console.error('[Playlists Rail] Failed to load:', err);
-                  container.innerHTML = '<p style="color:var(--muted);padding:20px;">Failed to load playlists</p>';
+                  console.error(`[Playlists Rail:${category}] Failed to load:`, err);
+                  if (section) section.hidden = true;
+                  else container.innerHTML = '<p style="color:var(--muted);padding:20px;">Failed to load playlists</p>';
                 }
               }
 
-              // The rail lives on the home view now and /api/public-playlists is
+              // The rails live on the home view now and /api/public-playlists is
               // public, so load immediately (no view-visibility gating needed).
-              loadPublicPlaylistsRail();
+              // Scenes first: the archive's story is the draw, the artist
+              // collections are the follow-through.
+              loadPublicPlaylistsRail('scenesPlaylistsContainer', 'Scene', 'scenesRailSection');
+              loadPublicPlaylistsRail('g100PlaylistsContainer',   'Artist');
             })();
             </script>
 

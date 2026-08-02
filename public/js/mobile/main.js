@@ -27,6 +27,18 @@ import { initMaddie } from './maddie.js';
       });
     });
 
+    // Browse hub cards → the tab they name.
+    document.querySelectorAll('.browse-card[data-goto]').forEach(card => {
+      card.addEventListener('click', () => switchTab(card.dataset.goto));
+    });
+
+    // Back out of a Browse sub-tab.
+    document.getElementById('browse-back')?.addEventListener('click', () => switchTab('browse'));
+
+    // Account is no longer a bottom-bar item; the header badge opens it, which
+    // is where people look for their account anyway.
+    document.getElementById('user-badge')?.addEventListener('click', () => switchTab('profile'));
+
     // ===== Genres =====
 
     // Clear filter functions (make them global for onclick handlers)
