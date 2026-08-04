@@ -1,13 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Google Tag Manager -->
-  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-  })(window,document,'script','dataLayer','GTM-W4LLH7XT');</script>
-  <!-- End Google Tag Manager -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -40,10 +33,6 @@
   <script src="/js/helpers.js?v=1"></script>
 </head>
 <body>
-  <!-- Google Tag Manager (noscript) -->
-  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-W4LLH7XT"
-  height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-  <!-- End Google Tag Manager (noscript) -->
   <!-- Crawlable page heading (visually hidden — the app shell has no static H1) -->
   <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;margin:0">Music Africa Direct — stream South African music on your phone</h1>
   <!-- Desktop User Notice -->
@@ -631,6 +620,46 @@
   <!-- Access-token fetch patch: classic script, MUST run before the module graph. -->
   <script src="/js/mobile/fetch-interceptor.js?v=1"></script>
   <!-- Mobile app (ES module graph). Deferred; runs after the classic scripts above. -->
+  <!-- Cookie / analytics consent. Mobile had no banner at all, so Google
+       Analytics could never fire here — safe, but it meant no data from the
+       larger audience, and this same page is what the Android app loads.
+       Sits above the tab bar and mini player, matching the desktop wording and
+       sharing its storage key: same origin, so a choice made on either surface
+       is honoured on both. -->
+  <div id="cookieNotice" style="display:none;position:fixed;left:12px;right:12px;bottom:96px;z-index:2000;
+       background:#16161d;border:1px solid rgba(255,255,255,0.14);border-radius:14px;padding:14px 16px;
+       box-shadow:0 8px 28px rgba(0,0,0,0.45);font-size:13px;line-height:1.45;color:#e8e8ee">
+    <div style="margin-bottom:12px">
+      We use cookies to keep you signed in &mdash; these are essential and always on. We&rsquo;d also like to use
+      Google Analytics to understand how the site is used, which sets its own cookies. That part is your choice.
+    </div>
+    <div style="display:flex;gap:8px">
+      <button id="cookieAcceptBtn" style="flex:1;padding:9px 12px;border:0;border-radius:9px;
+              background:#7c4dff;color:#fff;font:inherit;font-weight:600;cursor:pointer">Accept analytics</button>
+      <button id="cookieDeclineBtn" style="flex:1;padding:9px 12px;border:1px solid rgba(255,255,255,0.3);
+              border-radius:9px;background:transparent;color:#e8e8ee;font:inherit;cursor:pointer;opacity:0.9">Essential only</button>
+    </div>
+  </div>
+  <script>
+  (function () {
+    var KEY = 'mass_cookie_consent_v2';       // shared with desktop, same origin
+    var el = document.getElementById('cookieNotice');
+    var choice = null;
+    try { choice = localStorage.getItem(KEY); } catch (e) { return; }  // private mode
+
+    if (choice === 'accepted' && typeof window.__loadGA === 'function') window.__loadGA();
+    if (!choice) setTimeout(function () { el.style.display = ''; }, 1200);
+
+    function settle(v) {
+      try { localStorage.setItem(KEY, v); } catch (e) {}
+      el.style.display = 'none';
+      if (v === 'accepted' && typeof window.__loadGA === 'function') window.__loadGA();
+    }
+    document.getElementById('cookieAcceptBtn').addEventListener('click', function () { settle('accepted'); });
+    document.getElementById('cookieDeclineBtn').addEventListener('click', function () { settle('declined'); });
+  })();
+  </script>
+
   <script type="module" src="/js/mobile/main.js?v=3"></script>
 </body>
 </html>
