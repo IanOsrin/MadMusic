@@ -1,13 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Google Tag Manager -->
-  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-  })(window,document,'script','dataLayer','GTM-W4LLH7XT');</script>
-  <!-- End Google Tag Manager -->
   <meta charset="utf-8" />
   <title>MAD — Music Africa Direct | Stream 100 Years of South African Music</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -59,10 +52,6 @@
         onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/app.css?v=12&r='+Date.now();},1500)">
 </head>
 <body>
-  <!-- Google Tag Manager (noscript) -->
-  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-W4LLH7XT"
-  height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-  <!-- End Google Tag Manager (noscript) -->
   <!-- Crawlable page heading (visually hidden — the app shell has no static H1) -->
   <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;margin:0">Music Africa Direct — stream 100 years of South African music from the original Gallo masters</h1>
   <script>
@@ -242,9 +231,12 @@
   <div class="cookie-notice hidden" id="cookieNotice">
     <div class="cookie-notice-content">
       <div class="cookie-notice-text">
-        This site uses cookies for authentication and session management. By continuing to use this service, you accept our use of cookies.
+        We use cookies to keep you signed in &mdash; these are essential and always on. We&rsquo;d also like to use
+        Google Analytics to understand how the site is used, which sets its own cookies. That part is your choice.
       </div>
-      <button class="cookie-notice-btn" id="cookieNoticeBtn">Got it!</button>
+      <button class="cookie-notice-btn" id="cookieNoticeBtn">Accept analytics</button>
+      <button class="cookie-notice-btn" id="cookieDeclineBtn"
+              style="background:transparent;border:1px solid rgba(255,255,255,0.35);opacity:0.85">Essential only</button>
     </div>
   </div>
 
@@ -2235,25 +2227,32 @@
   <script>
   // ========= COOKIE NOTICE =========
   (function() {
-    const COOKIE_CONSENT_KEY = 'mass_cookie_consent';
+    // v2 key on purpose. The old banner was a single "Got it!" acknowledging
+    // auth cookies; it was never consent to analytics, so reusing that stored
+    // value would be consenting on people's behalf retrospectively. Everyone is
+    // asked once more, and only about the part that is genuinely optional.
+    const COOKIE_CONSENT_KEY = 'mass_cookie_consent_v2';
     const cookieNotice = document.getElementById('cookieNotice');
     const cookieNoticeBtn = document.getElementById('cookieNoticeBtn');
+    const cookieDeclineBtn = document.getElementById('cookieDeclineBtn');
 
-    // Check if user has already accepted cookies
-    const hasAccepted = localStorage.getItem(COOKIE_CONSENT_KEY);
+    const choice = localStorage.getItem(COOKIE_CONSENT_KEY);
 
-    if (!hasAccepted) {
-      // Show cookie notice after a short delay for better UX
-      setTimeout(() => {
-        cookieNotice.classList.remove('hidden');
-      }, 1000);
+    // Returning visitor who already accepted — load GA now. Declining stores
+    // 'declined', so this stays false and Google is never contacted.
+    if (choice === 'accepted' && typeof window.__loadGA === 'function') window.__loadGA();
+
+    if (!choice) {
+      setTimeout(() => { cookieNotice.classList.remove('hidden'); }, 1000);
     }
 
-    // Handle "Got it!" button click
-    cookieNoticeBtn.addEventListener('click', () => {
-      localStorage.setItem(COOKIE_CONSENT_KEY, 'true');
+    function settleConsent(value) {
+      localStorage.setItem(COOKIE_CONSENT_KEY, value);
       cookieNotice.classList.add('hidden');
-    });
+      if (value === 'accepted' && typeof window.__loadGA === 'function') window.__loadGA();
+    }
+    cookieNoticeBtn.addEventListener('click', () => settleConsent('accepted'));
+    cookieDeclineBtn.addEventListener('click', () => settleConsent('declined'));
   })();
   </script>
 

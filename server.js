@@ -129,6 +129,19 @@ const UMAMI_URL = (process.env.UMAMI_URL || '').trim().replace(/\/+$/, '');
 const UMAMI_WEBSITE_ID = (process.env.UMAMI_WEBSITE_ID || '').trim();
 const UMAMI_ENABLED = Boolean(UMAMI_URL && UMAMI_WEBSITE_ID);
 
+// ── Google Analytics 4 (ships dark) ──────────────────────────────────────────
+// Renders only when GA_MEASUREMENT_ID is set, so it can be switched off from
+// the Render dashboard without a deploy. Runs ALONGSIDE Umami, which is
+// cookieless — GA4 is not, and sets its own cookies. The id is validated
+// against the G-XXXXXXX shape before being interpolated into a <script>: it
+// comes from the environment, but the environment is not a place to take
+// on faith when the value ends up in executable page markup.
+const GA_MEASUREMENT_ID = (process.env.GA_MEASUREMENT_ID || '').trim();
+const GA_ENABLED = /^G-[A-Z0-9]{4,20}$/i.test(GA_MEASUREMENT_ID);
+if (GA_MEASUREMENT_ID && !GA_ENABLED) {
+  console.warn(`[MASS] GA_MEASUREMENT_ID "${GA_MEASUREMENT_ID}" is not a valid G-XXXXXXXXXX id — Google Analytics NOT loaded.`);
+}
+
 // Security headers (applied to every response)
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -643,6 +656,20 @@ async function loadHtml(filename) {
     // Umami visitor analytics (cookieless; deferred so it never blocks boot).
     + (UMAMI_ENABLED
         ? `\n<script defer src="${UMAMI_URL}/script.js" data-website-id="${UMAMI_WEBSITE_ID.replace(/"/g, '')}"></script>`
+        : '')
+    // Google Analytics 4 — CONSENT-GATED. This does NOT load the tag; it only
+    // defines the loader. Nothing contacts Google and no GA cookie is set until
+    // the page calls window.__loadGA(), which the cookie banner does on an
+    // explicit Accept. Umami keeps running either way — it is cookieless, which
+    // is exactly why it never needed a gate.
+    + (GA_ENABLED
+        ? `\n<script>window.__GA_ID='${GA_MEASUREMENT_ID}';`
+        + `window.__loadGA=function(){if(window.__gaLoaded)return;window.__gaLoaded=1;`
+        + `var s=document.createElement('script');s.async=1;`
+        + `s.src='https://www.googletagmanager.com/gtag/js?id='+window.__GA_ID;`
+        + `document.head.appendChild(s);`
+        + `window.dataLayer=window.dataLayer||[];window.gtag=function(){window.dataLayer.push(arguments);};`
+        + `window.gtag('js',new Date());window.gtag('config',window.__GA_ID);};</script>`
         : '');
   stamped = /<head[^>]*>/i.test(stamped)
     ? stamped.replace(/<head[^>]*>/i, (m) => `${m}\n${flagScript}`)
