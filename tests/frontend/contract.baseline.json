@@ -556,7 +556,6 @@
     },
     "audio-lab.html": {
       "scriptOrder": [
-        "inline",
         "https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js",
         "inline",
         "inline"
