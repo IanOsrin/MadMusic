@@ -106,7 +106,7 @@
     </div>
 
     <!-- Browse Tab — the hub that keeps the bottom bar at four items. G100,
-         Genres, Decades, Scenes and MAD About are ways INTO the catalogue, not
+         Genres, Decades, Themes and MAD About are ways INTO the catalogue, not
          separate destinations, so they live behind one thumb-reachable entry
          rather than five competing ones. New rails (Themes, Decades) get a card
          here instead of another bottom-bar slot. -->
@@ -118,7 +118,7 @@
       <div class="browse-grid">
         <button class="browse-card" data-goto="scenes">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-          <span class="browse-card-title">Scenes</span>
+          <span class="browse-card-title">Themes</span>
           <span class="browse-card-sub">The sounds that made South Africa</span>
         </button>
         <button class="browse-card" data-goto="madabout">
@@ -189,12 +189,13 @@
 
     </div>
 
-    <!-- Scenes Tab — playlists whose FM Category is 'Scene': a sound, a place
+    <!-- Themes Tab — playlists whose FM Category is 'Theme'. Renamed from
+         Scenes (client decision, 2026-08-04); ids keep the old name
          and a moment. Same card grid and loader as MAD About; only the category
          differs, so the two rails can never show the same playlist. -->
     <div class="tab-content" id="scenes-tab">
       <div class="section-header">
-        <h2 class="section-title">Scenes</h2>
+        <h2 class="section-title">Themes</h2>
       </div>
       <div class="g100-section-subtitle" style="margin:-6px 0 14px;">The sounds that made South Africa</div>
       <div id="scenes-content">
@@ -368,7 +369,7 @@
 
   <!-- Bottom Tab Navigation -->
   <!-- Four destinations, all thumb-reachable. Everything that used to sit here
-       (G100, Genres, Decades, Scenes, MAD About) is a way into the catalogue,
+       (G100, Genres, Decades, Themes, MAD About) is a way into the catalogue,
        so it lives in Browse. Account is the badge in the header, where people
        already look for it. -->
   <nav class="bottom-tabs">

@@ -445,6 +445,10 @@ router.get('/public-playlists', async (req, res) => {
       // the MAD-About-<artist> naming already states the answer. Drop this once
       // every playlist carries a Category.
       const legacyArtist = (pl) => !pl.category && want === 'artist' && /^MAD[\s_-]*About/i.test(pl.name || '');
+      // Scenes were renamed Themes (2026-08-04). A transitional alias let
+      // 'Theme' also match 'Scene' while the FM values were changed by hand;
+      // removed once every playlist read Theme, so a stray 'Scene' now shows up
+      // as a missing playlist rather than passing silently as a Theme.
       const filtered = value.playlists.filter(pl =>
         String(pl.category || '').toLowerCase() === want || legacyArtist(pl));
       return res.json({ ...value, playlists: filtered.slice(0, limit) });

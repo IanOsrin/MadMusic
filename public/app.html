@@ -603,14 +603,17 @@
                 <button id="sharedPlaylistCopy" type="button" class="btn small">Copy share link</button>
               </div>
             </section>
-            <!-- Scenes Section — playlists whose FM Category is 'Scene': a sound,
+            <!-- Themes Section — playlists whose FM Category is 'Theme'. Renamed
+                 from Scenes on the client's call (2026-08-04); the element ids
+                 keep the old name so the contract baseline and CSS stay put.
+                 The API still accepts 'Scene' while FileMaker is updated.
                  a place and a moment (Mbaqanga, Maskandi, Cape Jazz…), as opposed
                  to the artist collections in the Playlists rail below. Same card
                  markup and loader as that rail; only the category differs. -->
             <section class="section" id="scenesRailSection" hidden>
               <div class="section-header">
                 <div>
-                  <h2 class="section-title">Scenes</h2>
+                  <h2 class="section-title">Themes</h2>
                   <p class="section-subtitle">The sounds that made South Africa</p>
                 </div>
               </div>
@@ -741,7 +744,7 @@
               // public, so load immediately (no view-visibility gating needed).
               // Scenes first: the archive's story is the draw, the artist
               // collections are the follow-through.
-              loadPublicPlaylistsRail('scenesPlaylistsContainer', 'Scene', 'scenesRailSection');
+              loadPublicPlaylistsRail('scenesPlaylistsContainer', 'Theme', 'scenesRailSection');
               loadPublicPlaylistsRail('g100PlaylistsContainer',   'Artist');
             })();
             </script>
