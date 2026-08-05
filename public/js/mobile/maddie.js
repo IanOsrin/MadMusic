@@ -94,6 +94,41 @@ function addCard(t, answerTracks) {
   log().scrollTop = log().scrollHeight;
 }
 
+// What the waiting line says, per phase the server reports.
+const WAITING = {
+  shelves: 'Maddie is checking the shelves…',
+  web: 'Maddie is at the computer, searching the web…',
+};
+
+// Read the turn. The server streams status events when we ask for them, so the
+// waiting line can change as she moves from the shelves to the web; if anything
+// in between strips the stream we still get one plain JSON body, same as before.
+async function readTurn(res, onPhase) {
+  if (!(res.headers.get('content-type') || '').includes('text/event-stream')) {
+    return res.json().catch(() => ({}));
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let payload = {};
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const frames = buffer.split('\n\n');
+    buffer = frames.pop();
+    for (const frame of frames) {
+      const event = (frame.match(/^event: (.*)$/m) || [])[1];
+      const data = (frame.match(/^data: (.*)$/m) || [])[1];
+      if (!data) continue;
+      let parsed; try { parsed = JSON.parse(data); } catch { continue; }
+      if (event === 'status') onPhase(parsed.phase);
+      else if (event === 'done' || event === 'error') payload = parsed;
+    }
+  }
+  return payload;
+}
+
 async function sendMessage(text) {
   const send = document.getElementById('maddie-send');
   const input = document.getElementById('maddie-input');
@@ -101,14 +136,19 @@ async function sendMessage(text) {
   history.push({ role: 'user', content: text });
   input.value = '';
   send.disabled = true;
-  const thinking = addMsg('err', 'Maddie is checking the shelves…');
+  const thinking = addMsg('err', WAITING.shelves);
   try {
     const res = await fetch('/api/maddie/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify({ messages: history })
     });
-    const data = await res.json().catch(() => ({}));
+    const data = res.ok
+      ? await readTurn(res, (phase) => {
+          thinking.textContent = WAITING[phase] || WAITING.shelves;
+          log().scrollTop = log().scrollHeight;
+        })
+      : await res.json().catch(() => ({}));
     thinking.remove();
     if (res.status === 401 || res.status === 403) {
       // Maddie is subscriber-only (every message costs real money, 2026-07-17)

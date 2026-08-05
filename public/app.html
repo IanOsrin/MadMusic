@@ -7853,19 +7853,56 @@
     }
   }
 
+  // What the waiting line says, per phase the server reports.
+  var WAITING = {
+    shelves: 'Maddie is checking the shelves…',
+    web: 'Maddie is at the computer, searching the web…',
+  };
+
+  // Read the turn. The server streams status events when we ask for them, so
+  // the waiting line can change as she moves from the shelves to the web; if
+  // anything in between strips the stream we still get one plain JSON body.
+  async function readTurn(res, onPhase) {
+    if ((res.headers.get('content-type') || '').indexOf('text/event-stream') === -1) {
+      return res.json().catch(function () { return {}; });
+    }
+    var reader = res.body.getReader(), decoder = new TextDecoder(), buffer = '', payload = {};
+    for (;;) {
+      var chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, { stream: true });
+      var frames = buffer.split('\n\n');
+      buffer = frames.pop();
+      for (var f = 0; f < frames.length; f++) {
+        var event = (frames[f].match(/^event: (.*)$/m) || [])[1];
+        var data = (frames[f].match(/^data: (.*)$/m) || [])[1];
+        if (!data) continue;
+        var parsed; try { parsed = JSON.parse(data); } catch (e) { continue; }
+        if (event === 'status') onPhase(parsed.phase);
+        else if (event === 'done' || event === 'error') payload = parsed;
+      }
+    }
+    return payload;
+  }
+
   async function sendMessage(text) {
     addMsg('user', text);
     history.push({ role: 'user', content: text });
     input.value = '';
     send.disabled = true;
-    var thinking = addMsg('err', 'Maddie is checking the shelves…');
+    var thinking = addMsg('err', WAITING.shelves);
     try {
       var res = await fetch('/api/maddie/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
         body: JSON.stringify({ messages: history }),
       });
-      var data = await res.json().catch(function () { return {}; });
+      var data = res.ok
+        ? await readTurn(res, function (phase) {
+            thinking.textContent = WAITING[phase] || WAITING.shelves;
+            log.scrollTop = log.scrollHeight;
+          })
+        : await res.json().catch(function () { return {}; });
       thinking.remove();
       if (!res.ok) {
         addMsg('err', data.error || 'Maddie stepped away for a moment — try again shortly.');
