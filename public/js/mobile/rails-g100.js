@@ -104,7 +104,7 @@ export async function loadG100Playlists() {
     }
 
 export async function loadScenes() {
-      await loadPlaylistRail('Scene', elements.scenesContent);
+      await loadPlaylistRail('Theme', elements.scenesContent);
       state.scenesLoaded = true;
     }
 
