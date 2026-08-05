@@ -537,8 +537,54 @@ async function suggestTitbitsForGaps(gaps, visitorQuestion) {
   }
 }
 
+// ── progress channel ─────────────────────────────────────────────────────────
+// A visitor watches one line of text while Maddie works, and that line used to
+// say "checking the shelves" for the whole wait — including the stretch where
+// she is actually out on the web, which is the slowest part of a turn. She
+// shouldn't claim to be doing one thing while doing another.
+//
+// Clients that ask for text/event-stream get status events as the turn unfolds;
+// everyone else gets exactly the single JSON body they got before. The stream
+// opens lazily, so an error raised before the first event still travels as a
+// real HTTP status code rather than a 200 with a sad payload.
+function progressChannel(req, res) {
+  const wants = String(req.get('accept') || '').includes('text/event-stream');
+  let open = false;
+  const send = (event, data) => {
+    if (!open) {
+      open = true;
+      res.status(200).set({
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',   // a buffering proxy would defeat the point
+      });
+      res.flushHeaders?.();
+    }
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+  return {
+    status(phase) { if (wants) send('status', { phase }); },
+    done(payload) { if (!wants) return res.json(payload); send('done', payload); res.end(); },
+    fail(code, payload) {
+      if (!wants || !open) return res.status(code).json(payload);
+      send('error', payload); res.end();
+    },
+  };
+}
+
+// Did this turn go out to the web? The server-side tool runs on Anthropic's
+// side, so it never reaches executeTool — it shows up in the assistant content
+// as a server_tool_use block and its result block.
+function usedWebSearch(content) {
+  return (content || []).some(b =>
+    (b?.type === 'server_tool_use' && /web_search/.test(b.name || '')) ||
+    (typeof b?.type === 'string' && b.type.startsWith('web_search_tool_result')));
+}
+
 // ── chat endpoint ────────────────────────────────────────────────────────────
 router.post('/chat', async (req, res) => {
+  const out = progressChannel(req, res);
   try {
     if (!process.env.ANTHROPIC_API_KEY) {
       // Free mode: semantic shelves, no LLM, no external calls.
@@ -547,18 +593,18 @@ router.post('/chat', async (req, res) => {
       const users = incomingLite.filter(m => m && m.role === 'user' && typeof m.content === 'string');
       const assistants = incomingLite.filter(m => m && m.role === 'assistant' && typeof m.content === 'string');
       const lastUser = users[users.length - 1];
-      if (!lastUser) return res.status(400).json({ error: 'Say something to Maddie first.' });
-      if (rateLimited(rateLimitKey(req))) return res.status(429).json({ error: 'Maddie needs a breather — try again in a few minutes.' });
+      if (!lastUser) return out.fail(400, { error: 'Say something to Maddie first.' });
+      if (rateLimited(rateLimitKey(req))) return out.fail(429, { error: 'Maddie needs a breather — try again in a few minutes.' });
       const lite = await maddieLite(
         textOf(lastUser),
         textOf(assistants[assistants.length - 1]),
         textOf(users[users.length - 2])
       );
-      if (lite) return res.json(lite);
-      return res.status(503).json({ error: 'Maddie is not on shift (no API key and no semantic index).' });
+      if (lite) return out.done(lite);
+      return out.fail(503, { error: 'Maddie is not on shift (no API key and no semantic index).' });
     }
     if (rateLimited(rateLimitKey(req))) {
-      return res.status(429).json({ error: 'Maddie needs a breather — try again in a few minutes.' });
+      return out.fail(429, { error: 'Maddie needs a breather — try again in a few minutes.' });
     }
 
     const incoming = Array.isArray(req.body?.messages) ? req.body.messages : [];
@@ -567,7 +613,7 @@ router.post('/chat', async (req, res) => {
       .slice(-MAX_HISTORY)
       .map(m => ({ role: m.role, content: m.content.slice(0, MAX_MSG_CHARS) }));
     if (!history.length || history[history.length - 1].role !== 'user') {
-      return res.status(400).json({ error: 'Say something to Maddie first.' });
+      return out.fail(400, { error: 'Say something to Maddie first.' });
     }
 
     const anthropic = new Anthropic();
@@ -578,6 +624,7 @@ router.post('/chat', async (req, res) => {
     // container; once one exists, every follow-up request in the turn must
     // carry its id or the API 400s ("container_id is required…").
     let containerId = null;
+    let phase = 'shelves';   // what the visitor is being told she's doing
 
     for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
       const response = await anthropic.messages.create({
@@ -601,6 +648,14 @@ router.post('/chat', async (req, res) => {
       const toolUses = response.content.filter(b => b.type === 'tool_use');
       const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
       if (text) reply = text;
+
+      // Tell the visitor where she actually is. A web dig runs over several
+      // rounds (MADDIE_WEB_MAX_USES searches, pausing in between), so the label
+      // flips once the first one lands and holds for the rest of the dig —
+      // which is the long part of the wait. It flips back when she carries a
+      // lead from the web to the shelves, because that is what she's then doing.
+      const phaseNow = usedWebSearch(response.content) ? 'web' : (toolUses.length ? 'shelves' : phase);
+      if (phaseNow !== phase) { phase = phaseNow; out.status(phase); }
 
       // Server-side tools (web_search) run on Anthropic's servers; a long
       // server-tool turn pauses — append the assistant turn and continue,
@@ -633,7 +688,7 @@ router.post('/chat', async (req, res) => {
     const seen = new Set();
     const tracks = ctx.recommended.filter(t => !seen.has(t.recordId) && seen.add(t.recordId));
 
-    res.json({ reply, tracks });
+    out.done({ reply, tracks });
 
     // Self-learning loop — after the visitor has their answer, propose draft
     // titbits for any artists the bio card couldn't cover. Fire-and-forget.
@@ -643,7 +698,7 @@ router.post('/chat', async (req, res) => {
   } catch (err) {
     const status = err?.status || 500;
     console.error('[maddie] chat failed:', err?.message || err);
-    res.status(status >= 400 && status < 600 ? status : 500).json({
+    out.fail(status >= 400 && status < 600 ? status : 500, {
       error: status === 429
         ? 'The counter is busy — give it a minute.'
         : 'Maddie stepped away from the counter for a moment. Try again shortly.',
@@ -654,3 +709,4 @@ router.post('/chat', async (req, res) => {
 export default router;
 
 export { suggestTitbitsForGaps, SYSTEM_PROMPT, TOOLS, WEB_SEARCH_TOOL, executeTool, MADDIE_MODEL };
+export { progressChannel, usedWebSearch };
