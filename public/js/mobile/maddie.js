@@ -119,12 +119,15 @@ async function sendMessage(text) {
       addMsg('err', data.error || 'Maddie stepped away for a moment — try again shortly.');
       return;
     }
+    // Picks first, her words last — see the same ordering in app.html. On a
+    // phone this matters more: a few cards fill the sheet, so a reply appended
+    // above them starts off-screen and the auto-scroll never comes back to it.
+    const tracks = data.tracks || [];
+    tracks.forEach((t) => addCard(t, tracks));
     if (data.reply) {
       addMsg('maddie', data.reply);
       history.push({ role: 'assistant', content: data.reply });
     }
-    const tracks = data.tracks || [];
-    tracks.forEach((t) => addCard(t, tracks));
   } catch {
     thinking.remove();
     addMsg('err', 'Lost the connection to the counter — try again.');
