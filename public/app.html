@@ -7871,11 +7871,14 @@
         addMsg('err', data.error || 'Maddie stepped away for a moment — try again shortly.');
         return;
       }
+      // Picks first, her words last. Reply-then-cards buried the reply above a
+      // run of cards and the auto-scroll landed past it, so the answer — the
+      // part worth reading — was the one thing you had to scroll back for.
+      (data.tracks || []).forEach(addCard);
       if (data.reply) {
         addMsg('maddie', data.reply);
         history.push({ role: 'assistant', content: data.reply });
       }
-      (data.tracks || []).forEach(addCard);
     } catch (e) {
       thinking.remove();
       addMsg('err', 'Lost the connection to the counter — try again.');
