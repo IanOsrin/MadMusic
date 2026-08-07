@@ -2981,7 +2981,11 @@
        back to 3.9:1 and clip the type again on any laptop under ~1360px. The
        floor exists for the square-art fallback, which keeps it. */
     .hero-banner--editorial {
-      aspect-ratio: 2000 / 475;
+      /* 7500×1750 is what the designed masters actually are (4.286:1), not the
+         4.21:1 the spec guessed at. Matching exactly means zero crop rather
+         than 0.9% off each side — harmless in itself, but the type sits close
+         enough to the edges that there is no reason to spend any of it. */
+      aspect-ratio: 7500 / 1750;
       min-height: 0;
       max-height: none;
     }
