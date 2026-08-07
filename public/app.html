@@ -6837,9 +6837,15 @@
 
     /* slide := { image, title, sub, eyebrow, badge, ambient, onOpen } */
     function renderSlides(slides) {
+      // Supplied banners have their own aspect and their own baked-in type, so
+      // the container switches shape and the overlay is suppressed. Only when
+      // EVERY slide is one — a mixed carousel keeps the standard treatment
+      // rather than cropping the odd one out.
+      var allClean = slides.length && slides.every(function (s) { return s.clean; });
+      banner.classList.toggle('hero-banner--editorial', !!allClean);
       stage.innerHTML = slides.map(function (s, i) {
         var img = esc(s.image);
-        return '<div class="hero-slide' + (s.ambient ? ' hero-slide--ambient' : '') + (s.bigface ? ' hero-slide--face' : '') + (i === 0 ? ' is-active' : '') + '"' +
+        return '<div class="hero-slide' + (s.ambient ? ' hero-slide--ambient' : '') + (s.bigface ? ' hero-slide--face' : '') + (s.clean ? ' hero-slide--clean' : '') + (i === 0 ? ' is-active' : '') + '"' +
                ' role="button" tabindex="0" aria-label="' + esc(s.title) + (s.sub ? ' — ' + esc(s.sub) : '') + '">' +
                  '<img class="hero-slide__bg" src="' + img + '" alt="" aria-hidden="true"' + (s.focal ? ' style="object-position:' + esc(s.focal) + '"' : '') + ' loading="' + (i === 0 ? 'eager' : 'lazy') + '">' +
                  (s.ambient ? '<img class="hero-slide__art" src="' + img + '" alt="' + esc(s.title) + '" loading="' + (i === 0 ? 'eager' : 'lazy') + '">' : '') +
@@ -6909,7 +6915,8 @@
               eyebrow: it.eyebrow || '',
               badge:   '',
               cta:     it.ctaLabel || 'Play',
-              ambient: false,            // editorial masters are 16:9 — safe to cover
+              ambient: false,            // supplied masters match the container — safe to cover
+              clean:   it.textBaked !== false,  // supplied banners carry their own type
               onOpen:  editorialAction(it)
             };
           });
