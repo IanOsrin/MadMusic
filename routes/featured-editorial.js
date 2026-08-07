@@ -11,7 +11,7 @@
  *
  * GET /api/featured-editorial?limit=6
  *   → { ok, source: 'live'|'fallback', items: [{ heroId, title, eyebrow,
- *        imageUrl, targetType, targetId, ctaLabel, order }] }
+ *        imageUrl, targetType, targetId, ctaLabel, textBaked, order }] }
  */
 import { Router } from 'express';
 import { fmFindRecords } from '../fm-client.js';
@@ -60,6 +60,12 @@ function mapRecord(r) {
     targetType: String(f.Target_Type || '').toLowerCase(),
     targetId:   String(f.Target_ID || '').trim(),
     ctaLabel:   String(f.CTA_Label || '').trim() || null,
+    // Supplied banners carry the artist name and title as part of the artwork,
+    // so the frontend must not draw its own caption over them. Default TRUE:
+    // the banners being commissioned are designed that way, and a blank field
+    // should not put text back on top of type that is already there. Set
+    // Text_Baked to 0 for a plain image that wants the overlay.
+    textBaked:  String(f.Text_Baked ?? '1').trim() !== '0',
     order:      Number.parseInt(f.Sort_Order, 10) || 999
   };
 }

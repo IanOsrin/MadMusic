@@ -2970,6 +2970,25 @@
       background: var(--bg-card);
     }
     .hero-banner[hidden] { display: none; }
+
+    /* Supplied banners own their own shape. Ian's masters are 2000×475 (4.21:1)
+       with the artist name and title BAKED IN at the extreme left and right
+       edges — inside the outer 4% each side. Rendered into the 16/6.5 (2.46:1)
+       container above, object-fit:cover overflows by 1.71× and cuts ~20% off
+       each side, taking both pieces of type with it.
+       min-height must go too: at a 1280px window the content column is ~936px,
+       whose natural height here is 222px, so a 240px floor would squash the box
+       back to 3.9:1 and clip the type again on any laptop under ~1360px. The
+       floor exists for the square-art fallback, which keeps it. */
+    .hero-banner--editorial {
+      aspect-ratio: 2000 / 475;
+      min-height: 0;
+      max-height: none;
+    }
+    /* Type is part of the artwork, so the scrim and caption would sit on top of
+       it. Title is still carried for the accessible name. */
+    .hero-slide--clean .hero-slide__scrim,
+    .hero-slide--clean .hero-caption { display: none; }
     .hero-stage { position: absolute; inset: 0; }
     .hero-slide {
       position: absolute;
