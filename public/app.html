@@ -6894,10 +6894,69 @@
     // Editorial target → action. album/playlist targets are Phase 2 (no
     // open-by-recordId path in v2.1 yet) — they fall through to no-op + warn.
     function editorialAction(it) {
-      return function () {
+      return async function () {
         var t = String(it.targetType || ''), id = String(it.targetId || '');
-        if (t === 'track' && id && window.playSong) return window.playSong(id);
-        if (t === 'external' && /^https?:\/\//.test(id)) return window.open(id, '_blank', 'noopener,noreferrer');
+
+        if (t === 'external' && /^https?:\/\//.test(id)) {
+          return window.open(id, '_blank', 'noopener,noreferrer');
+        }
+
+        // playSong() only plays a track whose CARD IS ON SCREEN — it looks the
+        // recordId up in itemsStore and returns silently when it misses. A hero
+        // track is almost never in the rails below it, so clicking a banner did
+        // nothing at all and only logged to the console (Ian, 2026-08-07).
+        // Resolve and play it directly instead — the same path Maddie's cards
+        // use for exactly the same reason.
+        if (t === 'track' && id) {
+          var meta = { recordId: id, title: it.title || '', artist: it.eyebrow || '', artUrl: '' };
+          var url = '';
+          if (!window.__GUEST) {
+            try {
+              var r = await fetch('/api/track/' + encodeURIComponent(id) + '/container');
+              var d = await r.json();
+              if (d && d.url) url = '/api/container?u=' + encodeURIComponent(d.url) + '&proxy=1';
+              if (d && d.artworkUrl) meta.artUrl = d.artworkUrl;
+              if (d && d.leadSilence) meta.leadSilence = parseFloat(d.leadSilence) || 0;
+            } catch (e) { /* guests and failures fall through to the preview */ }
+          }
+          if (window._PLAYER && window._PLAYER.playTrack) {
+            // In guest mode playTrack rewrites ANY url to /api/preview/<recordId>.
+            return window._PLAYER.playTrack(url || '/api/preview/' + encodeURIComponent(id), meta);
+          }
+          console.warn('[Hero] no player available for track', id);
+          return;
+        }
+
+        // Album: Target_ID is the catalogue number. Look the album up so the
+        // reveal gets a real title — the listener drops the event when title
+        // and artist are both blank.
+        if (t === 'album' && id) {
+          // The lookup is an exact match, and the same album is spelled both
+          // ways across systems — "CDGMP 40296" in Gallo, "CDGMP40296" on the
+          // streamer. Try what was given, then the despaced form, rather than
+          // making whoever fills the field guess which one this album uses.
+          try {
+            var f = {};
+            for (var cand of [id, id.replace(/\s+/g, '')]) {
+              var ar = await fetch('/api/album?cat=' + encodeURIComponent(cand) + '&limit=1');
+              var ad = await ar.json();
+              var got = (ad && ad.items && ad.items[0] && ad.items[0].fields) || null;
+              if (got) { f = got; break; }
+            }
+            var albumTitle  = f['Album Title']  || f['Tape Files::Album Title']  || '';
+            var albumArtist = f['Album Artist'] || f['Tape Files::Album Artist'] || f['Track Artist'] || '';
+            if (albumTitle) {
+              window.__currentAlbumKey = '';        // clear the re-entry guard
+              window.dispatchEvent(new CustomEvent('mad-reveal-album', {
+                detail: { albumTitle: albumTitle, albumArtist: albumArtist, cat: id },
+              }));
+              return;
+            }
+          } catch (e) { /* fall through to the warning */ }
+          console.warn('[Hero] no album found for catalogue', id);
+          return;
+        }
+
         console.warn('[Hero] unhandled editorial target:', t, id);
       };
     }
