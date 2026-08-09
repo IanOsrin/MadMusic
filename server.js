@@ -17,7 +17,7 @@ import playlistsRouter from './routes/playlists.js';
 import catalogRouter from './routes/catalog.js';
 import libraryRouter from './routes/library.js';
 import streamRouter from './routes/stream.js';
-import adminRouter from './routes/admin.js';
+import adminRouter, { requireAdminKey } from './routes/admin.js';
 import editorialRouter from './routes/featured-editorial.js';
 import artistBioRouter from './routes/artist-bio.js';
 import downloadRouter from './routes/download.js';
@@ -42,6 +42,7 @@ import { METADATA_SOURCE } from './lib/metadata-source.js';
 import { loadAccessTokens } from './lib/token-store.js';
 import { loadPlaylistByShareId } from './lib/playlist-store.js';
 import { getTrackShareMeta, buildOgTags, inlineJson } from './lib/share-meta.js';
+import { bumpTaster, readTasterStats } from './lib/taster-stats.js';
 import { resolveRequestOrigin } from './lib/http.js';
 import { createPrecompressedStatic } from './lib/precompressed-static.js';
 import { hostnameResolvesPrivate } from './lib/ssrf-guard.js';
@@ -533,6 +534,11 @@ app.use('/api/', async (req, res, next) => {
     '/download/',
     '/ringtone/',
     '/audio-proxy',
+    // Taster play beacon — guests BY DESIGN (aggregate counter, no user data).
+    // The report skips token auth like the other admin endpoints above
+    // (/pg-mirror, /tokens/*) because requireAdminKey guards it instead.
+    '/taster/event',
+    '/taster/report',
     // NOTE: '/audio-lab/' is intentionally NOT skipped — every /api/audio-lab/*
     // endpoint (key validation + the Replicate proxy) requires a valid access
     // token so we never forward to a paid third-party API unauthenticated.
@@ -919,6 +925,9 @@ app.get('/', async (req, res) => {
     ).toString();
     return res.redirect(302, `/mobile?${qs}`);
   }
+  // Cookie-free funnel: count desktop taster landings server-side (the mobile
+  // redirect above is counted once, by the /mobile handler it lands on).
+  if (t) bumpTaster({ kind: 'land', campaign: req.query?.utm_campaign, track: t, mobile: false }).catch(() => {});
   if (await sendShareLanding(req, res, 'app.html')) return;
   sendHtml(res, 'app.html');
 });
@@ -931,12 +940,30 @@ app.get('/library',  (_req, res) => sendHtml(res, 'app.html')); // library.html 
 // Redirect legacy standalone pages to unified app
 app.get('/home',     (_req, res) => res.redirect(301, '/'));
 app.get('/mobile',   async (req, res) => {
+  const t = String(req.query?.t || '').trim();
+  if (t) bumpTaster({ kind: 'land', campaign: req.query?.utm_campaign, track: t, mobile: true }).catch(() => {});
   if (await sendShareLanding(req, res, 'mobile.html')) return;
   sendHtml(res, 'mobile.html');
 });
 app.get('/m',        (_req, res) => sendHtml(res, 'mobile.html'));
 app.get('/ringtone', (_req, res) => sendHtml(res, 'ringtone.html'));
 app.get('/audio-lab',(_req, res) => sendHtml(res, 'audio-lab.html'));
+
+// ── Taster funnel beacons ─────────────────────────────────────────────────────
+// Cookie-free counterpart to the Umami events: the client pings 'play' when a
+// taster visitor presses the big play button. Aggregate counts only — no
+// visitor data. Sits behind the general apiLimiter like everything under /api.
+app.post('/api/taster/event', express.json({ limit: '2kb' }), async (req, res) => {
+  const kind = String(req.body?.kind || '');
+  if (kind !== 'play') return res.status(400).json({ ok: false, error: 'Unknown kind' });
+  await bumpTaster({ kind, campaign: req.body?.campaign, track: req.body?.t, mobile: !!req.body?.mobile });
+  res.json({ ok: true });
+});
+
+// Read the aggregate (same admin key as the other /api/admin endpoints).
+app.get('/api/taster/report', requireAdminKey, async (_req, res) => {
+  res.json({ ok: true, stats: await readTasterStats() });
+});
 
 // ── Audio Lab key validation ──────────────────────────────────────────────────
 // Requires a valid streaming access token so we can link the entitlement to

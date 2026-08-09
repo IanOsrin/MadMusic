@@ -115,11 +115,22 @@ import { initMaddie } from './maddie.js';
     // that track's album opened in the bottom sheet. __SHARE_TRACK is injected
     // by the server (which already resolved the record for the OG tags), and
     // /api/album?cat= is public — works for guests and members alike.
+    // GUESTS get the taster hero first — cover, title, one giant play button —
+    // because the link that brought them promised "listen to this song".
     async function handleShareDeepLink() {
       const st = window.__SHARE_TRACK;
       if (!st || !st.catalogue) return;
+      const campaign = ((new URLSearchParams(window.location.search)).get('utm_campaign') || 'share')
+        .replace(/[^a-z0-9_-]/gi, '').slice(0, 40) || 'share';
       // Clean the URL FIRST so the modal's history entry isn't clobbered.
       window.history.replaceState({}, document.title, window.location.pathname);
+
+      if (window.__GUEST && st.recordId) {
+        try { sessionStorage.setItem('mad_taster', JSON.stringify({ t: st.recordId, campaign })); } catch (e) {}
+        try { window.umami && window.umami.track('taster-land', { t: st.recordId, campaign }); } catch (e) {}
+        showTasterHero(st, campaign);
+      }
+
       try {
         const r = await fetch(`/api/album?${new URLSearchParams({ cat: st.catalogue })}`);
         const d = await r.json();
@@ -134,6 +145,59 @@ import { initMaddie } from './maddie.js';
       } catch (err) {
         console.warn('[Share] deep link failed:', err);
       }
+    }
+
+    // Full-screen one-tap-play card for taster guests. Sits above the album
+    // sheet (which loads behind it) and above the cookie banner.
+    function showTasterHero(st, campaign) {
+      const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const wrap = document.createElement('div');
+      wrap.id = 'tasterHero';
+      wrap.innerHTML =
+        '<style>' +
+        '#tasterHero{position:fixed;inset:0;z-index:12000;display:flex;align-items:center;justify-content:center;' +
+        'background:rgba(8,8,12,.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}' +
+        '#tasterHero .th-card{display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px;max-width:360px;width:calc(100% - 40px);text-align:center;}' +
+        '#tasterHero img{width:min(240px,64vw);aspect-ratio:1;object-fit:cover;border-radius:14px;box-shadow:0 16px 50px rgba(0,0,0,.6);}' +
+        '#tasterHero .th-title{font-size:1.35rem;font-weight:800;color:#fff;line-height:1.2;}' +
+        '#tasterHero .th-artist{font-size:1rem;color:#b9a7ff;font-weight:600;margin-top:-6px;}' +
+        '#tasterHero .th-play{display:flex;align-items:center;gap:10px;border:0;cursor:pointer;border-radius:999px;' +
+        'padding:15px 30px;font-size:1.1rem;font-weight:800;color:#fff;background:linear-gradient(135deg,#7c5cff,#a34bff);' +
+        'box-shadow:0 10px 30px rgba(124,92,255,.45);}' +
+        '#tasterHero .th-sub{font-size:.8rem;color:#9a96a8;}' +
+        '#tasterHero .th-skip{background:none;border:0;color:#8f8a9e;font-size:.9rem;cursor:pointer;text-decoration:underline;padding:8px;}' +
+        '</style>' +
+        '<div class="th-card">' +
+        (st.artworkUrl ? '<img alt="" src="' + esc(st.artworkUrl) + '">' : '') +
+        '<div class="th-title">' + esc(st.title) + '</div>' +
+        '<div class="th-artist">' + esc(st.artist || st.albumArtist || '') + '</div>' +
+        '<button class="th-play" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>Play the song</button>' +
+        '<div class="th-sub">Free preview · full songs with a free 7-day trial</div>' +
+        '<button class="th-skip" type="button">Just browsing? Explore the vault →</button>' +
+        '</div>';
+      document.body.appendChild(wrap);
+      wrap.querySelector('.th-skip').addEventListener('click', () => wrap.remove());
+      wrap.querySelector('.th-play').addEventListener('click', () => {
+        playTrack({
+          recordId: st.recordId,
+          fields: {
+            'Track Name': st.title || '',
+            'Track Artist': st.artist || st.albumArtist || '',
+            'Album Title': st.album || '',
+            'Album Artist': st.albumArtist || '',
+            'Artwork_S3_URL': st.artworkUrl || ''
+          }
+        });
+        try { window.umami && window.umami.track('taster-play', { t: st.recordId, campaign }); } catch (e) {}
+        try {
+          fetch('/api/taster/event', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ kind: 'play', t: st.recordId, campaign, mobile: true }),
+            keepalive: true
+          }).catch(() => {});
+        } catch (e) {}
+        wrap.remove();                       // album sheet is loaded behind
+      });
     }
 
     // Function to set access token

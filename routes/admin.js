@@ -30,7 +30,7 @@ const router = Router();
 
 const ADMIN_SECRET = (process.env.ADMIN_SECRET || '').trim();
 
-function requireAdminKey(req, res, next) {
+export function requireAdminKey(req, res, next) {
   if (!ADMIN_SECRET) {
     // No secret configured — lock down the endpoint entirely rather than leave it open.
     console.warn('[admin] ADMIN_SECRET not set — rejecting request');

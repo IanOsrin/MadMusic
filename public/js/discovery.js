@@ -202,15 +202,21 @@
           submitBtn.disabled    = true;
           submitBtn.textContent = 'Starting trial...';
 
+          // Funnel attribution: if this visitor arrived via a taster link
+          // (/?t=… under a YouTube video), credit that campaign/track.
+          let via = null;
+          try { via = JSON.parse(sessionStorage.getItem('mad_taster') || 'null'); } catch (e) {}
+
           try {
             const res  = await fetch('/api/payments/trial', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email })
+              body: JSON.stringify(via ? { email, via } : { email })
             });
             const data = await res.json();
 
             if (data.ok && data.token) {
+              try { window.umami && window.umami.track('trial-start', via || {}); } catch (e) {}
               localStorage.setItem(STORAGE_KEY, data.token);
               accessToken = data.token;
               window.location.reload();

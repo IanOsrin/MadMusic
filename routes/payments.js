@@ -14,6 +14,7 @@ import {
 } from '../lib/token-store.js';
 import { pendingPaymentsCache, processedWebhookEventsCache } from '../cache.js';
 import { isStrictEmail } from '../lib/validators.js';
+import { bumpTaster } from '../lib/taster-stats.js';
 import { SUBSCRIPTION_DAYS_MIN, SUBSCRIPTION_DAYS_MAX } from '../lib/constants.js';
 
 const router = Router();
@@ -144,6 +145,15 @@ router.post('/trial', async (req, res) => {
     sendTrialEmail(normalisedEmail, token.code);
 
     console.log(`[MASS] Trial token issued: ${token.code} → ${normalisedEmail}`);
+
+    // Funnel attribution (optional, client-supplied): a trial that started from
+    // a taster landing (/?t=… under a YouTube video) counts against its
+    // campaign in the cookie-free stats. Fire-and-forget; never blocks.
+    const via = req.body?.via;
+    if (via && typeof via === 'object') {
+      bumpTaster({ kind: 'trial', campaign: via.campaign, track: via.t }).catch(() => {});
+    }
+
     res.json({ ok: true, token: token.code });
   } catch (err) {
     console.error('[MASS] Trial token creation failed:', err);
