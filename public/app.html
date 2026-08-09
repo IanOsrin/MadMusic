@@ -6569,6 +6569,88 @@
   })();
   </script>
 
+  <script>
+  /* ── Taster landing — deliver the promise in one tap ─────────────────────────
+     A GUEST arriving via /?t=<recordId> (YouTube description links, shares)
+     was promised "listen to this song". Instead of dropping them into the app
+     to figure it out, show one thing: the cover, the title, and a giant play
+     button. First tap = music playing (the server-clipped 30 s preview).
+     Signed-in visitors skip this — the share reveal above already serves them.
+     Funnel counts: landing is counted server-side; 'play' pings Umami plus the
+     cookie-free /api/taster/event backstop. ─────────────────────────────────── */
+  (function () {
+    var st = window.__SHARE_TRACK;
+    if (!st || !st.recordId) return;
+    if (!window.__GUEST_PREVIEW) return;                       // previews off → nothing to promise
+    try { if (localStorage.getItem('mass_access_token')) return; } catch (e) {}
+
+    var qs = new URLSearchParams(window.location.search);
+    var campaign = (qs.get('utm_campaign') || 'share').replace(/[^a-z0-9_-]/gi, '').slice(0, 40) || 'share';
+    try { sessionStorage.setItem('mad_taster', JSON.stringify({ t: st.recordId, campaign: campaign })); } catch (e) {}
+    try { window.umami && window.umami.track('taster-land', { t: st.recordId, campaign: campaign }); } catch (e) {}
+
+    function esc(s) { return String(s || '').replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+    var wrap = document.createElement('div');
+    wrap.id = 'tasterHero';
+    wrap.innerHTML =
+      '<style>' +
+      '#tasterHero{position:fixed;inset:0;z-index:10500;display:flex;align-items:center;justify-content:center;' +
+      'background:rgba(8,8,12,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);}' +
+      '#tasterHero .th-card{display:flex;flex-direction:column;align-items:center;gap:18px;padding:34px 30px;max-width:420px;width:calc(100% - 48px);text-align:center;}' +
+      '#tasterHero img{width:min(300px,62vw);aspect-ratio:1;object-fit:cover;border-radius:14px;box-shadow:0 18px 60px rgba(0,0,0,.6);}' +
+      '#tasterHero .th-title{font-size:1.5rem;font-weight:800;color:#fff;line-height:1.2;}' +
+      '#tasterHero .th-artist{font-size:1.05rem;color:#b9a7ff;font-weight:600;margin-top:-8px;}' +
+      '#tasterHero .th-play{display:flex;align-items:center;gap:12px;border:0;cursor:pointer;border-radius:999px;' +
+      'padding:16px 34px;font-size:1.15rem;font-weight:800;color:#fff;background:linear-gradient(135deg,#7c5cff,#a34bff);' +
+      'box-shadow:0 10px 34px rgba(124,92,255,.45);}' +
+      '#tasterHero .th-play svg{flex:none;}' +
+      '#tasterHero .th-sub{font-size:.85rem;color:#9a96a8;}' +
+      '#tasterHero .th-skip{background:none;border:0;color:#8f8a9e;font-size:.95rem;cursor:pointer;text-decoration:underline;padding:8px;}' +
+      '</style>' +
+      '<div class="th-card">' +
+      (st.artworkUrl ? '<img alt="" src="' + esc(st.artworkUrl) + '">' : '') +
+      '<div class="th-title">' + esc(st.title) + '</div>' +
+      '<div class="th-artist">' + esc(st.artist || st.albumArtist || '') + '</div>' +
+      '<button class="th-play" type="button"><svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>Play the song</button>' +
+      '<div class="th-sub">Free preview · full songs with a free 7-day trial</div>' +
+      '<button class="th-skip" type="button">Just browsing? Explore the vault →</button>' +
+      '</div>';
+
+    function mount() { document.body.appendChild(wrap); }
+    if (document.body) mount();
+    else document.addEventListener('DOMContentLoaded', mount);
+
+    function dismiss() { wrap.remove(); }
+    wrap.querySelector('.th-skip').addEventListener('click', dismiss);
+
+    wrap.querySelector('.th-play').addEventListener('click', function () {
+      var src = '/api/preview/' + encodeURIComponent(st.recordId);
+      var meta = { title: st.title, artist: st.artist || st.albumArtist || '', artUrl: st.artworkUrl || '', recordId: st.recordId };
+      var played = false;
+      try {
+        if (window._PLAYER && typeof window._PLAYER.playTrack === 'function') {
+          window._PLAYER.playTrack(src, meta);
+          played = true;
+        }
+      } catch (e) {}
+      if (!played) {
+        var a = document.getElementById('player');
+        if (a) { a.src = src; a.play().catch(function () {}); }
+      }
+      try { window.umami && window.umami.track('taster-play', { t: st.recordId, campaign: campaign }); } catch (e) {}
+      try {
+        fetch('/api/taster/event', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: 'play', t: st.recordId, campaign: campaign, mobile: false }),
+          keepalive: true
+        }).catch(function () {});
+      } catch (e) {}
+      dismiss();                                 // the revealed album is behind
+    });
+  })();
+  </script>
+
   <script src="/js/helpers.js?v=1"></script>
   <script src="/js/auth.js?v=2"></script>
   <script src="/js/player.js?v=5"></script>

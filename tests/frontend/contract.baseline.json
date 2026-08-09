@@ -32,6 +32,7 @@
         "inline",
         "inline",
         "inline",
+        "inline",
         "/js/helpers.js",
         "/js/auth.js",
         "/js/player.js",
@@ -76,6 +77,7 @@
         "__ARTIST_BIO",
         "__EDITORIAL_HERO",
         "__GUEST",
+        "__GUEST_PREVIEW",
         "__MADDIE",
         "__MEDIA_CDN",
         "__SHARE_TRACK",
@@ -850,7 +852,8 @@
     "showPlaylistView",
     "showUserPlaylistPage",
     "showView",
-    "stopPlayback"
+    "stopPlayback",
+    "umami"
   ],
   "referencedIds": [
     "accessTokenInfo",

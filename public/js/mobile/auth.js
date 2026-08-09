@@ -73,16 +73,21 @@ export async function startTrial() {
 
       showToast('Starting your trial…', 'success');
 
+      // Funnel attribution: credit the taster link that brought this visitor.
+      let via = null;
+      try { via = JSON.parse(sessionStorage.getItem('mad_taster') || 'null'); } catch (e) {}
+
       try {
         const response = await fetch('/api/payments/trial', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email.trim() })
+          body: JSON.stringify(via ? { email: email.trim(), via } : { email: email.trim() })
         });
 
         const data = await response.json();
 
         if (response.ok && data.ok && data.token) {
+          try { window.umami && window.umami.track('trial-start', via || {}); } catch (e) {}
           localStorage.setItem('mass_access_token', String(data.token).trim());
           localStorage.setItem('mass_token_email', email.trim().toLowerCase());
           showToast('Trial started! Reloading…', 'success');
