@@ -162,7 +162,7 @@ function renderArtTrack(t, art, audio, out) {
       ...(meta ? [{ text: meta, font: 'ArialMT', size: 32, alpha: 0.6, x: 980, y: 566 }] : []),
       // Watermark → call to action: the link under the video is invisible while
       // watching; this is the one placement every viewer sees for the whole song.
-      { text: 'Hear the full song', font: 'ArialMT', size: 34, alpha: 0.85, x: 1860, y: 52, align: 'right' },
+      { text: 'Hear the full album and more at', font: 'ArialMT', size: 34, alpha: 0.85, x: 1860, y: 52, align: 'right' },
       { text: 'musicafricadirect.com', font: 'Arial-BoldMT', size: 42, alpha: 0.95, x: 1860, y: 96, align: 'right' }
     ]
   });
@@ -195,7 +195,7 @@ function renderShort(t, art, audio, out) {
     items: [
       { text: t.title, font: 'Arial-BoldMT', size: 64, align: 'center', x: 0, y: 1260 },
       { text: t.artist, font: 'ArialMT', size: 46, alpha: 0.92, align: 'center', x: 0, y: 1364 },
-      { text: 'Hear the full song', font: 'ArialMT', size: 36, alpha: 0.85, align: 'center', x: 0, y: 1700 },
+      { text: 'Hear the full album and more at', font: 'ArialMT', size: 36, alpha: 0.85, align: 'center', x: 0, y: 1700 },
       { text: 'musicafricadirect.com', font: 'Arial-BoldMT', size: 46, align: 'center', x: 0, y: 1748 }
     ]
   });
