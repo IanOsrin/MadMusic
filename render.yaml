@@ -87,7 +87,11 @@ services:
     branch: live               # same branch the other crons deploy from
     schedule: "0 3 * * *"      # 03:00 UTC = 05:00 SAST — after the other jobs
     buildCommand: cd scripts/artwork-resize && npm ci   # lockfile-exact + integrity-verified
-    startCommand: cd scripts/artwork-resize && node resize-artwork.mjs --since=48
+    # --since=336 (14 days): masters are often uploaded well before their album
+    # goes live in FM; a 48h window let 7 covers ship without derivatives
+    # (2026-08-12). The script skips masters whose derivatives are already
+    # newer, so the wide window costs seconds, not re-processing.
+    startCommand: cd scripts/artwork-resize && node resize-artwork.mjs --since=336
     envVars:
       - key: AWS_ACCESS_KEY_ID
         sync: false
