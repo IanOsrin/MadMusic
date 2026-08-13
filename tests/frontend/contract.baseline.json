@@ -452,6 +452,7 @@
     },
     "mobile.html": {
       "scriptOrder": [
+        "inline",
         "/js/helpers.js",
         "inline",
         "inline",
@@ -465,6 +466,7 @@
         "/js/mobile/main.js"
       ],
       "windowGlobals": [
+        "Capacitor",
         "MADHelpers",
         "__GUEST",
         "__MADDIE",
@@ -808,6 +810,7 @@
     }
   },
   "crossFileGlobals": [
+    "Capacitor",
     "MADCurrency",
     "MADHelpers",
     "MADOpenShareEmailModal",

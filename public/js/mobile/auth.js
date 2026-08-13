@@ -108,6 +108,14 @@ export async function startTrial() {
 // paywall sheet pops every 5 minutes instead of the blocking key screen.
 const GUEST_POPUP_INTERVAL_MS = 5 * 60 * 1000;
 
+// True when this page is running inside the Capacitor native shell (the app
+// loads the live site; Capacitor injects window.Capacitor). Google Play's
+// payments policy allows NO non-Play purchase flow in the app, so every Buy
+// Access surface is suppressed in native — Play Billing (RevenueCat) replaces
+// them in a later release. Belt (hidden UI) and braces (refused code path).
+export const isNativeApp = () =>
+  !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+
 function injectGuestPaywall() {
   if (document.getElementById('guest-paywall')) return;
 
@@ -121,14 +129,14 @@ function injectGuestPaywall() {
       <h3>Enjoying the music?</h3>
       <p>You're in preview mode — 30 second clips. Get full access to every track.</p>
       <button class="btn btn-primary" id="guest-paywall-trial">Start 7-Day Free Trial</button>
-      <button class="btn btn-secondary" id="guest-paywall-buy">Buy Access</button>
+      ${isNativeApp() ? '' : '<button class="btn btn-secondary" id="guest-paywall-buy">Buy Access</button>'}
       <button class="btn btn-secondary" id="guest-paywall-token">Enter Access Token</button>
     </div>`;
   document.body.appendChild(overlay);
 
   document.getElementById('guest-paywall-close').addEventListener('click', hideGuestPaywall);
   document.getElementById('guest-paywall-trial').addEventListener('click', startTrial);
-  document.getElementById('guest-paywall-buy').addEventListener('click', buyAccess);
+  document.getElementById('guest-paywall-buy')?.addEventListener('click', buyAccess);
   document.getElementById('guest-paywall-token').addEventListener('click', setAccessToken);
   // Tapping the dimmed backdrop also just closes it — exploring stays easy.
   overlay.addEventListener('click', (e) => { if (e.target === overlay) hideGuestPaywall(); });
@@ -170,6 +178,12 @@ export function enterGuestMode() {
 }
 
 export async function buyAccess() {
+      if (isNativeApp()) {
+        // Play policy: no Paystack in the app. Neutral wording on purpose —
+        // naming an external purchase channel is itself a policy violation.
+        showToast('Purchases are not available in this app', 'error');
+        return;
+      }
       const email = prompt('Enter your email address for the receipt:');
       if (!email || !email.includes('@')) {
         showToast('Please enter a valid email address', 'error');
