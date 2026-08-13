@@ -26,6 +26,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <!-- Naked-render guard — see app.html: never flash unstyled white mid-restart. -->
   <style>html{background:#0b0b10;color:#e8e8ee}body{background:#0b0b10}a{color:inherit}</style>
+  <!-- Native shell detection: the Capacitor app loads this same page remotely and
+       injects window.Capacitor before any script runs. Google Play payments policy
+       allows NO non-Play purchase flow inside the app, so html.native-app hides
+       every Buy Access surface (auth.js refuses the code paths too). -->
+  <script>
+    if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+      document.documentElement.classList.add('native-app');
+    }
+  </script>
+  <style>html.native-app #buy-access-btn,html.native-app #guest-paywall-buy{display:none!important}</style>
   <link rel="stylesheet" href="/css/mobile.css?v=2"
         onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/mobile.css?v=2&r='+Date.now();},1500)">
   <!-- Shared field/format helpers (window.MADHelpers); loaded before body scripts
