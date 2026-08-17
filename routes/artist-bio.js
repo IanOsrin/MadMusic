@@ -19,7 +19,7 @@
  * (Social/streaming links are deferred from v1 — see docs/memory plan.)
  */
 import { Router } from 'express';
-import { fmFindRecords } from '../fm-client.js';
+import { fmFindAll } from '../fm-client.js';
 import { FM_ARTIST_BIO_LAYOUT } from '../lib/fm-fields.js';
 import { createSwrCache } from '../lib/swr-cache.js';
 
@@ -75,8 +75,11 @@ export function buildIndex(records) {
 }
 
 async function fetchFromFm() {
-  const result = await fmFindRecords(FM_ARTIST_BIO_LAYOUT, [{ Active: '1' }], { limit: 500 });
-  // fmFindRecords returns { ok, data, ... }; missing layout (FM 102) → ok:false → empty.
+  // Paged, not a flat limit of 500: the bio set is meant to grow, and a hard
+  // limit cuts it off silently once it does — no error, just artists that
+  // quietly stop having cards.
+  const result = await fmFindAll(FM_ARTIST_BIO_LAYOUT, [{ Active: '1' }], { pageSize: 500 });
+  // fmFindAll returns { ok, data, ... }; missing layout (FM 102) → ok:false → empty.
   return buildIndex(result?.data || []);
 }
 
