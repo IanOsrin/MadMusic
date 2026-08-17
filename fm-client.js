@@ -419,6 +419,52 @@ export async function fmFindRecords(layout, queries, { limit = 1, offset = 1, so
   return { ok: true, data, total };
 }
 
+/**
+ * Every record matching a find, fetched a page at a time.
+ *
+ * fmFindRecords takes a single `limit`, so callers picked a number they hoped
+ * was big enough — and a set that outgrew it was silently cut off at that
+ * number, with no error and no sign anything was missing. The artist bio index
+ * sat at 500 while the whole point of the knowledge base is that it grows.
+ *
+ * FileMaker reports the true foundCount on the first page, so this pages until
+ * it has them all. `maxRecords` is a backstop against pulling something
+ * enormous by accident — and if it ever bites, it says so loudly rather than
+ * quietly returning a short list.
+ */
+export async function fmFindAll(layout, queries, opts = {}) {
+  return pageAll(fmFindRecords, layout, queries, opts);
+}
+
+/**
+ * The paging itself, with the finder passed in. Separated from fmFindAll so the
+ * arithmetic can be tested against a fake finder — an ES module's internal call
+ * to its own export cannot be stubbed, and the sums are the part worth guarding.
+ */
+export async function pageAll(find, layout, queries, { pageSize = 500, maxRecords = 10_000, sort = [] } = {}) {
+  const first = await find(layout, queries, { limit: pageSize, offset: 1, sort });
+  if (!first.ok) return first;
+
+  const total = first.total || first.data.length;
+  const want = Math.min(total, maxRecords);
+  const out = [...first.data];
+
+  while (out.length < want) {
+    const page = await find(layout, queries, {
+      limit: Math.min(pageSize, want - out.length),
+      offset: out.length + 1,
+      sort,
+    });
+    if (!page.ok || !page.data.length) break;    // a failed page returns what we have, never throws
+    out.push(...page.data);
+  }
+
+  if (total > maxRecords) {
+    console.warn(`[fm] ${layout}: ${total} records match but maxRecords is ${maxRecords} — ${total - maxRecords} NOT loaded. Raise maxRecords.`);
+  }
+  return { ok: true, data: out, total, truncated: total > maxRecords };
+}
+
 export async function fmDeleteRecord(layout, recordId) {
   if (!recordId) throw new Error('fmDeleteRecord requires recordId');
   const url = `${fmBase}/layouts/${encodeURIComponent(layout)}/records/${encodeURIComponent(recordId)}`;

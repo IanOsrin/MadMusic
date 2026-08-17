@@ -21,6 +21,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { knnRaw } from '../lib/semantic-shelves.js';
 import { answerFromShelves, QUESTION_LINE } from '../lib/maddie-lite.js';
 import { fmFindRecords, fmCreateRecord } from '../fm-client.js';
+import { searchSubjects, saveSubject } from '../lib/shop-knowledge.js';
 import { resolveClientIp } from '../lib/cloudflare-ips.js';
 
 const router = Router();
@@ -55,6 +56,8 @@ House rules — these are absolute:
 Tool notes: you have TWO search moves — use both. search_shelves is exact/lexical (names of artists, tracks, albums). feel_search is the shop's semantic index (62,000+ tracks embedded by meaning) — it finds music by mood, feeling, era, instrument, style, "sounds like", even half-memories; it is the stronger opener for anything that isn't a name lookup.
 
 NAME LOOKUPS ARE SACRED: when the visitor names an artist or band, your FIRST call is ALWAYS search_shelves with the artist parameter set to that exact name — not q, not feel_search, no rephrasing. Only widen (feel_search, alternate spellings, related searches) AFTER you've seen what the shelves hold under the name they actually said.
+
+OUR OWN NOTEBOOK FIRST: for a question about a SUBJECT rather than a person — a genre, a scene, an era, a label, an instrument, a piece of music history ("what is mbaqanga?", "how does maskandi differ from it?", "what was happening in Soweto in the 70s?") — call shop_knowledge BEFORE anything else. The shop has often been asked it before and written the answer down; that note is instant and costs nothing, where the web is slow and charges us again for what we already know. If it comes back with an entry, answer from it in your own voice. Only if it misses do you consider the web, and the same ASK BEFORE THE BACK ROOM courtesy applies — offer, don't wander off. Whatever you learn out there gets written into the notebook afterwards, so you need only look it up once.
 
 ASK BEFORE THE BACK ROOM: when a visitor wants an artist's STORY and artist_info misses on the best spelling, do NOT go to the web unprompted. Report the miss plainly ("Nothing on the shop's card for X yet") and OFFER: would they like you to go to the computer and search the wider web for them? Only call web_search for that story AFTER the visitor says yes — their yes may already be in the current message ("yes please check"). When you come back: (1) answer honestly, clearly flagged as coming from the wider web, not our shelves ("not on our shelves, but the story goes…"); (2) tell them you'll file what you found in the shop's records so the card exists next time (the shop files it for review automatically — say it naturally, "I'll note that in our files", never mention databases or review queues); (3) harvest leads — other names they recorded under, bands, labels, collaborators, alternate spellings — and IMMEDIATELY bring each lead back to search_shelves: obscure artists often hide in this vault under different billings. If they say no thanks, offer the nearest thing the shelves DO hold.
 
@@ -121,6 +124,15 @@ const TOOLS = [
       type: 'object',
       properties: { name: { type: 'string' } },
       required: ['name'],
+    },
+  },
+  {
+    name: 'shop_knowledge',
+    description: 'Look up what the shop already knows about a SUBJECT — a genre, a scene, an era, an instrument, a label, a piece of music history. Anything that is not about one particular artist (use artist_info for those). Call this BEFORE any web search on a subject question: the shop has often answered it before, and its own notes are faster and cost nothing. Examples: "mbaqanga", "difference between mbaqanga and maskandi", "kwela", "Soweto in the 1970s", "Gallo Records history".',
+    input_schema: {
+      type: 'object',
+      properties: { topic: { type: 'string', description: 'The subject to look up, in a few words.' } },
+      required: ['topic'],
     },
   },
   {
@@ -286,10 +298,20 @@ async function executeTool(name, input, ctx) {
     case 'artist_info': {
       const data = await selfGet(`/api/artist-bio?name=${encodeURIComponent(String(input?.name || '').slice(0, 100))}`);
       // The route nests the payload under `artist` ({found, artist:{name, bio,
-      // titbits, country}}); tolerate the old flat shape too. Titbits is the
-      // AI's own knowledge field — preferred over the writer's Bio article.
+      // titbits, country}}); tolerate the old flat shape too.
+      //
+      // BIO FIRST, THEN TITBITS — and both. This used to be `titbits || bio`,
+      // which meant that on any artist with a titbit she never saw the Bio at
+      // all: the marketing-proofed article was invisible on exactly the artists
+      // the shop had invested most writing in. They are different things with
+      // different owners — Bio is the client-facing account, Titbits is
+      // Maddie's extra resource on top (Ian, 2026-08-17).
       const a = (data && typeof data.artist === 'object' && data.artist) || {};
-      const bio = a.titbits || a.bio || data?.bio;
+      const article = String(a.bio || data?.bio || '').trim();
+      const extra   = String(a.titbits || '').trim();
+      // /api/artist-bio copies titbits into bio when there is no article, so a
+      // titbits-only artist would otherwise arrive with the same text twice.
+      const bio = [article, extra === article ? '' : extra].filter(Boolean).join('\n\n');
       if (data?.found && bio) {
         return {
           found: true,
@@ -308,6 +330,24 @@ async function executeTool(name, input, ctx) {
       const missName = String(input?.name || '').trim();
       if (missName && ctx.bioMisses && !ctx.bioMisses.includes(missName)) ctx.bioMisses.push(missName);
       return { found: false };
+    }
+    case 'shop_knowledge': {
+      // Called in-process, NOT through selfGet: these are internal working notes
+      // and there is deliberately no route serving them, so nothing a visitor
+      // can reach ever returns one.
+      const topic = String(input?.topic || '').slice(0, 120);
+      const hits = await searchSubjects(topic, { limit: 3 });
+      if (!hits.length) {
+        // Remember the miss — the reply is answered first, then the subject is
+        // filed afterwards, same shape as a bio gap.
+        if (topic && ctx.subjectMisses && !ctx.subjectMisses.includes(topic)) ctx.subjectMisses.push(topic);
+        return { found: false };
+      }
+      ctx.subjectHits = (ctx.subjectHits || 0) + 1;
+      return {
+        found: true,
+        entries: hits.map(h => ({ subject: h.subject, knowledge: h.knowledge.slice(0, 2500) })),
+      };
     }
     case 'list_playlists': {
       const data = await selfGet('/api/public-playlists');
@@ -537,6 +577,64 @@ async function suggestTitbitsForGaps(gaps, visitorQuestion) {
   }
 }
 
+const SUBJECT_PROMPT = `You keep the notebook behind the counter at MAD Music, a South African record shop sitting on the Gallo vault. Maddie has just answered a visitor's question about a SUBJECT — a genre, a scene, an era, a label, an instrument — and you write down what the shop now knows, so the next person who asks gets the answer straight away instead of it being researched again.
+
+You are given the visitor's question and Maddie's answer. Reply with EXACTLY two lines:
+
+SUBJECT: <the topic in two to four words, as someone would look it up — "mbaqanga", "mbaqanga vs maskandi", "kwela history". Not a question, not a sentence.>
+KNOWLEDGE: <80-250 words of flowing prose holding the durable facts from the answer. Write it for Maddie to read later, not for a customer: no greeting, no "as I mentioned", no reference to this conversation or the person who asked. Keep only what stays true — drop chit-chat, drop anything about what is in stock today, drop opinions. If a detail was uncertain in the answer, leave it out or mark it [UNVERIFIED].>
+
+If the exchange holds no durable general knowledge — it was small talk, a request to play something, a question about one specific artist, or the answer was "I don't know" — reply with exactly NOTHING_TO_FILE and no other text.`;
+
+/**
+ * File what Maddie just worked out about a subject, so the shop stops paying to
+ * learn the same thing twice.
+ *
+ * Runs AFTER the visitor has their reply, like suggestTitbitsForGaps — nobody
+ * waits on the notebook. Artist questions are not handled here; those go to the
+ * bio path, where the Active=0 review gate belongs. Subject entries are internal
+ * and ungated, so they are useful from the moment they are written.
+ */
+async function recordSubjectKnowledge(ctx, question, answer) {
+  if (!LEARN_ENABLED() || !process.env.ANTHROPIC_API_KEY) return;
+  if (!question || !answer || answer.length < 120) return;
+  // Only when she actually went looking for subject knowledge and came back
+  // empty. A hit means the shop already had it, and an artist question belongs
+  // to the bio path.
+  if (!ctx?.subjectMisses?.length) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  if (_suggest.day !== today) { _suggest.day = today; _suggest.count = 0; }
+  if (_suggest.count >= MAX_SUGGESTIONS_PER_DAY) return;
+
+  try {
+    const anthropic = new Anthropic();
+    const res = await anthropic.messages.create({
+      model: MADDIE_MODEL,
+      max_tokens: 700,
+      system: SUBJECT_PROMPT,
+      messages: [{ role: 'user', content: `Visitor asked: "${question.slice(0, 400)}"\n\nMaddie answered:\n${answer.slice(0, 3000)}` }],
+    });
+    const text = (res.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+    if (!text || text.includes('NOTHING_TO_FILE')) return;
+
+    const subject = (text.match(/^SUBJECT:\s*(.+)$/m) || [])[1]?.trim();
+    const knowledge = (text.split(/^KNOWLEDGE:\s*/m)[1] || '').trim();
+    if (!subject || !knowledge) return;
+
+    const id = await saveSubject(subject, knowledge, {
+      question,
+      source: ctx.usedWeb ? 'after a web dig' : 'from the shelves',
+    });
+    if (id) {
+      _suggest.count += 1;
+      console.log(`[maddie-learn] filed subject "${subject}" → recordId ${id} (internal, ungated)`);
+    }
+  } catch (err) {
+    console.warn('[maddie-learn] subject note failed:', err?.message || err);
+  }
+}
+
 // ── progress channel ─────────────────────────────────────────────────────────
 // A visitor watches one line of text while Maddie works, and that line used to
 // say "checking the shelves" for the whole wait — including the stretch where
@@ -617,7 +715,7 @@ router.post('/chat', async (req, res) => {
     }
 
     const anthropic = new Anthropic();
-    const ctx = { recommended: [], bioMisses: [] };
+    const ctx = { recommended: [], bioMisses: [], subjectMisses: [], subjectHits: 0 };
     const messages = [...history];
     let reply = '';
     // The _20260209 web tool filters results via a server-side code-execution
@@ -654,7 +752,9 @@ router.post('/chat', async (req, res) => {
       // flips once the first one lands and holds for the rest of the dig —
       // which is the long part of the wait. It flips back when she carries a
       // lead from the web to the shelves, because that is what she's then doing.
-      const phaseNow = usedWebSearch(response.content) ? 'web' : (toolUses.length ? 'shelves' : phase);
+      const wentToWeb = usedWebSearch(response.content);
+      if (wentToWeb) ctx.usedWeb = true;   // recorded on the note, so its provenance is on the record
+      const phaseNow = wentToWeb ? 'web' : (toolUses.length ? 'shelves' : phase);
       if (phaseNow !== phase) { phase = phaseNow; out.status(phase); }
 
       // Server-side tools (web_search) run on Anthropic's servers; a long
@@ -695,6 +795,12 @@ router.post('/chat', async (req, res) => {
     const lastQuestion = history[history.length - 1]?.content || '';
     suggestTitbitsForGaps(ctx.bioMisses, lastQuestion)
       .catch((e) => console.warn('[maddie-learn] loop error:', e?.message || e));
+
+    // …and the same for subjects, which have no artist to hang off. Fire-and-
+    // forget: the visitor already has their answer, and a failed note must never
+    // turn a good turn into an error.
+    recordSubjectKnowledge(ctx, lastQuestion, reply)
+      .catch((e) => console.warn('[maddie-learn] subject loop error:', e?.message || e));
   } catch (err) {
     const status = err?.status || 500;
     console.error('[maddie] chat failed:', err?.message || err);
