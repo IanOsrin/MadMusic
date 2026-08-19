@@ -947,6 +947,7 @@ app.get('/mobile',   async (req, res) => {
 });
 app.get('/m',        (_req, res) => sendHtml(res, 'mobile.html'));
 app.get('/ringtone', (_req, res) => sendHtml(res, 'ringtone.html'));
+app.get('/privacy',  (_req, res) => sendHtml(res, 'privacy.html')); // required by the app stores; POPIA statement
 app.get('/audio-lab',(_req, res) => sendHtml(res, 'audio-lab.html'));
 
 // ── Taster funnel beacons ─────────────────────────────────────────────────────
