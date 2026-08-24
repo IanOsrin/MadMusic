@@ -7786,11 +7786,13 @@
    plays into 30 s previews automatically. */
 (function () {
   if (!window.__MADDIE) return;
-  // Subscriber-only (2026-07-17): every Maddie message costs real API money,
-  // so guests don't even see the bell. Token presence is known synchronously
-  // at load; if the token later fails validation the server 401s the chat
-  // anyway (this gate is UX, the auth middleware is the enforcement).
-  if (!localStorage.getItem('mass_access_token')) return;
+  // Chat is subscriber-only (2026-07-17): every Maddie message costs real
+  // API money. Since 2026-08-24 guests DO get the floating corner bell as a
+  // signpost (Ian's call) — but clicking it opens the sign-up gate, never
+  // the chat, so the guest path costs nothing. Token presence is known
+  // synchronously at load; if the token later fails validation the server
+  // 401s the chat anyway (this gate is UX, auth middleware is enforcement).
+  var MADDIE_GUEST = !localStorage.getItem('mass_access_token');
 
   var css = ''
     /* Lives INSIDE the New Releases section-header, absolutely centered on the
@@ -7908,11 +7910,33 @@
     fab.click();
   });
   var clearBtn = document.getElementById('clear');
-  if (clearBtn && clearBtn.parentElement) clearBtn.insertAdjacentElement('afterend', topBell);
+  // Top-bar bell stays subscriber-only (Ian, 2026-08-24) — guests get just
+  // the corner bell below.
+  if (!MADDIE_GUEST && clearBtn && clearBtn.parentElement) clearBtn.insertAdjacentElement('afterend', topBell);
 
-  // The in-rail bell is retired (2026-07-20): the top-bar bell is now the only
-  // Maddie entry point. The fab element stays alive OFF-DOM purely as the
-  // click-logic holder that topBell delegates to — do not append it anywhere.
+  // The in-rail bell is retired (2026-07-20). Since 2026-08-24 the fab is
+  // back ON-DOM as a floating bottom-right bell (the now-conventional
+  // assistant spot — Ian's call): same element, same click logic, so the
+  // top-bar bell and the corner bell stay perfectly in sync. The .floating
+  // CSS pins it above the player bar.
+  fab.classList.add('floating');
+  document.body.appendChild(fab);
+
+  // Guest path ends here: the corner bell is a signpost, not a chat. Clicking
+  // rings the counter bell and opens the access gate (auth.js owns its
+  // guest-mode dismissibility). No panel, no chat wiring, no API cost.
+  if (MADDIE_GUEST) {
+    fab.addEventListener('click', function () {
+      dingBell();
+      fab.classList.remove('ringing');
+      void fab.offsetWidth;
+      fab.classList.add('ringing');
+      var gate = document.getElementById('paymentOverlay');
+      if (gate) gate.classList.remove('hidden');
+      try { window.umami && window.umami.track('maddie-guest-nudge'); } catch (e) {}
+    });
+    return;
+  }
 
   var panel = document.createElement('div');
   panel.id = 'maddiePanel';
