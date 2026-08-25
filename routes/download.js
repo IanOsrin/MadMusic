@@ -198,7 +198,10 @@ router.get('/callback', async (req, res) => {
 // paid with: purchase looked up server-side, and a SHORT-LIVED signed token is
 // issued instead of re-exposing the long-TTL ref. Signed with AUTH_SECRET.
 const RECOVER_TOKEN_TTL_MS = 15 * 60 * 1000;
-const RECOVER_SECRET = process.env.DOWNLOAD_LINK_SECRET || process.env.AUTH_SECRET || '';
+// Secret precedence: a dedicated DOWNLOAD_LINK_SECRET, else the Paystack
+// secret (always present where payments work, server-side only). Never mint
+// with an empty key — the token could never verify.
+const RECOVER_SECRET = process.env.DOWNLOAD_LINK_SECRET || process.env.AUTH_SECRET || process.env.PAYSTACK_SECRET_KEY || '';
 
 function signRecoverToken(reference) {
   const payload = Buffer.from(JSON.stringify({ r: reference, e: Date.now() + RECOVER_TOKEN_TTL_MS }))
@@ -225,6 +228,10 @@ function verifyRecoverToken(token) {
 // freshness window; the token expires in 15 minutes and embeds the reference.
 
 router.post('/recover', async (req, res) => {
+  if (!RECOVER_SECRET) {
+    console.error('[DOWNLOAD] Recover disabled: no DOWNLOAD_LINK_SECRET/PAYSTACK_SECRET_KEY configured');
+    return res.status(500).json({ ok: false, error: 'Download recovery is not available right now — please contact support with your payment receipt' });
+  }
   const { trackRecordId, email } = req.body || {};
   if (!trackRecordId || !isStrictEmail(email)) {
     return res.status(400).json({ ok: false, error: 'trackRecordId and a valid email are required' });

@@ -14,7 +14,7 @@ beforeAll(async () => {
   app = serverMod.app;
 });
 
-const SECRET = process.env.DOWNLOAD_LINK_SECRET || process.env.AUTH_SECRET || '';
+const SECRET = process.env.DOWNLOAD_LINK_SECRET || process.env.AUTH_SECRET || process.env.PAYSTACK_SECRET_KEY || '';
 
 function makeToken({ reference = 'T_TEST_REF', expiresInMs = 60000, secret = SECRET, tamper = false } = {}) {
   const payload = Buffer.from(JSON.stringify({ r: reference, e: Date.now() + expiresInMs })).toString('base64url');
