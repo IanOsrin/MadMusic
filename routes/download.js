@@ -24,6 +24,8 @@ import {
 } from '../lib/fm-fields.js';
 import { paystackRequest } from '../lib/paystack.js';
 import { isStrictEmail, fmExactMatch } from '../lib/validators.js';
+import { sendDownloadLinkEmail } from '../lib/email.js';
+import { requireAdminKey } from './admin.js';
 
 const router = Router();
 
@@ -179,6 +181,7 @@ router.get('/callback', async (req, res) => {
         Status:             'complete'
       });
       console.log(`[DOWNLOAD] Purchase recorded: "${trackName}" ref=${reference} email=${email}`);
+      sendDownloadLinkEmail(email, trackName, reference);   // fire-and-forget
     }
 
     // Do NOT include the Paystack reference in the browser-facing URL — it is a
@@ -320,6 +323,32 @@ router.get('/file', async (req, res) => {
   }
 });
 
+// ── POST /api/download/resend-email (admin) ──────────────────────────────────
+// Support tool: re-send the download-link email for a recorded purchase.
+// Body: { reference } — X-Admin-Key required.
+
+router.post('/resend-email', requireAdminKey, async (req, res) => {
+  const { reference } = req.body || {};
+  if (!reference) return res.status(400).json({ ok: false, error: 'reference is required' });
+  try {
+    const purchase = await findPurchaseByRef(reference);
+    if (!purchase) return res.status(404).json({ ok: false, error: 'No purchase found for that reference' });
+    const email = purchase['Email'];
+    if (!email) return res.status(404).json({ ok: false, error: 'Purchase has no email on record' });
+    let trackName = 'your track';
+    try {
+      const t = await fetchTrackRecord(purchase['TrackRecordID']);
+      if (t) trackName = t['Track Name'] || t['Title'] || t['Song Name'] || trackName;
+    } catch { /* name is garnish */ }
+    await sendDownloadLinkEmail(email, trackName, reference);
+    console.log(`[DOWNLOAD] Resend: link email for ref=${reference} → ${email}`);
+    return res.json({ ok: true, sentTo: email, trackName });
+  } catch (err) {
+    console.error('[DOWNLOAD] Resend error:', err.message);
+    return res.status(500).json({ ok: false, error: 'Could not resend the email' });
+  }
+});
+
 // ── Webhook handler (called from payments.js) ─────────────────────────────────
 
 export async function handleDownloadWebhook(paymentData, reference) {
@@ -347,6 +376,7 @@ export async function handleDownloadWebhook(paymentData, reference) {
     Status:             'complete'
   });
   console.log(`[DOWNLOAD] Webhook: purchase recorded "${trackName}" ref=${reference}`);
+  sendDownloadLinkEmail(email, trackName, reference);   // fire-and-forget
 }
 
 export default router;
