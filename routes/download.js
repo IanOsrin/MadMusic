@@ -11,6 +11,7 @@
 import { Router }   from 'express';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   fmFindRecords,
   fmCreateRecord,
@@ -59,7 +60,11 @@ async function fetchTrackRecord(recordId) {
 // Candidate timestamp fields on the purchase record. The FM map does not document
 // an explicit Created/Paid field on API_Download_Purchases, so we probe the common
 // names. Returns ms-epoch or null if none is present/parseable.
+// CreationTimestamp is the pinned field (added to API_Download_Purchases
+// 2026-08-25, populated on all records, FM "MM/DD/YYYY HH:MM:SS" — parseable);
+// the rest remain as fallbacks.
 const PURCHASE_TS_FIELD_CANDIDATES = [
+  'CreationTimestamp',
   'Created', 'Created_At', 'CreatedTimestamp', 'Creation_Timestamp',
   'Date_Created', 'Timestamp', 'Paid_At', 'Paid', 'Purchase_Date', 'Date'
 ];
@@ -186,11 +191,80 @@ router.get('/callback', async (req, res) => {
   }
 });
 
+// ── Recovery tokens ───────────────────────────────────────────────────────────
+// When the Paystack return lands in a different tab/browser (common in mobile
+// in-app browsers) the sessionStorage ref is gone even though the purchase is
+// recorded. /recover lets the buyer restart the download with the email they
+// paid with: purchase looked up server-side, and a SHORT-LIVED signed token is
+// issued instead of re-exposing the long-TTL ref. Signed with AUTH_SECRET.
+const RECOVER_TOKEN_TTL_MS = 15 * 60 * 1000;
+const RECOVER_SECRET = process.env.DOWNLOAD_LINK_SECRET || process.env.AUTH_SECRET || '';
+
+function signRecoverToken(reference) {
+  const payload = Buffer.from(JSON.stringify({ r: reference, e: Date.now() + RECOVER_TOKEN_TTL_MS }))
+    .toString('base64url');
+  const mac = createHmac('sha256', RECOVER_SECRET).update(payload).digest('base64url');
+  return `${payload}.${mac}`;
+}
+
+function verifyRecoverToken(token) {
+  const [payload, mac] = String(token || '').split('.');
+  if (!payload || !mac || !RECOVER_SECRET) return null;
+  const expect = createHmac('sha256', RECOVER_SECRET).update(payload).digest('base64url');
+  if (mac.length !== expect.length || !timingSafeEqual(Buffer.from(mac), Buffer.from(expect))) return null;
+  try {
+    const { r, e } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (!r || !Number.isFinite(e) || Date.now() > e) return null;
+    return r;
+  } catch { return null; }
+}
+
+// ── POST /api/download/recover ────────────────────────────────────────────────
+// Body: { trackRecordId, email } → { ok, token } when a fresh completed
+// purchase by that email for that track exists. Auth = email + track +
+// freshness window; the token expires in 15 minutes and embeds the reference.
+
+router.post('/recover', async (req, res) => {
+  const { trackRecordId, email } = req.body || {};
+  if (!trackRecordId || !isStrictEmail(email)) {
+    return res.status(400).json({ ok: false, error: 'trackRecordId and a valid email are required' });
+  }
+  try {
+    // Purchases store the site-facing trackId; the return URL carries the FM
+    // recordId — bridge via the track record's recid field.
+    const fieldData = await fetchTrackRecord(trackRecordId);
+    if (!fieldData) return res.status(404).json({ ok: false, error: 'Track not found' });
+    const trackId = String(fieldData['recid'] || trackRecordId);
+
+    const result = await fmFindRecords(FM_DOWNLOADS_LAYOUT, [
+      { TrackRecordID: fmExactMatch(trackId), Email: fmExactMatch(email.trim()), Status: fmExactMatch('complete') }
+    ]);
+    const purchases = (result?.data || []).map(r => r.fieldData).filter(isPurchaseFresh);
+    if (!purchases.length) {
+      console.warn(`[DOWNLOAD] Recover: no fresh purchase for track ${trackId} / ${email}`);
+      return res.status(404).json({ ok: false, error: 'No recent purchase found for that email' });
+    }
+    purchases.sort((a, b) => (purchaseTimestampMs(b) || 0) - (purchaseTimestampMs(a) || 0));
+    const reference = purchases[0]['Paystack_Reference'];
+    if (!reference) return res.status(500).json({ ok: false, error: 'Purchase record is missing its reference' });
+    console.log(`[DOWNLOAD] Recover: issued token for ref=${reference} (track ${trackId})`);
+    return res.json({ ok: true, token: signRecoverToken(reference) });
+  } catch (err) {
+    console.error('[DOWNLOAD] Recover error:', err.message);
+    return res.status(500).json({ ok: false, error: 'Could not recover the download' });
+  }
+});
+
 // ── GET /api/download/file ────────────────────────────────────────────────────
 // ?ref=PAYSTACK_REFERENCE  — verified against FM purchase record
+// ?t=SIGNED_TOKEN          — 15-minute recovery token from /recover
 
 router.get('/file', async (req, res) => {
-  const { ref } = req.query;
+  let { ref } = req.query;
+  if (!ref && req.query.t) {
+    ref = verifyRecoverToken(req.query.t);
+    if (!ref) return res.status(403).json({ ok: false, error: 'This download link has expired — request a new one' });
+  }
   if (!ref) return res.status(400).json({ ok: false, error: 'ref is required' });
 
   try {
