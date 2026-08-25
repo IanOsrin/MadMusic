@@ -16,6 +16,7 @@ import {
   fmFindRecords,
   fmCreateRecord,
   fmGetRecordById,
+  fmUpdateRecord,
   safeFetch
 } from '../fm-client.js';
 import {
@@ -35,6 +36,11 @@ const FM_DOWNLOADS_LAYOUT = process.env.FM_DOWNLOADS_LAYOUT || 'API_Download_Pur
 // a leaked `ref` (it rides in URLs) being replayed indefinitely.
 const DOWNLOAD_LINK_TTL_HOURS = Number.parseFloat(process.env.DOWNLOAD_LINK_TTL_HOURS || '48') || 48;
 
+// A link is dead after this many COMPLETED downloads (Ian, 2026-08-25: 3 —
+// covers phone+computer+retry while making sharing pointless; counting only
+// completed streams keeps mail-scanner prefetches from burning uses).
+const DOWNLOAD_MAX_USES = Number.parseInt(process.env.DOWNLOAD_MAX_USES || '3', 10) || 3;
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function resolveAudioUrl(fieldData) {
@@ -50,7 +56,9 @@ async function findPurchaseByRef(reference) {
     { Paystack_Reference: fmExactMatch(reference), Status: fmExactMatch('complete') }
   ], { limit: 1 });
   if (!result.ok || result.data.length === 0) return null;
-  return result.data[0].fieldData;
+  const fd = result.data[0].fieldData;
+  fd.__recordId = result.data[0].recordId;   // for the download counter
+  return fd;
 }
 
 async function fetchTrackRecord(recordId) {
@@ -288,6 +296,13 @@ router.get('/file', async (req, res) => {
       return res.status(403).json({ ok: false, error: 'This download link has expired' });
     }
 
+    // Dead after DOWNLOAD_MAX_USES completed downloads.
+    const usedCount = Number.parseInt(purchase['Download_Count'], 10) || 0;
+    if (usedCount >= DOWNLOAD_MAX_USES) {
+      console.warn(`[DOWNLOAD] Limit reached for ref=${ref} (${usedCount}/${DOWNLOAD_MAX_USES})`);
+      return res.status(403).json({ ok: false, error: 'This download link has reached its download limit — please contact support with your payment receipt' });
+    }
+
     const trackRecordId = purchase['TrackRecordID'] || '';
     if (!trackRecordId) {
       return res.status(404).json({ ok: false, error: 'Track record ID missing from purchase' });
@@ -315,8 +330,14 @@ router.get('/file', async (req, res) => {
     const contentLength = s3Res.headers.get('content-length');
     if (contentLength) res.setHeader('Content-Length', contentLength);
 
-    console.log(`[DOWNLOAD] Serving "${filename}" ref=${ref}`);
+    console.log(`[DOWNLOAD] Serving "${filename}" ref=${ref} (use ${usedCount + 1}/${DOWNLOAD_MAX_USES})`);
     await pipeline(Readable.fromWeb(s3Res.body), res);
+    // Count only COMPLETED downloads — pipeline resolving means the whole
+    // file went out. Fire-and-forget; a failed count must never break serving.
+    if (purchase.__recordId) {
+      fmUpdateRecord(FM_DOWNLOADS_LAYOUT, purchase.__recordId, { Download_Count: usedCount + 1 })
+        .catch(err => console.error(`[DOWNLOAD] Could not bump Download_Count for ref=${ref}:`, err?.message || err));
+    }
   } catch (err) {
     console.error('[DOWNLOAD] File serve error:', err.message);
     if (!res.headersSent) res.status(500).json({ ok: false, error: 'Download failed' });
