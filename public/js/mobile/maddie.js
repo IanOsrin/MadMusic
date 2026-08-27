@@ -2,10 +2,10 @@
 // Same API as desktop (POST /api/maddie/chat → { reply, tracks }), rendered as
 // a full-screen chat sheet. Gated on window.__MADDIE (MADDIE_ENABLED).
 
-import { state } from './state.js?v=7';
-import { escapeHtml } from './fields.js?v=7';
-import { playTrack, renderPlayerQueue } from './player.js?v=7';
-import { showAlbumTracksModal } from './cards.js?v=7';
+import { state } from './state.js?v=8';
+import { escapeHtml } from './fields.js?v=8';
+import { playTrack, renderPlayerQueue } from './player.js?v=8';
+import { showAlbumTracksModal } from './cards.js?v=8';
 
 // Shorter greetings than desktop — a phone screen, not a panel.
 const GREETINGS = [
