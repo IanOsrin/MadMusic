@@ -1,11 +1,11 @@
 // Album/track card builders + their modals for the mobile app.
 
-import { elements, state } from './state.js';
-import { escapeHtml, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js';
-import { switchTab } from './nav.js';
-import { search } from './search.js';
-import { closeModal, playTrack, renderPlayerQueue } from './player.js';
-import { pushOverlay } from './router.js';
+import { elements, state } from './state.js?v=14';
+import { escapeHtml, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=14';
+import { switchTab } from './nav.js?v=14';
+import { search } from './search.js?v=14';
+import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=14';
+import { pushOverlay } from './router.js?v=14';
 
 // ── Shared album tile (the New Releases / G100 look) ─────────────────────────
 // One square-cover tile: first tap reveals the title/artist overlay, second tap
@@ -40,6 +40,7 @@ export function createAlbumTile(album, opts = {}) {
 
       card.innerHTML = `
         <img class="nr-album-artwork" src="${escapeHtml(album.artwork)}" alt="${escapeHtml(album.title)}" loading="lazy" onerror="this.onerror=null;this.src='/img/placeholder.png'">
+        <div class="nr-card-caption"><div class="t">${escapeHtml(album.artist || '')}</div><div class="a">${escapeHtml(album.title)}</div></div>
         ${badge ? `<span class="${badgeClass}">${escapeHtml(badge)}</span>` : ''}
         <div class="nr-card-overlay">
           <div class="nr-overlay-title">${escapeHtml(album.title)}</div>

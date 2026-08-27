@@ -2,22 +2,24 @@
 // holds the DOM event wiring + drag/search state + init(), and exposes the
 // inline on*-handlers on window. All app logic lives in the mobile/*.js modules.
 
-import { elements, state } from './state.js';
-import { showToast } from './util.js';
-import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js';
+import { elements, state } from './state.js?v=14';
+import { showToast } from './util.js?v=14';
+import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=14';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, enterGuestMode, logout, setAccessToken, startTrial, updateAuthUI } from './auth.js?v=3';
-import { switchTab } from './nav.js';
-import { renderSearchResults, search } from './search.js';
-import { createPlaylist, loadPlaylists, showAddToPlaylistModal } from './playlists.js';
-import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js';
-import { filterG100Albums, loadG100 } from './rails-g100.js';
-import { loadNewReleases } from './rails-newreleases.js';
-import { closeModal, playTrack, sendStreamEvent, stepQueue, updatePlayerModal, updateProgress } from './player.js';
-import { showAlbumTracksModal } from './cards.js';
-import { initRouter } from './router.js';
-import { initMaddie } from './maddie.js';
+import { buyAccess, enterGuestMode, logout, setAccessToken, startTrial, updateAuthUI } from './auth.js?v=14';
+import { switchTab } from './nav.js?v=14';
+import { renderSearchResults, search } from './search.js?v=14';
+import { createPlaylist, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=14';
+import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=14';
+import { filterG100Albums, loadG100 } from './rails-g100.js?v=14';
+import { loadNewReleases } from './rails-newreleases.js?v=14';
+import { initMobHero } from './hero.js?v=14';
+import { loadHomeShelves } from './rails-g100.js?v=14';
+import { closeModal, playTrack, sendStreamEvent, stepQueue, updatePlayerModal, updateProgress } from './player.js?v=14';
+import { showAlbumTracksModal } from './cards.js?v=14';
+import { initRouter } from './router.js?v=14';
+import { initMaddie } from './maddie.js?v=14';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {
@@ -84,6 +86,8 @@ import { initMaddie } from './maddie.js';
         if (window.__GUEST_PREVIEW === true) {
           enterGuestMode();
           loadNewReleases();
+          initMobHero();
+          loadHomeShelves();
           loadPlaylists();
           handleShareDeepLink();
           return;
@@ -107,6 +111,8 @@ import { initMaddie } from './maddie.js';
       state.currentUser = { email: localStorage.getItem('mass_token_email') || '' };
       updateAuthUI();
       loadNewReleases();
+          initMobHero();
+          loadHomeShelves();
       loadPlaylists();
       handleShareDeepLink();
     }

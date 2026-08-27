@@ -409,21 +409,37 @@
     }
 
     /* ===== Maddie (mobile) ===== */
+    /* Maddie is a person, not a notification — the bare bell read as system
+       noise (Ian, 2026-08-26). A named pill makes her unmissable; a gentle
+       double pulse on load catches the eye once, then never nags again. */
     #maddie-bell {
       margin-left: auto;
-      margin-right: 12px;
-      width: 36px;
+      margin-right: 10px;
       height: 36px;
-      border-radius: 50%;
+      padding: 0 12px 0 10px;
+      border-radius: 18px;
       border: 1px solid var(--accent);
-      background: transparent;
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
       color: var(--accent);
       display: flex;
       align-items: center;
-      justify-content: center;
+      gap: 7px;
       cursor: pointer;
       flex: none;
+      animation: maddie-hello 2.2s ease-in-out 1.2s 2;
     }
+    .maddie-bell-label {
+      display: flex; flex-direction: column; align-items: flex-start;
+      line-height: 1.05; text-align: left;
+    }
+    .maddie-bell-label { font-size: 13px; font-weight: 700; letter-spacing: 0.2px; }
+    .maddie-bell-label small { font-size: 8.5px; font-weight: 600; opacity: 0.75;
+      text-transform: uppercase; letter-spacing: 0.6px; }
+    @keyframes maddie-hello {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+      50% { transform: scale(1.06); box-shadow: 0 0 0 6px transparent; }
+    }
+    @media (prefers-reduced-motion: reduce) { #maddie-bell { animation: none; } }
 
     #maddie-bell[hidden] { display: none; }
 
@@ -1530,3 +1546,94 @@ body.audio-buffering #player-title::after {
   animation: mobPulse 1s ease-in-out infinite;
 }
 @keyframes mobPulse { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
+
+/* ===== Desktop-parity pass (client, 2026-08-26): hero + rails ===== */
+/* Hero carousel: editorial 16:9 masters render cover; square album art is
+   NEVER stretched — blurred ambient layer behind, sharp contain in front
+   (docs/banners.md discipline, same as desktop). Swipe-driven, dots below. */
+.mob-hero { position: relative; margin: 0 0 18px; border-radius: 16px; overflow: hidden;
+  aspect-ratio: 16 / 10; background: var(--bg-secondary); box-shadow: 0 4px 16px var(--shadow); }
+.mob-hero-track { display: flex; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.mob-hero-track::-webkit-scrollbar { display: none; }
+.mob-hero-slide { position: relative; flex: 0 0 100%; height: 100%; scroll-snap-align: start;
+  scroll-snap-stop: always; cursor: pointer; overflow: hidden; }
+.mob-hero-ambient { position: absolute; inset: -12%; width: 124%; height: 124%;
+  object-fit: cover; filter: blur(22px) brightness(0.55) saturate(1.15); }
+.mob-hero-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+/* Editorial banners are 7500x1750 designed masters (4.29:1). Desktop matches
+   that ratio exactly; a phone can't (375px wide -> an 82px sliver), so the
+   banner shows WHOLE — contained over its own ambient blur — in a shorter
+   wide container. Nothing is ever cropped off a designed banner. */
+.mob-hero.editorial { aspect-ratio: 7500 / 1750; }  /* the masters' exact shape — banner IS the frame */
+.mob-hero-slide.editorial .mob-hero-art { object-fit: cover; }
+.mob-hero-caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 14px 12px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.78)); color: #fff; pointer-events: none; }
+.mob-hero-caption .t { font-size: 15px; font-weight: 700; line-height: 1.2;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mob-hero-caption .a { font-size: 12px; opacity: 0.85; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.mob-hero-dots { position: absolute; right: 10px; top: 10px; display: flex; gap: 5px; }
+.mob-hero-dots span { width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(255,255,255,0.45); transition: background 0.2s, transform 0.2s; }
+.mob-hero-dots span.on { background: #fff; transform: scale(1.25); }
+
+/* Rails: New Releases + Highlighted become horizontal shelves of half-size
+   cards (86px vs the old ~174px two-up grid). First card is 1.5x — a feature
+   slot that breaks the shelf's monotony. The renderer's markup is unchanged;
+   only these two containers get shelf behaviour. */
+#newreleases-content .nr-album-grid,
+#g100-content .nr-album-grid {
+  display: flex; align-items: flex-start; overflow-x: auto; gap: 10px; padding: 2px 2px 10px;
+  scroll-snap-type: x proximity; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+#newreleases-content .nr-album-grid::-webkit-scrollbar,
+#g100-content .nr-album-grid::-webkit-scrollbar { display: none; }
+#newreleases-content .nr-album-card, #newreleases-content .skeleton-card,
+#g100-content .nr-album-card, #g100-content .skeleton-card {
+  /* exactly three across, any phone width (2 gaps of 10px between 3 cards) */
+  flex: 0 0 calc((100% - 20px) / 3); width: calc((100% - 20px) / 3);
+  aspect-ratio: 1; scroll-snap-align: start;
+}
+#newreleases-content .nr-overlay-title, #g100-content .nr-overlay-title { font-size: 10px; }
+#newreleases-content .nr-overlay-artist, #g100-content .nr-overlay-artist { font-size: 9px; }
+#newreleases-content .nr-track-count, #g100-content .nr-track-count { display: none; }
+#newreleases-content .nr-card-overlay, #g100-content .nr-card-overlay { padding: 6px; }
+
+/* Home playlist shelves (MAD About + Themes): the Browse grids as rails. */
+.home-pl-rail .g100-playlist-grid {
+  display: flex; align-items: flex-start; overflow-x: auto; gap: 10px;
+  padding: 2px 2px 10px; scroll-snap-type: x proximity;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.home-pl-rail .g100-playlist-grid::-webkit-scrollbar { display: none; }
+.home-pl-rail .g100-playlist-card, .home-pl-rail .skeleton-card {
+  flex: 0 0 calc((100% - 20px) / 3); width: calc((100% - 20px) / 3);
+  scroll-snap-align: start;   /* one card size across every shelf: exactly 3 visible */
+}
+/* The playlist art carries its own baked-in title — the text strip under it
+   duplicated that, so it goes (Ian, 2026-08-27). Pure art tiles, and the
+   SAME SHAPE as the album cards: square, 14px corners, same shadow. */
+.home-pl-rail .g100-playlist-info { display: none; }
+.home-pl-rail .g100-playlist-card { border-radius: 0; border: none;
+  box-shadow: 0 2px 10px var(--shadow); background: var(--bg-secondary); }
+.home-pl-rail .g100-playlist-art { aspect-ratio: 1; border-radius: 0; }
+.home-pl-rail .g100-playlist-art img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Album-card captions (client example 2026-08-27, Spotify-style): title +
+   artist always visible UNDER the art; the tap-overlay keeps the actions.
+   Art stays square via its own aspect; the card grows to fit the text. */
+.nr-album-card { aspect-ratio: auto !important; background: transparent; box-shadow: none;
+  overflow: visible !important; }   /* the card used to clip to its rounded art; captions live outside that shape now */
+.nr-album-artwork { aspect-ratio: 1; width: 100%; object-fit: cover; display: block;
+  border-radius: 0;   /* fully square (Ian, 2026-08-27) */
+  box-shadow: 0 2px 10px var(--shadow); background: var(--bg-secondary); }
+.nr-card-caption { padding: 6px 2px 2px; }
+.nr-card-caption .t { font-size: 12px; font-weight: 700; color: var(--text-primary);
+  line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nr-card-caption .a { font-size: 11px; color: var(--text-secondary); line-height: 1.45;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* rails: smaller type, overlay still covers just the art */
+#newreleases-content .nr-card-caption .t, #g100-content .nr-card-caption .t { font-size: 10px; }
+#newreleases-content .nr-card-caption .a, #g100-content .nr-card-caption .a { font-size: 9px; }
+.nr-card-overlay { border-radius: 0; aspect-ratio: 1; bottom: auto; top: 0; }

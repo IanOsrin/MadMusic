@@ -71,7 +71,7 @@ describe('mobile history router (js/mobile/router.js)', () => {
 
   it('switchTab records history, guarded against restore + active-tab refresh', () => {
     const nav = mobileFiles['nav.js'];
-    expect(nav).toMatch(/import\s*\{[^}]*pushTab[^}]*\}\s*from\s*'\.\/router\.js'/);
+    expect(nav).toMatch(/import\s*\{[^}]*pushTab[^}]*\}\s*from\s*'\.\/router\.js(?:\?v=\d+)?'/);
     expect(nav).toMatch(/!wasAlreadyActive\s*&&\s*!isRestoring\(\)\)\s*pushTab/);
   });
 
