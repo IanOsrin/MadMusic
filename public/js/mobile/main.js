@@ -2,24 +2,24 @@
 // holds the DOM event wiring + drag/search state + init(), and exposes the
 // inline on*-handlers on window. All app logic lives in the mobile/*.js modules.
 
-import { elements, state } from './state.js?v=4';
-import { showToast } from './util.js?v=4';
-import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=4';
+import { elements, state } from './state.js?v=5';
+import { showToast } from './util.js?v=5';
+import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=5';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, enterGuestMode, logout, setAccessToken, startTrial, updateAuthUI } from './auth.js?v=4';
-import { switchTab } from './nav.js?v=4';
-import { renderSearchResults, search } from './search.js?v=4';
-import { createPlaylist, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=4';
-import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=4';
-import { filterG100Albums, loadG100 } from './rails-g100.js?v=4';
-import { loadNewReleases } from './rails-newreleases.js?v=4';
-import { initMobHero } from './hero.js?v=4';
-import { loadHomeShelves } from './rails-g100.js?v=4';
-import { closeModal, playTrack, sendStreamEvent, stepQueue, updatePlayerModal, updateProgress } from './player.js?v=4';
-import { showAlbumTracksModal } from './cards.js?v=4';
-import { initRouter } from './router.js?v=4';
-import { initMaddie } from './maddie.js?v=4';
+import { buyAccess, enterGuestMode, logout, setAccessToken, startTrial, updateAuthUI } from './auth.js?v=5';
+import { switchTab } from './nav.js?v=5';
+import { renderSearchResults, search } from './search.js?v=5';
+import { createPlaylist, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=5';
+import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=5';
+import { filterG100Albums, loadG100 } from './rails-g100.js?v=5';
+import { loadNewReleases } from './rails-newreleases.js?v=5';
+import { initMobHero } from './hero.js?v=5';
+import { loadHomeShelves } from './rails-g100.js?v=5';
+import { closeModal, playTrack, sendStreamEvent, stepQueue, updatePlayerModal, updateProgress } from './player.js?v=5';
+import { showAlbumTracksModal } from './cards.js?v=5';
+import { initRouter } from './router.js?v=5';
+import { initMaddie } from './maddie.js?v=5';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {

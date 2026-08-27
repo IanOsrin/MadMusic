@@ -4,10 +4,10 @@
 // blur behind, contain in front; never stretched, per docs/banners.md).
 // Swipe-driven scroll-snap with dots; auto-advance 6.5s that pauses on touch,
 // when the tab is hidden, and entirely under prefers-reduced-motion.
-import { state } from './state.js?v=4';
-import { getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField } from './fields.js?v=4';
-import { showAlbumTracksModal } from './cards.js?v=4';
-import { playTrack } from './player.js?v=4';
+import { state } from './state.js?v=5';
+import { getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField } from './fields.js?v=5';
+import { showAlbumTracksModal } from './cards.js?v=5';
+import { playTrack } from './player.js?v=5';
 
 const DWELL_MS = 6500, MAX_SLIDES = 6;
 const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -29,11 +29,13 @@ function render(slides) {
 
   track.innerHTML = '';
   dots.innerHTML = '';
+  // A carousel of designed banners gets the shorter, banner-shaped container.
+  hero.classList.toggle('editorial', slides.every(s => s.editorial));
   slides.forEach((s, i) => {
     const el = document.createElement('div');
     el.className = 'mob-hero-slide' + (s.editorial ? ' editorial' : '');
     el.innerHTML = `
-      ${s.editorial ? '' : `<img class="mob-hero-ambient" src="${esc(s.image)}" alt="" aria-hidden="true">`}
+      <img class="mob-hero-ambient" src="${esc(s.image)}" alt="" aria-hidden="true">
       <img class="mob-hero-art" src="${esc(s.image)}" alt="${esc(s.title)}" loading="${i ? 'lazy' : 'eager'}">
       ${s.clean ? '' : `<div class="mob-hero-caption"><div class="t">${esc(s.title)}</div><div class="a">${esc(s.subtitle)}</div></div>`}`;
     // a broken banner never shows: drop the slide, like desktop
