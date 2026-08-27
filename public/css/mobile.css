@@ -1565,8 +1565,8 @@ body.audio-buffering #player-title::after {
    that ratio exactly; a phone can't (375px wide -> an 82px sliver), so the
    banner shows WHOLE — contained over its own ambient blur — in a shorter
    wide container. Nothing is ever cropped off a designed banner. */
-.mob-hero.editorial { aspect-ratio: 2.6 / 1; }
-.mob-hero-slide.editorial .mob-hero-art { object-fit: contain; }
+.mob-hero.editorial { aspect-ratio: 7500 / 1750; }  /* the masters' exact shape — banner IS the frame */
+.mob-hero-slide.editorial .mob-hero-art { object-fit: cover; }
 .mob-hero-caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 14px 12px;
   background: linear-gradient(transparent, rgba(0,0,0,0.78)); color: #fff; pointer-events: none; }
 .mob-hero-caption .t { font-size: 15px; font-weight: 700; line-height: 1.2;
@@ -1593,8 +1593,6 @@ body.audio-buffering #player-title::after {
 #g100-content .nr-album-card, #g100-content .skeleton-card {
   flex: 0 0 86px; width: 86px; aspect-ratio: 1; scroll-snap-align: start;
 }
-#newreleases-content .nr-album-card:first-child,
-#g100-content .nr-album-card:first-child { flex-basis: 132px; width: 132px; }
 #newreleases-content .nr-overlay-title, #g100-content .nr-overlay-title { font-size: 10px; }
 #newreleases-content .nr-overlay-artist, #g100-content .nr-overlay-artist { font-size: 9px; }
 #newreleases-content .nr-track-count, #g100-content .nr-track-count { display: none; }

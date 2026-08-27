@@ -1,11 +1,11 @@
 // Album/track card builders + their modals for the mobile app.
 
-import { elements, state } from './state.js?v=5';
-import { escapeHtml, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=5';
-import { switchTab } from './nav.js?v=5';
-import { search } from './search.js?v=5';
-import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=5';
-import { pushOverlay } from './router.js?v=5';
+import { elements, state } from './state.js?v=6';
+import { escapeHtml, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=6';
+import { switchTab } from './nav.js?v=6';
+import { search } from './search.js?v=6';
+import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=6';
+import { pushOverlay } from './router.js?v=6';
 
 // ── Shared album tile (the New Releases / G100 look) ─────────────────────────
 // One square-cover tile: first tap reveals the title/artist overlay, second tap
