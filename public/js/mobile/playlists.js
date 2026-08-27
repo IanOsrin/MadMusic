@@ -1,12 +1,12 @@
 // User playlists (load/render/play/create/add-to) for the mobile app.
 
-import { elements, state } from './state.js?v=8';
-import { showToast } from './util.js?v=8';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, getTitleField } from './fields.js?v=8';
-import { switchTab } from './nav.js?v=8';
-import { closeModal, playTrack } from './player.js?v=8';
-import { pushOverlay } from './router.js?v=8';
-import { createAlbumTile } from './cards.js?v=8';
+import { elements, state } from './state.js?v=10';
+import { showToast } from './util.js?v=10';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, getTitleField } from './fields.js?v=10';
+import { switchTab } from './nav.js?v=10';
+import { closeModal, playTrack } from './player.js?v=10';
+import { pushOverlay } from './router.js?v=10';
+import { createAlbumTile } from './cards.js?v=10';
 
 export async function loadPlaylists() {
       try {
