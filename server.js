@@ -53,6 +53,30 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// ── Retired-instance kill switch ─────────────────────────────────────────────
+// Set RETIRED_REDIRECT=https://musicafricadirect.com on a service to retire it:
+// every request gets a 301 to the new home, with a small courtesy page for
+// anything that renders HTML. Unset (the normal case), this is inert. Lets an
+// old Render URL (madmusic.onrender.com) point people at the real site instead
+// of dying with a platform error page.
+if (process.env.RETIRED_REDIRECT) {
+  const dest = process.env.RETIRED_REDIRECT.replace(/\/+$/, '');
+  app.use((req, res) => {
+    const target = dest + (req.originalUrl === '/' ? '' : req.originalUrl);
+    res.status(301);
+    res.setHeader('Location', target);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(`<!doctype html><html><head><meta charset="utf-8">
+<title>We’ve moved</title>
+<meta http-equiv="refresh" content="3;url=${target}">
+<style>body{font-family:system-ui,sans-serif;background:#0d0b14;color:#f2eefc;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center}
+a{color:#b388ff} .card{padding:40px}</style></head>
+<body><div class="card"><h1>Music Africa Direct has moved</h1>
+<p>This address is no longer in use. You’ll be taken to the new home in a moment — or go straight to</p>
+<p><a href="${target}">musicafricadirect.com</a></p></div></body></html>`);
+  });
+}
+
 process.on('unhandledRejection', (err) => {
   console.error('unhandledRejection', err);
 });
