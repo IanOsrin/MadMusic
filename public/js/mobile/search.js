@@ -1,8 +1,8 @@
 // Catalogue search for the mobile app.
 
-import { elements, state } from './state.js';
-import { groupTracksByAlbum, hasValidArtwork, hasValidAudio, escapeHtml } from './fields.js';
-import { renderAlbumTileGrid } from './cards.js';
+import { elements, state } from './state.js?v=4';
+import { groupTracksByAlbum, hasValidArtwork, hasValidAudio, escapeHtml } from './fields.js?v=4';
+import { renderAlbumTileGrid } from './cards.js?v=4';
 
 export async function search(query) {
       try {
