@@ -7,6 +7,7 @@
 import { state } from './state.js';
 import { getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField } from './fields.js';
 import { showAlbumTracksModal } from './cards.js';
+import { playTrack } from './player.js';
 
 const DWELL_MS = 6500, MAX_SLIDES = 6;
 const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -34,7 +35,9 @@ function render(slides) {
     el.innerHTML = `
       ${s.editorial ? '' : `<img class="mob-hero-ambient" src="${esc(s.image)}" alt="" aria-hidden="true">`}
       <img class="mob-hero-art" src="${esc(s.image)}" alt="${esc(s.title)}" loading="${i ? 'lazy' : 'eager'}">
-      <div class="mob-hero-caption"><div class="t">${esc(s.title)}</div><div class="a">${esc(s.subtitle)}</div></div>`;
+      ${s.clean ? '' : `<div class="mob-hero-caption"><div class="t">${esc(s.title)}</div><div class="a">${esc(s.subtitle)}</div></div>`}`;
+    // a broken banner never shows: drop the slide, like desktop
+    el.querySelector('.mob-hero-art').addEventListener('error', () => { el.remove(); });
     el.addEventListener('click', () => s.onTap && s.onTap());
     track.appendChild(el);
     const d = document.createElement('span');
@@ -81,17 +84,67 @@ function albumSlides(tracks) {
   }));
 }
 
+// Editorial target → action, mirroring desktop's editorialAction():
+// external opens; track resolves by recordId and plays (a hero track is never
+// in the rails below, so lookups-by-card would no-op); album finds the
+// catalogue (spaced and despaced — the same album is spelled both ways across
+// systems) and opens the album modal.
+function editorialAction(it) {
+  return async () => {
+    const t = String(it.targetType || ''), id = String(it.targetId || '');
+    if (t === 'external' && /^https?:\/\//.test(id)) {
+      window.open(id, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    if (t === 'track' && id) {
+      const track = { recordId: id, fields: {
+        'Track Name': it.title || '', 'Track Artist': it.eyebrow || '',
+        'Album Artist': it.eyebrow || '', 'Artwork_S3_URL': it.imageUrl || '',
+      } };
+      state.playlistContext = { tracks: [track], currentIndex: 0, name: it.title || 'Featured', playFn: playTrack };
+      playTrack(track);
+      return;
+    }
+    if (t === 'album' && id) {
+      for (const cand of [id, id.replace(/\s+/g, '')]) {
+        try {
+          const r = await fetch('/api/album?cat=' + encodeURIComponent(cand));
+          const d = await r.json();
+          const items = (d && d.items) || [];
+          if (!items.length) continue;
+          const f0 = items[0].fields || {};
+          const album = {
+            title: getAlbumField(f0) || it.title || 'Album',
+            artist: getAlbumArtist(f0),
+            artwork: getArtworkUrl(f0) || it.imageUrl || '',
+            tracks: items,
+          };
+          window.MADHelpers.sortTracksBySeq(album.tracks);
+          showAlbumTracksModal(album);
+          return;
+        } catch (_) { /* try the next spelling */ }
+      }
+      console.warn('[MobHero] no album found for catalogue', id);
+      return;
+    }
+    console.warn('[MobHero] unhandled editorial target:', t, id);
+  };
+}
+
 export function initMobHero() {
   if (started) return;
   started = true;
-  fetch('/api/featured-editorial', { signal: AbortSignal.timeout(6000) })
+  // Desktop contract (routes/featured-editorial.js): editorial only counts
+  // when source === 'live'; items carry imageUrl/title/eyebrow/textBaked and
+  // a target. Anything else → the new-releases fallback slides.
+  fetch('/api/featured-editorial?limit=' + MAX_SLIDES, { signal: AbortSignal.timeout(6000) })
     .then(r => r.ok ? r.json() : null).catch(() => null)
     .then(j => {
-      const items = (j && (j.slides || j.items)) || [];
-      const slides = items.filter(s => s && s.image).slice(0, MAX_SLIDES).map(s => ({
-        image: s.image, title: s.title || '', subtitle: s.subtitle || s.artist || '',
-        editorial: true,
-        onTap: () => { if (s.action === 'external' && s.url) window.open(s.url, '_blank', 'noopener'); },
+      const live = j && j.source === 'live' && Array.isArray(j.items) ? j.items : [];
+      const slides = live.filter(s => s && s.imageUrl).slice(0, MAX_SLIDES).map(s => ({
+        image: s.imageUrl, title: s.title || '', subtitle: s.eyebrow || '',
+        editorial: true, clean: s.textBaked !== false,
+        onTap: editorialAction(s),
       }));
       if (slides.length) return render(slides);
       // Fallback: new-release albums — wait for the rail's own load to land.
