@@ -108,6 +108,17 @@ export async function loadScenes() {
       state.scenesLoaded = true;
     }
 
+// Front-page shelves (client 2026-08-26): the same two playlist rails,
+// loaded into the Home tab's containers. Browse's own copies still lazy-load
+// on first visit; the endpoint is SWR-cached server-side, so the doubled
+// fetch is cheap.
+export async function loadHomeShelves() {
+      await Promise.all([
+        loadPlaylistRail('Artist', document.getElementById('home-madabout-content')),
+        loadPlaylistRail('Theme', document.getElementById('home-themes-content')),
+      ]);
+    }
+
 async function loadPlaylistRail(category, container) {
       if (!container) return;
       try {
@@ -134,6 +145,10 @@ export function renderG100Playlists(playlists, target) {
       grid.className = 'g100-playlist-grid';
 
       playlists.forEach((pl, i) => {
+        // Display name only — FM names carry a "MAD-About-" prefix and dashes
+        // ("MAD-About-Ladysmith-Black-Mambazo"); the card reads better as
+        // "Ladysmith Black Mambazo". Clicks still use the REAL pl.name.
+        const displayName = pl.name.replace(/^MAD[- ]About[- ]/i, '').replace(/-/g, ' ');
         const hue  = (i * 47 + 210) % 360;
         const card = document.createElement('div');
         card.className = 'g100-playlist-card';
@@ -147,7 +162,7 @@ export function renderG100Playlists(playlists, target) {
             }
           </div>
           <div class="g100-playlist-info">
-            <div class="g100-playlist-name">${escapeHtml(pl.name)}</div>
+            <div class="g100-playlist-name">${escapeHtml(displayName)}</div>
             <div class="g100-playlist-count">${pl.trackCount} track${pl.trackCount !== 1 ? 's' : ''}</div>
           </div>
         `;

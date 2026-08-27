@@ -15,6 +15,7 @@ import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-dis
 import { filterG100Albums, loadG100 } from './rails-g100.js';
 import { loadNewReleases } from './rails-newreleases.js';
 import { initMobHero } from './hero.js';
+import { loadHomeShelves } from './rails-g100.js';
 import { closeModal, playTrack, sendStreamEvent, stepQueue, updatePlayerModal, updateProgress } from './player.js';
 import { showAlbumTracksModal } from './cards.js';
 import { initRouter } from './router.js';
@@ -86,6 +87,7 @@ import { initMaddie } from './maddie.js';
           enterGuestMode();
           loadNewReleases();
           initMobHero();
+          loadHomeShelves();
           loadPlaylists();
           handleShareDeepLink();
           return;
@@ -110,6 +112,7 @@ import { initMaddie } from './maddie.js';
       updateAuthUI();
       loadNewReleases();
           initMobHero();
+          loadHomeShelves();
       loadPlaylists();
       handleShareDeepLink();
     }
