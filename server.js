@@ -437,12 +437,23 @@ const paymentLimiter = rateLimit({
   skip: skipInTest
 });
 
+// Free-trial minting is the cheapest thing to abuse on the site — a legit
+// visitor needs exactly one attempt (maybe two for a typo), so 5/hour/IP.
+const trialLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many trial requests, please try again later' },
+  keyGenerator: clientIpKey,
+  skip: skipInTest
+});
+
 // Apply general rate limiting to all API routes
 app.use('/api/', apiLimiter);
 
 // Apply stricter rate limits to expensive and payment-sensitive endpoints
 app.use(['/api/explore', '/api/trending', '/api/featured-albums', '/api/missing-audio-songs', '/api/singles'], expensiveLimiter);
-app.use(['/api/payments/initialize', '/api/payments/subscribe', '/api/payments/trial', '/api/ringtone/initiate'], paymentLimiter);
+app.use(['/api/payments/initialize', '/api/payments/subscribe', '/api/ringtone/initiate'], paymentLimiter);
+app.use('/api/payments/trial', trialLimiter);
 
 // Add Cache-Control headers
 app.use((req, res, next) => {

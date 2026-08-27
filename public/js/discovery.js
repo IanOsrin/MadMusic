@@ -191,6 +191,7 @@
 
           errorEl.style.display  = 'none';
           errorEl.textContent    = '';
+          errorEl.style.color    = '';
 
           if (!email || !email.includes('@')) {
             errorEl.textContent   = 'Please enter your email address above first';
@@ -216,10 +217,20 @@
             const data = await res.json();
 
             if (data.ok && data.token) {
+              // Legacy path (server no longer returns the token, but keep the
+              // handler tolerant during rollout)
               try { window.umami && window.umami.track('trial-start', via || {}); } catch (e) {}
               localStorage.setItem(STORAGE_KEY, data.token);
               accessToken = data.token;
               window.location.reload();
+            } else if (data.ok && data.sent) {
+              // Abuse fix 2026-08-27: the token now arrives ONLY by email, so
+              // a trial needs a mailbox you control. Point them at their inbox.
+              try { window.umami && window.umami.track('trial-start', via || {}); } catch (e) {}
+              errorEl.style.color   = '#2e7d32';
+              errorEl.textContent   = `We've emailed your trial token to ${email}. Check your inbox (and spam), then enter the token above to start listening.`;
+              errorEl.style.display = 'block';
+              submitBtn.textContent = 'Token sent — check your email';
             } else {
               errorEl.textContent   = data.error || 'Failed to start trial. Please try again.';
               errorEl.style.display = 'block';
