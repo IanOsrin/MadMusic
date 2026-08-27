@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { sendTokenEmail, sendSubscriptionWelcomeEmail, sendTrialEmail } from '../lib/email.js';
+import { sendTokenEmail, sendSubscriptionWelcomeEmail, sendTrialEmail, emailTransporter } from '../lib/email.js';
 import {
   paystackRequest, verifyPaystackWebhook,
   PAYSTACK_PLANS, PAYSTACK_SUBSCRIPTION_PLAN, SUBSCRIPTION_INTERVAL_DAYS,
@@ -10,7 +10,7 @@ import {
   createAccessToken,
   createSubscriptionToken, renewSubscriptionToken,
   disableSubscriptionToken, findSubscriptionToken,
-  findTrialTokenByEmail
+  findTrialTokenByEmail, findTrialTokenInFM, revokeToken
 } from '../lib/token-store.js';
 import { pendingPaymentsCache, processedWebhookEventsCache } from '../cache.js';
 import { isStrictEmail } from '../lib/validators.js';
@@ -123,6 +123,12 @@ router.post('/initialize', async (req, res) => {
 // Issues a 7-day trial token directly — no payment required.
 const TRIAL_DAYS = 7;
 
+// ABUSE FIX 2026-08-27: the token used to come back in the HTTP response, so
+// the email was never verified — any invented address minted a fresh trial on
+// screen. And the one-per-email check only read the JSON file, which does not
+// survive every deploy, so even the SAME email could re-claim. Now: dedupe
+// checks FileMaker (the durable memory) as well, and the token travels ONLY
+// via the trial email — claiming a trial requires a mailbox you control.
 router.post('/trial', async (req, res) => {
   try {
     const { email } = req.body;
@@ -133,18 +139,41 @@ router.post('/trial', async (req, res) => {
 
     const normalisedEmail = email.trim().toLowerCase();
 
+    // Email-only delivery makes a working transporter a hard requirement —
+    // refusing loudly beats minting tokens nobody can receive.
+    if (!emailTransporter) {
+      console.error('[MASS] Trial refused — email transporter not configured (EMAIL_USER/EMAIL_PASS)');
+      return res.status(503).json({ ok: false, error: 'Trial signup is temporarily unavailable. Please try again later.' });
+    }
+
     const existing = await findTrialTokenByEmail(normalisedEmail);
     if (existing) {
-      console.log(`[MASS] Trial blocked — already issued to ${normalisedEmail}`);
+      console.log(`[MASS] Trial blocked (JSON) — already issued to ${normalisedEmail}`);
       return res.status(409).json({ ok: false, error: 'A free trial has already been used for this email address.' });
+    }
+
+    try {
+      const inFM = await findTrialTokenInFM(normalisedEmail);
+      if (inFM) {
+        console.log(`[MASS] Trial blocked (FM) — already issued to ${normalisedEmail}`);
+        return res.status(409).json({ ok: false, error: 'A free trial has already been used for this email address.' });
+      }
+    } catch (err) {
+      // FM outage: degrade to the JSON-only check rather than blocking signups.
+      console.error('[MASS] FM trial-dedupe lookup failed — JSON-only check in effect:', err?.message || err);
     }
 
     const token = await createAccessToken(TRIAL_DAYS, '7-day free trial', normalisedEmail, 'trial');
 
-    // Fire-and-forget — don't block the response on email delivery
-    sendTrialEmail(normalisedEmail, token.code);
+    try {
+      await sendTrialEmail(normalisedEmail, token.code);
+    } catch (err) {
+      // Undelivered token would block this email's retry forever — roll it back.
+      await revokeToken(token.code, 'trial email delivery failed');
+      return res.status(502).json({ ok: false, error: 'We could not send the email. Please check the address and try again.' });
+    }
 
-    console.log(`[MASS] Trial token issued: ${token.code} → ${normalisedEmail}`);
+    console.log(`[MASS] Trial token issued: ${token.code} → ${normalisedEmail} (delivered by email)`);
 
     // Funnel attribution (optional, client-supplied): a trial that started from
     // a taster landing (/?t=… under a YouTube video) counts against its
@@ -154,7 +183,8 @@ router.post('/trial', async (req, res) => {
       bumpTaster({ kind: 'trial', campaign: via.campaign, track: via.t }).catch(() => {});
     }
 
-    res.json({ ok: true, token: token.code });
+    // Deliberately NO token in the response.
+    res.json({ ok: true, sent: true });
   } catch (err) {
     console.error('[MASS] Trial token creation failed:', err);
     res.status(500).json({ ok: false, error: 'Failed to create trial token' });

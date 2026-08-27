@@ -1,7 +1,7 @@
 // Auth + access-token flow for the mobile app.
 
-import { elements, state } from './state.js?v=14';
-import { showToast } from './util.js?v=14';
+import { elements, state } from './state.js?v=15';
+import { showToast } from './util.js?v=15';
 
 export function logout() {
       localStorage.removeItem('mass_access_token');
@@ -87,11 +87,21 @@ export async function startTrial() {
         const data = await response.json();
 
         if (response.ok && data.ok && data.token) {
+          // Legacy path (server no longer returns the token, but stay tolerant
+          // during rollout)
           try { window.umami && window.umami.track('trial-start', via || {}); } catch (e) {}
           localStorage.setItem('mass_access_token', String(data.token).trim());
           localStorage.setItem('mass_token_email', email.trim().toLowerCase());
           showToast('Trial started! Reloading…', 'success');
           setTimeout(() => window.location.reload(), 1000);
+        } else if (response.ok && data.ok && data.sent) {
+          // Abuse fix 2026-08-27: the token arrives ONLY by email now — a
+          // trial needs a mailbox you control. Point them at their inbox,
+          // then open the token prompt so it's one paste away.
+          try { window.umami && window.umami.track('trial-start', via || {}); } catch (e) {}
+          localStorage.setItem('mass_token_email', email.trim().toLowerCase());
+          alert(`We've emailed your trial token to ${email.trim()}.\n\nCheck your inbox (and spam), then enter the token to start listening.`);
+          setAccessToken();
         } else {
           showToast(data.error || 'Could not start the trial. Please try again.', 'error');
         }

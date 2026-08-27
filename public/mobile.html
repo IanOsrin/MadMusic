@@ -36,11 +36,11 @@
     }
   </script>
   <style>html.native-app #buy-access-btn,html.native-app #guest-paywall-buy{display:none!important}</style>
-  <link rel="stylesheet" href="/css/mobile.css?v=14"
+  <link rel="stylesheet" href="/css/mobile.css?v=15"
         onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/mobile.css?v=4&r='+Date.now();},1500)">
   <!-- Shared field/format helpers (window.MADHelpers); loaded before body scripts
        so mobile's utilities can delegate to the single canonical source. -->
-  <script src="/js/helpers.js?v=14"></script>
+  <script src="/js/helpers.js?v=15"></script>
 </head>
 <body>
   <!-- Crawlable page heading (visually hidden — the app shell has no static H1) -->
@@ -670,7 +670,7 @@
   </script>
 
   <!-- Access-token fetch patch: classic script, MUST run before the module graph. -->
-  <script src="/js/mobile/fetch-interceptor.js?v=14"></script>
+  <script src="/js/mobile/fetch-interceptor.js?v=15"></script>
   <!-- Mobile app (ES module graph). Deferred; runs after the classic scripts above. -->
   <!-- Cookie / analytics consent. Mobile had no banner at all, so Google
        Analytics could never fire here — safe, but it meant no data from the
@@ -712,6 +712,6 @@
   })();
   </script>
 
-  <script type="module" src="/js/mobile/main.js?v=14"></script>
+  <script type="module" src="/js/mobile/main.js?v=15"></script>
 </body>
 </html>
