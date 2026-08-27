@@ -14,6 +14,7 @@ import { createPlaylist, loadPlaylists, showAddToPlaylistModal } from './playlis
 import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js';
 import { filterG100Albums, loadG100 } from './rails-g100.js';
 import { loadNewReleases } from './rails-newreleases.js';
+import { initMobHero } from './hero.js';
 import { closeModal, playTrack, sendStreamEvent, stepQueue, updatePlayerModal, updateProgress } from './player.js';
 import { showAlbumTracksModal } from './cards.js';
 import { initRouter } from './router.js';
@@ -84,6 +85,7 @@ import { initMaddie } from './maddie.js';
         if (window.__GUEST_PREVIEW === true) {
           enterGuestMode();
           loadNewReleases();
+          initMobHero();
           loadPlaylists();
           handleShareDeepLink();
           return;
@@ -107,6 +109,7 @@ import { initMaddie } from './maddie.js';
       state.currentUser = { email: localStorage.getItem('mass_token_email') || '' };
       updateAuthUI();
       loadNewReleases();
+          initMobHero();
       loadPlaylists();
       handleShareDeepLink();
     }
