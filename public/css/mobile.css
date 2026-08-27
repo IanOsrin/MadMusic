@@ -1591,7 +1591,9 @@ body.audio-buffering #player-title::after {
 #g100-content .nr-album-grid::-webkit-scrollbar { display: none; }
 #newreleases-content .nr-album-card, #newreleases-content .skeleton-card,
 #g100-content .nr-album-card, #g100-content .skeleton-card {
-  flex: 0 0 100px; width: 100px; aspect-ratio: 1; scroll-snap-align: start;
+  /* exactly three across, any phone width (2 gaps of 10px between 3 cards) */
+  flex: 0 0 calc((100% - 20px) / 3); width: calc((100% - 20px) / 3);
+  aspect-ratio: 1; scroll-snap-align: start;
 }
 #newreleases-content .nr-overlay-title, #g100-content .nr-overlay-title { font-size: 10px; }
 #newreleases-content .nr-overlay-artist, #g100-content .nr-overlay-artist { font-size: 9px; }
@@ -1606,7 +1608,8 @@ body.audio-buffering #player-title::after {
 }
 .home-pl-rail .g100-playlist-grid::-webkit-scrollbar { display: none; }
 .home-pl-rail .g100-playlist-card, .home-pl-rail .skeleton-card {
-  flex: 0 0 100px; width: 100px; scroll-snap-align: start;   /* one card size across every shelf */
+  flex: 0 0 calc((100% - 20px) / 3); width: calc((100% - 20px) / 3);
+  scroll-snap-align: start;   /* one card size across every shelf: exactly 3 visible */
 }
 /* The playlist art carries its own baked-in title — the text strip under it
    duplicated that, so it goes (Ian, 2026-08-27). Pure art tiles, and the

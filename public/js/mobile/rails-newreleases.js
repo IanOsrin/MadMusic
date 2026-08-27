@@ -1,8 +1,8 @@
 // Home rail: New Releases (mobile).
 
-import { elements, state } from './state.js?v=12';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField, hasValidArtwork, hasValidAudio } from './fields.js?v=12';
-import { renderAlbumTileGrid } from './cards.js?v=12';
+import { elements, state } from './state.js?v=13';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField, hasValidArtwork, hasValidAudio } from './fields.js?v=13';
+import { renderAlbumTileGrid } from './cards.js?v=13';
 
 export async function loadNewReleases(forceRefresh = false) {
       const container = elements.newReleasesContent;
