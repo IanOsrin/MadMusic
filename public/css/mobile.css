@@ -409,21 +409,37 @@
     }
 
     /* ===== Maddie (mobile) ===== */
+    /* Maddie is a person, not a notification — the bare bell read as system
+       noise (Ian, 2026-08-26). A named pill makes her unmissable; a gentle
+       double pulse on load catches the eye once, then never nags again. */
     #maddie-bell {
       margin-left: auto;
-      margin-right: 12px;
-      width: 36px;
+      margin-right: 10px;
       height: 36px;
-      border-radius: 50%;
+      padding: 0 12px 0 10px;
+      border-radius: 18px;
       border: 1px solid var(--accent);
-      background: transparent;
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
       color: var(--accent);
       display: flex;
       align-items: center;
-      justify-content: center;
+      gap: 7px;
       cursor: pointer;
       flex: none;
+      animation: maddie-hello 2.2s ease-in-out 1.2s 2;
     }
+    .maddie-bell-label {
+      display: flex; flex-direction: column; align-items: flex-start;
+      line-height: 1.05; text-align: left;
+    }
+    .maddie-bell-label { font-size: 13px; font-weight: 700; letter-spacing: 0.2px; }
+    .maddie-bell-label small { font-size: 8.5px; font-weight: 600; opacity: 0.75;
+      text-transform: uppercase; letter-spacing: 0.6px; }
+    @keyframes maddie-hello {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+      50% { transform: scale(1.06); box-shadow: 0 0 0 6px transparent; }
+    }
+    @media (prefers-reduced-motion: reduce) { #maddie-bell { animation: none; } }
 
     #maddie-bell[hidden] { display: none; }
 
