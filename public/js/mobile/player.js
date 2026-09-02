@@ -85,12 +85,96 @@ export async function playTrack(track) {
       // Update UI
       updateFloatingPlayer();
       updatePlayerModal();
+      updateMediaSession();          // lock screen, Control Centre, car stereo
       state.playerBubble.visible = true;
       elements.floatingPlayer.classList.add('visible', 'playing');
 
       // Generate a new session ID for this track — stream event fired by the audio 'play' listener
       state.streamSessionId = generateSessionId();
     }
+
+// ── Lock-screen / Control Centre playback controls ──────────────────────────
+// navigator.mediaSession puts the track title, artist, album and artwork on the
+// lock screen, in Control Centre and on a car stereo, and routes the hardware
+// play/pause/next/prev — headphone buttons, steering-wheel controls, Bluetooth.
+//
+// Without it a locked phone gives a MUSIC app no controls at all, which is the
+// single most-missed thing in a web-wrapped player. It also matters for the App
+// Store: an app that behaves like a media app, rather than a website in a
+// frame, is the answer to Apple's "minimum functionality" objection.
+//
+// Guarded because support is uneven: absent in some WebViews, and individual
+// setActionHandler calls throw for actions a browser does not implement, which
+// would otherwise take the whole player down with them.
+function mediaSessionSupported() {
+  return typeof navigator !== 'undefined' && 'mediaSession' in navigator;
+}
+
+export function updateMediaSession() {
+  if (!mediaSessionSupported() || !state.currentTrack) return;
+  const fields = state.currentTrack.fields || {};
+  const artwork = getArtworkUrl(fields);
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title:  getTitleField(fields) || 'MAD Music',
+      artist: getArtistField(fields) || '',
+      album:  getAlbumField(fields) || '',
+      // Several sizes declared from one URL: the OS picks what it needs, and a
+      // wrong-sized hint is better than no artwork on the lock screen.
+      artwork: artwork ? [
+        { src: artwork, sizes: '256x256', type: 'image/jpeg' },
+        { src: artwork, sizes: '512x512', type: 'image/jpeg' },
+      ] : [],
+    });
+  } catch (e) { /* MediaMetadata missing — controls still work, just unlabelled */ }
+}
+
+// Called once at startup. Each handler is set separately: one unsupported
+// action must not stop the rest being registered.
+export function initMediaSession() {
+  if (!mediaSessionSupported()) return;
+  const audio = elements.audio || document.getElementById('audio');
+  if (!audio) return;
+
+  const set = (action, fn) => {
+    try { navigator.mediaSession.setActionHandler(action, fn); } catch (e) {}
+  };
+
+  set('play',  () => audio.play().catch(() => {}));
+  set('pause', () => audio.pause());
+  set('previoustrack', () => stepQueue(-1));
+  set('nexttrack',     () => stepQueue(1));
+  // Seeking is offered because a lock screen shows a scrubber; guests are on a
+  // 30-second clip, where it is harmless either way.
+  set('seekbackward', (d) => { audio.currentTime = Math.max(0, audio.currentTime - (d?.seekOffset || 10)); });
+  set('seekforward',  (d) => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (d?.seekOffset || 10)); });
+  set('seekto', (d) => { if (d && d.fastSeek && audio.fastSeek) audio.fastSeek(d.seekTime); else if (d) audio.currentTime = d.seekTime; });
+  // Deliberately NOT 'stop': iOS then shows a stop button in place of pause,
+  // which reads as "quit" and loses the queue.
+
+  // Keep the OS in step with the actual element, not with what we think we did:
+  // playback can start or stop from the lock screen, a headset, or an autoplay
+  // block, and the widget must not claim otherwise.
+  const sync = () => { try { navigator.mediaSession.playbackState = audio.paused ? 'paused' : 'playing'; } catch (e) {} };
+  audio.addEventListener('play', sync);
+  audio.addEventListener('pause', sync);
+  audio.addEventListener('ended', sync);
+}
+
+// The scrubber on the lock screen. Skipped while the numbers are not finite —
+// a live or still-loading stream reports NaN, and passing that throws.
+export function updateMediaSessionPosition() {
+  if (!mediaSessionSupported() || !navigator.mediaSession.setPositionState) return;
+  const audio = elements.audio || document.getElementById('audio');
+  if (!audio || !isFinite(audio.duration) || !isFinite(audio.currentTime) || audio.duration <= 0) return;
+  try {
+    navigator.mediaSession.setPositionState({
+      duration: audio.duration,
+      playbackRate: audio.playbackRate || 1,
+      position: Math.min(audio.currentTime, audio.duration),
+    });
+  } catch (e) {}
+}
 
 export function setArtwork(imgId, url) {
       const img = document.getElementById(imgId);
