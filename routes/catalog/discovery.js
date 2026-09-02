@@ -18,6 +18,7 @@ import { createLogger } from '../../lib/logger.js';
 import { parsePositiveInt } from '../../lib/format.js';
 import { usePostgresMetadata } from '../../lib/metadata-source.js';
 import { pgFind, pgRandomPool, pgMissingAudio } from '../../lib/catalog-store-pg.js';
+import { recordIsVisible } from '../../lib/fm-fields.js';
 
 const router       = Router();
 
@@ -288,6 +289,11 @@ async function loadPlaylistTracks(name) {
     throw err;
   }
   const rawTracks = result.data
+    // recordIsVisible carries the client's eligibility rule (ISRC + UPC +
+    // cover) as well as the Visibility field. Public playlists read through
+    // pgFind/fmFindRecords, neither of which filters — which is why songs with
+    // no cover kept turning up here when they appeared nowhere else.
+    .filter(r => recordIsVisible(r.fieldData || {}))
     .filter(r => hasValidAudio(r.fieldData || {}))
     .map(r => {
       const f           = r.fieldData || {};
