@@ -16,7 +16,7 @@ import { filterG100Albums, loadG100 } from './rails-g100.js?v=15';
 import { loadNewReleases } from './rails-newreleases.js?v=15';
 import { initMobHero } from './hero.js?v=15';
 import { loadHomeShelves } from './rails-g100.js?v=15';
-import { closeModal, playTrack, sendStreamEvent, stepQueue, updatePlayerModal, updateProgress } from './player.js?v=15';
+import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=15';
 import { showAlbumTracksModal } from './cards.js?v=15';
 import { initRouter } from './router.js?v=15';
 import { initMaddie } from './maddie.js?v=15';
@@ -55,6 +55,11 @@ import { initMaddie } from './maddie.js?v=15';
 
     // ===== Initialize =====
     async function init() {
+      // Lock-screen / Control Centre controls. Registered once at startup, not
+      // per track: the OS keeps the handlers, and re-registering on every play
+      // is wasted work.
+      initMediaSession();
+
       // Check URL for payment result first (redirect back from Paystack)
       const urlParams = new URLSearchParams(window.location.search);
       const paymentStatus = urlParams.get('payment');
@@ -337,6 +342,7 @@ import { initMaddie } from './maddie.js?v=15';
         showToast('Preview ended — subscribe to hear the full track', 'success');
       }
       updateProgress();
+      updateMediaSessionPosition();   // keeps the lock-screen scrubber honest
 
       const now = Date.now();
       if (now - state.lastProgressUpdate > 30000) {
