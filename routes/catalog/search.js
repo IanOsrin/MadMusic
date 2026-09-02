@@ -14,6 +14,7 @@ import { validators } from '../../lib/validators.js';
 import { suggestNames } from '../../lib/name-index.js';
 import { usePostgresMetadata } from '../../lib/metadata-source.js';
 import { pgFind } from '../../lib/catalog-store-pg.js';
+import { recordIsVisible } from '../../lib/fm-fields.js';
 
 const router = Router();
 
@@ -185,7 +186,12 @@ async function runSearch({ q, artist, album, track, genres, yearRange, limit, ui
       });
     }
 
-    const validRecords = rawData.filter(r => hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
+    // recordIsVisible carries the Visibility field AND the client's eligibility
+    // rule (ISRC + UPC + cover). Search reads FM/pg directly and filtered on
+    // audio and artwork only, so an ineligible track stayed findable here after
+    // it had been removed from every rail — the hole this closes.
+    const validRecords = rawData.filter(r =>
+      recordIsVisible(r.fieldData || {}) && hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
     return { validRecords, fmReturnedCount, foundCount };
   }
 
@@ -401,7 +407,10 @@ async function runExplore({ start, end, limit, offset, genre = '' }) {
       [query],
       { limit: Math.min(500, limit), offset: offset + 1 } // pgFind offset is FM-style 1-based
     );
-    const valid = data.filter(r => hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
+    // Eligibility (ISRC + UPC + cover) rides on recordIsVisible — decade and
+    // genre browse read FM/pg directly and filtered on audio and artwork only.
+    const valid = data.filter(r =>
+      recordIsVisible(r.fieldData || {}) && hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
     const consumed = offset + data.length;
     const hasMore = consumed < foundCount;
     return {
@@ -425,7 +434,10 @@ async function runExplore({ start, end, limit, offset, genre = '' }) {
     );
   }
 
-  const valid = rawData.filter(r => hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
+  // Eligibility (ISRC + UPC + cover) rides on recordIsVisible — decade and
+  // genre browse read FM/pg directly and filtered on audio and artwork only.
+  const valid = rawData.filter(r =>
+    recordIsVisible(r.fieldData || {}) && hasValidAudio(r.fieldData || {}) && hasValidArtwork(r.fieldData || {}));
   const total = valid.length;
   const page  = valid.slice(offset, offset + limit);
   const hasMore = offset + limit < total;
