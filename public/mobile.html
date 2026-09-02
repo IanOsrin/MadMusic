@@ -35,7 +35,8 @@
       document.documentElement.classList.add('native-app');
     }
   </script>
-  <style>html.native-app #buy-access-btn,html.native-app #guest-paywall-buy{display:none!important}</style>
+  <style>html.native-app #buy-access-btn,html.native-app #guest-paywall-buy,
+         html.native-app #mobileRingtoneBtn{display:none!important}</style>
   <link rel="stylesheet" href="/css/mobile.css?v=15"
         onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/mobile.css?v=4&r='+Date.now();},1500)">
   <!-- Shared field/format helpers (window.MADHelpers); loaded before body scripts
@@ -569,6 +570,14 @@
       // Guests never get the ringtone editor — it carries the audio source
       // URL, and guests only ever hold the clipped preview stream.
       if (window.__GUEST) return;
+      // Nor does the native app. /ringtone sells a ringtone through Paystack,
+      // and Google Play requires digital goods bought inside an Android app to
+      // go through Play Billing — so the whole surface is withheld rather than
+      // shown as a dead end. Pointing users at the website instead would be an
+      // anti-steering violation in its own right. Ringtones stay a web feature.
+      // (The stylesheet hides it too; this stops the href, which carries the
+      // audio source URL, from being built at all.)
+      if (document.documentElement.classList.contains('native-app')) return;
       var audio = document.getElementById('audio');
       var btn   = document.getElementById('mobileRingtoneBtn');
       if (!audio || !btn) return;
