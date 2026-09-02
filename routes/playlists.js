@@ -17,11 +17,52 @@ import {
   isShareIdTaken, createPlaylist, updatePlaylist, deletePlaylist
 } from '../lib/playlist-store.js';
 import { fmGetRecordById, fmUpdateRecord } from '../fm-client.js';
+import { trackIsEligible, ELIGIBILITY_ENABLED } from '../lib/track-eligibility.js';
+import { getTrackRecordCached } from '../lib/track-cache.js';
 
 const router = Router();
 
 // All playlist routes return user-specific data — never cache on client or CDN.
 router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
+
+/**
+ * Drop tracks a user saved that no longer qualify to be shown.
+ *
+ * Saved entries are a COPY of the track made when it was added — name, artwork,
+ * audio URL — and carry no ISRC or UPC, so eligibility cannot be read from the
+ * playlist itself. The record has to be re-fetched by recordId, which is the
+ * same thing playback already does (stored FileMaker URLs expire; recordId is
+ * the stable key). getTrackRecordCached dedupes and caches, so a playlist of
+ * twenty tracks costs at most twenty lookups and usually none.
+ *
+ * A lookup that FAILS keeps the track. An FM hiccup should not silently empty
+ * somebody's playlist — the filter exists to hide incomplete records, not to
+ * punish a timeout.
+ */
+async function stripIneligibleTracks(playlists) {
+  if (!ELIGIBILITY_ENABLED) return playlists;
+  const verdict = new Map();
+  const ok = async (id) => {
+    if (!id) return true;
+    if (verdict.has(id)) return verdict.get(id);
+    let keep = true;
+    try {
+      const rec = await getTrackRecordCached(FM_LAYOUT, id);
+      if (rec) keep = trackIsEligible(rec.fieldData || {});
+    } catch (e) { keep = true; }
+    verdict.set(id, keep);
+    return keep;
+  };
+  for (const pl of playlists || []) {
+    if (!Array.isArray(pl.tracks)) continue;
+    const kept = [];
+    for (const t of pl.tracks) {
+      if (await ok(t.trackRecordId || t.recordId)) kept.push(t);
+    }
+    pl.tracks = kept;
+  }
+  return playlists;
+}
 
 // ── GET / — list user's playlists ─────────────────────────────────────────────
 router.get('/', async (req, res) => {
@@ -30,7 +71,7 @@ router.get('/', async (req, res) => {
 
   try {
     const playlists = await loadUserPlaylists(user.email);
-    res.json({ ok: true, playlists });
+    res.json({ ok: true, playlists: await stripIneligibleTracks(playlists) });
   } catch (err) {
     console.error('[MASS] Fetch playlists failed:', err);
     res.status(500).json({ ok: false, error: 'Failed to load playlists' });
