@@ -26,7 +26,11 @@ function rec(id, { album, artist, cat, title }) {
         // NOTE: hasValidArtwork requires 'gmvi' in the URL (scan naming) —
         // see lib/track.js. Discogs 'DGS_*' sleeves fail this check (flagged
         // to Ian 2026-07-11).
-        'Artwork_S3_URL': `https://s3.example.com/artwork/GMVi${id}.jpg`
+        'Artwork_S3_URL': `https://s3.example.com/artwork/GMVi${id}.jpg`,
+        // Eligibility (client rule, 2026-09-02): a displayable record carries
+        // an ISRC and a UPC too. These fixtures stand for normal records.
+        'ISRC': `ZAC1107000${id}`,
+        'UPC': '6009555110602'
       }
     }
   };

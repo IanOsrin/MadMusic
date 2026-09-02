@@ -12,6 +12,10 @@ const good = (id, extra = {}) => ({
     'S3_URL': `https://x.s3.amazonaws.com/${id}.mp3`,
     'Artwork_S3_URL': `https://x.s3.amazonaws.com/artwork/GMVi${id}.jpg`,
     'Track Name': `Song ${id}`,
+    // A displayable record now needs an ISRC and a UPC as well (the client's
+    // eligibility rule, 2026-09-02) — these fixtures stand for normal records.
+    'ISRC': `ZAC1107000${id}`,
+    'UPC': '6009555110602',
     ...extra,
   },
 });
