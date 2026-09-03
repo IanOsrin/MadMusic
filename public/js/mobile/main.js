@@ -7,7 +7,7 @@ import { showToast } from './util.js?v=15';
 import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=15';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, enterGuestMode, logout, setAccessToken, startTrial, updateAuthUI } from './auth.js?v=15';
+import { buyAccess, enterGuestMode, isNativeApp, logout, setAccessToken, startTrial, updateAuthUI } from './auth.js?v=15';
 import { switchTab } from './nav.js?v=15';
 import { renderSearchResults, search } from './search.js?v=15';
 import { createPlaylist, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=15';
@@ -105,7 +105,7 @@ import { initMaddie } from './maddie.js?v=15';
             <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 8px;">New to MAD Music? Try free for 7 days — no payment required.</p>
             <button class="btn btn-primary" onclick="startTrial()" style="margin-bottom: 8px;">Start 7-Day Free Trial</button>
             <button class="btn btn-secondary" onclick="setAccessToken()" style="margin-bottom: 8px;">Enter Access Token</button>
-            <button class="btn btn-secondary" onclick="buyAccess()">Buy Access</button>
+            ${isNativeApp() ? '' : '<button class="btn btn-secondary" onclick="buyAccess()">Buy Access</button>'}
           </div>
         `;
         updateAuthUI();
