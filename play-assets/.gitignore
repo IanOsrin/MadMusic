@@ -1,0 +1,10 @@
+# Rendered store graphics stay out — they are OUTPUT, regenerable from the two
+# recipes beside this file:
+#
+#   feature.html  → export at exactly 1024x500 with headless Chrome
+#   shoot.mjs     → node shoot.mjs (Playwright, Pixel 5 emulation, live site)
+#
+# The delivered copies live in ~/Desktop/Ian stuff/mad-play-assets, because
+# ~/Downloads gets cleaned out.
+*.png
+screens/
