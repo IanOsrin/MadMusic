@@ -123,3 +123,41 @@ Playwright screenshots and the structural tests do **not** exercise mobile *play
 data flow*. The recent mobile bugs (grouping, ringtone, next/prev, stale URLs) all passed the
 green net. **Verify mobile behavior changes by actually playing/clicking**, and add a static
 guard in `tests/frontend/mobile-invariants.test.js` where you can.
+
+## Native apps — `android/` and `ios/` (Capacitor)
+
+Both are **live-URL wrappers**: `capacitor.config.json` points the web view at
+`https://musicafricadirect.com/mobile`, so the apps update with every site deploy and only
+native-shell changes need a store release. Two consequences that bite:
+
+1. **A local site change is invisible to the app.** To test one, start the site locally, then
+   temporarily set `server.url` to `http://localhost:3000/mobile` with `cleartext: true`, add
+   `NSAppTransportSecurity:NSAllowsArbitraryLoads` to `ios/App/App/Info.plist` (iOS only),
+   `npx cap sync ios`, rebuild — **and revert both afterwards**.
+2. **Store policy is enforced by the PAGE, not by a native build.** Neither store permits
+   buying digital goods outside its own billing, so every purchase surface must withhold
+   itself when it detects the shell. `mobile.html` stamps `html.native-app` and hides three
+   buttons by id; anything built in JS must ALSO check `isNativeApp()` at the point it is
+   rendered — an id-based stylesheet cannot reach markup that carries no id, which is how the
+   `main.js` token gate stayed reachable through two Play reviews.
+   `tests/frontend/native-purchase-guards.test.js` is the guard. A free trial is not a
+   purchase and stays.
+
+Simulator build (no signing needed):
+
+```
+cd ios/App && xcodebuild -project App.xcodeproj -scheme App -sdk iphonesimulator \
+  -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -derivedDataPath <dir> CODE_SIGNING_ALLOWED=NO build
+```
+
+**Signing material is never in this repo** — it is public. The Android upload keystore lives
+in `~/Documents/mad-android-signing/`; `android/.gitignore` blocks `keystore.properties`,
+`*.keystore` and `*.jks`. Lose that folder and the app can never be updated again.
+
+iOS specifics worth knowing: background audio needs BOTH `UIBackgroundModes: audio` and the
+`AVAudioSession.setCategory(.playback)` call in `AppDelegate` — the plist key alone does not
+survive a screen lock. Safe-area insets only report real values because `mobile.html` sets
+`viewport-fit=cover`; `--header-height`/`--tab-bar-height` in `mobile.css` stay the bare
+chrome heights and the insets are added on top, because several rules already add
+`env(safe-area-inset-bottom)` themselves and folding it in would double-count.

@@ -1,0 +1,13 @@
+{
+  "appId": "com.musicafricadirect.app",
+  "appName": "Music Africa Direct",
+  "webDir": "public",
+  "server": {
+    "url": "https://musicafricadirect.com/mobile",
+    "cleartext": false,
+    "allowNavigation": [
+      "musicafricadirect.com",
+      "*.musicafricadirect.com"
+    ]
+  }
+}

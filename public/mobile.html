@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- viewport-fit=cover is what makes env(safe-area-inset-*) report real values; without
+       it every safe-area rule in mobile.css silently evaluates to 0 and the fixed header
+       renders underneath the clock and Dynamic Island in the native app shell. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>MAD — Music Africa Direct | South African Music on Your Phone</title>
