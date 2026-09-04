@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Music Africa Direct</string>
+    <string name="title_activity_main">Music Africa Direct</string>
+    <string name="package_name">com.musicafricadirect.app</string>
+    <string name="custom_url_scheme">com.musicafricadirect.app</string>
+</resources>
