@@ -198,8 +198,15 @@ export async function showG100PlaylistTracks(playlistName) {
           return;
         }
 
-        // Normalise track shape to what playTrack expects
+        // Normalise track shape to what playTrack expects.
+        // recordId is NOT optional: guest playback is the server-clipped preview
+        // at /api/preview/:recordId, and playTrack refuses outright without one
+        // ("a full stream must never reach a guest"). Dropping it here meant no
+        // guest could preview a single MAD About or Themes track — on web,
+        // Android and iOS alike — while subscribers, who take the S3_URL branch,
+        // saw nothing wrong.
         const tracks = data.tracks.map(t => ({
+          recordId: t.recordId || t.trackRecordId,
           fields: {
             'Track Name':   t.name        || '',
             'Album Artist': t.trackArtist || t.albumArtist || '',

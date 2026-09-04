@@ -181,4 +181,26 @@ describe('mobile invariant: album playback keeps skips inside the album (2026-07
     expect(mobileHtml).toMatch(/id="player-queue"/);
     expect(mobileHtml).toMatch(/id="mini-progress-fill"/);
   });
+
+  // Every rail adapts its API rows into playTrack's {recordId, fields} shape.
+  // Omitting recordId is silent for a subscriber (the S3_URL branch still
+  // plays) and fatal for a guest (playTrack refuses without one), so it hides
+  // behind exactly the account everyone tests with. rails-g100.js dropped it
+  // and no guest could preview a MAD About or Themes track until 2026-09-04.
+  it('every mobile track normaliser carries a recordId alongside fields', () => {
+    const offenders = [];
+    for (const file of readdirSync(mobileDir).filter(f => f.endsWith('.js'))) {
+      const src = readFileSync(join(mobileDir, file), 'utf8');
+      let i = src.indexOf('fields: {');
+      while (i !== -1) {
+        // recordId belongs in the same object literal, so it sits just before
+        // the `fields:` key — a short lookback, not a whole-file search.
+        if (!src.slice(Math.max(0, i - 220), i).includes('recordId')) {
+          offenders.push(`${file}:${src.slice(0, i).split('\n').length}`);
+        }
+        i = src.indexOf('fields: {', i + 1);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });
