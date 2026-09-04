@@ -7,7 +7,7 @@ import { showToast } from './util.js?v=15';
 import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=15';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, enterGuestMode, isNativeApp, logout, setAccessToken, startTrial, updateAuthUI } from './auth.js?v=15';
+import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, startTrial, updateAuthUI } from './auth.js?v=15';
 import { switchTab } from './nav.js?v=15';
 import { renderSearchResults, search } from './search.js?v=15';
 import { createPlaylist, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=15';
@@ -52,6 +52,7 @@ import { initMaddie } from './maddie.js?v=15';
     document.getElementById('change-token-btn').addEventListener('click', () => setAccessToken());
     document.getElementById('buy-access-btn').addEventListener('click', () => buyAccess());
     document.getElementById('logout-btn').addEventListener('click', logout);
+    document.getElementById('delete-account-btn')?.addEventListener('click', () => deleteAccountFlow());
 
     // ===== Initialize =====
     async function init() {

@@ -416,7 +416,11 @@
           <button class="btn btn-primary" style="width: 100%; margin-bottom: 8px;" id="trial-btn">Start 7-Day Free Trial</button>
           <button class="btn btn-primary" style="width: 100%; margin-bottom: 8px;" id="change-token-btn">Enter Access Token</button>
           <button class="btn btn-secondary" style="width: 100%; margin-bottom: 8px;" id="buy-access-btn">Buy Access</button>
-          <button class="btn btn-secondary" style="width: 100%;" id="logout-btn">Clear Token & Logout</button>
+          <button class="btn btn-secondary" style="width: 100%; margin-bottom: 24px;" id="logout-btn">Clear Token & Logout</button>
+          <!-- Apple Guideline 5.1.1(v): account deletion must be reachable inside
+               the app. Set apart from the buttons above, and hidden while signed
+               out — there is nothing to delete then. -->
+          <button class="btn btn-secondary" style="width: 100%; color: var(--error); border-color: var(--error);" id="delete-account-btn" hidden>Delete my account</button>
         </div>
       </div>
     </div>
