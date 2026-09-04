@@ -16,6 +16,7 @@ import paymentsRouter from './routes/payments.js';
 import playlistsRouter from './routes/playlists.js';
 import catalogRouter from './routes/catalog.js';
 import libraryRouter from './routes/library.js';
+import accountRouter from './routes/account.js';
 import streamRouter from './routes/stream.js';
 import adminRouter, { requireAdminKey } from './routes/admin.js';
 import editorialRouter from './routes/featured-editorial.js';
@@ -842,6 +843,10 @@ app.use('/api/download', downloadRouter);
 app.use('/api/ringtone', ringtoneRouter);
 app.use('/api/playlists', playlistsRouter);
 app.use('/api/library', libraryRouter);
+// Account self-service (Apple Guideline 5.1.1(v) requires in-app deletion).
+// Deliberately NOT in the auth skip-list above: you may only delete the account
+// whose valid access token you are holding.
+app.use('/api/account', accountRouter);
 app.use('/api', catalogRouter);
 app.use('/api', streamRouter);
 app.use('/api', adminRouter);

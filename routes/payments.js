@@ -12,6 +12,7 @@ import {
   disableSubscriptionToken, findSubscriptionToken,
   findTrialTokenByEmail, findTrialTokenInFM, revokeToken
 } from '../lib/token-store.js';
+import { wasAccountDeleted } from '../lib/account-delete.js';
 import { pendingPaymentsCache, processedWebhookEventsCache } from '../cache.js';
 import { isStrictEmail } from '../lib/validators.js';
 import { bumpTaster } from '../lib/taster-stats.js';
@@ -156,6 +157,14 @@ router.post('/trial', async (req, res) => {
       const inFM = await findTrialTokenInFM(normalisedEmail);
       if (inFM) {
         console.log(`[MASS] Trial blocked (FM) — already issued to ${normalisedEmail}`);
+        return res.status(409).json({ ok: false, error: 'A free trial has already been used for this email address.' });
+      }
+      // Deleting an account scrubs the email off the token row, so the check
+      // above can no longer see it — without this, "delete account, sign up
+      // again" would be an unlimited trial generator. The row keeps a one-way
+      // fingerprint of the mailbox for exactly this purpose.
+      if (await wasAccountDeleted(normalisedEmail)) {
+        console.log('[MASS] Trial blocked (deleted account fingerprint)');
         return res.status(409).json({ ok: false, error: 'A free trial has already been used for this email address.' });
       }
     } catch (err) {

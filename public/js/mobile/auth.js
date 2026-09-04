@@ -23,6 +23,11 @@ export function updateAuthUI() {
       const trialBtn = document.getElementById('trial-btn');
       if (trialBtn) trialBtn.style.display = state.currentUser ? 'none' : '';
 
+      // …and account deletion only while logged in. A guest has no account, so
+      // offering to delete one would be a dead end (and the endpoint refuses).
+      const deleteBtn = document.getElementById('delete-account-btn');
+      if (deleteBtn) deleteBtn.hidden = !state.currentUser;
+
       if (state.currentUser) {
         if (tokenEmail) tokenEmail.textContent = state.currentUser.email || '';
         if (tokenStatus) tokenStatus.textContent = 'Access Active';
@@ -125,6 +130,103 @@ const GUEST_POPUP_INTERVAL_MS = 5 * 60 * 1000;
 // them in a later release. Belt (hidden UI) and braces (refused code path).
 export const isNativeApp = () =>
   !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+
+// ── Account deletion (Apple Guideline 5.1.1(v)) ──────────────────────────────
+// An app that creates accounts must let people delete them from inside the app;
+// a support address does not satisfy it, and neither does signing out. So this
+// ships on the web too — one page, one behaviour, and the native shells inherit
+// it the way they inherit everything else.
+//
+// Two taps, never one. The first shows what is actually about to go, counted
+// from the server rather than promised in the abstract, and says plainly what
+// is kept and why. Nothing is destroyed until the second.
+
+export async function deleteAccountFlow() {
+  if (!localStorage.getItem('mass_access_token')) {
+    showToast('You are not signed in', 'error');
+    return;
+  }
+
+  const overlay = document.getElementById('modal-overlay');
+  const sheet   = document.getElementById('bottom-sheet');
+  if (!overlay || !sheet) return;
+
+  const show = (html) => {
+    sheet.innerHTML = html;
+    overlay.classList.add('show');
+  };
+  const close = () => (window.closeModal ? window.closeModal() : overlay.classList.remove('show'));
+
+  show('<div class="bottom-sheet-header">Delete account</div>' +
+       '<div class="empty-state"><p>Checking your account…</p></div>');
+
+  let account;
+  try {
+    const res  = await fetch('/api/account');
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'lookup failed');
+    account = data.account;
+  } catch {
+    show('<div class="bottom-sheet-header">Delete account</div>' +
+         '<div class="empty-state"><div class="empty-icon">⚠️</div>' +
+         '<p>We could not reach your account just now. Please try again.</p></div>' +
+         '<button class="btn btn-secondary" style="width:100%;margin-top:16px;" id="del-cancel">Close</button>');
+    document.getElementById('del-cancel').addEventListener('click', close);
+    return;
+  }
+
+  const line = (n, one, many) => (n ? `<li>${n} ${n === 1 ? one : many}</li>` : '');
+  const goes = [
+    line(account.tokens, 'access token', 'access tokens'),
+    line(account.playlists, 'playlist', 'playlists'),
+    line(account.library, 'saved library', 'saved library records'),
+  ].join('') || '<li>your access</li>';
+
+  show(`
+    <div class="bottom-sheet-header">Delete account</div>
+    <div style="padding:0 4px 4px;">
+      <p style="margin:0 0 12px;">This permanently deletes${account.email ? ` <strong>${account.email}</strong>` : ' your account'} and cannot be undone.</p>
+      <p style="margin:0 0 6px;color:var(--text-secondary);font-size:14px;">We will delete:</p>
+      <ul style="margin:0 0 12px 18px;padding:0;color:var(--text-secondary);font-size:14px;">${goes}</ul>
+      <p style="margin:0 0 16px;color:var(--text-muted);font-size:13px;">
+        Your listening history is anonymised. Purchase receipts are kept as financial records.
+        You will not be able to start another free trial with this email address.
+      </p>
+      <button class="btn btn-secondary" style="width:100%;margin-bottom:8px;" id="del-cancel">Keep my account</button>
+      <button class="btn btn-primary" style="width:100%;background:var(--error);color:#fff;" id="del-confirm">Delete permanently</button>
+    </div>`);
+
+  document.getElementById('del-cancel').addEventListener('click', close);
+  document.getElementById('del-confirm').addEventListener('click', async () => {
+    const btn = document.getElementById('del-confirm');
+    btn.disabled = true;
+    btn.textContent = 'Deleting…';
+    try {
+      const res  = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: 'DELETE' }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'deletion failed');
+      // Local state must go too, or the next launch reads a token the server
+      // has already destroyed and shows a confusing "invalid token" screen.
+      localStorage.removeItem('mass_access_token');
+      localStorage.removeItem('mass_token_info');
+      localStorage.removeItem('mass_token_email');
+      state.currentUser = null;
+      state.playlists   = [];
+      show('<div class="bottom-sheet-header">Account deleted</div>' +
+           '<div class="empty-state"><div class="empty-icon">✓</div>' +
+           '<p>Your account has been deleted. Thanks for listening.</p></div>');
+      setTimeout(() => window.location.reload(), 2500);
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = 'Delete permanently';
+      showToast(err.message || 'Could not delete your account', 'error');
+    }
+  });
+}
 
 function injectGuestPaywall() {
   if (document.getElementById('guest-paywall')) return;
