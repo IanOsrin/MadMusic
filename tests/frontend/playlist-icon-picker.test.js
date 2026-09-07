@@ -17,6 +17,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (...p) => readFileSync(join(root, ...p), 'utf8');
 
 const appJs      = read('public', 'app.min.js');
+const sidebarJs  = read('public', 'js', 'playlists.js');
 const mobileJs   = read('public', 'js', 'mobile', 'playlists.js');
 const mobileMain = read('public', 'js', 'mobile', 'main.js');
 const manifest   = JSON.parse(read('public', 'data', 'playlist-icons.json'));
@@ -66,13 +67,41 @@ describe('desktop picker', () => {
     expect(appJs).toMatch(/playlistIconThumb\(url, 300\)/);
   });
 
-  it('shows the chosen icon on the playlist pill', () => {
-    expect(appJs).toMatch(/playlistIconThumb\(pl\.artwork, 300\)/);
+  it('exposes the picker for other modules to open', () => {
+    expect(appJs).toMatch(/window\.massPickPlaylistIcon\s*=/);
+  });
+});
+
+// The desktop sidebar is the LIVE playlist list. renderPlaylistsPanel() in
+// app.min.js guards on #playlistsPanel, which exists in no markup, so anything
+// wired there is dead — the icon work shipped into it once and was invisible.
+describe('desktop sidebar (the live list)', () => {
+  it('renders in js/playlists.js against #sidebarMyPlaylistsList', () => {
+    expect(sidebarJs).toMatch(/sidebarMyPlaylistsList/);
+    expect(sidebarJs).toMatch(/function renderMyPlaylists/);
   });
 
-  it('offers an artwork edit control that PATCHes', () => {
-    expect(appJs).toMatch(/massPickPlaylistIcon/);
-    expect(appJs).toMatch(/method: 'PATCH'/);
+  it('#playlistsPanel really is absent from every page', () => {
+    const html = ['app.html', 'mobile.html'].map(f => read('public', f)).join('\n');
+    expect(html).not.toMatch(/id="playlistsPanel"/);
+  });
+
+  it('shows the chosen icon on the sidebar thumb instead of the note glyph', () => {
+    expect(sidebarJs).toMatch(/playlist\.artwork/);
+    expect(sidebarJs).toMatch(/thumb\.style\.backgroundImage/);
+  });
+
+  it('offers an artwork action that PATCHes and refreshes', () => {
+    expect(sidebarJs).toMatch(/sidebar-playlist-artwork/);
+    expect(sidebarJs).toMatch(/massPickPlaylistIcon/);
+    expect(sidebarJs).toMatch(/method: 'PATCH'/);
+    expect(sidebarJs).toMatch(/loadMyPlaylists\(\)/);
+  });
+
+  it('stops the row click from firing when the artwork button is used', () => {
+    // Without this the picker opens AND the playlist view navigates.
+    const handler = sidebarJs.slice(sidebarJs.indexOf('sidebar-playlist-artwork'));
+    expect(handler.slice(0, 900)).toMatch(/e\.stopPropagation\(\)/);
   });
 });
 
@@ -100,6 +129,15 @@ describe('mobile picker', () => {
   it('offers an artwork edit path', () => {
     expect(mobileJs).toMatch(/export async function editPlaylistArtwork/);
     expect(mobileJs).toMatch(/method: 'PATCH'/);
+  });
+
+  it('puts the artwork action above the track list, not below it', () => {
+    // Buried under a long playlist's tracks it was effectively undiscoverable.
+    const sheet = mobileJs.slice(mobileJs.indexOf('export function showPlaylistTracks'));
+    const artIdx   = sheet.indexOf('data-act="artwork"');
+    const trackIdx = sheet.indexOf('No tracks yet');
+    expect(artIdx).toBeGreaterThan(-1);
+    expect(artIdx).toBeLessThan(trackIdx);
   });
 });
 
