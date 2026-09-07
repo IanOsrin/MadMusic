@@ -1,0 +1,14 @@
+{
+  "_comment": "Icons offered when someone creates or edits their own playlist. Served no-cache, so adding one here is live on the next page load — no deploy stamp to bust. Each `file` must exist as a master at artwork/<file> in the S3 bucket; the pickers render the artwork/resized/<name>_300.webp derivative and fall back to the master if the resizer hasn't run yet. Icons whose image fails to load are dropped from the grid.",
+  "base": "https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/",
+  "icons": [
+    { "id": "jazz",      "name": "Jazz",      "file": "playlist-icon-jazz.png" },
+    { "id": "marabi",    "name": "Marabi",    "file": "playlist-icon-marabi.png" },
+    { "id": "kwela",     "name": "Kwela",     "file": "playlist-icon-kwela.png" },
+    { "id": "soul",      "name": "Soul",      "file": "playlist-icon-soul.png" },
+    { "id": "blues",     "name": "Blues",     "file": "playlist-icon-blues.png" },
+    { "id": "classical", "name": "Classical", "file": "playlist-icon-classical.png" },
+    { "id": "afro",      "name": "Afro",      "file": "playlist-icon-afro.png" },
+    { "id": "chill",     "name": "Chill",     "file": "playlist-icon-chill.png" }
+  ]
+}

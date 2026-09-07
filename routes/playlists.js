@@ -6,7 +6,7 @@ import { timingSafeEqualStr } from '../lib/crypto-utils.js';
 import { normalizeShareId, generateShareId, escapeHtml } from '../lib/format.js';
 import { buildShareUrl } from '../lib/http.js';
 import {
-  playlistOwnerMatches, sanitizePlaylistForShare,
+  playlistOwnerMatches, sanitizePlaylistForShare, normalizePlaylistArtwork,
   buildPlaylistDuplicateIndex, resolveDuplicate, summarizeTrackPayload, buildTrackEntry
 } from '../lib/playlist.js';
 import { normalizeTrackPayload } from '../lib/track.js';
@@ -100,10 +100,7 @@ router.post('/', async (req, res) => {
     const name = nameValidation.value;
 
     // Validate artwork URL if provided — must be a recognised S3 origin
-    const S3_ARTWORK_BASE = 'https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/artwork/';
-    const artwork = typeof artworkRaw === 'string' && artworkRaw.startsWith(S3_ARTWORK_BASE)
-      ? artworkRaw.trim()
-      : '';
+    const artwork = normalizePlaylistArtwork(artworkRaw);
 
     // Collision check against existing user playlists
     const existing = await loadUserPlaylists(email);
@@ -749,6 +746,53 @@ router.delete('/:playlistId/tracks/:addedAt', async (req, res) => {
 });
 
 // ── DELETE /:playlistId — delete a playlist ───────────────────────────────────
+// ── PATCH /:playlistId — change a playlist's artwork ──────────────────────────
+// Create-time was the only chance to set an icon, so every playlist made before
+// the picker existed was stuck without one. Artwork only for now: renaming would
+// need the same collision check as create, which is a separate job.
+
+router.patch('/:playlistId', async (req, res) => {
+  const user = requireTokenEmail(req, res);
+  if (!user) return;
+
+  try {
+    const playlistId = req.params?.playlistId;
+    if (!playlistId) {
+      res.status(400).json({ ok: false, error: 'Playlist ID required' });
+      return;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(req.body || {}, 'artwork')) {
+      res.status(400).json({ ok: false, error: 'Nothing to update' });
+      return;
+    }
+
+    // An explicit null/'' clears the icon; anything off-origin is rejected
+    // rather than silently blanked, so a broken picker can't wipe artwork.
+    const raw = req.body.artwork;
+    const clearing = raw === null || raw === '';
+    const artwork = clearing ? '' : normalizePlaylistArtwork(raw);
+    if (!clearing && !artwork) {
+      res.status(400).json({ ok: false, error: 'Unrecognised artwork image' });
+      return;
+    }
+
+    const playlist = await loadPlaylistById(playlistId, user.email);
+    if (!playlist) {
+      res.status(404).json({ ok: false, error: 'Playlist not found' });
+      return;
+    }
+
+    const updatedAt = new Date().toISOString();
+    await updatePlaylist(playlist._fmRecordId, { artwork, updatedAt });
+
+    res.json({ ok: true, playlist: { ...playlist, artwork, updatedAt } });
+  } catch (err) {
+    console.error('[MASS] Update playlist artwork failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to update playlist' });
+  }
+});
+
 router.delete('/:playlistId', async (req, res) => {
   const user = requireTokenEmail(req, res);
   if (!user) return;
