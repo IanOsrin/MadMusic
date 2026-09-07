@@ -92,7 +92,9 @@ export async function pickPlaylistIcon(currentArtwork = '', heading = 'Choose ar
       const img = document.createElement('img');
       img.src = playlistIconThumb(url, 300);
       img.alt = '';
-      img.loading = 'lazy';
+      // NOT lazy: the grid is a handful of ~15 KB tiles the user is looking at
+      // right now, and a lazy image in a sheet that animates in can sit
+      // undecoded — which also defers the onerror that prunes missing icons.
       // Derivative first, master second (the resizer may not have run yet); if
       // neither loads the icon simply isn't offered.
       img.onerror = () => {
