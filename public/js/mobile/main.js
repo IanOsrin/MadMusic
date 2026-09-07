@@ -2,24 +2,24 @@
 // holds the DOM event wiring + drag/search state + init(), and exposes the
 // inline on*-handlers on window. All app logic lives in the mobile/*.js modules.
 
-import { elements, state } from './state.js?v=16';
-import { showToast } from './util.js?v=16';
-import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=16';
+import { elements, state } from './state.js?v=17';
+import { showToast } from './util.js?v=17';
+import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=17';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, startTrial, updateAuthUI } from './auth.js?v=16';
-import { switchTab } from './nav.js?v=16';
-import { renderSearchResults, search } from './search.js?v=16';
-import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=16';
-import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=16';
-import { filterG100Albums, loadG100 } from './rails-g100.js?v=16';
-import { loadNewReleases } from './rails-newreleases.js?v=16';
-import { initMobHero } from './hero.js?v=16';
-import { loadHomeShelves } from './rails-g100.js?v=16';
-import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=16';
-import { showAlbumTracksModal } from './cards.js?v=16';
-import { initRouter } from './router.js?v=16';
-import { initMaddie } from './maddie.js?v=16';
+import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, startTrial, updateAuthUI } from './auth.js?v=17';
+import { switchTab } from './nav.js?v=17';
+import { renderSearchResults, search } from './search.js?v=17';
+import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=17';
+import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=17';
+import { filterG100Albums, loadG100 } from './rails-g100.js?v=17';
+import { loadNewReleases } from './rails-newreleases.js?v=17';
+import { initMobHero } from './hero.js?v=17';
+import { loadHomeShelves } from './rails-g100.js?v=17';
+import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=17';
+import { showAlbumTracksModal } from './cards.js?v=17';
+import { initRouter } from './router.js?v=17';
+import { initMaddie } from './maddie.js?v=17';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {

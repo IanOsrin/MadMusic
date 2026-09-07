@@ -2360,7 +2360,12 @@
     });
   })();
   </script>
-  <script defer src="/app.min.js?v=111&t=1782800000"></script>
+  <!-- NOTE: this ?v= must be bumped BY HAND on every app.min.js change.
+       The deploy-stamp rewrite in server.js (loadHtml) only matches /js/ and
+       /css/ paths, and this bundle sits at the root — while cacheControlFor
+       serves anything containing ".min." as immutable for a year. Without a
+       bump, returning desktop visitors keep the cached bundle indefinitely. -->
+  <script defer src="/app.min.js?v=112&t=1783000000"></script>
   <script>
   // ── Genre dropdown — populated dynamically from /api/genres ─────────────────
   // The select#searchGenre contains only the "All Genres" placeholder; we fetch

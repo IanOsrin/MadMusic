@@ -32,6 +32,16 @@
   const myPlaylistsList = document.getElementById('sidebarMyPlaylistsList');
   const myPlaylistsEmpty = document.getElementById('sidebarMyPlaylistsEmpty');
 
+  // Master artwork url -> the pre-generated 300px WebP. Kept local rather than
+  // reaching for app.min.js's copy so rendering never depends on script order.
+  function thumbUrl(master) {
+    if (!master || typeof master !== 'string') return '';
+    if (master.includes('/artwork/resized/')) return master;
+    return master
+      .replace('/artwork/', '/artwork/resized/')
+      .replace(/\.(?:jpe?g|png)(\?.*)?$/i, '_300.webp$1');
+  }
+
   async function loadMyPlaylists() {
     try {
       const res = await fetch('/api/playlists');
@@ -61,7 +71,18 @@
 
       const thumb = document.createElement('div');
       thumb.className = 'sidebar-playlist-thumb';
-      thumb.textContent = '🎵';
+      // The chosen icon, if there is one — the thumb is already styled
+      // center/cover, so it only needs the image. Falls back to the note glyph.
+      if (playlist.artwork) {
+        thumb.style.backgroundImage = `url("${thumbUrl(playlist.artwork)}")`;
+        // If the derivative is missing, fall back to the master rather than
+        // showing an empty square.
+        const probe = new Image();
+        probe.onerror = () => { thumb.style.backgroundImage = `url("${playlist.artwork}")`; };
+        probe.src = thumbUrl(playlist.artwork);
+      } else {
+        thumb.textContent = '🎵';
+      }
 
       const name = document.createElement('span');
       name.className = 'sidebar-playlist-name';
@@ -108,6 +129,39 @@
         }
       });
 
+      // --- Artwork button ---
+      const artBtn = document.createElement('button');
+      artBtn.className = 'sidebar-playlist-action sidebar-playlist-artwork';
+      artBtn.title = playlist.artwork ? 'Change artwork' : 'Add artwork';
+      artBtn.setAttribute('aria-label', `${artBtn.title} for ${playlist.name}`);
+      artBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>';
+      artBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (typeof window.massPickPlaylistIcon !== 'function') {
+          showToast('Artwork picker unavailable', 'error');
+          return;
+        }
+        const chosen = await window.massPickPlaylistIcon(playlist.artwork || '');
+        if (chosen === null) return;                       // cancelled
+        if ((playlist.artwork || '') === chosen) return;   // unchanged
+        artBtn.disabled = true;
+        try {
+          const res = await fetch(`/api/playlists/${encodeURIComponent(playlist.id)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ artwork: chosen })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) throw new Error(data.error || 'Update failed');
+          showToast(chosen ? 'Artwork updated' : 'Artwork removed');
+          loadMyPlaylists();
+        } catch (err) {
+          console.error('[Sidebar] Update artwork error:', err);
+          showToast(err.message || 'Update failed', 'error');
+          artBtn.disabled = false;
+        }
+      });
+
       // --- Delete button ---
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'sidebar-playlist-action sidebar-playlist-delete';
@@ -137,6 +191,7 @@
       });
 
       li.appendChild(btn);
+      li.appendChild(artBtn);
       li.appendChild(shareBtn);
       li.appendChild(deleteBtn);
       myPlaylistsList.appendChild(li);

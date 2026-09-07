@@ -1,11 +1,11 @@
 // Home rail: G100 albums + curated playlists (mobile).
 
-import { elements, state } from './state.js?v=16';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, hasValidAudio } from './fields.js?v=16';
-import { showAlbumTracksModal, renderAlbumTileGrid } from './cards.js?v=16';
-import { closeModal, playTrack } from './player.js?v=16';
-import { pushOverlay } from './router.js?v=16';
-import { loadArtistBioMobile } from './search.js?v=16';
+import { elements, state } from './state.js?v=17';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, hasValidAudio } from './fields.js?v=17';
+import { showAlbumTracksModal, renderAlbumTileGrid } from './cards.js?v=17';
+import { closeModal, playTrack } from './player.js?v=17';
+import { pushOverlay } from './router.js?v=17';
+import { loadArtistBioMobile } from './search.js?v=17';
 
 // "MAD-About-Oliver-Mtukudzi" → "Oliver Mtukudzi"; '' for non-MAD-About names.
 function artistFromMadAbout(name) {

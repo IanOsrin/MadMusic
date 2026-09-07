@@ -1,12 +1,12 @@
 // User playlists (load/render/play/create/add-to) for the mobile app.
 
-import { elements, state } from './state.js?v=16';
-import { showToast } from './util.js?v=16';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, getTitleField } from './fields.js?v=16';
-import { switchTab } from './nav.js?v=16';
-import { closeModal, playTrack } from './player.js?v=16';
-import { pushOverlay } from './router.js?v=16';
-import { createAlbumTile } from './cards.js?v=16';
+import { elements, state } from './state.js?v=17';
+import { showToast } from './util.js?v=17';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, getTitleField } from './fields.js?v=17';
+import { switchTab } from './nav.js?v=17';
+import { closeModal, playTrack } from './player.js?v=17';
+import { pushOverlay } from './router.js?v=17';
+import { createAlbumTile } from './cards.js?v=17';
 
 // ── Playlist icons ───────────────────────────────────────────────────────────
 // Choices come from /data/playlist-icons.json (served no-cache) so adding one
@@ -186,6 +186,7 @@ export function showPlaylistTracks(playlist) {
       const tracks = playlist.tracks || [];
       elements.bottomSheet.innerHTML = `
         <div class="bottom-sheet-header">${escapeHtml(playlist.name)}</div>
+        <button class="btn btn-secondary" style="width:100%;margin-bottom:16px;" data-act="artwork">${playlist.artwork ? 'Change artwork' : 'Add artwork'}</button>
         ${tracks.length === 0 ? '<p style="text-align:center;color:var(--text-muted);padding:16px;">No tracks yet</p>' :
           tracks.map((t, i) => `
             <button class="bottom-sheet-option" data-index="${i}" style="display:flex;align-items:center;gap:10px;text-align:left;">
@@ -193,8 +194,7 @@ export function showPlaylistTracks(playlist) {
               <span>▶</span>
             </button>
           `).join('')}
-        <button class="btn btn-secondary" style="width:100%;margin-top:16px;" data-act="artwork">Change artwork</button>
-        <button class="btn btn-secondary" style="width:100%;margin-top:8px;" onclick="closeModal()">Close</button>
+        <button class="btn btn-secondary" style="width:100%;margin-top:16px;" onclick="closeModal()">Close</button>
       `;
       elements.modalOverlay.classList.add('show');
       pushOverlay('playlist-tracks', playlist.id);
