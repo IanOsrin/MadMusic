@@ -1082,6 +1082,74 @@
       background: var(--bg-primary);
     }
 
+    /* Playlist icon picker — create + change-artwork bottom sheet */
+    .playlist-icon-hint {
+      margin: 0 0 var(--spacing-md);
+      font-size: var(--font-size-sm);
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .playlist-icon-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--spacing-sm);
+    }
+
+    .playlist-icon-cell {
+      position: relative;
+      aspect-ratio: 1;
+      padding: 0;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--bg-card);
+      cursor: pointer;
+    }
+
+    .playlist-icon-cell img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .playlist-icon-cell span {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 2px 0 3px;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+      text-align: center;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.6);
+    }
+
+    .playlist-icon-cell.selected {
+      border-color: var(--accent);
+    }
+
+    .playlist-icon-empty {
+      margin: 0;
+      font-size: var(--font-size-sm);
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .playlist-icon-actions {
+      display: flex;
+      gap: var(--spacing-sm);
+      margin-top: var(--spacing-lg);
+    }
+
+    .playlist-icon-actions .btn {
+      flex: 1;
+    }
+
     /* Close button in bottom sheet — sits below suggestions */
     .bs-close-btn {
       width: 100%;
