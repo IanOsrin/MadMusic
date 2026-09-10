@@ -2360,12 +2360,12 @@
     });
   })();
   </script>
-  <!-- NOTE: this ?v= must be bumped BY HAND on every app.min.js change.
-       The deploy-stamp rewrite in server.js (loadHtml) only matches /js/ and
-       /css/ paths, and this bundle sits at the root — while cacheControlFor
-       serves anything containing ".min." as immutable for a year. Without a
-       bump, returning desktop visitors keep the cached bundle indefinitely. -->
-  <script defer src="/app.min.js?v=112&t=1783000000"></script>
+  <!-- NOTE: ?v= here is a placeholder — loadHtml() in server.js rewrites it to
+       the per-boot DEPLOY_STAMP on every request, so there is nothing to bump
+       by hand. It must stay present: cacheControlFor serves anything containing
+       ".min." as immutable for a year, so with no ?v= to rewrite, returning
+       desktop visitors would keep the cached bundle indefinitely. -->
+  <script defer src="/app.min.js?v=113&t=1783100000"></script>
   <script>
   // ── Genre dropdown — populated dynamically from /api/genres ─────────────────
   // The select#searchGenre contains only the "All Genres" placeholder; we fetch
@@ -4521,6 +4521,11 @@
         return tracks;
       };
 
+      // One album is one album however FileMaker spells it: collapse runs of
+      // whitespace, trim, and ignore case. Used for every album-identity compare
+      // in this view so a stray space cannot split a release in two.
+      const albumKey = (s) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim().toLowerCase();
+
       window.showAlbumDetailView = async function(album, relatedAlbums = []) {
         if (window.MADRouter) window.MADRouter.pushOverlay('album', album && album.recordId);
         const playlistView = document.getElementById('playlistView');
@@ -4568,9 +4573,10 @@
               const albumsMap = new Map();
               data.items.forEach(item => {
                 const f = item.fields || {};
-                const albumTitle = f['Album Title'] || f['Tape Files::Album Title'] || 'Unknown Album';
-                if (!albumsMap.has(albumTitle)) {
-                  albumsMap.set(albumTitle, {
+                const albumTitle = String(f['Album Title'] || f['Tape Files::Album Title'] || 'Unknown Album').trim() || 'Unknown Album';
+                const key = albumKey(albumTitle);
+                if (!albumsMap.has(key)) {
+                  albumsMap.set(key, {
                     title: albumTitle,
                     artist: f['Album Artist'] || f['Tape Files::Album Artist'] || f['Track Artist'] || album.artist,
                     artwork: f['Artwork_S3_URL'] || f['Tape Files::Artwork_S3_URL'] || f['Artwork::Picture'] || f['Artwork Picture'] || f['Picture'] || '/img/placeholder.jpg',
@@ -4581,7 +4587,7 @@
                 }
                 const _t = (v) => (v !== undefined && v !== null) ? String(v).trim() : '';
                 const audioTest = String(f['songfiles:Audio Test'] || f['Songfiles::Audio Test'] || f['songfiles::Audio Test'] || f['Audio Test'] || '').toLowerCase();
-                albumsMap.get(albumTitle).tracks.push({
+                albumsMap.get(key).tracks.push({
                   seq:            _trackSeq(f),
                   name:           f['Track Name'] || 'Unknown Track',
                   trackArtist:    f['Track Artist'] || f['Tape Files::Track Artist'] || '',
@@ -4618,7 +4624,15 @@
           year: album.year || '',
           tracks: album.tracks || []
         };
-        const existingIdx = artistAlbums.findIndex(a => a.title === album.title);
+        // Compare on a NORMALISED title. FileMaker titles carry stray whitespace
+        // and inconsistent case — "Mama Said To Me + Bump Baby " (trailing space)
+        // is real live data on EN 12. detectArtistMatch trims the clicked title
+        // while this list kept the raw field, so an exact === never matched, the
+        // clicked album was unshifted as a SECOND entry, and the artist page read
+        // "2 albums" for a one-album artist. The extra card had no artwork or
+        // genre because clickedEntry is built with picture:'' / genre:'' — which
+        // is what made it look like a rendering quirk rather than a duplicate.
+        const existingIdx = artistAlbums.findIndex(a => albumKey(a.title) === albumKey(album.title));
         if (existingIdx !== -1) {
           // When opened from New Releases / the hero banner, the clicked entry has
           // no artwork/genre/year/tracks (openAlbumDirect passes none) — so keep the
