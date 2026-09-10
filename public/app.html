@@ -626,6 +626,28 @@
               </div>
             </section>
 
+            <!-- Curated Section — playlists whose FM Category is 'Curated'.
+                 Guest selectors: the playlist is NAMED for the person ("Nicky B",
+                 "The Wizard") and this heading supplies the "Curated by", so the
+                 cards read as people rather than as themes. Same card markup and
+                 loader as the rails above; only the category differs. Hidden until
+                 a playlist carries the category, so it can ship before they exist. -->
+            <section class="section" id="curatedRailSection" hidden>
+              <div class="section-header">
+                <div>
+                  <h2 class="section-title">Curated by</h2>
+                  <p class="section-subtitle">Selections from the people who know the vault</p>
+                </div>
+              </div>
+              <div class="horizontal-scroll-wrapper">
+                <button class="scroll-arrow scroll-arrow-left" data-target="curatedPlaylistsContainer" aria-label="Scroll left"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                <div id="curatedPlaylistsContainer" class="horizontal-scroll-container">
+                  <div class="loading"><div class="spinner"></div></div>
+                </div>
+                <button class="scroll-arrow scroll-arrow-right visible" data-target="curatedPlaylistsContainer" aria-label="Scroll right"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+              </div>
+            </section>
+
             <!-- New Releases Section -->
             <section class="section" id="newReleasesSection" hidden>
               <div class="section-header">
@@ -745,6 +767,7 @@
               // Scenes first: the archive's story is the draw, the artist
               // collections are the follow-through.
               loadPublicPlaylistsRail('scenesPlaylistsContainer', 'Theme', 'scenesRailSection');
+              loadPublicPlaylistsRail('curatedPlaylistsContainer', 'Curated', 'curatedRailSection');
               loadPublicPlaylistsRail('g100PlaylistsContainer',   'Artist');
             })();
             </script>

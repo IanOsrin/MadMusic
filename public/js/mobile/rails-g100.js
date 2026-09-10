@@ -1,11 +1,11 @@
 // Home rail: G100 albums + curated playlists (mobile).
 
-import { elements, state } from './state.js?v=17';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, hasValidAudio } from './fields.js?v=17';
-import { showAlbumTracksModal, renderAlbumTileGrid } from './cards.js?v=17';
-import { closeModal, playTrack } from './player.js?v=17';
-import { pushOverlay } from './router.js?v=17';
-import { loadArtistBioMobile } from './search.js?v=17';
+import { elements, state } from './state.js?v=18';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, hasValidAudio } from './fields.js?v=18';
+import { showAlbumTracksModal, renderAlbumTileGrid } from './cards.js?v=18';
+import { closeModal, playTrack } from './player.js?v=18';
+import { pushOverlay } from './router.js?v=18';
+import { loadArtistBioMobile } from './search.js?v=18';
 
 // "MAD-About-Oliver-Mtukudzi" → "Oliver Mtukudzi"; '' for non-MAD-About names.
 function artistFromMadAbout(name) {
@@ -116,10 +116,14 @@ export async function loadHomeShelves() {
       await Promise.all([
         loadPlaylistRail('Artist', document.getElementById('home-madabout-content')),
         loadPlaylistRail('Theme', document.getElementById('home-themes-content')),
+        // Guest selectors — hidden entirely until one exists, header included.
+        loadPlaylistRail('Curated', document.getElementById('home-curated-content'), {
+          hideWhenEmpty: ['home-curated-content', 'home-curated-header'],
+        }),
       ]);
     }
 
-async function loadPlaylistRail(category, container) {
+async function loadPlaylistRail(category, container, opts = {}) {
       if (!container) return;
       try {
         const res  = await fetch(`/api/public-playlists?category=${encodeURIComponent(category)}`);
@@ -127,8 +131,18 @@ async function loadPlaylistRail(category, container) {
         const playlists = data.playlists || [];
 
         if (!playlists.length) {
+          // A category nobody has tagged yet is a normal state, not a failure.
+          // Rails that pass hideWhenEmpty disappear with their heading rather
+          // than leaving a titled shelf saying "No playlists available".
+          if (opts.hideWhenEmpty) {
+            opts.hideWhenEmpty.forEach((id) => { const el = document.getElementById(id); if (el) el.hidden = true; });
+            return;
+          }
           container.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><p>No playlists available</p></div>`;
           return;
+        }
+        if (opts.hideWhenEmpty) {
+          opts.hideWhenEmpty.forEach((id) => { const el = document.getElementById(id); if (el) el.hidden = false; });
         }
 
         if (category === 'Artist') state.g100Playlists = playlists;
