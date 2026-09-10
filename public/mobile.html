@@ -40,11 +40,11 @@
   </script>
   <style>html.native-app #buy-access-btn,html.native-app #guest-paywall-buy,
          html.native-app #mobileRingtoneBtn{display:none!important}</style>
-  <link rel="stylesheet" href="/css/mobile.css?v=17"
+  <link rel="stylesheet" href="/css/mobile.css?v=18"
         onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/mobile.css?v=4&r='+Date.now();},1500)">
   <!-- Shared field/format helpers (window.MADHelpers); loaded before body scripts
        so mobile's utilities can delegate to the single canonical source. -->
-  <script src="/js/helpers.js?v=17"></script>
+  <script src="/js/helpers.js?v=18"></script>
 </head>
 <body>
   <!-- Crawlable page heading (visually hidden — the app shell has no static H1) -->
@@ -150,6 +150,23 @@
         </div>
       </div>
       <div id="home-themes-content" class="home-pl-rail">
+        <div class="g100-playlist-grid">
+          <div class="skeleton-card skeleton" style="aspect-ratio:1;height:auto;border-radius:12px;margin:0;"></div>
+          <div class="skeleton-card skeleton" style="aspect-ratio:1;height:auto;border-radius:12px;margin:0;"></div>
+          <div class="skeleton-card skeleton" style="aspect-ratio:1;height:auto;border-radius:12px;margin:0;"></div>
+        </div>
+      </div>
+
+      <!-- Guest selectors. The playlist is NAMED for the person, so this heading
+           supplies the "Curated by". Header AND rail are hidden until a playlist
+           carries the category — an empty shelf with a heading reads as broken. -->
+      <div class="section-header" id="home-curated-header" style="margin-top:6px;" hidden>
+        <div>
+          <h2 class="section-title">Curated by</h2>
+          <p class="section-subtitle">Selections from the people who know the vault</p>
+        </div>
+      </div>
+      <div id="home-curated-content" class="home-pl-rail" hidden>
         <div class="g100-playlist-grid">
           <div class="skeleton-card skeleton" style="aspect-ratio:1;height:auto;border-radius:12px;margin:0;"></div>
           <div class="skeleton-card skeleton" style="aspect-ratio:1;height:auto;border-radius:12px;margin:0;"></div>
@@ -686,7 +703,7 @@
   </script>
 
   <!-- Access-token fetch patch: classic script, MUST run before the module graph. -->
-  <script src="/js/mobile/fetch-interceptor.js?v=17"></script>
+  <script src="/js/mobile/fetch-interceptor.js?v=18"></script>
   <!-- Mobile app (ES module graph). Deferred; runs after the classic scripts above. -->
   <!-- Cookie / analytics consent. Mobile had no banner at all, so Google
        Analytics could never fire here — safe, but it meant no data from the
@@ -728,6 +745,6 @@
   })();
   </script>
 
-  <script type="module" src="/js/mobile/main.js?v=17"></script>
+  <script type="module" src="/js/mobile/main.js?v=18"></script>
 </body>
 </html>
