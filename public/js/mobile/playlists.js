@@ -1,12 +1,12 @@
 // User playlists (load/render/play/create/add-to) for the mobile app.
 
-import { elements, state } from './state.js?v=17';
-import { showToast } from './util.js?v=17';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, getTitleField } from './fields.js?v=17';
-import { switchTab } from './nav.js?v=17';
-import { closeModal, playTrack } from './player.js?v=17';
-import { pushOverlay } from './router.js?v=17';
-import { createAlbumTile } from './cards.js?v=17';
+import { elements, state } from './state.js?v=19';
+import { showToast } from './util.js?v=19';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, getTitleField } from './fields.js?v=19';
+import { switchTab } from './nav.js?v=19';
+import { closeModal, playTrack } from './player.js?v=19';
+import { pushOverlay } from './router.js?v=19';
+import { createAlbumTile } from './cards.js?v=19';
 
 // ── Playlist icons ───────────────────────────────────────────────────────────
 // Choices come from /data/playlist-icons.json (served no-cache) so adding one
@@ -105,10 +105,10 @@ export async function pickPlaylistIcon(currentArtwork = '', heading = 'Choose ar
       };
       img.onload = () => { live++; empty.hidden = true; };
 
-      const lbl = document.createElement('span');
-      lbl.textContent = name;
-
-      cell.append(img, lbl);
+      // No caption: the art speaks for itself and a label strip over it just
+      // fights the image. The name still reaches assistive tech via the
+      // aria-label above.
+      cell.append(img);
       cell.addEventListener('click', () => {
         selected = selected === url ? '' : url;
         paint();

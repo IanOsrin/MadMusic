@@ -1,7 +1,7 @@
 // Auth + access-token flow for the mobile app.
 
-import { elements, state } from './state.js?v=17';
-import { showToast } from './util.js?v=17';
+import { elements, state } from './state.js?v=19';
+import { showToast } from './util.js?v=19';
 
 export function logout() {
       localStorage.removeItem('mass_access_token');
@@ -289,37 +289,115 @@ export function enterGuestMode() {
   }, GUEST_POPUP_INTERVAL_MS);
 }
 
+// The plan list comes from our own server, not a user, but it is still
+// interpolated into innerHTML — escape it rather than rely on that staying true.
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/**
+ * Buy access — pick a plan, then check out.
+ *
+ * Mobile used to hardcode plan:'7-day' and never call /api/payments/plans, so
+ * the 1-day and 30-day passes were unreachable on the platform that carries
+ * most of the traffic — including any price change, which reached desktop only.
+ * The plans come from the server so there is still exactly one source of truth
+ * (PAYSTACK_PLANS in lib/paystack.js).
+ */
 export async function buyAccess() {
-      if (isNativeApp()) {
-        // Play policy: no Paystack in the app. Neutral wording on purpose —
-        // naming an external purchase channel is itself a policy violation.
-        showToast('Purchases are not available in this app', 'error');
-        return;
-      }
-      const email = prompt('Enter your email address for the receipt:');
-      if (!email || !email.includes('@')) {
-        showToast('Please enter a valid email address', 'error');
-        return;
-      }
+  // Play/App Store policy: no external purchase channel inside the wrapper,
+  // and naming one is itself a violation — so the wording stays neutral.
+  if (isNativeApp()) {
+    showToast('Purchases are not available in this app', 'error');
+    return;
+  }
 
-      showToast('Redirecting to payment...', 'success');
+  let plans = [];
+  try {
+    const res  = await fetch('/api/payments/plans');
+    const data = await res.json();
+    if (res.ok && Array.isArray(data.plans)) plans = data.plans;
+  } catch { /* fall through to the fallback below */ }
 
-      try {
-        const response = await fetch('/api/payments/initialize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email.trim(), plan: '7-day', source: 'mobile' })
-        });
+  // Never block a sale on a failed lookup: offer the mid plan as before.
+  if (!plans.length) {
+    plans = [{ id: '7-day', label: '7 Day Access', days: 7, display: 'R7.50' }];
+  }
 
-        const data = await response.json();
+  showPlanPicker(plans);
+}
 
-        if (response.ok && data.authorization_url) {
-          window.location.href = data.authorization_url;
-        } else {
-          showToast(data.error || 'Failed to start payment', 'error');
-        }
-      } catch (err) {
-        console.error('[Mobile] Payment error:', err);
-        showToast('Payment service unavailable', 'error');
-      }
+function closePlanPicker() {
+  document.getElementById('plan-picker')?.remove();
+}
+
+function showPlanPicker(plans) {
+  closePlanPicker();
+  const overlay = document.createElement('div');
+  overlay.id = 'plan-picker';
+  overlay.className = 'guest-paywall show';   // same bottom sheet as the paywall
+  overlay.innerHTML = `
+    <div class="guest-paywall-card">
+      <button type="button" class="guest-paywall-close" id="plan-picker-close" aria-label="Close">&times;</button>
+      <div class="guest-paywall-icon">🎟️</div>
+      <h3>Choose your access</h3>
+      <p>Unlimited streaming for the period you pick. No subscription, no card stored.</p>
+      <div class="plan-list">
+        ${plans.map((p, i) => `
+          <button type="button" class="plan-row${i === plans.length - 1 ? ' plan-row-best' : ''}" data-plan="${esc(p.id)}">
+            <span class="plan-row-main">
+              <span class="plan-row-name">${esc(p.label)}</span>
+              <span class="plan-row-sub">${p.days} ${p.days === 1 ? 'day' : 'days'} of unlimited streaming</span>
+            </span>
+            <span class="plan-row-price">${esc(p.display)}</span>
+          </button>`).join('')}
+      </div>
+      <label class="plan-email-label" for="plan-email">Where should we send your access code?</label>
+      <input type="email" id="plan-email" class="plan-email" inputmode="email" autocomplete="email"
+             autocapitalize="off" spellcheck="false" placeholder="you@example.com">
+      <div class="plan-picker-status" id="plan-picker-status"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closePlanPicker(); });
+  document.getElementById('plan-picker-close').addEventListener('click', closePlanPicker);
+  for (const btn of overlay.querySelectorAll('.plan-row')) {
+    btn.addEventListener('click', () => startCheckout(btn.dataset.plan));
+  }
+}
+
+/** Send the chosen plan to Paystack. */
+async function startCheckout(planId) {
+  const input  = document.getElementById('plan-email');
+  const status = document.getElementById('plan-picker-status');
+  const email  = (input?.value || '').trim();
+
+  // An inline field rather than prompt(): a native dialog on mobile is easy to
+  // dismiss by accident, and loses what was typed when it happens.
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    if (status) status.textContent = 'Enter a valid email address first — your access code is sent there.';
+    input?.focus();
+    return;
+  }
+
+  if (status) status.textContent = 'Redirecting to payment…';
+  for (const b of document.querySelectorAll('#plan-picker .plan-row')) b.disabled = true;
+
+  try {
+    const response = await fetch('/api/payments/initialize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, plan: planId, source: 'mobile' })
+    });
+    const data = await response.json();
+    if (response.ok && data.authorization_url) {
+      window.location.href = data.authorization_url;
+    } else {
+      if (status) status.textContent = data.error || 'Could not start payment. Please try again.';
+      for (const b of document.querySelectorAll('#plan-picker .plan-row')) b.disabled = false;
     }
+  } catch (err) {
+    console.error('[Mobile] Payment error:', err);
+    if (status) status.textContent = 'Payment service unavailable. Please try again.';
+    for (const b of document.querySelectorAll('#plan-picker .plan-row')) b.disabled = false;
+  }
+}
