@@ -1635,10 +1635,35 @@
         <button class="account-modal-close" data-close-modal>&times;</button>
       </div>
       <div class="account-modal-body">
-        <div class="account-row"><span class="account-label">Email</span><span class="account-value" id="acctEmail">—</span></div>
-        <div class="account-row"><span class="account-label">Token</span><span class="account-value account-mono" id="acctToken">—</span></div>
-        <div class="account-row"><span class="account-label">Expires</span><span class="account-value" id="acctExpiry">—</span></div>
-        <div class="account-row"><span class="account-label">Status</span><span class="account-value" id="acctStatus">—</span></div>
+        <!-- Signed in: the account details. -->
+        <div id="acctSignedIn">
+          <div class="account-row"><span class="account-label">Email</span><span class="account-value" id="acctEmail">—</span></div>
+          <div class="account-row"><span class="account-label">Token</span><span class="account-value account-mono" id="acctToken">—</span></div>
+          <div class="account-row"><span class="account-label">Expires</span><span class="account-value" id="acctExpiry">—</span></div>
+          <div class="account-row"><span class="account-label">Status</span><span class="account-value" id="acctStatus">—</span></div>
+        </div>
+
+        <!-- Signed out: the way back in. Without this, logging out left this
+             modal showing four dashes and no route to signing back in — the
+             gate only reappears on its own timer. -->
+        <div id="acctSignedOut" hidden style="text-align:center;padding:6px 0 2px">
+          <div id="acctReturning" hidden style="margin-bottom:14px">
+            <div style="font-size:15px;font-weight:600;margin-bottom:4px">Welcome back</div>
+            <div id="acctReturningEmail" class="account-mono" style="font-size:13px;opacity:.75"></div>
+          </div>
+          <div id="acctFirstTime" hidden style="font-size:14px;opacity:.8;margin-bottom:14px">
+            You’re signed out.
+          </div>
+          <p style="font-size:13px;opacity:.7;margin:0 0 16px">
+            Sign back in with your access code — it’s in the email we sent you.
+          </p>
+          <button id="acctLoginBtn" style="display:block;width:100%;padding:12px 16px;border-radius:10px;background:var(--accent,#8b5cf6);color:#fff;font-size:14px;font-weight:600;border:none;cursor:pointer">
+            Log back in
+          </button>
+          <button id="acctNotYouBtn" hidden style="margin-top:10px;background:none;border:none;color:inherit;opacity:.55;font-size:12px;text-decoration:underline;cursor:pointer">
+            Not you?
+          </button>
+        </div>
       </div>
     </div>
 
@@ -2440,7 +2465,17 @@
             });
           } catch (err) { console.error('[LOGOUT] access-token logout failed:', err); }
         }
+        // Remember WHO signed out so My Account can greet them on the way
+        // back. The token itself is cleared — this is a name badge, not a key.
+        try {
+          const last = localStorage.getItem('mass_token_email');
+          if (last) localStorage.setItem('mass_last_email', last);
+        } catch (e) {}
         localStorage.removeItem('mass_access_token');
+        // auth.js writes the info under mass_access_token_info; the old line
+        // cleared 'mass_token_info', which nothing writes — so the previous
+        // session's expiry and status survived a logout.
+        localStorage.removeItem('mass_access_token_info');
         localStorage.removeItem('mass_token_info');
         localStorage.removeItem('mass_token_email');
         window.massAccessReady = false;
@@ -6345,7 +6380,38 @@
       }
 
       // ── View my Account ────────────────────────────────────────────────
+      // Masked so a shared or borrowed device does not display someone's full
+      // address just because they signed out on it.
+      function maskEmail(addr) {
+        const [user, domain] = String(addr || '').split('@');
+        if (!user || !domain) return '';
+        const head = user.slice(0, 2);
+        return `${head}${'•'.repeat(Math.max(1, user.length - 2))}@${domain}`;
+      }
+
       function openAccountModal() {
+        const signedIn  = document.getElementById('acctSignedIn');
+        const signedOut = document.getElementById('acctSignedOut');
+        const hasToken  = !!(localStorage.getItem('mass_access_token') || '').trim();
+
+        signedIn.hidden  = !hasToken;
+        signedOut.hidden = hasToken;
+
+        if (!hasToken) {
+          // mass_last_email is the breadcrumb logout deliberately leaves behind:
+          // enough to greet a returning customer, never enough to sign in with.
+          const last = localStorage.getItem('mass_last_email') || '';
+          const returning = document.getElementById('acctReturning');
+          const firstTime = document.getElementById('acctFirstTime');
+          const notYou    = document.getElementById('acctNotYouBtn');
+          returning.hidden = !last;
+          firstTime.hidden = !!last;
+          notYou.hidden    = !last;
+          if (last) document.getElementById('acctReturningEmail').textContent = maskEmail(last);
+          openModal('modalAccount');
+          return;
+        }
+
         let email = '—', token = '—', expiry = '—', status = '✅ Active';
         try {
           // auth.js stores info under 'mass_access_token_info' with field 'expirationDate'
@@ -6371,6 +6437,28 @@
         document.getElementById('acctStatus').textContent = status;
         openModal('modalAccount');
       }
+
+      // Sign back in: hand straight to the gate's own token entry rather than
+      // rebuilding validation here — that flow owns the 3-device policy, the
+      // email-claim step and the guest→subscriber reload.
+      //
+      // Wired inline, NOT inside another DOMContentLoaded: this whole block
+      // already runs from one, so a nested listener registers after the event
+      // has fired and never runs — the buttons were dead until this changed.
+      (function wireAccountAuthButtons() {
+        const loginBtn = document.getElementById('acctLoginBtn');
+        if (loginBtn) loginBtn.addEventListener('click', function() {
+          closeModal();
+          if (window.MADAuth && window.MADAuth.showTokenEntry) window.MADAuth.showTokenEntry();
+          else if (window.MADAuth && window.MADAuth.showTokenOverlay) window.MADAuth.showTokenOverlay();
+          else window.location.href = '/access';
+        });
+        const notYou = document.getElementById('acctNotYouBtn');
+        if (notYou) notYou.addEventListener('click', function() {
+          try { localStorage.removeItem('mass_last_email'); } catch (e) {}
+          openAccountModal();   // re-render as a first-time sign-in
+        });
+      })();
 
       // ── Settings ───────────────────────────────────────────────────────
       function openSettingsModal() {

@@ -46,6 +46,17 @@ describe('PAYSTACK_PLANS catalogue', () => {
   it('contains 1/7/30-day plans with kobo amounts', () => {
     expect(PAYSTACK_PLANS['1-day'].amount).toBe(250);
     expect(PAYSTACK_PLANS['7-day'].amount).toBe(750);
-    expect(PAYSTACK_PLANS['30-day'].amount).toBe(3999);
+    expect(PAYSTACK_PLANS['30-day'].amount).toBe(2999);
+  });
+
+  // amount is what Paystack charges; display is only the label on the card.
+  // They drifted apart once and the card would then advertise one price and
+  // bill another, so pin the pair rather than the number alone.
+  it('displays the price it actually charges', () => {
+    for (const [key, plan] of Object.entries(PAYSTACK_PLANS)) {
+      const shown = Number(String(plan.display).replace(/[^0-9.]/g, ''));
+      expect(Math.round(shown * 100), `${key} display ${plan.display} vs amount ${plan.amount}`)
+        .toBe(plan.amount);
+    }
   });
 });

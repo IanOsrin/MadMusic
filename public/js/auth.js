@@ -195,6 +195,23 @@
       overlay.classList.add('hidden');
     }
 
+    /**
+     * The gate, opened on the access-code tab instead of the purchase tab.
+     *
+     * showTokenOverlay() leads with "Start listening" because most people who
+     * see the gate have nothing to enter. Someone signing back in from My
+     * Account is the opposite case: they already have a code, and being shown
+     * the plans first reads as being asked to buy again.
+     */
+    function showTokenEntry() {
+      showTokenOverlay();
+      const purchaseSection = document.getElementById('purchaseSection');
+      const tokenSection    = document.getElementById('tokenSection');
+      if (purchaseSection) purchaseSection.classList.add('hidden');
+      if (tokenSection)    tokenSection.classList.add('active');
+      if (input) { try { input.focus(); } catch (e) {} }
+    }
+
     function updateTokenInfo() {
       if (!tokenInfo) {
         infoDiv.classList.add('hidden');
@@ -742,6 +759,7 @@
 // Export key functions globally
 window.MADAuth = {
   showTokenOverlay,
+  showTokenEntry,
   hideTokenOverlay,
   clearAccessToken,
   updateTokenInfo
