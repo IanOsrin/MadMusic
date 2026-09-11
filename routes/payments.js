@@ -18,6 +18,38 @@ import { isStrictEmail } from '../lib/validators.js';
 import { bumpTaster } from '../lib/taster-stats.js';
 import { SUBSCRIPTION_DAYS_MIN, SUBSCRIPTION_DAYS_MAX } from '../lib/constants.js';
 
+/**
+ * The customer's email from a Paystack payload, or null.
+ *
+ * This used to fall back to the literal string 'unknown', which was then
+ * handed to the mailer and written to FileMaker as the customer's address.
+ * The send could only fail, and the token was left carrying a fake email that
+ * breaks the account binding and the free-trial dedupe.
+ *
+ * Null is the honest answer. Callers must still create the token — the
+ * customer has paid — and log loudly enough that it can be delivered by hand.
+ */
+function customerEmail(raw) {
+  const trimmed = String(raw ?? '').trim();
+  return isStrictEmail(trimmed) ? trimmed : null;
+}
+
+/** For notes/log lines, where a placeholder is fine and null reads badly. */
+const emailLabel = (email) => email || 'NO EMAIL ON PAYMENT';
+
+/**
+ * A paid-for token nobody can be told about. Logged as one distinctive line so
+ * it can be grepped out of Render and delivered manually — the alternative is
+ * a silent failure that only surfaces when the customer complains.
+ */
+function warnUndeliverable(kind, tokenCode, ref) {
+  console.error(
+    `[MASS] ⚠️  MANUAL ACTION — ${kind} token ${tokenCode} has NO customer email ` +
+    `(ref/sub: ${ref}). Paystack sent no address, so nothing was emailed. ` +
+    `Find the customer in Paystack and send this code by hand.`
+  );
+}
+
 const router = Router();
 
 const pendingPayments = pendingPaymentsCache;
@@ -295,7 +327,7 @@ router.get('/callback', async (req, res) => {
     }
 
     const metadata   = data.data.metadata || {};
-    const email      = data.data.customer?.email || 'unknown';
+    const email      = customerEmail(data.data.customer?.email);
     const isSubscription = metadata.payment_type === 'subscription' || !!data.data.plan;
 
     let token;
@@ -315,19 +347,27 @@ router.get('/callback', async (req, res) => {
       } else {
         token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays);
         // Fire-and-forget: never block the post-payment redirect on email.
-        Promise.resolve(sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label)).catch((err) =>
-          console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. ref=${reference} token=${token.code} email=${email} error=${err?.message || err}`));
+        if (email) {
+          Promise.resolve(sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label)).catch((err) =>
+            console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. ref=${reference} token=${token.code} email=${email} error=${err?.message || err}`));
+        } else {
+          warnUndeliverable('subscription', token.code, reference);
+        }
       }
       console.log(`[MASS] Subscription checkout complete: ${reference} → token ${token.code}`);
     } else {
       // ── One-time purchase ─────────────────────────────────────────────────
       const planId = metadata.plan_id;
       const days   = clampDays(metadata.days, 7);
-      token = await createAccessToken(days, `Paystack purchase: ${planId} (${email}, ref: ${reference})`, email);
+      token = await createAccessToken(days, `Paystack purchase: ${planId} (${emailLabel(email)}, ref: ${reference})`, email);
       // Fire-and-forget: the token is already returned in the redirect URL, so a
       // slow/failing email must not delay or hang the user's return to the app.
-      Promise.resolve(sendTokenEmail(email, token.code, days)).catch((err) =>
-        console.error(`[MASS] ⚠️  TOKEN EMAIL FAILED. ref=${reference} token=${token.code} email=${email} error=${err?.message || err}`));
+      if (email) {
+        Promise.resolve(sendTokenEmail(email, token.code, days)).catch((err) =>
+          console.error(`[MASS] ⚠️  TOKEN EMAIL FAILED. ref=${reference} token=${token.code} email=${email} error=${err?.message || err}`));
+      } else {
+        warnUndeliverable('access', token.code, reference);
+      }
       console.log(`[MASS] Payment successful: ${reference} → token ${token.code} (${days} days)`);
     }
 
@@ -400,7 +440,7 @@ router.post('/webhook', async (req, res) => {
       const sub   = event.data;
       const subscriptionCode = sub.subscription_code;
       const planCode         = sub.plan?.plan_code || PAYSTACK_SUBSCRIPTION_PLAN.code;
-      const email            = sub.customer?.email || 'unknown';
+      const email            = customerEmail(sub.customer?.email);
       const interval         = sub.plan?.interval  || 'monthly';
       const billingDays      = SUBSCRIPTION_INTERVAL_DAYS[interval] || 31;
 
@@ -412,10 +452,14 @@ router.post('/webhook', async (req, res) => {
       }
 
       const token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays);
-      try {
-        await sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label);
-      } catch (err) {
-        console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. sub=${subscriptionCode} token=${token.code} email=${email} error=${err?.message || err}`);
+      if (email) {
+        try {
+          await sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label);
+        } catch (err) {
+          console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. sub=${subscriptionCode} token=${token.code} email=${email} error=${err?.message || err}`);
+        }
+      } else {
+        warnUndeliverable('subscription', token.code, subscriptionCode);
       }
       console.log(`[MASS] Webhook subscription.create: token ${token.code} created for sub ${subscriptionCode}`);
       return ack();
@@ -458,15 +502,19 @@ router.post('/webhook', async (req, res) => {
       } else {
         // First charge for this subscription — create token (fallback if subscription.create fires late)
         const planCode    = paymentData.plan || PAYSTACK_SUBSCRIPTION_PLAN.code;
-        const email       = paymentData.customer?.email || 'unknown';
+        const email       = customerEmail(paymentData.customer?.email);
         const interval    = paymentData.plan_object?.interval || 'monthly';
         const billingDays = SUBSCRIPTION_INTERVAL_DAYS[interval] || 31;
         if (!pendingPayments.has(reference)) {
           const token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays);
-          try {
-            await sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label);
-          } catch (err) {
-            console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. sub=${subscriptionCode} token=${token.code} error=${err?.message || err}`);
+          if (email) {
+            try {
+              await sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label);
+            } catch (err) {
+              console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. sub=${subscriptionCode} token=${token.code} error=${err?.message || err}`);
+            }
+          } else {
+            warnUndeliverable('subscription', token.code, subscriptionCode);
           }
           pendingPayments.set(reference, { tokenCode: token.code, timestamp: Date.now() });
           console.log(`[MASS] Webhook charge.success (new sub): token ${token.code} for sub ${subscriptionCode}`);
@@ -490,15 +538,19 @@ router.post('/webhook', async (req, res) => {
     }
 
     const days   = clampDays(metadata.days, 7);
-    const email  = paymentData.customer?.email || 'unknown';
-    const planId = metadata.plan_id || 'unknown';
+    const email  = customerEmail(paymentData.customer?.email);
+    const planId = metadata.plan_id || 'unknown';   // a plan id, not an address
 
-    const token = await createAccessToken(days, `Paystack webhook: ${planId} (${email}, ref: ${reference})`, email);
+    const token = await createAccessToken(days, `Paystack webhook: ${planId} (${emailLabel(email)}, ref: ${reference})`, email);
 
-    try {
-      await sendTokenEmail(email, token.code, days);
-    } catch (err) {
-      console.error(`[MASS] ⚠️  TOKEN EMAIL FAILED. ref=${reference} token=${token.code} email=${email} error=${err?.message || err}`);
+    if (email) {
+      try {
+        await sendTokenEmail(email, token.code, days);
+      } catch (err) {
+        console.error(`[MASS] ⚠️  TOKEN EMAIL FAILED. ref=${reference} token=${token.code} email=${email} error=${err?.message || err}`);
+      }
+    } else {
+      warnUndeliverable('access', token.code, reference);
     }
 
     pendingPayments.set(reference, { tokenCode: token.code, timestamp: Date.now() });
