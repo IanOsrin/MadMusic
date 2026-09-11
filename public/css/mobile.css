@@ -1114,23 +1114,11 @@
       display: block;
     }
 
-    .playlist-icon-cell span {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      padding: 2px 0 3px;
-      font-size: 9px;
-      font-weight: 600;
-      letter-spacing: .03em;
-      text-transform: uppercase;
-      text-align: center;
-      color: #fff;
-      background: rgba(0, 0, 0, 0.6);
-    }
-
+    /* With the captions gone the border is the only cue, so give it a ring
+       that still reads against busy artwork. */
     .playlist-icon-cell.selected {
       border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent);
     }
 
     .playlist-icon-empty {
@@ -1601,6 +1589,56 @@
       line-height: 1;
       cursor: pointer;
     }
+    /* ── Plan picker (mobile purchase) ──────────────────────────────────────
+       Reuses the guest-paywall bottom sheet. Mobile previously went straight
+       to checkout on a hardcoded 7-day plan, so the 1-day and 30-day passes
+       could not be bought at all on the platform carrying most of the traffic. */
+    .plan-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+    .plan-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border, #33333c);
+      border-radius: 12px;
+      background: var(--bg, #14141a);
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .plan-row:active { transform: scale(0.99); }
+    .plan-row:disabled { opacity: 0.5; cursor: default; }
+    .plan-row-best { border-color: #7b2ff7; }
+    .plan-row-main { flex: 1; min-width: 0; }
+    .plan-row-name { display: block; font-size: 15px; font-weight: 600; }
+    .plan-row-sub  { display: block; font-size: 12px; color: var(--text-muted, #999); margin-top: 2px; }
+    .plan-row-price { font-size: 16px; font-weight: 700; white-space: nowrap; }
+    .plan-email-label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted, #999);
+      text-align: left;
+      margin-bottom: 6px;
+    }
+    .plan-email {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid var(--border, #33333c);
+      border-radius: 10px;
+      background: var(--bg, #14141a);
+      color: inherit;
+      /* 16px stops iOS Safari zooming the page when the field takes focus */
+      font-size: 16px;
+    }
+    .plan-picker-status {
+      min-height: 18px;
+      margin-top: 10px;
+      font-size: 12.5px;
+      color: var(--text-muted, #999);
+    }
+
     .guest-pill {
       position: fixed;
       right: 12px;
