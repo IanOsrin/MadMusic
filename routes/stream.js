@@ -27,6 +27,28 @@ function isRedirectableHost(hostname) {
   return REDIRECT_HOST_ALLOWLIST.has(String(hostname || '').toLowerCase());
 }
 
+/**
+ * True for a /api/container request that will only 302 the browser to a known
+ * media origin — no FileMaker call, no proxied bytes. The general API rate
+ * limiter skips these: every album cover on a results page is one of them, so
+ * a few genre clicks (~100 covers each) spent a visitor's whole 600-call budget
+ * on redirects and the NEXT real search 429'd ("Genre search error: Too many
+ * requests", 2026-09-14). Worse behind an office NAT, where everyone shares one
+ * budget. Must mirror the redirect branch of resolveContainerUpstream exactly:
+ * anything that could be proxied (rid/field, proxy=1, other hosts) still counts.
+ */
+export function isContainerRedirectRequest(pathname, query = {}) {
+  if (pathname !== '/api/container') return false;
+  if (query.rid || query.field) return false;
+  if (['1', 'true', 'yes'].includes(String(query.proxy || '').toLowerCase())) return false;
+  const direct = String(query.u || '').trim();
+  if (!REGEX_HTTP_HTTPS.test(direct)) return false;
+  let url;
+  try { url = new URL(direct); } catch { return false; }
+  if (isSameOrigin(direct, FM_HOST)) return false;
+  return isRedirectableHost(url.hostname);
+}
+
 async function resolveContainerUpstream(req) {
   const rid    = (req.query.rid   || '').toString().trim();
   const field  = (req.query.field || '').toString().trim();
