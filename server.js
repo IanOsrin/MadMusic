@@ -17,7 +17,7 @@ import playlistsRouter from './routes/playlists.js';
 import catalogRouter from './routes/catalog.js';
 import libraryRouter from './routes/library.js';
 import accountRouter from './routes/account.js';
-import streamRouter from './routes/stream.js';
+import streamRouter, { isContainerRedirectRequest } from './routes/stream.js';
 import adminRouter, { requireAdminKey } from './routes/admin.js';
 import editorialRouter from './routes/featured-editorial.js';
 import artistBioRouter from './routes/artist-bio.js';
@@ -419,7 +419,10 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: clientIpKey,
-  skip: skipInTest
+  // Cover images are 302s to S3 (see isContainerRedirectRequest) — free to
+  // serve, and there are ~100 per results page, so they must not spend the
+  // budget that real searches need.
+  skip: (req) => skipInTest() || isContainerRedirectRequest(req.baseUrl + req.path, req.query)
 });
 
 const expensiveLimiter = rateLimit({
