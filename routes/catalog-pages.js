@@ -169,6 +169,7 @@ router.get('/artist/:slug', async (req, res, next) => {
       <h1>${esc(artist.name)}</h1>
       <p class="muted">${albums.length} album${albums.length === 1 ? '' : 's'} · ${artist.tracks} tracks on MAD Music${albums[0]?.genre ? ' · ' + esc(albums[0].genre) : ''}</p>
       ${bio?.bio ? `<div class="bio">${esc(bio.bio).replace(/\n+/g, '</p><p>').replace(/^/, '<p>')}</p></div>` : ''}
+      <p><a class="cta" href="/album/${esc(albums[0]?.slug || '')}">▶ Play ${esc(artist.name)} free</a></p>
       <h2>Albums</h2>
       <div class="grid">${albums.map(albumTile).join('')}</div>`;
     send(res, pageShell({
@@ -231,7 +232,9 @@ router.get('/album/:slug', async (req, res, next) => {
         <div style="flex:1;min-width:260px">
           <h1>${esc(album.title)}</h1>
           <p class="muted"><a href="/artist/${esc(album.artistSlug)}">${esc(album.artist)}</a>${album.year ? ' · ' + esc(album.year) : ''}${album.genre ? ' · ' + esc(album.genre) : ''} · ${tracks.length} tracks</p>
-          <p><a class="cta" href="/?utm_source=catalog&utm_medium=album">▶ Stream the full album free</a></p>
+          <p><a class="cta" href="${tracks[0]?.recordId
+            ? `/?t=${encodeURIComponent(tracks[0].recordId)}&utm_campaign=catalog_album`
+            : '/?utm_source=catalog&utm_medium=album'}">▶ Stream the full album free</a></p>
           ${GUEST_PREVIEW_ENABLED ? '<p class="muted" style="font-size:.85rem">Every track below has a free 30-second preview.</p>' : ''}
         </div>
       </div>

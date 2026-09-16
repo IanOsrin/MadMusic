@@ -62,7 +62,10 @@
 
       // Redirect mobile users to /mobile unless they explicitly want desktop view
       if ((isMobile || isSmallScreen) && !sessionStorage.getItem('forceDesktopView')) {
-        window.location.href = '/mobile';
+        // Carry the query string across: a catalogue page links to
+        // /?album=…&artist=…, and dropping it landed search visitors on a
+        // generic home screen with no idea where their album went.
+        window.location.href = '/mobile' + window.location.search;
       }
     })();
   </script>
@@ -2318,6 +2321,10 @@
     if (albumParam || artistParam) {
       // Set flag to prevent app.min.js from loading featured albums
       window.__skipFeaturedLoad = true;
+      // Captured HERE because the address bar is cleaned before app.min.js
+      // gets to look: a visitor from a catalogue page (/album/… links to
+      // /?album=…&artist=…) must land on that album, not the home page.
+      window.__CATALOG_LINK = { album: albumParam || '', artist: artistParam || '' };
       console.log('[MASS] URL parameters detected early, skipping featured album load');
     }
   })();
