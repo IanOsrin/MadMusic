@@ -29,6 +29,11 @@ const router = Router();
 const ORIGIN = 'https://musicafricadirect.com';
 const GUEST_PREVIEW_ENABLED = process.env.GUEST_PREVIEW_ENABLED === 'true';
 
+// Credit fields hold "A; B", "A / B" or "A, B" depending on which database the
+// row came through; split them so each name is its own credit.
+const names = (...vals) => unique(vals.flatMap((v) => String(v || '').split(/\s*[;/]\s*|\s+&\s+/)));
+const unique = (list) => [...new Set(list.map((s) => String(s || '').trim()).filter((s) => s && s !== '?' && s.toLowerCase() !== 'unknown'))];
+
 const esc = (s) => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -74,6 +79,14 @@ function pageShell({ title, description, canonicalPath, jsonLd, body, ogImage })
     ol.tracks li{display:flex;align-items:center;gap:12px;padding:9px 10px;border-bottom:1px solid var(--border)}
     ol.tracks .n{color:var(--muted);width:22px;text-align:right;flex:none;font-size:.85rem}
     ol.tracks .name{flex:1;min-width:0}
+    ol.tracks li{align-items:flex-start}
+    ol.tracks .tmeta{display:block;font-size:.78rem;margin-top:2px}
+    dl.facts{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;max-width:760px;margin:12px 0 22px}
+    dl.facts dt{color:var(--muted);font-size:.85rem}
+    dl.facts dd{margin:0;font-size:.92rem}
+    .credit{margin:0 0 14px;max-width:760px}
+    .credit h3{font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 3px;font-weight:600}
+    .credit p{margin:0}
     audio{height:32px;max-width:230px}
     .pill{display:inline-block;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 14px;margin:0 8px 8px 0;font-size:.85rem}
     footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--border);font-size:.85rem;color:var(--muted)}
@@ -169,6 +182,7 @@ router.get('/artist/:slug', async (req, res, next) => {
       <h1>${esc(artist.name)}</h1>
       <p class="muted">${albums.length} album${albums.length === 1 ? '' : 's'} · ${artist.tracks} tracks on MAD Music${albums[0]?.genre ? ' · ' + esc(albums[0].genre) : ''}</p>
       ${bio?.bio ? `<div class="bio">${esc(bio.bio).replace(/\n+/g, '</p><p>').replace(/^/, '<p>')}</p></div>` : ''}
+      <p><a class="cta" href="/album/${esc(albums[0]?.slug || '')}">▶ Play ${esc(artist.name)} free</a></p>
       <h2>Albums</h2>
       <div class="grid">${albums.map(albumTile).join('')}</div>`;
     send(res, pageShell({
@@ -205,9 +219,38 @@ router.get('/album/:slug', async (req, res, next) => {
         artist: r.fieldData['Track Artist'] || album.artist,
         seq: parseInt(r.fieldData['Sequence Number'], 10) || 999,
         duration: r.fieldData['Duration'] || '',
+        // The credits are the whole point of these pages: the global platforms
+        // hold the audio but drop the history, so the sleeve detail is what MAD
+        // can be found for and they cannot (2026-09-16).
+        composers: names(r.fieldData['Composers'] || r.fieldData['Composer'], r.fieldData['Composer 2'], r.fieldData['Composer 3']),
+        producers: names(r.fieldData['Producers'] || r.fieldData['Producer']),
+        publishers: names(r.fieldData['Publishers']),
+        isrc: (r.fieldData['ISRC'] || '').trim(),
+        label: (r.fieldData['Label'] || '').trim(),
+        country: (r.fieldData['Country'] || '').trim(),
+        language: (r.fieldData['Language'] || '').trim(),
+        catalogue: (r.fieldData['Reference Catalogue Number'] || r.fieldData['Album Catalogue Number'] || '').replace(/\s+/g, ' ').trim(),
+        upc: (r.fieldData['UPC'] || '').trim(),
+        recorded: (r.fieldData['Original Release date'] || '').trim(),
+        cLine: (r.fieldData['cLine'] || '').trim(),
       }))
       .filter((t) => t.name)
       .sort((a, b) => a.seq - b.seq);
+
+    // Album-level facts: the value most of the tracks agree on.
+    const commonest = (key) => {
+      const tally = new Map();
+      for (const t of tracks) { const v = t[key]; if (v) tally.set(v, (tally.get(v) || 0) + 1); }
+      return [...tally.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+    };
+    const label = commonest('label');
+    const catalogue = commonest('catalogue');
+    const upc = commonest('upc');
+    const country = commonest('country');
+    const recordedFirst = tracks.map((t) => t.recorded).filter(Boolean).sort()[0] || '';
+    const allComposers = unique(tracks.flatMap((t) => t.composers));
+    const allProducers = unique(tracks.flatMap((t) => t.producers));
+    const allPublishers = unique(tracks.flatMap((t) => t.publishers));
 
     const jsonLd = {
       '@context': 'https://schema.org',
@@ -218,11 +261,33 @@ router.get('/album/:slug', async (req, res, next) => {
       ...(album.year ? { datePublished: album.year } : {}),
       ...(album.genre ? { genre: album.genre } : {}),
       numTracks: tracks.length,
+      ...(label ? { recordLabel: { '@type': 'Organization', name: label } } : {}),
+      ...(catalogue ? { identifier: catalogue } : {}),
+      ...(upc ? { gtin13: upc } : {}),
+      ...(allProducers.length ? { producer: allProducers.map((n) => ({ '@type': 'Person', name: n })) } : {}),
       track: tracks.slice(0, 60).map((t, i) => ({
         '@type': 'MusicRecording', name: t.name, position: i + 1,
         byArtist: { '@type': 'MusicGroup', name: t.artist },
+        ...(t.isrc ? { isrcCode: t.isrc } : {}),
+        ...(t.composers.length ? { composer: t.composers.map((n) => ({ '@type': 'Person', name: n })) } : {}),
+        ...(t.producers.length ? { producer: t.producers.map((n) => ({ '@type': 'Person', name: n })) } : {}),
       })),
     };
+    // One readable sentence carrying the facts a search actually uses.
+    const summary = [
+      label && `Released on ${label}`,
+      catalogue && `catalogue number ${catalogue}`,
+      recordedFirst.slice(0, 4) && `first issued ${recordedFirst.slice(0, 4)}`,
+      country === 'ZA' ? 'in South Africa' : country && `in ${country}`,
+    ].filter(Boolean).join(', ');
+    const facts = [
+      ['Catalogue number', catalogue], ['Label', label],
+      ['First released', recordedFirst || album.year], ['Barcode (UPC)', upc],
+      ['Genre', album.genre], ['Country', country === 'ZA' ? 'South Africa' : country],
+      ['Tracks', String(tracks.length)],
+    ].filter(([, v]) => v);
+    const creditBlock = (heading, list) => (list.length
+      ? `<div class="credit"><h3>${heading}</h3><p>${list.map(esc).join(' · ')}</p></div>` : '');
     const body = `
       <div class="crumbs"><a href="/browse">Catalogue</a> · <a href="/artist/${esc(album.artistSlug)}">${esc(album.artist)}</a> · Album</div>
       <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
@@ -231,20 +296,35 @@ router.get('/album/:slug', async (req, res, next) => {
         <div style="flex:1;min-width:260px">
           <h1>${esc(album.title)}</h1>
           <p class="muted"><a href="/artist/${esc(album.artistSlug)}">${esc(album.artist)}</a>${album.year ? ' · ' + esc(album.year) : ''}${album.genre ? ' · ' + esc(album.genre) : ''} · ${tracks.length} tracks</p>
-          <p><a class="cta" href="/?utm_source=catalog&utm_medium=album">▶ Stream the full album free</a></p>
+          <p><a class="cta" href="${tracks[0]?.recordId
+            ? `/?t=${encodeURIComponent(tracks[0].recordId)}&utm_campaign=catalog_album`
+            : '/?utm_source=catalog&utm_medium=album'}">▶ Stream the full album free</a></p>
           ${GUEST_PREVIEW_ENABLED ? '<p class="muted" style="font-size:.85rem">Every track below has a free 30-second preview.</p>' : ''}
         </div>
       </div>
       <h2>Tracklist</h2>
       <ol class="tracks">${tracks.map((t, i) => `
         <li><span class="n">${i + 1}</span>
-          <span class="name">${esc(t.name)}${t.artist !== album.artist ? ` <span class="muted">— ${esc(t.artist)}</span>` : ''}</span>
+          <span class="name">${esc(t.name)}${t.artist !== album.artist ? ` <span class="muted">— ${esc(t.artist)}</span>` : ''}
+            ${t.composers.length || t.duration || t.isrc ? `<span class="tmeta muted">${[
+              t.composers.length ? `Written by ${t.composers.map(esc).join(', ')}` : '',
+              t.duration ? esc(t.duration.replace(/^00:/, '')) : '',
+              t.isrc ? `ISRC ${esc(t.isrc)}` : '',
+            ].filter(Boolean).join(' · ')}</span>` : ''}</span>
           ${GUEST_PREVIEW_ENABLED ? `<audio controls preload="none" src="/api/preview/${esc(t.recordId)}" title="Preview: ${esc(t.name)}"></audio>` : ''}
         </li>`).join('')}
-      </ol>`;
+      </ol>
+      ${(facts.length || allComposers.length || allProducers.length || allPublishers.length) ? `
+      <h2>Release details</h2>
+      ${summary ? `<p>${esc(summary)}.</p>` : ''}
+      <dl class="facts">${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+      ${creditBlock('Written by', allComposers)}
+      ${creditBlock('Produced by', allProducers)}
+      ${creditBlock('Publishers', allPublishers)}
+      <p class="muted" style="font-size:.85rem">Credits as they appear on the original Gallo master tape and sleeve.</p>` : ''}`;
     send(res, pageShell({
       title: `${album.title} — ${album.artist}${album.year ? ` (${album.year})` : ''} | MAD Music`,
-      description: `Listen to ${album.title} by ${album.artist} on MAD Music — ${tracks.length} tracks${album.genre ? ` of South African ${album.genre}` : ''}, streamed from the original masters with free previews.`,
+      description: `${album.title} by ${album.artist}${recordedFirst.slice(0, 4) ? ` (${recordedFirst.slice(0, 4)})` : ''}${label ? ` on ${label}` : ''}${catalogue ? `, ${catalogue}` : ''} — ${tracks.length} tracks${album.genre ? ` of South African ${album.genre}` : ''} with credits, streamed from the original masters.`,
       canonicalPath: `/album/${album.slug}`,
       ogImage: album.artwork,
       jsonLd,
