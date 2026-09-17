@@ -16,6 +16,7 @@
 import { Router } from 'express';
 import { getIndex, slugify } from '../lib/catalog-slugs.js';
 import { pgFind } from '../lib/catalog-store-pg.js';
+import { createSwrCache } from '../lib/swr-cache.js';
 import { getArtistBio } from './artist-bio.js';
 import { recordIsVisible } from '../lib/fm-fields.js';
 import { thumbArtworkUrl } from '../lib/track.js';
@@ -196,13 +197,18 @@ router.get('/artist/:slug', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// ── /album/:slug ──────────────────────────────────────────────────────────────
-router.get('/album/:slug', async (req, res, next) => {
-  try {
-    const idx = await getIndex();
-    const album = idx.albums.get(String(req.params.slug || '').toLowerCase());
-    if (!album) return notFound(res, 'album');
-
+// Album tracks are cached per album (SWR): search engines crawl these pages in
+// bursts, and on 2026-09-17 a burst of uncached album lookups held every
+// Postgres connection and took the whole site down. Fresh for 10 minutes, then
+// served stale while one background refresh runs; concurrent misses for the same
+// album share a single query. Only the fields the page renders are kept, so
+// 1,000 albums stay a few MB.
+const albumTracksSwr = createSwrCache({
+  ttlMs: 10 * 60 * 1000,
+  max: 1000,
+  label: 'album-page',
+  name: 'album-page',
+  loader: async (_slug, album) => {
     // '==' forces an exact whole-value match. A plain multi-word value falls
     // through to conditionSql's phrase-PREFIX ILIKE, so "Greatest Hits" also
     // matched "Greatest Hits Vol. 2" by the same artist — the public album page
@@ -211,7 +217,7 @@ router.get('/album/:slug', async (req, res, next) => {
       [{ 'Album Title': `==${album.title}`, 'Album Artist': `==${album.artist}` }],
       { limit: 200 }
     );
-    const tracks = (data || [])
+    return (data || [])
       .filter((r) => recordIsVisible(r.fieldData))
       .map((r) => ({
         recordId: r.recordId,
@@ -236,6 +242,17 @@ router.get('/album/:slug', async (req, res, next) => {
       }))
       .filter((t) => t.name)
       .sort((a, b) => a.seq - b.seq);
+  },
+});
+
+// ── /album/:slug ──────────────────────────────────────────────────────────────
+router.get('/album/:slug', async (req, res, next) => {
+  try {
+    const idx = await getIndex();
+    const album = idx.albums.get(String(req.params.slug || '').toLowerCase());
+    if (!album) return notFound(res, 'album');
+
+    const { value: tracks } = await albumTracksSwr.get(album.slug, album);
 
     // Album-level facts: the value most of the tracks agree on.
     const commonest = (key) => {

@@ -48,6 +48,17 @@ ALTER TABLE tracks ADD COLUMN IF NOT EXISTS is_new_release boolean NOT NULL DEFA
 CREATE INDEX IF NOT EXISTS tracks_album_idx
   ON tracks (lower(album_title), lower(album_artist));
 
+-- Album pages (/album/:slug) find their tracks with an EXACT match on the raw
+-- FileMaker fields: lower(raw->>'Album Title') = … AND lower(raw->>'Album Artist')
+-- = … The index above is on the extracted columns, so it could not serve that,
+-- and each page read all ~67k jsonb rows from disk (up to 60 s). On 2026-09-17 a
+-- burst of album-page requests held all 10 pool connections that way and the
+-- whole site timed out. Created on prod by hand that day; kept here so a rebuilt
+-- database gets it too. Plain CREATE INDEX here (migrate runs before traffic);
+-- on a live database use CREATE INDEX CONCURRENTLY.
+CREATE INDEX IF NOT EXISTS tracks_album_exact_idx
+  ON tracks (lower(raw->>'Album Title'), lower(raw->>'Album Artist'));
+
 -- Flag rails (featured / G100 / singles / global favorites) — partial indexes.
 CREATE INDEX IF NOT EXISTS tracks_featured_idx   ON tracks (is_featured)   WHERE is_featured;
 CREATE INDEX IF NOT EXISTS tracks_g100_idx       ON tracks (is_g100)       WHERE is_g100;
