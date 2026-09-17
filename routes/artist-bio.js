@@ -132,4 +132,46 @@ export async function getArtistBio(name) {
   }
 }
 
+// ── Bio links for the "Suggested for You" rail ──────────────────────────────
+// The bios are a second source of truth about who is who: Aliases say which
+// catalogue spellings are one act, and "Related Music in Streamer" lists the
+// albums an artist wrote for, produced, or appears on. Read regardless of
+// ARTIST_BIO_ENABLED — the rail uses the data, not the public bio pages.
+const RELATION_BY_HEADING = [
+  [/^COMPOSER/, 'wrote for'],
+  [/^PRODUCED/, 'produced'],
+  [/^COLLABORATIONS/, 'features'],
+  [/^APPEARS ON/, 'appears on'],
+];
+// "• Sister Phumi — Substitute (1990): "When We Are In Tears", …"
+const RELATED_LINE = /^•\s*(.+?)\s+—\s+(.+?)(?:\s+\((\d{4})\))?:\s+"/;
+
+export function parseRelatedMusic(text) {
+  const out = [];
+  let relation = null;
+  for (const raw of String(text || '').split('\n')) {
+    const line = raw.trim();
+    const heading = RELATION_BY_HEADING.find(([re]) => re.test(line));
+    if (heading) { relation = heading[1]; continue; }
+    const m = relation && RELATED_LINE.exec(line);
+    if (m) out.push({ artist: m[1], title: m[2], relation });
+  }
+  return out;
+}
+
+/** @returns {Promise<{ artists: { name:string, aliases:string[], related:{artist,title,relation}[] }[] }>} */
+export async function getArtistBioLinks() {
+  try {
+    const { value } = await bioSwr.get('default');
+    const artists = [...new Set((value || new Map()).values())].map((a) => ({
+      name: a.name,
+      aliases: a._keys,
+      related: parseRelatedMusic(a.related),
+    }));
+    return { artists };
+  } catch {
+    return { artists: [] };
+  }
+}
+
 export default router;

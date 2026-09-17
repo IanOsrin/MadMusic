@@ -14,6 +14,7 @@ import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './pla
 import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=19';
 import { filterG100Albums, loadG100 } from './rails-g100.js?v=19';
 import { loadNewReleases } from './rails-newreleases.js?v=19';
+import { loadSuggestedForYou } from './rails-suggested.js?v=19';
 import { initMobHero } from './hero.js?v=19';
 import { loadHomeShelves } from './rails-g100.js?v=19';
 import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=19';
@@ -116,6 +117,7 @@ import { initMaddie } from './maddie.js?v=19';
       // Token present — load app; server validates on each protected API call
       state.currentUser = { email: localStorage.getItem('mass_token_email') || '' };
       updateAuthUI();
+      loadSuggestedForYou();
       loadNewReleases();
           initMobHero();
           loadHomeShelves();

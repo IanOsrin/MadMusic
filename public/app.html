@@ -606,6 +606,26 @@
                 <button id="sharedPlaylistCopy" type="button" class="btn small">Copy share link</button>
               </div>
             </section>
+            <!-- Suggested for You — the first home rail (2026-09-17). Ten albums
+                 picked from this subscriber's own listening by
+                 /api/suggested-for-you; loaded by discovery.js
+                 loadSuggestedForYou(). Stays hidden for guests, while
+                 PERSONAL_RAIL_ENABLED is off, and until the listener has 100
+                 different songs behind them. -->
+            <section class="section" id="suggestedForYouSection" hidden>
+              <div class="section-header">
+                <div>
+                  <h2 class="section-title">Suggested for You</h2>
+                  <p class="section-subtitle">Picked from what you've been listening to</p>
+                </div>
+              </div>
+              <div class="horizontal-scroll-wrapper">
+                <button class="scroll-arrow scroll-arrow-left" data-target="suggestedForYouContainer" aria-label="Scroll left"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                <div id="suggestedForYouContainer" class="nr-grid horizontal-scroll-container"></div>
+                <button class="scroll-arrow scroll-arrow-right visible" data-target="suggestedForYouContainer" aria-label="Scroll right"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+              </div>
+            </section>
+
             <!-- Themes Section — playlists whose FM Category is 'Theme'. Renamed
                  from Scenes on the client's call (2026-08-04); the element ids
                  keep the old name so the contract baseline and CSS stay put.
@@ -5400,6 +5420,8 @@
       // Open a suggested album by its catalogue number via /api/album?cat=, which
       // returns the album's tracks directly — robust where artist-name search
       // isn't (compilations, album-artist ≠ track-artist). Returns true on success.
+      // Shared with the home "Suggested for You" rail (discovery.js).
+      window.openAlbumByCatalogue = (cat, title, artist) => openSimilarAlbumByCat(cat, title, artist);
       async function openSimilarAlbumByCat(cat, title, artist) {
         if (typeof window.showAlbumDetailView !== 'function') return false;
         try {
@@ -6239,6 +6261,7 @@
     var searchHeading     = document.getElementById('searchResultsHeading');
     var searchSubtitle    = document.getElementById('searchResultsSubtitle');
     var newReleasesSection = document.getElementById('newReleasesSection');
+    var suggestedForYouSection = document.getElementById('suggestedForYouSection');
     var publicPlaylistsRailSection = document.getElementById('publicPlaylistsRailSection');
     var singlesSection    = document.getElementById('singlesSection');
     var trendingSection   = document.querySelector('#trendingContainer')?.closest('section.section');
@@ -6254,6 +6277,7 @@
       if (trendingSection)    trendingSection.style.display   = isSearch ? 'none' : '';
       if (discoverSection)    discoverSection.style.display   = isSearch ? 'none' : '';
       if (newReleasesSection) newReleasesSection.style.display = isSearch ? 'none' : '';
+      if (suggestedForYouSection) suggestedForYouSection.style.display = isSearch ? 'none' : '';
       if (publicPlaylistsRailSection) publicPlaylistsRailSection.style.display = isSearch ? 'none' : '';
       if (singlesSection)     singlesSection.style.display     = isSearch ? 'none' : '';
       if (heroBanner)         heroBanner.style.display        = isSearch ? 'none' : '';
