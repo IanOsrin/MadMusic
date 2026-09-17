@@ -1181,6 +1181,8 @@
       text-align: left;
     }
     .mob-sug-card:active { opacity: 0.7; }
+    /* Suggested for You home shelf reuses the bottom-sheet suggestion cards. */
+    .home-sfy-rail { margin-bottom: var(--spacing-md); }
     .mob-sug-art {
       width: 100px;
       height: 100px;

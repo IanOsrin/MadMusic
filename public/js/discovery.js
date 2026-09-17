@@ -260,6 +260,7 @@
       random: '/api/random-songs?count=20&_t=' + Date.now(), // Increased to 20, added timestamp for fresh results
       trending: '/api/trending',
       newReleases: '/api/new-releases',
+      suggestedForYou: '/api/suggested-for-you',
       globalFavorites: '/api/global-favorites',
       search: '/api/search',
       container: '/api/container'
@@ -875,6 +876,7 @@
 
       // loadFeatured(); // Removed - Featured section disabled
       // loadHighlights(); // Removed - Highlights section disabled
+      loadSuggestedForYou();
       console.log('[MADMusic] About to call loadNewReleases()');
       loadNewReleases();
       loadGlobalFavorites();
@@ -1072,6 +1074,52 @@
       }
     }
 
+    // "Suggested for You" — the first home rail. Subscribers only: guests have
+    // no listening history, and the server answers eligible:false (rail stays
+    // hidden) until the listener has 100 different songs.
+    async function loadSuggestedForYou() {
+      const section   = document.getElementById('suggestedForYouSection');
+      const container = document.getElementById('suggestedForYouContainer');
+      if (!section || !container) return;
+      if (window.__PERSONAL_RAIL !== true || window.__GUEST || !currentAccessToken) return;
+      try {
+        const response = await apiFetch(API.suggestedForYou);
+        if (!response.ok) return;
+        const data  = await response.json();
+        const items = ((data && data.eligible && data.items) || []).filter((it) => it.artworkSrc);
+        if (!items.length) return;
+
+        container.innerHTML = items.map((it) => {
+          const meta = [it.year, it.genre].filter(Boolean).join(' · ');
+          return `
+            <div class="trending-card suggested-card" data-cat="${escapeHtml(it.catalogue || '')}" data-album="${escapeHtml(it.album)}" data-artist="${escapeHtml(it.artist)}">
+              <div class="trending-artwork" style="cursor:pointer">
+                <img src="${escapeHtml(it.artworkSrc)}" alt="${escapeHtml(it.album)}" loading="lazy" onerror="this.closest('.trending-card').style.display='none'" />
+                <div class="play-overlay"><div class="play-icon" style="font-size:20px">⊞</div></div>
+              </div>
+              <div class="trending-info">
+                <div class="trending-title">${escapeHtml(it.album)}</div>
+                <div class="trending-artist">${escapeHtml(it.artist)}</div>
+                ${meta ? `<div class="trending-meta">${escapeHtml(meta)}</div>` : ''}
+              </div>
+            </div>`;
+        }).join('');
+
+        container.querySelectorAll('.suggested-card').forEach((card) => {
+          card.addEventListener('click', async () => {
+            const { cat, album, artist } = card.dataset;
+            // Catalogue first: it returns the album's exact tracks.
+            if (cat && typeof window.openAlbumByCatalogue === 'function'
+                && await window.openAlbumByCatalogue(cat, album, artist)) return;
+            if (album && typeof window.openAlbumDirect === 'function') window.openAlbumDirect(album, artist);
+          });
+        });
+        section.hidden = false;
+      } catch (err) {
+        console.warn('[SuggestedForYou] Failed to load:', err);
+      }
+    }
+
     function loadNewReleases() {
       return loadAlbumRail({
         sectionId:   'newReleasesSection',
@@ -1205,6 +1253,7 @@
   window.loadHighlights = loadHighlights;
   window.loadTrending = loadTrending;
   window.loadNewReleases = loadNewReleases;
+  window.loadSuggestedForYou = loadSuggestedForYou;
   window.loadRandom = loadRandom;
   window.loadInitialContent = loadInitialContent;
   window.apiFetch = apiFetch;

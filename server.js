@@ -26,6 +26,7 @@ import ringtoneRouter from './routes/ringtone.js';
 import telkomRouter from './routes/telkom.js';
 import podcastsRouter from './routes/podcasts.js';
 import suggestionsRouter from './routes/suggestions.js';
+import suggestedForYouRouter from './routes/suggested-for-you.js';
 import previewRouter from './routes/preview.js';
 import maddieRouter from './routes/maddie.js';
 import { initSemanticIndex, semanticIndexStatus } from './lib/semantic-index.js';
@@ -241,6 +242,12 @@ const PODCASTS_ENABLED = process.env.PODCASTS_ENABLED === 'true';
 // be present on disk or downloadable via SUGGEST_DB_URL — see initSemanticIndex).
 const SUGGESTIONS_ENABLED = process.env.SUGGESTIONS_ENABLED === 'true';
 
+// "Suggested for You" (2026-09-17): the first home rail, built from a
+// subscriber's own listening once they have 100 different songs. Ships dark;
+// needs the same semantic index as SUGGESTIONS_ENABLED. Subscriber-only (never
+// skip-listed) and 404'd before auth while off.
+const PERSONAL_RAIL_ENABLED = process.env.PERSONAL_RAIL_ENABLED === 'true';
+
 // Guest preview mode (2026-07-05): ships dark. When on, visitors WITHOUT an
 // access token can browse the app and play server-clipped ~30 s previews via
 // the public /api/preview/:recordId route (routes/preview.js); the frontend
@@ -285,6 +292,13 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   if (SUGGESTIONS_ENABLED) return next();
   if (req.path.toLowerCase().startsWith('/api/suggestions')) {
+    return res.status(404).send('Not found');
+  }
+  next();
+});
+app.use((req, res, next) => {
+  if (PERSONAL_RAIL_ENABLED) return next();
+  if (req.path.toLowerCase().startsWith('/api/suggested-for-you')) {
     return res.status(404).send('Not found');
   }
   next();
@@ -697,6 +711,7 @@ async function loadHtml(filename) {
   const flagScript = '<script>'
     + `window.__EDITORIAL_HERO=${EDITORIAL_HERO_ENABLED ? 'true' : 'false'};`
     + `window.__SUGGESTIONS=${SUGGESTIONS_ENABLED ? 'true' : 'false'};`
+    + `window.__PERSONAL_RAIL=${PERSONAL_RAIL_ENABLED ? 'true' : 'false'};`
     + `window.__ARTIST_BIO=${ARTIST_BIO_ENABLED ? 'true' : 'false'};`
     + `window.__GUEST_PREVIEW=${GUEST_PREVIEW_ENABLED ? 'true' : 'false'};`
     + `window.__MADDIE=${MADDIE_ENABLED ? 'true' : 'false'};`
@@ -837,6 +852,7 @@ app.use('/api/payments', paymentsRouter);
 if (TELKOM_ENABLED) app.use('/api/telkom', telkomRouter); // ring-fenced: 404'd above when off
 if (PODCASTS_ENABLED) app.use('/api', podcastsRouter);    // dark until PODCASTS_ENABLED=true
 if (SUGGESTIONS_ENABLED) app.use('/api', suggestionsRouter); // dark until SUGGESTIONS_ENABLED=true
+if (PERSONAL_RAIL_ENABLED) app.use('/api', suggestedForYouRouter); // dark until PERSONAL_RAIL_ENABLED=true
 if (GUEST_PREVIEW_ENABLED) app.use('/api', previewRouter);   // dark until GUEST_PREVIEW_ENABLED=true
 if (MADDIE_ENABLED) app.use('/api/maddie', maddieRouter);     // dark until MADDIE_ENABLED=true
 if (CATALOG_PAGES_ENABLED) {                                  // dark until CATALOG_PAGES_ENABLED=true
@@ -1206,7 +1222,7 @@ await warmConnections();
 // Open the semantic album index at boot so the first "Similar albums" request
 // isn't slowed by the (one-time) DB open / S3 download. Non-fatal: if the
 // artifact is absent the route degrades to an empty rail. Off-thread of listen.
-if (SUGGESTIONS_ENABLED) {
+if (SUGGESTIONS_ENABLED || PERSONAL_RAIL_ENABLED) {
   initSemanticIndex()
     .then(() => console.log('[MASS] Semantic suggestion index:', JSON.stringify(semanticIndexStatus())))
     .catch((err) => console.warn('[MASS] Semantic index init failed:', err?.message || err));
