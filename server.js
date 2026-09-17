@@ -657,6 +657,14 @@ const DEPLOY_STAMP = Date.now().toString(36); // e.g. "lzxabcd"
 /**
  * Read an HTML file from disk and replace every `?v=<anything>` query string
  * on JS/CSS asset references with `?v=<DEPLOY_STAMP>`.
+ * Matches any root-relative path ending in .js/.css — not just /js/ and /css/,
+ * because the desktop bundle lives at the root (/app.min.js). While it was
+ * excluded it was the one asset nothing could bust: the ?v= was hand-written
+ * in app.html and cacheControlFor() serves anything with ".min." as immutable
+ * for a year, so shipped desktop changes never reached returning visitors
+ * (real bug, 2026-09-07, picker change). Keying on the extension also keeps
+ * non-code assets out — /img/g100-banner.png?v=2 must stay as authored.
+ * `[^"&]*` stops at the first `&` so extra params survive (?v=112&t=...).
  * In production the result is cached in memory (one read per boot).
  * In development the file is read fresh on every request so edits are
  * visible immediately without restarting the server.
@@ -667,7 +675,7 @@ async function loadHtml(filename) {
   if (!DEV_MODE && _htmlCache.has(filename)) return _htmlCache.get(filename);
   const raw = await fs.readFile(path.join(PUBLIC_DIR, filename), 'utf8');
   let stamped = raw.replace(
-    /((?:src|href)="\/(?:js|css)\/[^"]+)\?v=[^"&]*/g,
+    /((?:src|href)="\/[^"?]*\.(?:js|css))\?v=[^"&]*/g,
     `$1?v=${DEPLOY_STAMP}`
   );
   // When Audio Lab is disabled, hide its UI entry points (home widget + per-track
