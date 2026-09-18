@@ -32,7 +32,17 @@ const GUEST_PREVIEW_ENABLED = process.env.GUEST_PREVIEW_ENABLED === 'true';
 
 // Credit fields hold "A; B", "A / B" or "A, B" depending on which database the
 // row came through; split them so each name is its own credit.
-const names = (...vals) => unique(vals.flatMap((v) => String(v || '').split(/\s*[;/]\s*|\s+&\s+/)));
+// Credits arrive in Ingrooves' form, role tags and all — "Alec Khaoli
+// <Lyricist>, Alec Khaoli <Composer>". The tags are for delivery, not for
+// readers: the album pages were rendering them as literal &lt;Lyricist&gt;.
+// A tagged value splits on commas too; an untagged one never does, because
+// "Mankwane, Marks" is one name written surname-first.
+const names = (...vals) => unique(vals.flatMap((v) => {
+  const raw = String(v || '');
+  const tagged = /<[^>]*>/.test(raw);
+  return raw.split(tagged ? /\s*[;/,]\s*|\s+&\s+/ : /\s*[;/]\s*|\s+&\s+/)
+    .map((part) => part.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim());
+}));
 const unique = (list) => [...new Set(list.map((s) => String(s || '').trim()).filter((s) => s && s !== '?' && s.toLowerCase() !== 'unknown'))];
 
 const esc = (s) => String(s ?? '')
@@ -303,6 +313,17 @@ router.get('/album/:slug', async (req, res, next) => {
       ['Genre', album.genre], ['Country', country === 'ZA' ? 'South Africa' : country],
       ['Tracks', String(tracks.length)],
     ].filter(([, v]) => v);
+    // Crawl paths: without these an album page links only to home, /browse and
+    // its artist, so the 7,400 albums are reachable almost nowhere.
+    const genreEntry = album.genre
+      ? [...idx.genres.values()].find((g) => g.name.toLowerCase() === String(album.genre).toLowerCase())
+      : null;
+    const genreLink = genreEntry ? `/genre/${esc(genreEntry.slug)}` : '';
+    const siblings = (idx.artists.get(album.artistSlug)?.albums || [])
+      .map((s) => idx.albums.get(s))
+      .filter((a) => a && a.slug !== album.slug)
+      .slice(0, 6);
+
     const creditBlock = (heading, list) => (list.length
       ? `<div class="credit"><h3>${heading}</h3><p>${list.map(esc).join(' · ')}</p></div>` : '');
     const body = `
@@ -338,7 +359,12 @@ router.get('/album/:slug', async (req, res, next) => {
       ${creditBlock('Written by', allComposers)}
       ${creditBlock('Produced by', allProducers)}
       ${creditBlock('Publishers', allPublishers)}
-      <p class="muted" style="font-size:.85rem">Credits as they appear on the original Gallo master tape and sleeve.</p>` : ''}`;
+      <p class="muted" style="font-size:.85rem">Credits as they appear on the original Gallo master tape and sleeve.</p>` : ''}
+      ${genreLink ? `<p class="muted">More South African ${esc(album.genre)}: <a href="${genreLink}">${esc(album.genre)} albums</a></p>` : ''}
+      ${siblings.length ? `
+      <h2>More from ${esc(album.artist)}</h2>
+      <div class="grid">${siblings.map(albumTile).join('')}</div>
+      <p><a href="/artist/${esc(album.artistSlug)}">All ${esc(album.artist)} albums</a></p>` : ''}`;
     send(res, pageShell({
       title: `${album.title} — ${album.artist}${album.year ? ` (${album.year})` : ''} | MAD Music`,
       description: `${album.title} by ${album.artist}${recordedFirst.slice(0, 4) ? ` (${recordedFirst.slice(0, 4)})` : ''}${label ? ` on ${label}` : ''}${catalogue ? `, ${catalogue}` : ''} — ${tracks.length} tracks${album.genre ? ` of South African ${album.genre}` : ''} with credits, streamed from the original masters.`,
