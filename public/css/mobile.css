@@ -1,5 +1,12 @@
 /* mobile.css — extracted verbatim from mobile.html <style> block (overhaul/frontend-dedup).
    Behavior-preserving externalization; no rule changes. */
+
+/* An element with the `hidden` attribute must actually be hidden. The browser's
+   own [hidden] rule is a USER-AGENT default, so any class here that sets a
+   display beats it: `.section-header { display: flex }` kept showing the
+   "Curated by" heading with nothing under it, and would have done the same to
+   "Suggested for You" for every guest (Ian, 2026-09-18). */
+[hidden] { display: none !important; }
     /* ===== CSS Variables ===== */
     :root {
       /* Colors — dark-first, unified with desktop palette */
