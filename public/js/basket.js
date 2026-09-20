@@ -97,12 +97,33 @@
     btn.textContent = '🛒 ' + items.length + ' · ' + rands(total(items));
     var panel = document.getElementById('madBasketPanel');
     if (panel) drawPanel(panel);
-    // Any add-buttons on screen show what they already hold.
+    labelButtons();
+  }
+
+  // Add-buttons say what they hold and what they cost. Since the basket became
+  // the only way to buy a download (the single-track button went on 2026-09-21),
+  // the price belongs on the button itself.
+  function labelButtons() {
     document.querySelectorAll('[data-basket-add]').forEach(function (b) {
       var inBasket = has(String(b.getAttribute('data-record-id') || ''));
-      b.textContent = inBasket ? '✓ In basket' : '+ Basket';
+      var price = parseFloat(b.getAttribute('data-price') || '0');
+      var want = inBasket ? '✓ In basket' : (price > 0 ? '+ Basket · ' + rands(price) : '+ Basket');
+      if (b.textContent !== want) b.textContent = want;
       b.disabled = false;
     });
+  }
+
+  // Rails, album panels and search results are rebuilt constantly, and a button
+  // drawn after the last render would otherwise keep a stale label. Watch for
+  // new ones — labels only, never the open panel, which would wipe a half-typed
+  // email address underneath the customer.
+  function watchForButtons() {
+    if (!window.MutationObserver) return;
+    var pending = null;
+    new MutationObserver(function () {
+      if (pending) return;
+      pending = setTimeout(function () { pending = null; labelButtons(); }, 120);
+    }).observe(document.body, { childList: true, subtree: true });
   }
 
   // ── the panel ─────────────────────────────────────────────────────────────
@@ -259,10 +280,7 @@
 
   window.MADBasket = { add: add, remove: remove, items: read, count: function () { return read().length; }, open: open, render: render };
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { render(); handleReturn(); });
-  } else {
-    render();
-    handleReturn();
-  }
+  function boot() { render(); watchForButtons(); handleReturn(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 })();

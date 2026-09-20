@@ -4959,7 +4959,6 @@
               <div class="playlist-track-actions">
                 <button class="track-action-btn track-add-playlist" data-track-index="${index}">+ Playlist</button>
                 <button class="track-action-btn track-add-library" data-track-index="${index}">♡ Songs</button>
-                ${(track.Download_Price || track.downloadPrice) ? `<button class="track-action-btn track-download-btn" data-track-index="${index}" data-price="${track.Download_Price || track.downloadPrice}">⬇ Download</button>` : ''}
                 ${(track.Download_Price || track.downloadPrice) ? `<button class="track-action-btn track-basket-btn" data-basket-add data-record-id="${track.recordId || ''}" data-price="${track.Download_Price || track.downloadPrice}" data-name="${(track.name || '').replace(/"/g, '&quot;')}" data-artist="${(track.trackArtist || track.artist || '').replace(/"/g, '&quot;')}">+ Basket</button>` : ''}
                 ${(track.S3_URL || track.resolvedSrc || track.audioUrl || track.mp3) ? `<button class="track-action-btn track-ringtone-btn" data-track-index="${index}" title="Make a ringtone from this track">✂ Ringtone</button>` : ''}
                 ${(track.S3_URL || track.resolvedSrc || track.audioUrl || track.mp3) ? `<button class="track-action-btn track-audio-lab-btn btn-audio-lab" data-track-index="${index}" data-audio-url="${track.S3_URL || track.resolvedSrc || track.audioUrl || track.mp3 || ''}" data-track-name="${encodeURIComponent(track.name || '')}">🎛️ Audio Lab</button>` : ''}
@@ -5127,73 +5126,10 @@
               });
             }
 
-            // ⬇ Download button
-            const downloadBtn = item.querySelector('.track-download-btn');
-            if (downloadBtn) {
-              const trackIndex = parseInt(downloadBtn.dataset.trackIndex);
-              const track = album.tracks[trackIndex];
-
-              downloadBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-
-                // No streaming token required — just ask for email
-                const savedEmail = localStorage.getItem('mass_token_email') || '';
-                let buyerEmail = savedEmail;
-                if (!buyerEmail) {
-                  buyerEmail = prompt(`Enter your email address to purchase "${track.name || 'this track'}" (R${downloadBtn.dataset.price}):`);
-                  if (buyerEmail !== null) buyerEmail = buyerEmail.trim();
-                }
-                if (!buyerEmail || !buyerEmail.includes('@')) {
-                  if (buyerEmail !== null) alert('A valid email address is required.');
-                  return;
-                }
-
-                downloadBtn.disabled = true;
-                downloadBtn.textContent = '…';
-
-                try {
-                  const res  = await fetch('/api/download/initiate', {
-                    method:  'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body:    JSON.stringify({
-                      trackId:       track.recordId,
-                      trackRecordId: track.recordId,
-                      email:         buyerEmail
-                    })
-                  });
-                  const data = await res.json();
-
-                  if (!data.ok || !data.authorization_url) {
-                    alert(data.error || 'Could not initiate payment. Please try again.');
-                    downloadBtn.disabled = false;
-                    downloadBtn.textContent = '⬇ Download';
-                    return;
-                  }
-
-                  // Persist the Paystack reference across the redirect. The callback
-                  // deliberately does NOT echo the ref in the return URL (it is a
-                  // replayable bearer token for /api/download/file), so this
-                  // sessionStorage copy is the ONLY way the return handler can fetch
-                  // the file. Same-tab, dies with the tab — keeps the ref out of
-                  // history/referrer/logs.
-                  try {
-                    sessionStorage.setItem('mass_download_ref', JSON.stringify({
-                      ref:      data.reference,
-                      recordId: String(track.recordId),
-                      name:     track.name || '',
-                      t:        Date.now()
-                    }));
-                  } catch (e) { /* private mode — legacy ?ref= fallback still works */ }
-
-                  // Redirect to Paystack — callback returns with ?download=success&name=…&recordId=…
-                  window.location.href = data.authorization_url;
-                } catch (err) {
-                  alert('Network error. Please try again.');
-                  downloadBtn.disabled = false;
-                  downloadBtn.textContent = '⬇ Download';
-                }
-              });
-            }
+            // The single-track ⬇ Download button was removed on 2026-09-21: it sat
+            // beside + Basket doing almost the same thing, and the two read as a
+            // choice the buyer had to make. Buying is the basket now. The
+            // /api/download/initiate route stays for links already in inboxes.
 
             // ⋮ Kebab (track info) button
             const kebabBtn = item.querySelector('.track-kebab-btn');
