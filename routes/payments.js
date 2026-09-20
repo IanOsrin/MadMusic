@@ -531,8 +531,8 @@ router.post('/webhook', async (req, res) => {
 
     const metadata = paymentData.metadata || {};
 
-    // ── Download purchase ─────────────────────────────────────────────────────
-    if (metadata.payment_type === 'download') {
+    // ── Download purchase (one track, or a basket of them) ────────────────────
+    if (metadata.payment_type === 'download' || metadata.payment_type === 'download_basket') {
       await handleDownloadWebhook(paymentData, reference);
       return ack();
     }

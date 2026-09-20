@@ -715,6 +715,9 @@
 
   <!-- Access-token fetch patch: classic script, MUST run before the module graph. -->
   <script src="/js/mobile/fetch-interceptor.js?v=19"></script>
+  <!-- Download basket: several tracks, one payment. Self-wiring off
+       [data-basket-add], and hides itself inside the native shell. -->
+  <script src="/js/basket.js?v=1"></script>
   <!-- Mobile app (ES module graph). Deferred; runs after the classic scripts above. -->
   <!-- Cookie / analytics consent. Mobile had no banner at all, so Google
        Analytics could never fire here — safe, but it meant no data from the

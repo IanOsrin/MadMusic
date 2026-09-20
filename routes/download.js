@@ -25,7 +25,7 @@ import {
 } from '../lib/fm-fields.js';
 import { paystackRequest } from '../lib/paystack.js';
 import { isStrictEmail, fmExactMatch } from '../lib/validators.js';
-import { sendDownloadLinkEmail } from '../lib/email.js';
+import { sendDownloadLinkEmail, sendBasketLinksEmail } from '../lib/email.js';
 import { requireAdminKey } from './admin.js';
 
 const router = Router();
@@ -51,14 +51,34 @@ function resolveAudioUrl(fieldData) {
   return null;
 }
 
-async function findPurchaseByRef(reference) {
+/**
+ * The purchase for a reference — and, since a basket pays once for several
+ * tracks, optionally the one FOR A GIVEN TRACK. Every item of a basket shares
+ * the Paystack reference but keeps its own record, so each track keeps its own
+ * download allowance and its own counter.
+ */
+async function findPurchaseByRef(reference, trackRecordId = null) {
   const result = await fmFindRecords(FM_DOWNLOADS_LAYOUT, [
     { Paystack_Reference: fmExactMatch(reference), Status: fmExactMatch('complete') }
-  ], { limit: 1 });
+  ], { limit: 100 });
   if (!result.ok || result.data.length === 0) return null;
-  const fd = result.data[0].fieldData;
-  fd.__recordId = result.data[0].recordId;   // for the download counter
+  const rows = result.data;
+  const pick = trackRecordId
+    ? rows.find(r => String(r.fieldData['TrackRecordID'] || '').trim() === String(trackRecordId).trim())
+    : rows[0];                    // no track asked for: the single-track case, unchanged
+  if (!pick) return null;
+  const fd = pick.fieldData;
+  fd.__recordId = pick.recordId;   // for the download counter
   return fd;
+}
+
+/** Every purchase sharing a reference — the whole basket. */
+async function findPurchasesByRef(reference) {
+  const result = await fmFindRecords(FM_DOWNLOADS_LAYOUT, [
+    { Paystack_Reference: fmExactMatch(reference), Status: fmExactMatch('complete') }
+  ], { limit: 100 });
+  if (!result.ok) return [];
+  return result.data.map(r => ({ ...r.fieldData, __recordId: r.recordId }));
 }
 
 async function fetchTrackRecord(recordId) {
@@ -158,6 +178,114 @@ router.post('/initiate', async (req, res) => {
   }
 });
 
+// ── POST /api/download/basket/initiate ────────────────────────────────────────
+// Body: { items: [trackRecordId, …], email }
+//
+// Paying per track was the thing stopping people buying more than one (Ian,
+// 2026-09-21). The basket is ONE Paystack transaction for the lot; everything
+// after the payment stays per track — a record each, a link each, three
+// downloads each — so a failed download costs one track, not the purchase.
+const BASKET_MAX_ITEMS = 50;
+
+router.post('/basket/initiate', async (req, res) => {
+  const { items, email } = req.body || {};
+  if (!Array.isArray(items) || !items.length) {
+    return res.status(400).json({ ok: false, error: 'items are required' });
+  }
+  if (!isStrictEmail(email)) {
+    return res.status(400).json({ ok: false, error: 'a valid email is required' });
+  }
+  const ids = [...new Set(items.map(String).map(s => s.trim()).filter(Boolean))].slice(0, BASKET_MAX_ITEMS);
+
+  try {
+    // Price every track from FileMaker, never from the browser: the basket the
+    // customer sees is a convenience, the price is ours.
+    const priced = [];
+    const rejected = [];
+    for (const id of ids) {
+      const fieldData = await fetchTrackRecord(id);
+      if (!fieldData) { rejected.push({ trackRecordId: id, reason: 'not found' }); continue; }
+      const price = parseFloat(fieldData['Download_Price'] || fieldData['DownloadPrice'] || 0);
+      if (!price || price <= 0) { rejected.push({ trackRecordId: id, reason: 'not for sale' }); continue; }
+      priced.push({
+        trackRecordId: id,
+        name: fieldData['Track Name'] || fieldData['Title'] || fieldData['Song Name'] || 'Track',
+        artist: fieldData['Track Artist'] || fieldData['Album Artist'] || '',
+        price,
+      });
+    }
+    if (!priced.length) {
+      return res.status(400).json({ ok: false, error: 'None of these tracks are available for purchase', rejected });
+    }
+
+    const total = priced.reduce((sum, i) => sum + i.price, 0);
+    const APP_BASE = (process.env.APP_URL || '').replace(/\/$/, '');
+    const callbackUrl = APP_BASE
+      ? `${APP_BASE}/api/download/callback`
+      : `${req.protocol}://${req.get('host')}/api/download/callback`;
+
+    const data = await paystackRequest('POST', '/transaction/initialize', {
+      email: email.trim().toLowerCase(),
+      amount: Math.round(total * 100),
+      currency: 'ZAR',
+      callback_url: callbackUrl,
+      metadata: {
+        payment_type: 'download_basket',
+        count: priced.length,
+        // Names ride along so the receipt and the email read properly even if a
+        // track record changes between paying and fulfilment.
+        items: priced.map(i => ({ id: i.trackRecordId, n: i.name.slice(0, 80), a: (i.artist || '').slice(0, 60), p: i.price })),
+      },
+    });
+
+    console.log(`[DOWNLOAD] Basket initialized: ${data.data.reference} — ${priced.length} tracks, R${total.toFixed(2)} for ${email}`);
+    return res.json({
+      ok: true,
+      authorization_url: data.data.authorization_url,
+      reference: data.data.reference,
+      items: priced,
+      total,
+      rejected,
+    });
+  } catch (err) {
+    console.error('[DOWNLOAD] Basket initiate error:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to initialize payment' });
+  }
+});
+
+/**
+ * Record a paid basket: one purchase row per track, all sharing the reference.
+ * Idempotent — the callback and the webhook both land here, and whichever
+ * arrives second writes nothing.
+ */
+async function recordBasket(metadata, reference, email) {
+  const items = (metadata.items || []).map(i => ({
+    trackRecordId: String(i.id || ''), name: i.n || 'Track', artist: i.a || '', price: Number(i.p) || 0,
+  })).filter(i => i.trackRecordId);
+  if (!items.length) return { items: [], created: 0 };
+
+  const already = await findPurchasesByRef(reference);
+  const have = new Set(already.map(p => String(p['TrackRecordID'] || '').trim()));
+  let created = 0;
+  for (const item of items) {
+    if (have.has(item.trackRecordId)) continue;
+    await fmCreateRecord(FM_DOWNLOADS_LAYOUT, {
+      TrackRecordID: item.trackRecordId,
+      Amount_Paid: item.price,
+      Currency: 'ZAR',
+      Paystack_Reference: reference,
+      Email: email,
+      Status: 'complete',
+    });
+    created++;
+  }
+  if (created) {
+    console.log(`[DOWNLOAD] Basket recorded: ${created} track(s) ref=${reference} email=${email}`);
+    sendBasketLinksEmail(email, items, reference);   // fire-and-forget
+  }
+  return { items, created };
+}
+
 // ── GET /api/download/callback ────────────────────────────────────────────────
 
 router.get('/callback', async (req, res) => {
@@ -169,9 +297,18 @@ router.get('/callback', async (req, res) => {
     const tx       = data.data;
     const metadata = tx?.metadata || {};
 
-    if (tx?.status !== 'success' || metadata.payment_type !== 'download') {
+    const isBasket = metadata.payment_type === 'download_basket';
+    if (tx?.status !== 'success' || (metadata.payment_type !== 'download' && !isBasket)) {
       console.warn(`[DOWNLOAD] Callback: unexpected status/type for ${reference}`);
       return res.redirect('/?download=error&reason=verification_failed');
+    }
+
+    if (isBasket) {
+      const email = tx.customer?.email || '';
+      const { items } = await recordBasket(metadata, reference, email);
+      // The reference stays out of the browser URL — it is a bearer token for
+      // /file. The page re-uses the copy the basket kept when it initiated.
+      return res.redirect(`/?download=basket&count=${items.length}`);
     }
 
     const { trackId, trackRecordId, trackName, price } = metadata;
@@ -286,7 +423,9 @@ router.get('/file', async (req, res) => {
   if (!ref) return res.status(400).json({ ok: false, error: 'ref is required' });
 
   try {
-    const purchase = await findPurchaseByRef(ref);
+    // `track` picks one item out of a basket. Old links carry no track and
+    // still resolve to their single purchase, so nothing already emailed breaks.
+    const purchase = await findPurchaseByRef(ref, req.query.track || null);
     if (!purchase) {
       return res.status(403).json({ ok: false, error: 'No valid purchase found for this reference' });
     }
@@ -376,6 +515,15 @@ export async function handleDownloadWebhook(paymentData, reference) {
   const metadata = paymentData.metadata || {};
   const { trackId, trackName, price } = metadata;
   const email = paymentData.customer?.email || '';
+
+  // A basket pays once for several tracks. The webhook is the safety net for
+  // when the buyer never returns to the browser, so it must fulfil baskets too
+  // — recordBasket is idempotent, so a callback that already ran costs nothing.
+  if (metadata.payment_type === 'download_basket') {
+    const { created, items } = await recordBasket(metadata, reference, email);
+    console.log(`[DOWNLOAD] Webhook: basket ref=${reference} — ${created} of ${items.length} written`);
+    return;
+  }
 
   if (!trackId) {
     console.warn('[DOWNLOAD] Webhook: missing trackId in metadata');

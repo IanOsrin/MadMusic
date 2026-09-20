@@ -127,10 +127,23 @@ export function showAlbumTracksModal(album) {
         ${album.tracks.map((track, index) => {
           const fields = track.fields || {};
           const trackTitle = getTitleField(fields);
+          // Downloads are sold per track; the basket pays for several at once.
+          // Never inside the native shell — store rules forbid it (see
+          // native-purchase-guards.test.js).
+          const price = parseFloat(fields['Download_Price'] || fields['DownloadPrice'] || 0) || 0;
+          const sellable = price > 0 && !document.documentElement.classList.contains('native-app');
           return `
-            <button class="bottom-sheet-option" data-track-index="${index}">
-              ${escapeHtml(trackTitle)}
-            </button>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="bottom-sheet-option" data-track-index="${index}" style="flex:1">
+                ${escapeHtml(trackTitle)}
+              </button>
+              ${sellable ? `<button class="btn btn-secondary" data-basket-add
+                data-record-id="${escapeHtml(track.recordId || '')}"
+                data-price="${price}"
+                data-name="${escapeHtml(trackTitle)}"
+                data-artist="${escapeHtml(getArtistField(fields) || album.artist || '')}"
+                style="white-space:nowrap;padding:8px 12px;font-size:13px">+ Basket</button>` : ''}
+            </div>
           `;
         }).join('')}
         <button class="btn btn-secondary bs-close-btn" onclick="closeModal()">Close</button>
