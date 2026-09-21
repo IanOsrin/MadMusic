@@ -40,13 +40,13 @@
     "express": "^5.1.0",
     "express-rate-limit": "^8.2.1",
     "lru-cache": "^11.2.2",
-    "nodemailer": "^7.0.13",
+    "nodemailer": "^10.0.10",
     "pg": "^8.22.0",
     "sqlite-vec": "^0.1.9",
     "undici": "^7"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "repository": {
     "type": "git",
