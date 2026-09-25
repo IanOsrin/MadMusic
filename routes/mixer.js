@@ -51,7 +51,10 @@ const S3_MEDIA_HOST = 'mass-music-audio-files.s3.eu-north-1.amazonaws.com';
 const MAX_UPLOAD = 400 * 1024 * 1024;   // a 20-min 24-bit stereo WAV is ~300 MB
 
 // ── entitlement + metering ────────────────────────────────────────────────────
-const entitled = (tok) => OPEN_TO_ALL || !!tok?.audioLabEnabled;
+// DEV_NO_TOKEN: local testing without a MAD sign-in (server.js lets /api/mixer/* past the token
+// check only when MIXER_DEV_NO_TOKEN=true AND NODE_ENV is not production).
+const DEV_NO_TOKEN = process.env.MIXER_DEV_NO_TOKEN === 'true' && process.env.NODE_ENV !== 'production';
+const entitled = (tok) => OPEN_TO_ALL || DEV_NO_TOKEN || !!tok?.audioLabEnabled;
 const monthKey = () => new Date().toISOString().slice(0, 7);
 const tokenKey = (tok) => String(tok?.code || '').trim().toUpperCase();
 
@@ -145,6 +148,84 @@ router.get('/track/:recordId', requireMixer, async (req, res) => {
   } catch (err) {
     console.warn('[mixer] track lookup failed:', err.message);
     res.status(502).json({ ok: false, error: 'Catalogue lookup failed' });
+  }
+});
+
+// ── the MadMixer catalogue (FileMaker "MADMixer" on FM Cloud, a MAM clone) ─────────
+// MADMIXER_FM_HOST / _DB / _USER / _PASS. The song list changes rarely, so it is cached for
+// five minutes; one FM session is reused until it expires (~15 min idle on FM Cloud).
+const MM = {
+  host: () => (process.env.MADMIXER_FM_HOST || '').replace(/^https?:\/\//, '').replace(/\/+$/, ''),
+  db: () => process.env.MADMIXER_FM_DB || 'MADMixer',
+  layout: () => process.env.MADMIXER_FM_SONGS_LAYOUT || 'Songs',
+  token: null,
+};
+const mmBase = () => `https://${MM.host()}/fmi/data/vLatest/databases/${encodeURIComponent(MM.db())}`;
+async function mmLogin() {
+  const r = await fetch(`${mmBase()}/sessions`, {
+    method: 'POST', signal: AbortSignal.timeout(20_000),
+    headers: { 'Content-Type': 'application/json', Authorization: 'Basic ' + Buffer.from(`${process.env.MADMIXER_FM_USER}:${process.env.MADMIXER_FM_PASS}`).toString('base64') },
+    body: '{}',
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!j.response?.token) throw new Error('MadMixer login failed: ' + (j.messages?.[0]?.message || r.status));
+  MM.token = j.response.token;
+}
+async function mmGet(pathAndQuery) {
+  if (!MM.host() || !process.env.MADMIXER_FM_USER) throw new Error('MadMixer database not configured (MADMIXER_FM_*)');
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (!MM.token) await mmLogin();
+    const r = await fetch(`${mmBase()}${pathAndQuery}`, { headers: { Authorization: `Bearer ${MM.token}` }, signal: AbortSignal.timeout(30_000) });
+    const j = await r.json().catch(() => ({}));
+    if (j.messages?.[0]?.code === '952') { MM.token = null; continue; }   // session expired → log in again
+    if (j.messages?.[0]?.code !== '0') throw new Error('MadMixer: ' + (j.messages?.[0]?.message || r.status));
+    return j.response;
+  }
+  throw new Error('MadMixer session could not be renewed');
+}
+const songSummary = (rec) => {
+  const f = rec.fieldData || {};
+  const mp3 = cdnUrl(f.Audio_S3_URL || '');
+  return {
+    id: String(rec.recordId), title: f['Track Name'] || '', artist: f['Track Artist'] || '', album: f['Album Title'] || '',
+    duration: f.Duration || '', genre: f['Local Genre'] || f.Genre || '', isrc: f.ISRC || '',
+    playable: /^https:\/\//.test(mp3), hasMaster: !!String(f.Audio_Vision_URL || '').trim(),
+  };
+};
+let songsCache = { at: 0, list: null };
+router.get('/songs', requireMixer, async (req, res) => {
+  try {
+    if (!songsCache.list || Date.now() - songsCache.at > 300_000) {
+      const all = [];
+      for (let off = 1; ; off += 500) {
+        const resp = await mmGet(`/layouts/${encodeURIComponent(MM.layout())}/records?_offset=${off}&_limit=500`);
+        all.push(...(resp.data || []));
+        if ((resp.data || []).length < 500) break;
+      }
+      songsCache = { at: Date.now(), list: all.map(songSummary).sort((a, b) => (a.artist + a.title).localeCompare(b.artist + b.title)) };
+    }
+    res.json({ ok: true, count: songsCache.list.length, songs: songsCache.list });
+  } catch (err) {
+    console.warn('[mixer] songs list failed:', err.message);
+    res.status(502).json({ ok: false, error: 'Could not load the Mad Mixer song list' });
+  }
+});
+
+// One song's audio link — the MP3 on the media CDN. (The Vision master is for stem-making,
+// not for browsers.) Record id only; the server decides the URL.
+router.get('/songs/:id', requireMixer, async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!/^\d{1,12}$/.test(id)) return res.status(400).json({ ok: false, error: 'Bad song id' });
+  try {
+    const resp = await mmGet(`/layouts/${encodeURIComponent(MM.layout())}/records/${id}`);
+    const rec = (resp.data || [])[0];
+    if (!rec) return res.status(404).json({ ok: false, error: 'Song not found' });
+    const s = songSummary(rec);
+    if (!s.playable) return res.status(404).json({ ok: false, error: 'This song has no playable audio yet', ...s });
+    res.json({ ok: true, ...s, audioUrl: cdnUrl(rec.fieldData.Audio_S3_URL) });
+  } catch (err) {
+    console.warn('[mixer] song lookup failed:', err.message);
+    res.status(502).json({ ok: false, error: 'Could not look the song up' });
   }
 });
 

@@ -611,7 +611,10 @@ app.use('/api/', async (req, res, next) => {
     // NOTE: '/audio-lab/' is intentionally NOT skipped — every /api/audio-lab/*
     // endpoint (key validation + the Replicate proxy) requires a valid access
     // token so we never forward to a paid third-party API unauthenticated.
-    '/catalog/'
+    '/catalog/',
+    // Mad Mixer, LOCAL TESTING ONLY: with MIXER_DEV_NO_TOKEN=true (ignored in production)
+    // the mixer API works without a MAD sign-in so the page can be tried on localhost.
+    ...(MAD_MIXER_ENABLED && process.env.MIXER_DEV_NO_TOKEN === 'true' && process.env.NODE_ENV !== 'production' ? ['/mixer/'] : [])
   ];
 
   if (skipPaths.some(path => req.path === path || req.path.startsWith(path))) {
