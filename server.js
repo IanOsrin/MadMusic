@@ -231,6 +231,11 @@ app.use((req, res, next) => {
   }
   next();
 });
+// Local mixer server (the "mad-mixer" server panel entry): the panel always opens the server's
+// front page, so send "/" to the mixer. Never in production.
+if (MAD_MIXER_ENABLED && process.env.MIXER_AS_HOME === 'true' && process.env.NODE_ENV !== 'production') {
+  app.get('/', (req, res) => res.redirect(302, '/mixer'));
+}
 
 // ── Telkom feature flag ───────────────────────────────────────────────────────
 // Telkom integration is OFF by default (ring-fenced June 2026 — waiting on
