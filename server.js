@@ -878,8 +878,8 @@ if (TELKOM_ENABLED) app.use('/api/telkom', telkomRouter); // ring-fenced: 404'd 
 if (PODCASTS_ENABLED) app.use('/api', podcastsRouter);    // dark until PODCASTS_ENABLED=true
 if (SUGGESTIONS_ENABLED) app.use('/api', suggestionsRouter); // dark until SUGGESTIONS_ENABLED=true
 if (PERSONAL_RAIL_ENABLED) app.use('/api', suggestedForYouRouter); // dark until PERSONAL_RAIL_ENABLED=true
-if (GUEST_PREVIEW_ENABLED) app.use('/api', previewRouter);
-if (MAD_MIXER_ENABLED) app.use('/api/mixer', mixerRouter);   // dark until MAD_MIXER_ENABLED=true   // dark until GUEST_PREVIEW_ENABLED=true
+if (GUEST_PREVIEW_ENABLED) app.use('/api', previewRouter);   // dark until GUEST_PREVIEW_ENABLED=true
+if (MAD_MIXER_ENABLED) app.use('/api/mixer', mixerRouter);   // dark until MAD_MIXER_ENABLED=true
 if (MADDIE_ENABLED) app.use('/api/maddie', maddieRouter);     // dark until MADDIE_ENABLED=true
 if (CATALOG_PAGES_ENABLED) {                                  // dark until CATALOG_PAGES_ENABLED=true
   // Public server-rendered catalogue pages (SEO tier 2): /browse, /artist/:slug,
