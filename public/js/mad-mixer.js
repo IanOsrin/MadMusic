@@ -49,6 +49,7 @@
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   // 2 · sign in with the MAD token ───────────────────────────────────────────
+  let signedOut = false;   // arrived with no MAD sign-in → the welcome screen, not the picker
   async function signIn() {
     // No MAD token: still ask — on this Mac (MIXER_DEV_NO_TOKEN) the mixer API works without one.
     // In production it answers 403 and we stay quietly signed out (no banner — Ian, 2026-09-25).
@@ -59,7 +60,7 @@
       banner('<strong>Mad Mixer is part of the Mad Mixer subscription.</strong> You can open and play audio here, but splitting into stems needs the Mad Mixer tier.', 'upsell');
       return false;
     }
-    if (!token && (r.status === 403 || r.status === 400)) return false;
+    if (!token && (r.status === 403 || r.status === 400)) { signedOut = true; return false; }
     if (r.status === 403) {
       banner('Your MAD access has expired or isn’t valid on this device. <a href="/">Open MAD</a> to sign in again.', 'warn');
       return false;
@@ -150,7 +151,10 @@
         const r = await fetch(`${MIXER}/songs`); const j = await r.json();
         if (!r.ok || !j.ok) throw new Error(j.error || r.status);
         songs = j.songs;
-      } catch (e) { $id('mmPickList').innerHTML = `<div class="mm-pick-empty">Couldn’t load the song list (${esc(e.message)}).</div>`; return; }
+      } catch (e) {
+        const msg = /subscription/i.test(e.message) ? esc(e.message) : `Couldn’t load the song list (${esc(e.message)}).`;
+        $id('mmPickList').innerHTML = `<div class="mm-pick-empty">${msg}</div>`; return;
+      }
     }
     renderPicker();
   }
@@ -188,6 +192,27 @@
     }
   }
 
+  // 3c · arriving cold (no MAD sign-in): Mad Mixer's own front door ─────────────
+  // One account for MAD and Mad Mixer: "Sign in" goes to MAD's access page (which also
+  // handles email claims and the device limit) and comes straight back here — to the same
+  // song, if one was asked for.
+  function showWelcome() {
+    const song = new URLSearchParams(location.search).get('song');
+    const back = '/mixer' + (song && /^\d{1,12}$/.test(song) ? '?song=' + song : '');
+    const w = document.createElement('div');
+    w.id = 'mmWelcome'; w.className = 'mm-picker mm-welcome';
+    w.innerHTML = `<div class="mm-picker-box mm-welcome-box" role="dialog" aria-label="Welcome to Mad Mixer">
+        <img class="mm-welcome-logo" src="/img/Madmusiclogonew-dark.png" alt="MAD — Music Africa Direct">
+        <h2>Mad Mixer</h2>
+        <p>Open South African classics as separate stems — vocals, drums, bass and more.
+           Mix them here, or download them to your DAW.</p>
+        <a class="mm-welcome-btn" href="/access?next=${encodeURIComponent(back)}">Sign in with your MAD access code</a>
+        <p class="mm-welcome-small">No access code yet? The sign-in page also lets you get one.
+           <br><a href="/">Or browse Music Africa Direct</a></p>
+      </div>`;
+    document.body.appendChild(w);
+  }
+
   // 4 · desktop-only bits (the Restore tab doesn't exist in Mad Mixer) ────────
   function hideDesktopOnly() {
     document.querySelectorAll('.dc-max-torestore').forEach((b) => b.remove());
@@ -198,6 +223,7 @@
     hideDesktopOnly();
     addSongsButton();
     signIn().then(() => {
+      if (signedOut) return showWelcome();
       // ?song=<MADMixer id> — from a 🎚 Mad Mixer button in MAD (only MADMixer songs have one)
       const song = new URLSearchParams(location.search).get('song');
       if (song && /^\d{1,12}$/.test(song)) return loadSong(song);

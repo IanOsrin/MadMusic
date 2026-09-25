@@ -12,6 +12,10 @@
   'use strict';
   if (!window.__MAD_MIXER) return;
 
+  // The "Mad Mixer" item in the left menu (app.html) — the way in from MAD.
+  function showNavItem() { const n = document.getElementById('navMadMixer'); if (n) n.style.display = ''; }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', showNavItem); else showNavItem();
+
   let tracks = null;
 
   function apply() {
