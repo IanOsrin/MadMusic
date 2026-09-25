@@ -29,6 +29,7 @@ import suggestionsRouter from './routes/suggestions.js';
 import suggestedForYouRouter from './routes/suggested-for-you.js';
 import previewRouter from './routes/preview.js';
 import maddieRouter from './routes/maddie.js';
+import mixerRouter from './routes/mixer.js';
 import { initSemanticIndex, semanticIndexStatus } from './lib/semantic-index.js';
 import { initNameIndex, nameIndexStatus } from './lib/name-index.js';
 
@@ -211,6 +212,21 @@ app.use((req, res, next) => {
   if (AUDIO_LAB_ENABLED) return next();
   const p = req.path.toLowerCase();
   if (p === '/audio-lab' || p === '/audio-lab.html' || p.startsWith('/api/audio-lab')) {
+    return res.status(404).send('Not found');
+  }
+  next();
+});
+
+// ── Mad Mixer feature flag ────────────────────────────────────────────────────
+// Mad Mixer = the Digital Cupboard Stems app adapted for MAD (public/mad-mixer.html, built
+// from the DCMax master by scripts/build-mad-mixer.mjs; API in routes/mixer.js). OFF by
+// default: the page and every /api/mixer/* endpoint 404 until MAD_MIXER_ENABLED=true.
+// Separate from AUDIO_LAB_ENABLED so the old Audio Lab can stay dark while this is tested.
+const MAD_MIXER_ENABLED = process.env.MAD_MIXER_ENABLED === 'true';
+app.use((req, res, next) => {
+  if (MAD_MIXER_ENABLED) return next();
+  const p = req.path.toLowerCase();
+  if (p === '/mixer' || p === '/mad-mixer.html' || p.startsWith('/api/mixer')) {
     return res.status(404).send('Not found');
   }
   next();
@@ -715,6 +731,7 @@ async function loadHtml(filename) {
     + `window.__ARTIST_BIO=${ARTIST_BIO_ENABLED ? 'true' : 'false'};`
     + `window.__GUEST_PREVIEW=${GUEST_PREVIEW_ENABLED ? 'true' : 'false'};`
     + `window.__MADDIE=${MADDIE_ENABLED ? 'true' : 'false'};`
+    + `window.__MAD_MIXER=${MAD_MIXER_ENABLED ? 'true' : 'false'};`
     //   __MEDIA_CDN — CloudFront host for bucket media (false = serve S3 direct).
     //   The client treats this host as direct-playable (no container proxy) and
     //   playTrack/artwork paths rewrite S3 URLs onto it. Set MEDIA_CDN_HOST on
@@ -853,7 +870,8 @@ if (TELKOM_ENABLED) app.use('/api/telkom', telkomRouter); // ring-fenced: 404'd 
 if (PODCASTS_ENABLED) app.use('/api', podcastsRouter);    // dark until PODCASTS_ENABLED=true
 if (SUGGESTIONS_ENABLED) app.use('/api', suggestionsRouter); // dark until SUGGESTIONS_ENABLED=true
 if (PERSONAL_RAIL_ENABLED) app.use('/api', suggestedForYouRouter); // dark until PERSONAL_RAIL_ENABLED=true
-if (GUEST_PREVIEW_ENABLED) app.use('/api', previewRouter);   // dark until GUEST_PREVIEW_ENABLED=true
+if (GUEST_PREVIEW_ENABLED) app.use('/api', previewRouter);
+if (MAD_MIXER_ENABLED) app.use('/api/mixer', mixerRouter);   // dark until MAD_MIXER_ENABLED=true   // dark until GUEST_PREVIEW_ENABLED=true
 if (MADDIE_ENABLED) app.use('/api/maddie', maddieRouter);     // dark until MADDIE_ENABLED=true
 if (CATALOG_PAGES_ENABLED) {                                  // dark until CATALOG_PAGES_ENABLED=true
   // Public server-rendered catalogue pages (SEO tier 2): /browse, /artist/:slug,
@@ -1016,6 +1034,27 @@ app.get('/m',        (_req, res) => sendHtml(res, 'mobile.html'));
 app.get('/ringtone', (_req, res) => sendHtml(res, 'ringtone.html'));
 app.get('/privacy',  (_req, res) => sendHtml(res, 'privacy.html')); // required by the app stores; POPIA statement
 app.get('/audio-lab',(_req, res) => sendHtml(res, 'audio-lab.html'));
+app.get('/mixer', (_req, res) => {
+  // The Stems app builds its DSP AudioWorklet from a blob: URL (script-src blob:) and
+  // loads the chosen track straight from the media CDN (connect-src). Page-scoped: the
+  // rest of the site keeps the stricter global policy above.
+  const media = MEDIA_CDN_HOST || 'media.musicafricadirect.com';
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' blob: https://cdnjs.cloudflare.com",
+    "worker-src 'self' blob:",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' https: data: blob:",
+    "media-src 'self' https: blob:",
+    `connect-src 'self' blob: data: https://${media}`,
+    "font-src 'self' https:",
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ].join('; '));
+  sendHtml(res, 'mad-mixer.html');
+});
 
 // ── Taster funnel beacons ─────────────────────────────────────────────────────
 // Cookie-free counterpart to the Umami events: the client pings 'play' when a

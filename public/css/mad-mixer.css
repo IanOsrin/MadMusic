@@ -1,0 +1,66 @@
+/* Mad Mixer — MAD branding over the Digital Cupboard Stems app.
+ * The build script already maps every hard-coded amber/brown colour to MAD's palette; this
+ * sheet sets the app's colour variables to MAD's values and styles the MAD-only pieces
+ * (logo, banner). Loaded last in <head>, so it wins over the app's own :root. */
+:root {
+  --blue:       #8b5cf6;              /* the app's primary accent (named "blue", was amber) */
+  --blue-dark:  #7c3aed;
+  --blue-deep:  #1e1433;
+  --blue-dim:   rgba(139, 92, 246, 0.15);
+  --white:      #e8e8e8;
+  --bg:         #121212;
+  --bg-card:    #1a1a1a;
+  --bg-lift:    #222222;
+  --border:     #333333;
+  --muted:      #999999;
+  --gold:       #a78bfa;
+  --mm-cyan:    #22d3ee;              /* the cyan end of the MAD logo gradient */
+}
+
+body {
+  background: #121212 !important;
+  background-image:
+    radial-gradient(ellipse at 12% 0%, rgba(34, 211, 238, 0.07) 0%, transparent 50%),
+    radial-gradient(ellipse at 88% 100%, rgba(139, 92, 246, 0.09) 0%, transparent 55%) !important;
+  color: #e8e8e8;
+}
+
+/* Header. In DCMax it hides once audio is open (the desktop window has its own chrome);
+   Mad Mixer keeps it as the page's identity bar, slimmer. */
+header, body:has(.drop-zone.hidden) header {
+  display: flex !important;
+  background: #161616 !important;
+  border-bottom: 1px solid #2a2a2a !important;
+  box-shadow: none !important;
+  padding: 10px 24px !important;
+}
+header .title-block small { color: #999 !important; letter-spacing: 0.02em !important; text-transform: none !important; font-size: 0.78rem !important; }
+
+/* DCMax's access-code sign-in: in MAD the MAD token is the sign-in, so this never shows. */
+#signinToggle, #signinCard { display: none !important; }
+
+/* Header: MAD logo in place of the 🎛️ emoji, name in the MAD gradient */
+header .mm-logo { display: flex; align-items: center; text-decoration: none; background: none !important; box-shadow: none !important; width: auto !important; height: auto !important; padding: 0 !important; }
+header .mm-logo img { height: 34px; width: auto; display: block; }
+header h1 {
+  background: linear-gradient(90deg, var(--mm-cyan), #8b5cf6 55%, #a78bfa);
+  -webkit-background-clip: text; background-clip: text; color: transparent !important;
+  letter-spacing: -0.01em;
+}
+header .header-badge { background: rgba(139, 92, 246, 0.15); color: #c4b5fd; border-color: rgba(139, 92, 246, 0.4); }
+
+/* Primary action buttons in the MAD button gradient */
+.btn-ai-split:not(:disabled) {
+  background: linear-gradient(135deg, #8b5cf6, #a78bfa) !important;
+  color: #fff !important; border-color: transparent !important;
+  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.25);
+}
+
+/* MAD message strip under the header */
+.mm-banner { margin: 10px 24px 0; padding: 10px 14px; border-radius: 10px; font-size: 0.86rem; line-height: 1.45;
+  background: #1a1a1a; border: 1px solid #333; color: #e8e8e8; }
+.mm-banner a { color: #a78bfa; }
+.mm-banner.mm-ok { border-color: rgba(34, 211, 238, 0.45); }
+.mm-banner.mm-warn { border-color: rgba(217, 64, 64, 0.55); }
+.mm-banner.mm-upsell { border-color: rgba(139, 92, 246, 0.6); background: linear-gradient(90deg, rgba(139, 92, 246, 0.14), rgba(34, 211, 238, 0.06)); }
+.mm-banner .mm-cat { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.78em; color: #999; margin-left: 4px; }

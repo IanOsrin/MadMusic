@@ -4962,6 +4962,7 @@
                 ${(track.Download_Price || track.downloadPrice) ? `<button class="track-action-btn track-basket-btn" data-basket-add data-record-id="${track.recordId || ''}" data-price="${track.Download_Price || track.downloadPrice}" data-name="${(track.name || '').replace(/"/g, '&quot;')}" data-artist="${(track.trackArtist || track.artist || '').replace(/"/g, '&quot;')}">+ Basket</button>` : ''}
                 ${(track.S3_URL || track.resolvedSrc || track.audioUrl || track.mp3) ? `<button class="track-action-btn track-ringtone-btn" data-track-index="${index}" title="Make a ringtone from this track">✂ Ringtone</button>` : ''}
                 ${(track.S3_URL || track.resolvedSrc || track.audioUrl || track.mp3) ? `<button class="track-action-btn track-audio-lab-btn btn-audio-lab" data-track-index="${index}" data-audio-url="${track.S3_URL || track.resolvedSrc || track.audioUrl || track.mp3 || ''}" data-track-name="${encodeURIComponent(track.name || '')}">🎛️ Audio Lab</button>` : ''}
+                ${(window.__MAD_MIXER && track.recordId) ? `<a class="track-action-btn track-mad-mixer-btn" href="/mixer?t=${encodeURIComponent(track.recordId)}" target="_blank" rel="noopener" title="Split this track into stems in Mad Mixer">🎚 Mad Mixer</a>` : ''}
               </div>
               <button class="track-kebab-btn" data-track-index="${index}" title="Track info">⋮</button>
             </div>
