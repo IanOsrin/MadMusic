@@ -34,12 +34,30 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
+import { execFileSync } from 'node:child_process';
 import { getTrackRecordCached } from '../lib/track-cache.js';
 
 const router = Router();
 
 const MVSEP = 'https://mvsep.com';
-const MVSEP_KEY = () => (process.env.MVSEP_KEY || '').trim();
+// The MVSEP key: MVSEP_KEY in the environment (Render), or — on a Mac, outside production — the
+// login Keychain item "mvsep" (added with: security add-generic-password -a "$USER" -s mvsep -w),
+// the same way the ElevenLabs key is kept. A missing Keychain key is re-checked at most every 30 s,
+// so adding it takes effect without a restart. The browser never sees the key.
+let keychainKey = '', keychainCheckedAt = 0;
+const MVSEP_KEY = () => {
+  const env = (process.env.MVSEP_KEY || '').trim();
+  if (env || keychainKey) return env || keychainKey;
+  if (process.platform !== 'darwin' || process.env.NODE_ENV === 'production') return '';
+  if (Date.now() - keychainCheckedAt < 30_000) return '';
+  keychainCheckedAt = Date.now();
+  try {
+    keychainKey = execFileSync('security', ['find-generic-password', '-s', 'mvsep', '-w'],
+      { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    if (keychainKey) console.log('[mixer] MVSEP key found in the Keychain');
+  } catch { /* not there yet */ }
+  return keychainKey;
+};
 const SPLITS_PER_MONTH = Math.max(0, Number.parseInt(process.env.MIXER_SPLITS_PER_MONTH, 10) || 30);
 const OPEN_TO_ALL = process.env.MIXER_OPEN_TO_ALL_TOKENS === 'true';
 const FM_LAYOUT = process.env.FM_LAYOUT || 'API_Album_Songs';
@@ -120,11 +138,11 @@ router.post('/auth', async (req, res) => {
   if (!entitled(req.accessToken)) {
     return res.status(402).json({ ok: false, error: 'Mad Mixer is part of the Mad Mixer subscription.', upgrade: true });
   }
-  res.json({ ok: true, ...(await usageFor(req.accessToken)) });
+  res.json({ ok: true, splitterReady: !!MVSEP_KEY(), ...(await usageFor(req.accessToken)) });
 });
 
 router.get('/usage', requireMixer, async (req, res) => {
-  res.json({ ok: true, gated: true, ...(await usageFor(req.accessToken)) });
+  res.json({ ok: true, gated: true, splitterReady: !!MVSEP_KEY(), ...(await usageFor(req.accessToken)) });
 });
 
 // Opening Mad Mixer from a track: the page passes the catalogue record id, never a raw URL,

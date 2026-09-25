@@ -68,8 +68,27 @@
       accessCode = token || 'local'; mvsepKey = accessCode; serverConnected = true;   // eslint-disable-line no-undef
       const setup = $id('setupBox'); if (setup) setup.style.display = 'none';
       const dot = $id('serverDot'); if (dot) dot.className = 's-dot ready';
-      if (typeof _renderCreditsPill === 'function') _renderCreditsPill(info);     // eslint-disable-line no-undef
-      if (typeof audioBuf !== 'undefined' && audioBuf && $id('btnAiSplit')) $id('btnAiSplit').disabled = false;   // eslint-disable-line no-undef
+      // The splits count is Mad Mixer's own monthly allowance — only meaningful once the server
+      // has an MVSEP key. Until then say so, and keep AI Split off (mixing still works).
+      if (typeof _renderCreditsPill === 'function') {                            // eslint-disable-line no-undef
+        const appPill = _renderCreditsPill;                                      // eslint-disable-line no-undef
+        _renderCreditsPill = function (u) {                                      // eslint-disable-line no-undef
+          if (u && u.splitterReady === false) {
+            serverConnected = false;                                             // eslint-disable-line no-undef
+            const lbl = $id('serverLabel'); if (lbl) lbl.textContent = 'Stem Splitter — not set up yet';
+            const d = $id('serverDot'); if (d) d.className = 's-dot';
+            const b = $id('btnAiSplit'); if (b) { b.disabled = true; b.title = 'Stem splitting isn’t switched on yet'; }
+            return;
+          }
+          serverConnected = true;                                                // eslint-disable-line no-undef
+          const d = $id('serverDot'); if (d) d.className = 's-dot ready';
+          const b = $id('btnAiSplit'); if (b) b.title = '';
+          if (typeof audioBuf !== 'undefined' && audioBuf && b) b.disabled = false;   // eslint-disable-line no-undef
+          appPill(u);
+        };
+        _renderCreditsPill(info);                                                // eslint-disable-line no-undef
+      }
+      if (serverConnected && typeof audioBuf !== 'undefined' && audioBuf && $id('btnAiSplit')) $id('btnAiSplit').disabled = false;   // eslint-disable-line no-undef
       if (typeof loadMvsepModels === 'function') loadMvsepModels();             // eslint-disable-line no-undef
     } catch (e) { console.warn('[Mad Mixer] could not hand the sign-in to the app', e); }
     return true;
