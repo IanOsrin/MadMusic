@@ -2,39 +2,33 @@
   "note": "Stable duplication fingerprint of the frontend views. Lower is better. Regenerate with UPDATE_BASELINE=1 npx vitest run tests/frontend/duplication-baseline.test.js",
   "perFile": {
     "app.html": {
-      "totalLines": 7537,
-      "styleBlocks": 5,
-      "cssSignificantLines": 182,
-      "inlineJsSignificantLines": 3875
+      "totalLines": 8188,
+      "styleBlocks": 6,
+      "cssSignificantLines": 194,
+      "inlineJsSignificantLines": 4305
     },
     "mobile.html": {
-      "totalLines": 516,
-      "styleBlocks": 2,
-      "cssSignificantLines": 10,
-      "inlineJsSignificantLines": 104
-    },
-    "audio-lab.html": {
-      "totalLines": 4641,
-      "styleBlocks": 1,
-      "cssSignificantLines": 470,
-      "inlineJsSignificantLines": 2385
+      "totalLines": 765,
+      "styleBlocks": 3,
+      "cssSignificantLines": 31,
+      "inlineJsSignificantLines": 120
     },
     "ringtone.html": {
-      "totalLines": 915,
+      "totalLines": 904,
       "styleBlocks": 1,
       "cssSignificantLines": 111,
-      "inlineJsSignificantLines": 412
+      "inlineJsSignificantLines": 407
     }
   },
   "cssDuplication": {
-    "sharedLineKeys": 12,
-    "redundantCopies": 14
+    "sharedLineKeys": 6,
+    "redundantCopies": 6
   },
   "jsDuplication": {
-    "sharedLineKeys": 58,
-    "redundantCopies": 69
+    "sharedLineKeys": 50,
+    "redundantCopies": 51
   },
-  "totalRedundantCopies": 83,
+  "totalRedundantCopies": 57,
   "cssExamples": [
     {
       "files": [
@@ -46,7 +40,6 @@
     {
       "files": [
         "app.html",
-        "audio-lab.html",
         "ringtone.html"
       ],
       "line": "align-items: center;"
@@ -54,7 +47,6 @@
     {
       "files": [
         "app.html",
-        "audio-lab.html",
         "ringtone.html"
       ],
       "line": "flex-direction: column;"
@@ -76,99 +68,12 @@
     {
       "files": [
         "app.html",
-        "audio-lab.html"
-      ],
-      "line": "white-space: nowrap;"
-    },
-    {
-      "files": [
-        "app.html",
-        "audio-lab.html"
-      ],
-      "line": "text-overflow: ellipsis;"
-    },
-    {
-      "files": [
-        "app.html",
-        "audio-lab.html"
-      ],
-      "line": "border-radius: 14px;"
-    },
-    {
-      "files": [
-        "app.html",
         "ringtone.html"
       ],
       "line": "text-decoration: none;"
-    },
-    {
-      "files": [
-        "audio-lab.html",
-        "ringtone.html"
-      ],
-      "line": "background: var(--bg);"
-    },
-    {
-      "files": [
-        "audio-lab.html",
-        "ringtone.html"
-      ],
-      "line": "border: 1px solid var(--border);"
-    },
-    {
-      "files": [
-        "audio-lab.html",
-        "ringtone.html"
-      ],
-      "line": "border-radius: 10px;"
     }
   ],
   "jsExamples": [
-    {
-      "files": [
-        "app.html",
-        "audio-lab.html",
-        "mobile.html",
-        "ringtone.html"
-      ],
-      "line": "(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':"
-    },
-    {
-      "files": [
-        "app.html",
-        "audio-lab.html",
-        "mobile.html",
-        "ringtone.html"
-      ],
-      "line": "new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],"
-    },
-    {
-      "files": [
-        "app.html",
-        "audio-lab.html",
-        "mobile.html",
-        "ringtone.html"
-      ],
-      "line": "j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src="
-    },
-    {
-      "files": [
-        "app.html",
-        "audio-lab.html",
-        "mobile.html",
-        "ringtone.html"
-      ],
-      "line": "'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);"
-    },
-    {
-      "files": [
-        "app.html",
-        "audio-lab.html",
-        "mobile.html",
-        "ringtone.html"
-      ],
-      "line": "})(window,document,'script','dataLayer','GTM-W4LLH7XT');"
-    },
     {
       "files": [
         "app.html",
@@ -186,16 +91,16 @@
     {
       "files": [
         "app.html",
-        "ringtone.html"
+        "mobile.html"
       ],
-      "line": "const m = Math.floor(secs / 60);"
+      "line": "if (choice === 'accepted' && typeof window.__loadGA === 'function') window.__loadGA();"
     },
     {
       "files": [
         "app.html",
-        "audio-lab.html"
+        "ringtone.html"
       ],
-      "line": "requestAnimationFrame(() => {"
+      "line": "const m = Math.floor(secs / 60);"
     },
     {
       "files": [
@@ -231,14 +136,49 @@
         "app.html",
         "ringtone.html"
       ],
-      "line": "if (!data.ok || !data.authorization_url) {"
+      "line": "if (!src) return '';"
     },
     {
       "files": [
         "app.html",
-        "ringtone.html"
+        "mobile.html"
       ],
-      "line": "if (!src) return '';"
+      "line": "overlay.style.cssText = ["
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html"
+      ],
+      "line": "document.body.appendChild(overlay);"
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html"
+      ],
+      "line": "var el = document.getElementById(id);"
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html"
+      ],
+      "line": "──────────────────────────────────────────────────────────────────────────── */"
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html"
+      ],
+      "line": "var p = new URLSearchParams();"
+    },
+    {
+      "files": [
+        "app.html",
+        "mobile.html"
+      ],
+      "line": "p.set('src',    url    || '');"
     }
   ]
 }

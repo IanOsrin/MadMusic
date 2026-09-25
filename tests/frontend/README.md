@@ -3,8 +3,8 @@
 The MadMusic frontend has **no build step**: `app.html`'s inline `<script>` blocks
 coordinate with `app.min.js` and the `js/*.js` modules purely through shared
 `window.*` globals, script load-order, and element IDs. Nothing catches a broken
-contract at build time, and the three big views (`app.html`, `mobile.html`,
-`audio-lab.html`) duplicate large amounts of CSS/JS by copy-paste.
+contract at build time, and the big views (`app.html`, `mobile.html`)
+duplicate large amounts of CSS/JS by copy-paste.
 
 These tests exist to make an **aggressive code-quality overhaul of those files safe**.
 They are the guardrail you refactor behind.

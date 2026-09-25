@@ -17,7 +17,7 @@ export const PUBLIC_DIR = join(__dirname, '..', '..', 'public');
 
 // HTML views users actually load. ringtone.html is included because it shares
 // the player/stream contract.
-export const HTML_VIEWS = ['app.html', 'mobile.html', 'audio-lab.html', 'ringtone.html'];
+export const HTML_VIEWS = ['app.html', 'mobile.html', 'ringtone.html'];
 // Standalone JS that participates in the global contract.
 export const JS_MODULES = [
   'app.min.js',

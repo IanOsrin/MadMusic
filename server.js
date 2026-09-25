@@ -4,7 +4,6 @@ import http from 'node:http';
 import http2 from 'node:http2';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { Readable } from 'node:stream';
 import compression from 'compression';
 import cors from 'cors';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
@@ -29,11 +28,11 @@ import suggestionsRouter from './routes/suggestions.js';
 import suggestedForYouRouter from './routes/suggested-for-you.js';
 import previewRouter from './routes/preview.js';
 import maddieRouter from './routes/maddie.js';
+import mixerRouter from './routes/mixer.js';
 import { initSemanticIndex, semanticIndexStatus } from './lib/semantic-index.js';
 import { initNameIndex, nameIndexStatus } from './lib/name-index.js';
 
 import { validateAccessToken } from './lib/auth.js';
-import { timingSafeEqualStr } from './lib/crypto-utils.js';
 import { normalizeShareId } from './lib/format.js';
 import { sanitizePlaylistForShare } from './lib/playlist.js';
 import { buildShareUrl } from './lib/http.js';
@@ -47,7 +46,6 @@ import { getTrackShareMeta, buildOgTags, inlineJson } from './lib/share-meta.js'
 import { bumpTaster, readTasterStats } from './lib/taster-stats.js';
 import { resolveRequestOrigin } from './lib/http.js';
 import { createPrecompressedStatic } from './lib/precompressed-static.js';
-import { hostnameResolvesPrivate } from './lib/ssrf-guard.js';
 import { resolveClientIp, isCloudflareIp } from './lib/cloudflare-ips.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -194,12 +192,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Audio Lab feature flag ────────────────────────────────────────────────────
-// Audio Lab is OFF by default. The code stays in place; this gate simply makes
-// the page, its static HTML, and every /api/audio-lab/* endpoint return 404 so
-// the whole surface (including audio-lab.html's reflected-title param) is
-// unreachable until revived. To turn it back on, set AUDIO_LAB_ENABLED=true.
-const AUDIO_LAB_ENABLED = process.env.AUDIO_LAB_ENABLED === 'true';
 // Mirrors routes/featured-editorial.js. Surfaced to the client (see loadHtml)
 // so the hero can skip the guaranteed-empty /api/featured-editorial round-trip
 // when the feature is off — saving one above-the-fold RTT on every page load.
@@ -207,14 +199,25 @@ const EDITORIAL_HERO_ENABLED = process.env.EDITORIAL_HERO_ENABLED === 'true';
 // Mirrors routes/artist-bio.js — surfaced to the client so the artist view can
 // skip the /api/artist-bio round-trip (which returns { found:false }) when off.
 const ARTIST_BIO_ENABLED = process.env.ARTIST_BIO_ENABLED === 'true';
+// ── Mad Mixer feature flag ────────────────────────────────────────────────────
+// Mad Mixer = the Digital Cupboard Stems app adapted for MAD (public/mad-mixer.html, built
+// from the DCMax master by scripts/build-mad-mixer.mjs; API in routes/mixer.js). OFF by
+// default: the page and every /api/mixer/* endpoint 404 until MAD_MIXER_ENABLED=true.
+// (It replaces the old Audio Lab page, retired 2026-09-25.)
+const MAD_MIXER_ENABLED = process.env.MAD_MIXER_ENABLED === 'true';
 app.use((req, res, next) => {
-  if (AUDIO_LAB_ENABLED) return next();
+  if (MAD_MIXER_ENABLED) return next();
   const p = req.path.toLowerCase();
-  if (p === '/audio-lab' || p === '/audio-lab.html' || p.startsWith('/api/audio-lab')) {
+  if (p === '/mixer' || p === '/mad-mixer.html' || p.startsWith('/api/mixer')) {
     return res.status(404).send('Not found');
   }
   next();
 });
+// Local mixer server (the "mad-mixer" server panel entry): the panel always opens the server's
+// front page, so send "/" to the mixer. Never in production.
+if (MAD_MIXER_ENABLED && process.env.MIXER_AS_HOME === 'true' && process.env.NODE_ENV !== 'production') {
+  app.get('/', (req, res) => res.redirect(302, '/mixer'));
+}
 
 // ── Telkom feature flag ───────────────────────────────────────────────────────
 // Telkom integration is OFF by default (ring-fenced June 2026 — waiting on
@@ -586,16 +589,15 @@ app.use('/api/', async (req, res, next) => {
     // before this middleware when the flag is off.)
     '/download/',
     '/ringtone/',
-    '/audio-proxy',
     // Taster play beacon — guests BY DESIGN (aggregate counter, no user data).
     // The report skips token auth like the other admin endpoints above
     // (/pg-mirror, /tokens/*) because requireAdminKey guards it instead.
     '/taster/event',
     '/taster/report',
-    // NOTE: '/audio-lab/' is intentionally NOT skipped — every /api/audio-lab/*
-    // endpoint (key validation + the Replicate proxy) requires a valid access
-    // token so we never forward to a paid third-party API unauthenticated.
-    '/catalog/'
+    '/catalog/',
+    // Mad Mixer, LOCAL TESTING ONLY: with MIXER_DEV_NO_TOKEN=true (ignored in production)
+    // the mixer API works without a MAD sign-in so the page can be tried on localhost.
+    ...(MAD_MIXER_ENABLED && process.env.MIXER_DEV_NO_TOKEN === 'true' && process.env.NODE_ENV !== 'production' ? ['/mixer/'] : [])
   ];
 
   if (skipPaths.some(path => req.path === path || req.path.startsWith(path))) {
@@ -692,12 +694,6 @@ async function loadHtml(filename) {
     /((?:src|href)="\/[^"?]*\.(?:js|css))\?v=[^"&]*/g,
     `$1?v=${DEPLOY_STAMP}`
   );
-  // When Audio Lab is disabled, hide its UI entry points (home widget + per-track
-  // buttons) so users don't hit the 404'd routes. Purely cosmetic; the server-side
-  // gate above is the real control. Re-enabling AUDIO_LAB_ENABLED removes this.
-  if (!AUDIO_LAB_ENABLED) {
-    stamped += '\n<style id="audio-lab-disabled">#audioLabWidget,.track-audio-lab-btn,.btn-audio-lab{display:none !important;}</style>\n';
-  }
   // Feature flags for the client. Injected into <head> (not appended at the
   // end of the document) so they exist BEFORE any classic <script> executes —
   // auth.js boots synchronously and reads __GUEST_PREVIEW to decide between
@@ -715,6 +711,7 @@ async function loadHtml(filename) {
     + `window.__ARTIST_BIO=${ARTIST_BIO_ENABLED ? 'true' : 'false'};`
     + `window.__GUEST_PREVIEW=${GUEST_PREVIEW_ENABLED ? 'true' : 'false'};`
     + `window.__MADDIE=${MADDIE_ENABLED ? 'true' : 'false'};`
+    + `window.__MAD_MIXER=${MAD_MIXER_ENABLED ? 'true' : 'false'};`
     //   __MEDIA_CDN — CloudFront host for bucket media (false = serve S3 direct).
     //   The client treats this host as direct-playable (no container proxy) and
     //   playTrack/artwork paths rewrite S3 URLs onto it. Set MEDIA_CDN_HOST on
@@ -854,6 +851,7 @@ if (PODCASTS_ENABLED) app.use('/api', podcastsRouter);    // dark until PODCASTS
 if (SUGGESTIONS_ENABLED) app.use('/api', suggestionsRouter); // dark until SUGGESTIONS_ENABLED=true
 if (PERSONAL_RAIL_ENABLED) app.use('/api', suggestedForYouRouter); // dark until PERSONAL_RAIL_ENABLED=true
 if (GUEST_PREVIEW_ENABLED) app.use('/api', previewRouter);   // dark until GUEST_PREVIEW_ENABLED=true
+if (MAD_MIXER_ENABLED) app.use('/api/mixer', mixerRouter);   // dark until MAD_MIXER_ENABLED=true
 if (MADDIE_ENABLED) app.use('/api/maddie', maddieRouter);     // dark until MADDIE_ENABLED=true
 if (CATALOG_PAGES_ENABLED) {                                  // dark until CATALOG_PAGES_ENABLED=true
   // Public server-rendered catalogue pages (SEO tier 2): /browse, /artist/:slug,
@@ -1015,7 +1013,27 @@ app.get('/mobile',   async (req, res) => {
 app.get('/m',        (_req, res) => sendHtml(res, 'mobile.html'));
 app.get('/ringtone', (_req, res) => sendHtml(res, 'ringtone.html'));
 app.get('/privacy',  (_req, res) => sendHtml(res, 'privacy.html')); // required by the app stores; POPIA statement
-app.get('/audio-lab',(_req, res) => sendHtml(res, 'audio-lab.html'));
+app.get('/mixer', (_req, res) => {
+  // The Stems app builds its DSP AudioWorklet from a blob: URL (script-src blob:) and
+  // loads the chosen track straight from the media CDN (connect-src). Page-scoped: the
+  // rest of the site keeps the stricter global policy above.
+  const media = MEDIA_CDN_HOST || 'media.musicafricadirect.com';
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' blob: https://cdnjs.cloudflare.com",
+    "worker-src 'self' blob:",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' https: data: blob:",
+    "media-src 'self' https: blob:",
+    `connect-src 'self' blob: data: https://${media}`,
+    "font-src 'self' https:",
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ].join('; '));
+  sendHtml(res, 'mad-mixer.html');
+});
 
 // ── Taster funnel beacons ─────────────────────────────────────────────────────
 // Cookie-free counterpart to the Umami events: the client pings 'play' when a
@@ -1031,135 +1049,6 @@ app.post('/api/taster/event', express.json({ limit: '2kb' }), async (req, res) =
 // Read the aggregate (same admin key as the other /api/admin endpoints).
 app.get('/api/taster/report', requireAdminKey, async (_req, res) => {
   res.json({ ok: true, stats: await readTasterStats() });
-});
-
-// ── Audio Lab key validation ──────────────────────────────────────────────────
-// Requires a valid streaming access token so we can link the entitlement to
-// the user's FileMaker record. Once activated, audioLabEnabled comes back
-// automatically on every subsequent /api/access/validate call.
-app.post('/api/audio-lab/validate-key', async (req, res) => {
-  const { key } = req.body || {};
-  // No hardcoded fallback — the Audio Lab unlock key MUST be configured via the
-  // AUDIO_LAB_KEY env var. If it's unset, the feature fails closed (503) rather
-  // than accepting a well-known default that would let anyone unlock it.
-  const validKey = process.env.AUDIO_LAB_KEY;
-  if (!validKey) return res.status(503).json({ ok: false, error: 'Audio Lab not configured' });
-  if (!key) return res.status(400).json({ ok: false, error: 'No key provided' });
-  // Constant-time comparison to avoid leaking the key via timing.
-  if (!timingSafeEqualStr(String(key).trim(), validKey)) {
-    return res.status(403).json({ ok: false, error: 'Invalid key' });
-  }
-
-  // Write Audio_Lab_Enabled = 1 to the FM token record
-  try {
-    const tokenCode = (req.headers['x-access-token'] || '').trim().toUpperCase();
-    if (tokenCode && req.accessToken?.recordId) {
-      const { fmUpdateRecord } = await import('./fm-client.js');
-      const layout = process.env.FM_TOKENS_LAYOUT || 'API_Access_Tokens';
-      await fmUpdateRecord(layout, req.accessToken.recordId, { Audio_Lab_Enabled: 1 });
-      console.log(`[AudioLab] Enabled for token ${tokenCode.slice(0, 8)}…`);
-    }
-  } catch (err) {
-    // Non-fatal — key is still valid, FM write just failed
-    console.warn('[AudioLab] Could not write to FM:', err.message);
-  }
-
-  return res.json({ ok: true, audioLabEnabled: true });
-});
-
-// ── SSRF guard ───────────────────────────────────────────────────────────────
-// Moved to lib/ssrf-guard.js so the container proxy (routes/stream.js) uses the
-// same DNS-resolving implementation instead of its own hostname regex.
-const _hostnameResolvesPrivate = hostnameResolvesPrivate;
-
-// ── Audio Lab proxy ── fetches a remote audio URL server-side to bypass CORS ──
-app.get('/api/audio-proxy', async (req, res) => {
-  const { url } = req.query;
-  if (!url) return res.status(400).json({ error: 'Missing url param' });
-  try {
-    const target = new URL(url); // throws if invalid
-    // Block non-https schemes and private/internal IP ranges (SSRF prevention).
-    // Resolves DNS so rebinding and alternate IP encodings can't bypass the check.
-    if (target.protocol !== 'https:') return res.status(400).json({ error: 'Only https URLs allowed' });
-    if (await _hostnameResolvesPrivate(target.hostname)) {
-      return res.status(400).json({ error: 'Private or internal addresses not allowed' });
-    }
-    const upstream = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(30_000) });
-    if (!upstream.ok) return res.status(upstream.status).json({ error: `Upstream ${upstream.status}` });
-    const ct = upstream.headers.get('content-type') || 'audio/mpeg';
-    const cl = upstream.headers.get('content-length');
-    res.setHeader('Content-Type', ct);
-    res.setHeader('Cache-Control', 'private, max-age=3600');
-    if (cl) res.setHeader('Content-Length', cl);
-    // Stream the body instead of buffering. Loading whole MP3s (3–15 MB) into
-    // memory per request was a meaningful contributor to OOM kills on the
-    // 512 MB Render tier with multiple concurrent listeners.
-    if (!upstream.body) return res.end();
-    const nodeStream = Readable.fromWeb(upstream.body);
-    nodeStream.on('error', (err) => {
-      console.warn('[audio-proxy] upstream stream error:', err.message);
-      if (!res.headersSent) res.status(502).end();
-      else res.destroy(err);
-    });
-    res.on('close', () => { if (!nodeStream.destroyed) nodeStream.destroy(); });
-    nodeStream.pipe(res);
-  } catch (err) {
-    console.warn('[audio-proxy] error:', err.message);
-    if (!res.headersSent) res.status(500).json({ error: 'Upstream request failed' });
-    else res.destroy();
-  }
-});
-
-// ── Replicate proxy ── forwards requests to api.replicate.com server-side ──────
-// The browser passes its Replicate API key in X-Replicate-Key header.
-// We forward to Replicate so the browser never hits api.replicate.com directly
-// (avoids CSP / CORS issues). No key is stored on this server.
-
-// Start a prediction — audio sent as base64 MP3 data URL (encoded client-side to keep size small).
-app.post('/api/audio-lab/replicate/predictions', async (req, res) => {
-  // Auth is enforced by the /api/ middleware (no longer skip-listed). The caller
-  // must supply their OWN Replicate key — we never fall back to the server's key
-  // for a client request, which would let callers spend the server's credits.
-  const replicateKey = req.headers['x-replicate-key'];
-  if (!replicateKey) return res.status(400).json({ error: 'No Replicate API key provided' });
-
-  try {
-    const upstream = await fetch('https://api.replicate.com/v1/predictions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${replicateKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(req.body)
-    });
-    const data = await upstream.json();
-    res.status(upstream.status).json(data);
-  } catch (err) {
-    console.error('[Replicate] Proxy error:', err.message);
-    res.status(502).json({ error: 'Upstream request failed' });
-  }
-});
-
-// Step 3: Poll prediction status.
-app.get('/api/audio-lab/replicate/predictions/:id', async (req, res) => {
-  const replicateKey = req.headers['x-replicate-key'];
-  if (!replicateKey) return res.status(400).json({ error: 'No Replicate API key provided' });
-  // Constrain the id to Replicate's id charset so it can't be used to path-traverse
-  // or hit arbitrary Replicate endpoints.
-  if (!/^[A-Za-z0-9]+$/.test(req.params.id)) {
-    return res.status(400).json({ error: 'Invalid prediction id' });
-  }
-
-  try {
-    const upstream = await fetch(`https://api.replicate.com/v1/predictions/${req.params.id}`, {
-      headers: { 'Authorization': `Token ${replicateKey}` }
-    });
-    const data = await upstream.json();
-    res.status(upstream.status).json(data);
-  } catch (err) {
-    console.error('[Replicate] Poll error:', err.message);
-    res.status(502).json({ error: 'Upstream request failed' });
-  }
 });
 
 // ========= STARTUP =========

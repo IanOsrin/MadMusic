@@ -116,9 +116,7 @@
         '/api/access/stream-events', // play tracking — server accepts tokenless
                                      // events (guest preview plays must count)
         '/api/payments/',    // payment flow must work before token exists
-        '/api/download/',    // download purchase flow — token-free by design
-        '/api/audio-proxy',  // Audio Lab proxy — no auth needed (key is gated separately)
-        '/api/audio-lab/'    // Audio Lab key validation
+        '/api/download/'     // download purchase flow — token-free by design
       ];
 
       const isPublicEndpoint = publicEndpoints.some(endpoint => url.includes(endpoint));
@@ -366,7 +364,7 @@
             return true;
           }
 
-          // Pass Audio Lab entitlement to the gate script
+          // Mad Mixer entitlement (FM Audio_Lab_Enabled — the field predates Mad Mixer)
           window.massAudioLabEnabled = data.audioLabEnabled || false;
 
           hideTokenOverlay();
