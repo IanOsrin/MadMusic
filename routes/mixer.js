@@ -10,7 +10,10 @@
  *   GET  /ping                         → { ok, engine, entitled }
  *   POST /auth                         → { ok, used, quota, remaining } or 402 when not subscribed
  *   GET  /usage                        → { used, quota, remaining } for this month
- *   GET  /track/:recordId              → { title, artist, album, catalogue, audioUrl } for ?t= opens
+ *   GET  /songs                        → the MADMixer song list (the picker)
+ *   GET  /songs/:id                    → one song + its MP3 on the media CDN (?song= opens)
+ *   GET  /mixable                      → { tracks: { madStreamerRecordId: madMixerSongId } } —
+ *                                        which MAD tracks get the 🎚 button (any signed-in token)
  *   GET  /mvsep/algorithms             → MVSEP model catalogue (cached 1 h)
  *   POST /mvsep/create?sep_type=…      → raw WAV body, STREAMED to MVSEP as multipart (never buffered)
  *   GET  /mvsep/get?hash=…             → MVSEP job status / result links
@@ -35,7 +38,9 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
 import { execFileSync } from 'node:child_process';
-import { getTrackRecordCached } from '../lib/track-cache.js';
+import { fmFindRecords } from '../fm-client.js';
+import { createSwrCache } from '../lib/swr-cache.js';
+import { buildMixableMap } from '../lib/mixer-match.js';
 
 const router = Router();
 
@@ -126,7 +131,6 @@ async function passJson(res, url, init) {
   }
 }
 const cdnUrl = (u) => String(u || '').replace(`https://${S3_MEDIA_HOST}/`, `https://${MEDIA_HOST}/`);
-const firstField = (f, names) => { for (const n of names) if (f[n]) return String(f[n]); return ''; };
 
 // ── routes ────────────────────────────────────────────────────────────────────
 router.get('/ping', (req, res) => {
@@ -143,30 +147,6 @@ router.post('/auth', async (req, res) => {
 
 router.get('/usage', requireMixer, async (req, res) => {
   res.json({ ok: true, gated: true, splitterReady: !!MVSEP_KEY(), ...(await usageFor(req.accessToken)) });
-});
-
-// Opening Mad Mixer from a track: the page passes the catalogue record id, never a raw URL,
-// so the server decides which audio loads (no open redirect / reflected-URL surface).
-router.get('/track/:recordId', requireMixer, async (req, res) => {
-  const rid = String(req.params.recordId || '');
-  if (!/^\d{1,12}$/.test(rid)) return res.status(400).json({ ok: false, error: 'Bad track id' });
-  try {
-    const rec = await getTrackRecordCached(FM_LAYOUT, rid);
-    if (!rec) return res.status(404).json({ ok: false, error: 'Track not found' });
-    const f = rec.fieldData || {};
-    const audio = cdnUrl(firstField(f, ['S3_URL']));
-    if (!/^https:\/\//.test(audio)) return res.status(404).json({ ok: false, error: 'No audio for this track' });
-    res.json({
-      ok: true, recordId: rid, audioUrl: audio,
-      title: firstField(f, ['Track Name', 'Song Title', 'Title']),
-      artist: firstField(f, ['Track Artist', 'Album Artist']),
-      album: firstField(f, ['Album Title', 'Tape Files::Album Title']),
-      catalogue: firstField(f, ['Album Catalogue Number', 'Reference Catalogue Number']),
-    });
-  } catch (err) {
-    console.warn('[mixer] track lookup failed:', err.message);
-    res.status(502).json({ ok: false, error: 'Catalogue lookup failed' });
-  }
 });
 
 // ── the MadMixer catalogue (FileMaker "MADMixer" on FM Cloud, a MAM clone) ─────────
@@ -210,19 +190,24 @@ const songSummary = (rec) => {
     playable: /^https:\/\//.test(mp3), hasMaster: !!String(f.Audio_Vision_URL || '').trim(),
   };
 };
-let songsCache = { at: 0, list: null };
+const songsSwr = createSwrCache({
+  name: 'mixer-songs', label: 'mixer-songs', ttlMs: 5 * 60_000, max: 1,
+  loader: async () => {
+    const all = [];
+    for (let off = 1; ; off += 500) {
+      const resp = await mmGet(`/layouts/${encodeURIComponent(MM.layout())}/records?_offset=${off}&_limit=500`);
+      all.push(...(resp.data || []));
+      if ((resp.data || []).length < 500) break;
+    }
+    return all.map(songSummary).sort((a, b) => (a.artist + a.title).localeCompare(b.artist + b.title));
+  },
+});
+const allSongs = async () => (await songsSwr.get('all')).value;
+
 router.get('/songs', requireMixer, async (req, res) => {
   try {
-    if (!songsCache.list || Date.now() - songsCache.at > 300_000) {
-      const all = [];
-      for (let off = 1; ; off += 500) {
-        const resp = await mmGet(`/layouts/${encodeURIComponent(MM.layout())}/records?_offset=${off}&_limit=500`);
-        all.push(...(resp.data || []));
-        if ((resp.data || []).length < 500) break;
-      }
-      songsCache = { at: Date.now(), list: all.map(songSummary).sort((a, b) => (a.artist + a.title).localeCompare(b.artist + b.title)) };
-    }
-    res.json({ ok: true, count: songsCache.list.length, songs: songsCache.list });
+    const songs = await allSongs();
+    res.json({ ok: true, count: songs.length, songs });
   } catch (err) {
     console.warn('[mixer] songs list failed:', err.message);
     res.status(502).json({ ok: false, error: 'Could not load the Mad Mixer song list' });
@@ -244,6 +229,59 @@ router.get('/songs/:id', requireMixer, async (req, res) => {
   } catch (err) {
     console.warn('[mixer] song lookup failed:', err.message);
     res.status(502).json({ ok: false, error: 'Could not look the song up' });
+  }
+});
+
+// ── which MAD tracks can open in Mad Mixer ───────────────────────────────────────
+// Only MADMixer songs can be mixed. For each MADMixer ISRC we find the MadStreamer tracks
+// carrying it (one FM find per ISRC through MAD's FM queue, 4 at a time); lib/mixer-match.js
+// keeps those whose title agrees and points each at its MADMixer song. ~450 finds, so it is
+// rebuilt at most every 6 hours (SWR: callers get the last map while a rebuild runs).
+async function streamerTracksByIsrc(isrcs) {
+  const out = {};
+  let next = 0;
+  await Promise.all(Array.from({ length: 4 }, async () => {
+    while (next < isrcs.length) {
+      const isrc = isrcs[next++];
+      const r = await fmFindRecords(FM_LAYOUT, [{ ISRC: `==${isrc}` }], { limit: 100 });
+      if (!r.ok && String(r.code) !== '401') throw new Error(`MadStreamer find failed (${r.code || r.status})`);
+      out[isrc] = (r.data || []).map((x) => ({
+        recordId: x.recordId,
+        title: x.fieldData?.['Track Name'] || '',
+        album: x.fieldData?.['Album Title'] || x.fieldData?.['Tape Files::Album Title'] || '',
+      }));
+    }
+  }));
+  return out;
+}
+const mixableSwr = createSwrCache({
+  name: 'mixer-mixable', label: 'mixer-mixable', ttlMs: 6 * 60 * 60_000, max: 1,
+  loader: async () => {
+    const songs = await allSongs();
+    const isrcs = [...new Set(songs.filter((s) => s.playable).map((s) => String(s.isrc || '').trim().toUpperCase()).filter(Boolean))];
+    const started = Date.now();
+    const tracks = buildMixableMap(songs, await streamerTracksByIsrc(isrcs));
+    console.log(`[mixer] mixable map: ${Object.keys(tracks).length} MAD tracks from ${isrcs.length} ISRCs in ${Math.round((Date.now() - started) / 1000)} s`);
+    return { tracks, builtAt: new Date().toISOString() };
+  },
+});
+// Warm it shortly after boot so the first listener doesn't wait for ~450 finds — only when Mad
+// Mixer is switched on (server.js imports this file either way; the router is mounted only when on).
+if (process.env.MAD_MIXER_ENABLED === 'true') {
+  setTimeout(() => mixableSwr.get('map').catch((err) => console.warn('[mixer] mixable warm-up failed:', err.message)), 15_000).unref?.();
+}
+
+// Any signed-in listener (MAD-only subscribers see the button too — Mad Mixer then offers the
+// upgrade). If the map is still being built, answer at once with ready:false; the page retries.
+router.get('/mixable', async (req, res) => {
+  try {
+    const got = await Promise.race([mixableSwr.get('map'), new Promise((r) => setTimeout(() => r(null), 1500))]);
+    if (!got) return res.json({ ok: true, ready: false, tracks: {} });
+    res.set('Cache-Control', 'private, max-age=600');
+    res.json({ ok: true, ready: true, builtAt: got.value.builtAt, tracks: got.value.tracks });
+  } catch (err) {
+    console.warn('[mixer] mixable map failed:', err.message);
+    res.json({ ok: true, ready: false, tracks: {} });
   }
 });
 
