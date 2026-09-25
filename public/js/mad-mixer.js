@@ -49,10 +49,7 @@
 
   // 2 · sign in with the MAD token ───────────────────────────────────────────
   async function signIn() {
-    if (!token) {
-      banner('You need to be signed in to Music Africa Direct to use Mad Mixer. <a href="/">Open MAD and sign in</a>, then come back.', 'warn');
-      return false;
-    }
+    if (!token) return false;   // no banner (Ian, 2026-09-25) — the pill still reads "Sign in to enable"
     let r, info = {};
     try { r = await fetch(`${MIXER}/auth`, { method: 'POST' }); info = await r.json().catch(() => ({})); }
     catch (_) { banner('Mad Mixer can’t reach the server right now. Check your connection and reload.', 'warn'); return false; }
