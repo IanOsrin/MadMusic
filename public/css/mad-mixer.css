@@ -87,3 +87,16 @@ header .header-badge { background: rgba(139, 92, 246, 0.15); color: #c4b5fd; bor
 .mm-pick-sub { grid-column: 1; color: #888; font-size: 0.78rem; }
 .mm-pick-dur { grid-row: 1 / span 2; grid-column: 2; align-self: center; color: #999; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.78rem; }
 .mm-pick-empty { padding: 24px; text-align: center; color: #999; }
+
+/* Arriving cold: the welcome / sign-in card (reuses the picker's overlay + box) */
+.mm-welcome { align-items: center; }
+.mm-welcome-box { width: min(460px, 100%); padding: 28px 28px 22px; text-align: center; align-items: center; gap: 12px; }
+.mm-welcome-logo { height: 46px; width: auto; }
+.mm-welcome-box h2 { margin: 2px 0 0; font-size: 1.6rem;
+  background: linear-gradient(90deg, #22d3ee, #8b5cf6 55%, #a78bfa); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.mm-welcome-box p { margin: 0; color: #cfcfcf; line-height: 1.5; font-size: 0.95rem; }
+.mm-welcome-btn { display: inline-block; margin: 8px 0 2px; padding: 12px 22px; border-radius: 999px; font-weight: 700; text-decoration: none;
+  color: #fff; background: linear-gradient(135deg, #8b5cf6, #a78bfa); box-shadow: 0 4px 14px rgba(139, 92, 246, 0.3); }
+.mm-welcome-btn:hover { filter: brightness(1.08); }
+.mm-welcome-box .mm-welcome-small { font-size: 0.8rem; color: #999; }
+.mm-welcome-small a { color: #a78bfa; }
