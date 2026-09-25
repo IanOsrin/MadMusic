@@ -4947,7 +4947,7 @@
                 <button class="track-action-btn track-add-library" data-track-index="${index}">♡ Songs</button>
                 ${(track.Download_Price || track.downloadPrice) ? `<button class="track-action-btn track-basket-btn" data-basket-add data-record-id="${track.recordId || ''}" data-price="${track.Download_Price || track.downloadPrice}" data-name="${(track.name || '').replace(/"/g, '&quot;')}" data-artist="${(track.trackArtist || track.artist || '').replace(/"/g, '&quot;')}">+ Basket</button>` : ''}
                 ${(track.S3_URL || track.resolvedSrc || track.audioUrl || track.mp3) ? `<button class="track-action-btn track-ringtone-btn" data-track-index="${index}" title="Make a ringtone from this track">✂ Ringtone</button>` : ''}
-                ${(window.__MAD_MIXER && track.recordId) ? `<a class="track-action-btn track-mad-mixer-btn" href="/mixer?t=${encodeURIComponent(track.recordId)}" target="_blank" rel="noopener" title="Split this track into stems in Mad Mixer">🎚 Mad Mixer</a>` : ''}
+                ${(window.__MAD_MIXER && track.recordId) ? `<a class="track-action-btn track-mad-mixer-btn" data-mix-rec="${encodeURIComponent(track.recordId)}" style="display:none" target="_blank" rel="noopener" title="Open this song in Mad Mixer">🎚 Mad Mixer</a>` : ''}
               </div>
               <button class="track-kebab-btn" data-track-index="${index}" title="Track info">⋮</button>
             </div>
@@ -6731,6 +6731,8 @@
   <script src="/js/discovery.js?v=5"></script>
   <!-- Buy several downloads in one payment; self-wiring off [data-basket-add]. -->
   <script src="/js/basket.js?v=1"></script>
+  <!-- 🎚 Mad Mixer buttons only on MADMixer songs; inert unless __MAD_MIXER. -->
+  <script src="/js/mad-mixer-links.js?v=1"></script>
 
   <script>
   /* ── Ringtone scissors button — global wiring ────────────────────────────────

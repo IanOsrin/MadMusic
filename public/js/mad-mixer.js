@@ -5,7 +5,8 @@
  * sign-in, so this file:
  *   1. points the app's API_BASE at /api/mixer and adds the MAD token to those calls;
  *   2. signs in automatically (or explains why not: not signed in to MAD / no Mad Mixer tier);
- *   3. opens the track given as ?t=<recordId> (the server resolves the audio; no raw URLs);
+ *   3. opens the MADMixer song given as ?song=<id>, or the song picker (the server resolves
+ *      the audio; no raw URLs — and only MADMixer songs can be opened);
  *   4. hides the few buttons that only make sense in the desktop DCMax (→ Restore).
  * The app's top-level `let`s and functions (API_BASE, accessCode, mvsepKey, serverConnected,
  * _renderCreditsPill, loadMvsepModels…) live in the shared global scope, which is why they
@@ -103,28 +104,6 @@
     window.postMessage({ type: 'dc-load-stems', ab, name }, location.origin);
   }
 
-  // 3 · open the track passed as ?t=<recordId> ────────────────────────────────
-  async function openTrack() {
-    const t = new URLSearchParams(location.search).get('t');
-    if (!t || !/^\d{1,12}$/.test(t) || !token) return;
-    banner('Loading the track from the MAD catalogue…');
-    try {
-      const r = await fetch(`${MIXER}/track/${t}`);
-      const meta = await r.json().catch(() => ({}));
-      if (!r.ok || !meta.ok) { banner(esc(meta.error || 'That track couldn’t be opened.') + ' You can still open your own audio with <b>Open Audio</b>.', 'warn'); return; }
-      const a = await nativeFetch(meta.audioUrl);
-      if (!a.ok) throw new Error('audio ' + a.status);
-      const ab = await a.arrayBuffer();
-      const name = [meta.artist, meta.title].filter(Boolean).join(' — ') || 'MAD track';
-      handToApp(ab, name + '.mp3');
-      document.title = `${meta.title || 'Track'} · Mad Mixer`;
-      banner(`Loaded <strong>${esc(meta.title)}</strong>${meta.artist ? ' by ' + esc(meta.artist) : ''}${meta.catalogue ? ' <span class="mm-cat">' + esc(meta.catalogue) + '</span>' : ''}. Press <b>AI Split</b> to separate it into stems.`, 'ok');
-    } catch (e) {
-      console.warn('[Mad Mixer] track load failed', e);
-      banner('The track’s audio couldn’t be loaded. You can still open your own audio with <b>Open Audio</b>.', 'warn');
-    }
-  }
-
   // 3b · the Mad Mixer songs (MADMixer on FM Cloud) ─────────────────────────────
   async function loadSong(id) {
     banner('Loading the song…');
@@ -219,8 +198,10 @@
     hideDesktopOnly();
     addSongsButton();
     signIn().then(() => {
-      if (new URLSearchParams(location.search).get('t')) return openTrack();
-      openPicker();                      // no track asked for: start at the song list
+      // ?song=<MADMixer id> — from a 🎚 Mad Mixer button in MAD (only MADMixer songs have one)
+      const song = new URLSearchParams(location.search).get('song');
+      if (song && /^\d{1,12}$/.test(song)) return loadSong(song);
+      openPicker();                      // no song asked for: start at the song list
     });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
