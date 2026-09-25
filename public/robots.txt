@@ -1,6 +1,5 @@
 User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /audio-lab
 
 Sitemap: https://musicafricadirect.com/sitemap.xml

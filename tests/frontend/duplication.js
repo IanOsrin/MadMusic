@@ -1,6 +1,6 @@
 // Duplication measurement across the sprawling frontend view files.
 //
-// The three big views (app.html, mobile.html, audio-lab.html) + ringtone.html
+// The big views (app.html, mobile.html) + ringtone.html
 // were built by copy-paste and share large amounts of CSS and JS. This module
 // produces a STABLE, reproducible numeric fingerprint of that duplication so the
 // overhaul can prove it actually reduced it (see duplication-baseline.test.js,
