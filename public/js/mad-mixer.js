@@ -75,6 +75,15 @@
     return true;
   }
 
+  // Give the app the audio with its real type. The app's own dc-load-stems path always tags the
+  // file audio/wav, so an MP3 showed as "WAV" in the source line; loadFile() takes a File as-is.
+  function handToApp(ab, name) {
+    const type = /\.mp3$/i.test(name) ? 'audio/mpeg' : 'audio/wav';
+    try { if (typeof loadFile === 'function') { loadFile(new File([ab], name, { type })); return; } }   // eslint-disable-line no-undef
+    catch (e) { console.warn('[Mad Mixer] direct load failed, using the message path', e); }
+    window.postMessage({ type: 'dc-load-stems', ab, name }, location.origin);
+  }
+
   // 3 · open the track passed as ?t=<recordId> ────────────────────────────────
   async function openTrack() {
     const t = new URLSearchParams(location.search).get('t');
@@ -88,7 +97,7 @@
       if (!a.ok) throw new Error('audio ' + a.status);
       const ab = await a.arrayBuffer();
       const name = [meta.artist, meta.title].filter(Boolean).join(' — ') || 'MAD track';
-      window.postMessage({ type: 'dc-load-stems', ab, name: name + '.mp3' }, location.origin);
+      handToApp(ab, name + '.mp3');
       document.title = `${meta.title || 'Track'} · Mad Mixer`;
       banner(`Loaded <strong>${esc(meta.title)}</strong>${meta.artist ? ' by ' + esc(meta.artist) : ''}${meta.catalogue ? ' <span class="mm-cat">' + esc(meta.catalogue) + '</span>' : ''}. Press <b>AI Split</b> to separate it into stems.`, 'ok');
     } catch (e) {
@@ -107,7 +116,7 @@
       const a = await nativeFetch(s.audioUrl);
       if (!a.ok) throw new Error('audio ' + a.status);
       const ab = await a.arrayBuffer();
-      window.postMessage({ type: 'dc-load-stems', ab, name: [s.artist, s.title].filter(Boolean).join(' — ') + '.mp3' }, location.origin);
+      handToApp(ab, [s.artist, s.title].filter(Boolean).join(' — ') + '.mp3');
       document.title = `${s.title || 'Song'} · Mad Mixer`;
       banner(`Loaded <strong>${esc(s.title)}</strong>${s.artist ? ' by ' + esc(s.artist) : ''}${s.album ? ' <span class="mm-cat">' + esc(s.album) + '</span>' : ''}.`, 'ok');
     } catch (e) {
