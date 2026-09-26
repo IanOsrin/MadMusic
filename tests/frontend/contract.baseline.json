@@ -41,6 +41,7 @@
         "/js/currency.js",
         "/js/discovery.js",
         "/js/basket.js",
+        "/js/mad-mixer-links.js",
         "inline",
         "inline",
         "inline",
@@ -61,7 +62,8 @@
         "/js/catalog.js",
         "/js/currency.js",
         "/js/discovery.js",
-        "/js/basket.js"
+        "/js/basket.js",
+        "/js/mad-mixer-links.js"
       ],
       "windowGlobals": [
         "MADAuth",
@@ -275,6 +277,7 @@
         "moreByArtist",
         "moreByArtistGrid",
         "navAlbumsBtn",
+        "navMadMixer",
         "navPodcasts",
         "newReleasesContainer",
         "newReleasesSection",
@@ -707,6 +710,7 @@
     "artistPromptOverlay",
     "artwork-emoji",
     "artwork-img",
+    "ask-sheet",
     "audio",
     "authClose",
     "authControls",

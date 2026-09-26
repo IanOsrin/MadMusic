@@ -33,6 +33,9 @@
     // so a plain token param here is unambiguous).
     const IS_ACCESS_PAGE = window.location.pathname === '/access';
     const accessPagePrefill = IS_ACCESS_PAGE ? (_cbp.get('token') || '').trim() : '';
+    // Where to go after signing in. Only Mad Mixer's own page is allowed (no open redirect):
+    // /access?next=/mixer is its "Sign in" button for visitors who arrive there cold.
+    const ACCESS_NEXT = IS_ACCESS_PAGE && /^\/mixer(\?song=\d{1,12})?$/.test(_cbp.get('next') || '') ? _cbp.get('next') : '/';
     if (accessPagePrefill) {
       // Don't leave the code sitting in the address bar / browser history.
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -360,7 +363,7 @@
           // On the standalone /access page a successful validation means the
           // page's job is done — hand over to the app proper.
           if (IS_ACCESS_PAGE) {
-            window.location.replace('/');
+            window.location.replace(ACCESS_NEXT);
             return true;
           }
 
@@ -706,7 +709,9 @@
         validateToken(accessPagePrefill); // success redirects home (see validateToken)
       } else if (existingToken) {
         // Already signed in — nothing to do here.
-        window.location.replace('/');
+        window.location.replace(ACCESS_NEXT);
+      } else if (ACCESS_NEXT !== '/') {
+        showTokenEntry();   // sent here by Mad Mixer's "Sign in": open on the access-code tab
       } else {
         showTokenOverlay();
       }

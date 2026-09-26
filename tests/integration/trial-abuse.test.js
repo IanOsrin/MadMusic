@@ -9,6 +9,10 @@ import { join } from 'node:path';
 // trials, and the JSON-only dedupe forgot everything on redeploy. These tests
 // pin the new contract: token travels ONLY by email, dedupe is canonical, and
 // a failed send rolls the token back so the address can retry.
+//
+// 2026-09-26 (Ian): "straight on, confirm later" — the response carries a
+// 1-DAY code so the listener is in at once; the email's signed Confirm link
+// extends it to 7 days. An invented address gets a day, not a week.
 
 const sendTrialEmailMock = vi.fn(async () => {});
 
@@ -32,14 +36,26 @@ beforeAll(async () => {
 });
 
 describe('free-trial abuse hardening (2026-08-27)', () => {
-  it('never returns the token in the response — email-only delivery', async () => {
+  it('signs straight on with a 1-day code and emails a signed Confirm link', async () => {
     const res = await request(app).post('/api/payments/trial').send({ email: 'first@example.com' });
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
-    expect(res.body.sent).toBe(true);
-    expect(res.body.token).toBeUndefined();
-    expect(JSON.stringify(res.body)).not.toMatch(/MASS-/);
-    expect(sendTrialEmailMock).toHaveBeenCalledWith('first@example.com', expect.stringMatching(/^MASS-/));
+    expect(res.body.token).toMatch(/^MASS-/);
+    expect(res.body.confirmWithinHours).toBe(24);
+    expect(sendTrialEmailMock).toHaveBeenCalledWith(
+      'first@example.com', res.body.token,
+      expect.stringMatching(/\/api\/payments\/trial\/confirm\?t=MASS-[^&]+&s=[A-Za-z0-9_-]{32}$/));
+    const { loadAccessTokens } = await import('../../lib/token-store.js');
+    const stored = (await loadAccessTokens()).tokens.find((t) => t.code === res.body.token);
+    const days = (new Date(stored.expirationDate) - new Date(stored.issuedDate)) / 86_400_000;
+    expect(Math.round(days)).toBe(1);
+  });
+
+  it('refuses a Confirm link whose signature does not match', async () => {
+    const res = await request(app).get('/api/payments/trial/confirm?t=MASS-AAA-BBB&s=not-the-signature-at-all-1234567');
+    expect(res.status).toBe(200);
+    expect(res.text).toMatch(/didn’t work/);
+    expect(res.text).not.toMatch(/Start listening/);
   });
 
   it('blocks a second trial for the same email', async () => {
