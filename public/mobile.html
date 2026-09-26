@@ -40,11 +40,11 @@
   </script>
   <style>html.native-app #buy-access-btn,html.native-app #guest-paywall-buy,
          html.native-app #mobileRingtoneBtn{display:none!important}</style>
-  <link rel="stylesheet" href="/css/mobile.css?v=21"
+  <link rel="stylesheet" href="/css/mobile.css?v=22"
         onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/mobile.css?v=4&r='+Date.now();},1500)">
   <!-- Shared field/format helpers (window.MADHelpers); loaded before body scripts
        so mobile's utilities can delegate to the single canonical source. -->
-  <script src="/js/helpers.js?v=21"></script>
+  <script src="/js/helpers.js?v=22"></script>
 </head>
 <body>
   <!-- Crawlable page heading (visually hidden — the app shell has no static H1) -->
@@ -444,6 +444,7 @@
           <button class="btn btn-primary" style="width: 100%; margin-bottom: 8px;" id="trial-btn">Start 7-Day Free Trial</button>
           <button class="btn btn-primary" style="width: 100%; margin-bottom: 8px;" id="change-token-btn">Enter Access Token</button>
           <button class="btn btn-secondary" style="width: 100%; margin-bottom: 8px;" id="buy-access-btn">Buy Access</button>
+          <button class="btn btn-secondary" style="width: 100%; margin-bottom: 8px;" id="contact-btn">💬 Contact us</button>
           <button class="btn btn-secondary" style="width: 100%; margin-bottom: 24px;" id="logout-btn">Clear Token & Logout</button>
           <!-- Apple Guideline 5.1.1(v): account deletion must be reachable inside
                the app. Set apart from the buttons above, and hidden while signed
@@ -714,7 +715,7 @@
   </script>
 
   <!-- Access-token fetch patch: classic script, MUST run before the module graph. -->
-  <script src="/js/mobile/fetch-interceptor.js?v=21"></script>
+  <script src="/js/mobile/fetch-interceptor.js?v=22"></script>
   <!-- Download basket: several tracks, one payment. Self-wiring off
        [data-basket-add], and hides itself inside the native shell. -->
   <script src="/js/basket.js?v=1"></script>
@@ -759,6 +760,6 @@
   })();
   </script>
 
-  <script type="module" src="/js/mobile/main.js?v=21"></script>
+  <script type="module" src="/js/mobile/main.js?v=22"></script>
 </body>
 </html>

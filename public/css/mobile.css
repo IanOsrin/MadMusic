@@ -1782,3 +1782,17 @@ body.audio-buffering #player-title::after {
     }
     .ask-sheet-input:focus { outline: none; border-color: var(--primary, #8b5cf6); }
     .ask-sheet-error { color: #ef4444 !important; margin: -4px 0 10px !important; }
+
+    /* "Having trouble? Contact us" under the sign-up / code / paywall sheets */
+    .sheet-help-link {
+      display: block;
+      margin: 6px auto 0;
+      padding: 6px 10px;
+      border: none;
+      background: none;
+      color: var(--text-muted, #999);
+      font-size: 13px;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    textarea.ask-sheet-input { resize: vertical; min-height: 96px; text-align: left; letter-spacing: normal; font-family: inherit; }

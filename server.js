@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 // Import routes
 import accessRouter from './routes/access.js';
 import paymentsRouter from './routes/payments.js';
+import contactRouter from './routes/contact.js';
 import playlistsRouter from './routes/playlists.js';
 import catalogRouter from './routes/catalog.js';
 import libraryRouter from './routes/library.js';
@@ -468,6 +469,15 @@ const trialLimiter = rateLimit({
   skip: skipInTest
 });
 
+// "Contact us" is public (people who can't sign in need it most) — keep it from being a spam cannon.
+const contactLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { ok: false, error: 'Too many messages — please try again later, or email serverdev@gmail.com.' },
+  keyGenerator: clientIpKey,
+  skip: skipInTest
+});
+
 // Apply general rate limiting to all API routes
 app.use('/api/', apiLimiter);
 
@@ -475,6 +485,7 @@ app.use('/api/', apiLimiter);
 app.use(['/api/explore', '/api/trending', '/api/featured-albums', '/api/missing-audio-songs', '/api/singles'], expensiveLimiter);
 app.use(['/api/payments/initialize', '/api/payments/subscribe', '/api/ringtone/initiate'], paymentLimiter);
 app.use('/api/payments/trial', trialLimiter);
+app.use('/api/contact', contactLimiter);
 
 // Add Cache-Control headers
 app.use((req, res, next) => {
@@ -569,6 +580,7 @@ app.use('/api/', async (req, res, next) => {
     '/global-favorites',
     '/auth', '/payments/initialize', '/payments/subscribe', '/payments/trial', '/payments/callback',
     '/payments/webhook', '/payments/plans', '/payments/subscription-plan',
+    '/contact',   // "Contact us" — must work for people who can't sign in (rate-limited above)
     '/access/stream-events', '/access/logout', '/access/email/', '/health',
     '/tokens/resync', '/tokens/unsynced', '/tokens/clear-trials', '/pg-mirror',
     // Telkom webhook paths skip token auth ONLY while the integration is live;
@@ -846,6 +858,7 @@ app.get('/img/jukebox.webp', async (req, res, next) => {
 // ========= ROUTE MOUNTS =========
 app.use('/api/access', accessRouter);
 app.use('/api/payments', paymentsRouter);
+app.use('/api/contact', contactRouter);
 if (TELKOM_ENABLED) app.use('/api/telkom', telkomRouter); // ring-fenced: 404'd above when off
 if (PODCASTS_ENABLED) app.use('/api', podcastsRouter);    // dark until PODCASTS_ENABLED=true
 if (SUGGESTIONS_ENABLED) app.use('/api', suggestionsRouter); // dark until SUGGESTIONS_ENABLED=true

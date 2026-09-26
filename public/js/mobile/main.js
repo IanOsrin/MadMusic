@@ -2,25 +2,25 @@
 // holds the DOM event wiring + drag/search state + init(), and exposes the
 // inline on*-handlers on window. All app logic lives in the mobile/*.js modules.
 
-import { elements, state } from './state.js?v=21';
-import { showToast } from './util.js?v=21';
-import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=21';
+import { elements, state } from './state.js?v=22';
+import { showToast } from './util.js?v=22';
+import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=22';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, startTrial, updateAuthUI } from './auth.js?v=21';
-import { switchTab } from './nav.js?v=21';
-import { renderSearchResults, search } from './search.js?v=21';
-import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=21';
-import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=21';
-import { filterG100Albums, loadG100 } from './rails-g100.js?v=21';
-import { loadNewReleases } from './rails-newreleases.js?v=21';
-import { loadSuggestedForYou } from './rails-suggested.js?v=21';
-import { initMobHero } from './hero.js?v=21';
-import { loadHomeShelves } from './rails-g100.js?v=21';
-import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=21';
-import { showAlbumTracksModal } from './cards.js?v=21';
-import { initRouter } from './router.js?v=21';
-import { initMaddie } from './maddie.js?v=21';
+import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=22';
+import { switchTab } from './nav.js?v=22';
+import { renderSearchResults, search } from './search.js?v=22';
+import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=22';
+import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=22';
+import { filterG100Albums, loadG100 } from './rails-g100.js?v=22';
+import { loadNewReleases } from './rails-newreleases.js?v=22';
+import { loadSuggestedForYou } from './rails-suggested.js?v=22';
+import { initMobHero } from './hero.js?v=22';
+import { loadHomeShelves } from './rails-g100.js?v=22';
+import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=22';
+import { showAlbumTracksModal } from './cards.js?v=22';
+import { initRouter } from './router.js?v=22';
+import { initMaddie } from './maddie.js?v=22';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {
@@ -53,6 +53,7 @@ import { initMaddie } from './maddie.js?v=21';
     document.getElementById('change-token-btn').addEventListener('click', () => setAccessToken());
     document.getElementById('buy-access-btn').addEventListener('click', () => buyAccess());
     document.getElementById('logout-btn').addEventListener('click', logout);
+    document.getElementById('contact-btn')?.addEventListener('click', () => showContactSheet());
     document.getElementById('delete-account-btn')?.addEventListener('click', () => deleteAccountFlow());
 
     // ===== Initialize =====

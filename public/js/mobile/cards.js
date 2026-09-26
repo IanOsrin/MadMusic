@@ -1,11 +1,11 @@
 // Album/track card builders + their modals for the mobile app.
 
-import { elements, state } from './state.js?v=21';
-import { escapeHtml, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=21';
-import { switchTab } from './nav.js?v=21';
-import { search } from './search.js?v=21';
-import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=21';
-import { pushOverlay } from './router.js?v=21';
+import { elements, state } from './state.js?v=22';
+import { escapeHtml, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=22';
+import { switchTab } from './nav.js?v=22';
+import { search } from './search.js?v=22';
+import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=22';
+import { pushOverlay } from './router.js?v=22';
 
 // ── Shared album tile (the New Releases / G100 look) ─────────────────────────
 // One square-cover tile: first tap reveals the title/artist overlay, second tap
@@ -28,7 +28,7 @@ function armTileOverlayDismiss() {
     }
 
 export function createAlbumTile(album, opts = {}) {
-      const { badge = '', badgeClass = 'nr-new-badge', playBtnStyle = '', countBadgeKey = null, onOpen = null, onPlay = null } = opts;
+      const { badge = '', badgeClass = 'nr-new-badge', playBtnStyle = '', countBadgeKey = null, onOpen = null, onPlay = null, openOnTap = false } = opts;
       armTileOverlayDismiss();
 
       const card = document.createElement('div');
@@ -54,6 +54,9 @@ export function createAlbumTile(album, opts = {}) {
 
       card.addEventListener('click', (e) => {
         if (e.target.closest('.nr-play-btn')) return;
+        // openOnTap (search results): the cover opens the album straight away — no
+        // first-tap overlay, which people took for "nothing happened".
+        if (openOnTap && !e.target.closest('.nr-overlay-artist')) { (onOpen || showAlbumTracksModal)(album); return; }
         if (!card.classList.contains('overlay-active')) {
           document.querySelectorAll('.nr-album-card.overlay-active').forEach(c => c.classList.remove('overlay-active'));
           card.classList.add('overlay-active');
@@ -93,7 +96,8 @@ export function createAlbumTile(album, opts = {}) {
 // one track deep and skips dead. After playback starts, swap the queue for the
 // real album from /api/album — silently, without interrupting the audio.
 const fullAlbumCache = new Map();
-export async function upgradeQueueToFullAlbum(album, playingTrack) {
+// The whole album (search results only carry the tracks that matched), cached per album.
+async function fetchFullAlbum(album) {
       const key = `${album.title}|||${album.artist}`.toLowerCase();
       let full = fullAlbumCache.get(key);
       if (!full) {
@@ -104,6 +108,21 @@ export async function upgradeQueueToFullAlbum(album, playingTrack) {
         } catch { full = album; }
         fullAlbumCache.set(key, full);
       }
+      return full;
+    }
+
+// Open an album from a search result: show what we have at once, then swap in the full
+// track list when it arrives (only if that album's sheet is still the one showing).
+export async function openFullAlbum(album) {
+      showAlbumTracksModal(album);
+      const full = await fetchFullAlbum(album);
+      const stillOpen = elements.modalOverlay.classList.contains('show') &&
+        elements.bottomSheet.dataset.albumKey === `${album.title}|||${album.artist}`;
+      if (stillOpen && full.tracks.length > album.tracks.length) showAlbumTracksModal(full, { refresh: true });
+    }
+
+export async function upgradeQueueToFullAlbum(album, playingTrack) {
+      const full = await fetchFullAlbum(album);
       // Only swap if the user is still on the track this play started
       if (state.currentTrack !== playingTrack) return;
       if (!full.tracks || full.tracks.length <= (state.playlistContext?.tracks?.length || 0)) return;
@@ -120,7 +139,8 @@ export function renderAlbumTileGrid(container, albums, optsFor = () => ({})) {
       return grid;
     }
 
-export function showAlbumTracksModal(album) {
+export function showAlbumTracksModal(album, { refresh = false } = {}) {
+      elements.bottomSheet.dataset.albumKey = `${album.title}|||${album.artist}`;
       elements.bottomSheet.innerHTML = `
         <div class="bottom-sheet-header">${escapeHtml(album.title)}</div>
         <p style="text-align: center; color: var(--text-secondary); margin-bottom: 16px;">${escapeHtml(album.artist)}</p>
@@ -150,7 +170,7 @@ export function showAlbumTracksModal(album) {
       `;
 
       elements.modalOverlay.classList.add('show');
-      pushOverlay('album-tracks', album.recordId || album.title);
+      if (!refresh) pushOverlay('album-tracks', album.recordId || album.title);   // a refresh is the same sheet — one Back closes it
 
       elements.bottomSheet.querySelectorAll('[data-track-index]').forEach(btn => {
         btn.addEventListener('click', () => {
