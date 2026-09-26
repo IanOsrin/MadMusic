@@ -1,8 +1,8 @@
 // Catalogue search for the mobile app.
 
-import { elements, state } from './state.js?v=21';
-import { groupTracksByAlbum, hasValidArtwork, hasValidAudio, escapeHtml } from './fields.js?v=21';
-import { renderAlbumTileGrid } from './cards.js?v=21';
+import { elements, state } from './state.js?v=22';
+import { groupTracksByAlbum, hasValidArtwork, hasValidAudio, escapeHtml } from './fields.js?v=22';
+import { openFullAlbum, renderAlbumTileGrid } from './cards.js?v=22';
 
 export async function search(query) {
       try {
@@ -46,7 +46,7 @@ export function renderSearchResults() {
       // Group search results by album — rendered as the same tile grid as
       // New Releases / G100 so every album surface shares one look
       const albums = groupTracksByAlbum(validResults);
-      renderAlbumTileGrid(elements.searchResults, albums);
+      renderAlbumTileGrid(elements.searchResults, albums, () => ({ openOnTap: true, onOpen: openFullAlbum }));
 
       // Artist biography above the albums — shown only when the search clearly
       // resolves to one dominant artist (i.e. an artist search, not a keyword).

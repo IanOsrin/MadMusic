@@ -1,7 +1,7 @@
 // Auth + access-token flow for the mobile app.
 
-import { elements, state } from './state.js?v=21';
-import { showToast } from './util.js?v=21';
+import { elements, state } from './state.js?v=22';
+import { showToast } from './util.js?v=22';
 
 export function logout() {
       localStorage.removeItem('mass_access_token');
@@ -77,12 +77,14 @@ function askSheet({ icon, title, text, type = 'text', placeholder = '', button, 
                ${type === 'email' ? 'inputmode="email" autocapitalize="off"' : 'autocapitalize="characters"'} spellcheck="false">
         <p class="ask-sheet-error" hidden></p>
         <button type="submit" class="btn btn-primary">${button}</button>
+        <button type="button" class="sheet-help-link">Having trouble? Contact us</button>
       </form>`;
     document.body.appendChild(wrap);
     const input = wrap.querySelector('input');
     const done = (v) => { wrap.remove(); resolve(v); };
     wrap.querySelector('.guest-paywall-close').addEventListener('click', () => done(null));
     wrap.addEventListener('click', (e) => { if (e.target === wrap) done(null); });
+    wrap.querySelector('.sheet-help-link').addEventListener('click', () => { done(null); showContactSheet(); });
     wrap.querySelector('form').addEventListener('submit', (e) => {
       e.preventDefault();
       const v = input.value.trim();
@@ -97,6 +99,61 @@ function askSheet({ icon, title, text, type = 'text', placeholder = '', button, 
     });
     setTimeout(() => input.focus(), 50);
   });
+}
+
+// "Contact us" — a short form that emails MAD support (server: routes/contact.js; the
+// support inbox gets it, with Ian as a silent BCC). The access code and device ride along
+// via the fetch interceptor and User-Agent, so nobody has to explain them.
+export function showContactSheet() {
+  document.getElementById('contact-sheet')?.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'contact-sheet';
+  wrap.className = 'guest-paywall show';
+  const known = localStorage.getItem('mass_token_email') || '';
+  wrap.innerHTML = `
+    <form class="guest-paywall-card" novalidate>
+      <button type="button" class="guest-paywall-close" aria-label="Close">&times;</button>
+      <div class="guest-paywall-icon">💬</div>
+      <h3>Contact us</h3>
+      <p>Tell us what’s wrong and we’ll get back to you by email.</p>
+      <input class="ask-sheet-input" type="email" name="email" placeholder="Your email address" autocomplete="email" inputmode="email" autocapitalize="off" spellcheck="false">
+      <textarea class="ask-sheet-input contact-message" name="message" rows="4" maxlength="3000" placeholder="How can we help?"></textarea>
+      <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;height:0;width:0;opacity:0">
+      <p class="ask-sheet-error" hidden></p>
+      <button type="submit" class="btn btn-primary">Send message</button>
+    </form>`;
+  document.body.appendChild(wrap);
+  const form = wrap.querySelector('form');
+  form.email.value = known;
+  const close = () => wrap.remove();
+  wrap.querySelector('.guest-paywall-close').addEventListener('click', close);
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
+  const err = wrap.querySelector('.ask-sheet-error');
+  const fail = (msg, field) => { err.textContent = msg; err.hidden = false; field?.focus(); };
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = form.email.value.trim(), message = form.message.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Please enter a valid email address so we can reply.', form.email);
+    if (message.length < 3) return fail('Please tell us what’s wrong.', form.message);
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true; btn.textContent = 'Sending…'; err.hidden = true;
+    try {
+      const r = await fetch('/api/contact', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, message, website: form.website.value, page: location.pathname + location.hash }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) throw new Error(d.error || 'We couldn’t send your message. Please try again.');
+      form.innerHTML = `<div class="guest-paywall-icon">✅</div><h3>Message sent</h3>
+        <p>Thanks — we’ll reply to ${email.replace(/[&<>"']/g, '')} as soon as we can.</p>
+        <button type="button" class="btn btn-primary">Done</button>`;
+      form.querySelector('button').addEventListener('click', close);
+    } catch (ex) {
+      btn.disabled = false; btn.textContent = 'Send message';
+      fail(ex.message);
+    }
+  });
+  setTimeout(() => (known ? form.message : form.email).focus(), 50);
 }
 
 export async function setAccessToken() {
@@ -295,6 +352,7 @@ function injectGuestPaywall() {
       <button class="btn btn-primary" id="guest-paywall-trial">Start 7-Day Free Trial</button>
       ${isNativeApp() ? '' : '<button class="btn btn-secondary" id="guest-paywall-buy">Buy Access</button>'}
       <button class="btn btn-secondary" id="guest-paywall-token">Enter Access Token</button>
+      <button type="button" class="sheet-help-link" id="guest-paywall-help">Having trouble? Contact us</button>
     </div>`;
   document.body.appendChild(overlay);
 
@@ -302,6 +360,7 @@ function injectGuestPaywall() {
   document.getElementById('guest-paywall-trial').addEventListener('click', startTrial);
   document.getElementById('guest-paywall-buy')?.addEventListener('click', buyAccess);
   document.getElementById('guest-paywall-token').addEventListener('click', setAccessToken);
+  document.getElementById('guest-paywall-help').addEventListener('click', () => { hideGuestPaywall(); showContactSheet(); });
   // Tapping the dimmed backdrop also just closes it — exploring stays easy.
   overlay.addEventListener('click', (e) => { if (e.target === overlay) hideGuestPaywall(); });
 
