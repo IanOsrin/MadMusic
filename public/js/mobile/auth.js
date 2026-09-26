@@ -1,7 +1,7 @@
 // Auth + access-token flow for the mobile app.
 
-import { elements, state } from './state.js?v=20';
-import { showToast } from './util.js?v=20';
+import { elements, state } from './state.js?v=21';
+import { showToast } from './util.js?v=21';
 
 export function logout() {
       localStorage.removeItem('mass_access_token');
@@ -58,23 +58,72 @@ export function updateAuthUI() {
       }
     }
 
-export function setAccessToken() {
-      const token = prompt('Please enter your access token:');
+// A one-field bottom sheet instead of window.prompt(): in-app browsers (WhatsApp, Facebook,
+// Instagram) silently block prompt(), and switching to the mail app dismisses it — both left
+// people unable to sign up. Resolves with the trimmed value, or null if closed.
+function askSheet({ icon, title, text, type = 'text', placeholder = '', button, autocomplete = 'off' }) {
+  return new Promise((resolve) => {
+    document.getElementById('ask-sheet')?.remove();
+    const wrap = document.createElement('div');
+    wrap.id = 'ask-sheet';
+    wrap.className = 'guest-paywall show';
+    wrap.innerHTML = `
+      <form class="guest-paywall-card" novalidate>
+        <button type="button" class="guest-paywall-close" aria-label="Close">&times;</button>
+        <div class="guest-paywall-icon">${icon}</div>
+        <h3>${title}</h3>
+        <p>${text}</p>
+        <input class="ask-sheet-input" type="${type}" placeholder="${placeholder}" autocomplete="${autocomplete}"
+               ${type === 'email' ? 'inputmode="email" autocapitalize="off"' : 'autocapitalize="characters"'} spellcheck="false">
+        <p class="ask-sheet-error" hidden></p>
+        <button type="submit" class="btn btn-primary">${button}</button>
+      </form>`;
+    document.body.appendChild(wrap);
+    const input = wrap.querySelector('input');
+    const done = (v) => { wrap.remove(); resolve(v); };
+    wrap.querySelector('.guest-paywall-close').addEventListener('click', () => done(null));
+    wrap.addEventListener('click', (e) => { if (e.target === wrap) done(null); });
+    wrap.querySelector('form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const v = input.value.trim();
+      const err = wrap.querySelector('.ask-sheet-error');
+      if (!v || (type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))) {
+        err.textContent = type === 'email' ? 'Please enter a valid email address' : 'Please enter your code';
+        err.hidden = false;
+        input.focus();
+        return;
+      }
+      done(v);
+    });
+    setTimeout(() => input.focus(), 50);
+  });
+}
+
+export async function setAccessToken() {
+      const token = await askSheet({
+        icon: '🔑', title: 'Enter your access code',
+        text: 'The code from your MAD email — it looks like MASS-XXX-XXX.',
+        placeholder: 'MASS-XXX-XXX', button: 'Start listening',
+      });
       if (token) {
-        localStorage.setItem('mass_access_token', token);
-        showToast('Access token saved! Reloading...', 'success');
+        localStorage.setItem('mass_access_token', token.toUpperCase());
+        showToast('Access code saved! Reloading...', 'success');
         setTimeout(() => window.location.reload(), 1000);
       }
     }
 
 // 7-day free trial — same endpoint the desktop gate uses. The server enforces
-// one trial per email (409 with a friendly message on repeats).
+// one trial per email (409 with a friendly message on repeats). Straight on
+// (2026-09-26): the response carries the code, so we sign in at once; the
+// trial email's Confirm button keeps it running the full 7 days.
 export async function startTrial() {
-      const email = prompt('Enter your email address to start your free 7-day trial:');
-      if (!email || !email.includes('@')) {
-        showToast('Please enter a valid email address', 'error');
-        return;
-      }
+      const email = await askSheet({
+        icon: '🎧', title: 'Start your free 7-day trial',
+        text: 'No payment needed. Enter your email and you’re straight in.',
+        type: 'email', placeholder: 'you@example.com', button: 'Start listening', autocomplete: 'email',
+      });
+      if (!email) return;
+      document.getElementById('guest-paywall')?.classList.remove('show');
 
       showToast('Starting your trial…', 'success');
 
@@ -92,13 +141,12 @@ export async function startTrial() {
         const data = await response.json();
 
         if (response.ok && data.ok && data.token) {
-          // Legacy path (server no longer returns the token, but stay tolerant
-          // during rollout)
+          // Straight on: signed in now; the email's Confirm button keeps all 7 days.
           try { window.umami && window.umami.track('trial-start', via || {}); } catch (e) {}
-          localStorage.setItem('mass_access_token', String(data.token).trim());
+          localStorage.setItem('mass_access_token', String(data.token).trim().toUpperCase());
           localStorage.setItem('mass_token_email', email.trim().toLowerCase());
-          showToast('Trial started! Reloading…', 'success');
-          setTimeout(() => window.location.reload(), 1000);
+          showToast('You’re in! Confirm the email we sent to keep all 7 days.', 'success');
+          setTimeout(() => window.location.reload(), 2200);
         } else if (response.ok && data.ok && data.sent) {
           // Abuse fix 2026-08-27: the token arrives ONLY by email now — a
           // trial needs a mailbox you control. Point them at their inbox,
@@ -107,6 +155,10 @@ export async function startTrial() {
           localStorage.setItem('mass_token_email', email.trim().toLowerCase());
           alert(`We've emailed your trial token to ${email.trim()}.\n\nCheck your inbox (and spam), then enter the token to start listening.`);
           setAccessToken();
+        } else if (response.status === 409) {
+          // This email already had a trial — they may simply need their code again.
+          showToast('This email has already had a free trial. Enter your code, or buy access.', 'error');
+          setTimeout(() => setAccessToken(), 600);
         } else {
           showToast(data.error || 'Could not start the trial. Please try again.', 'error');
         }

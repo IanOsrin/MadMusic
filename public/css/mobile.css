@@ -1763,3 +1763,22 @@ body.audio-buffering #player-title::after {
 #newreleases-content .nr-card-caption .t, #g100-content .nr-card-caption .t { font-size: 10px; }
 #newreleases-content .nr-card-caption .a, #g100-content .nr-card-caption .a { font-size: 9px; }
 .nr-card-overlay { border-radius: 0; aspect-ratio: 1; bottom: auto; top: 0; }
+
+    /* One-field sheet (trial email / access code) — replaces window.prompt(),
+       which in-app browsers block and app-switching dismisses. */
+    .ask-sheet-input {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      margin: 0 0 10px;
+      padding: 13px 14px;
+      border-radius: 10px;
+      border: 1.5px solid var(--border, #333);
+      background: var(--bg, #121212);
+      color: var(--text, #fff);
+      font-size: 16px; /* 16px stops iOS zooming into the field */
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+    .ask-sheet-input:focus { outline: none; border-color: var(--primary, #8b5cf6); }
+    .ask-sheet-error { color: #ef4444 !important; margin: -4px 0 10px !important; }

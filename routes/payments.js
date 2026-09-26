@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'node:crypto';
 import { sendTokenEmail, sendSubscriptionWelcomeEmail, sendTrialEmail, emailTransporter } from '../lib/email.js';
 import {
   paystackRequest, verifyPaystackWebhook,
@@ -10,8 +11,10 @@ import {
   createAccessToken,
   createSubscriptionToken, renewSubscriptionToken,
   disableSubscriptionToken, findSubscriptionToken,
-  findTrialTokenByEmail, findTrialTokenInFM, revokeToken
+  findTrialTokenByEmail, findTrialTokenInFM, revokeToken,
+  confirmTrialToken, TRIAL_UNCONFIRMED_DAYS
 } from '../lib/token-store.js';
+import { timingSafeEqualStr } from '../lib/crypto-utils.js';
 import { wasAccountDeleted } from '../lib/account-delete.js';
 import { pendingPaymentsCache, processedWebhookEventsCache } from '../cache.js';
 import { isStrictEmail } from '../lib/validators.js';
@@ -159,9 +162,19 @@ const TRIAL_DAYS = 7;
 // ABUSE FIX 2026-08-27: the token used to come back in the HTTP response, so
 // the email was never verified — any invented address minted a fresh trial on
 // screen. And the one-per-email check only read the JSON file, which does not
-// survive every deploy, so even the SAME email could re-claim. Now: dedupe
-// checks FileMaker (the durable memory) as well, and the token travels ONLY
-// via the trial email — claiming a trial requires a mailbox you control.
+// survive every deploy, so even the SAME email could re-claim. Dedupe now
+// checks FileMaker (the durable memory) as well.
+//
+// STRAIGHT ON, CONFIRM LATER (Ian, 2026-09-26): email-only delivery made phones
+// loop — the code prompt vanished while people fetched it from their mail app,
+// and a second "Start trial" hit "already used". Now the response carries a
+// 1-day code, so the listener is in at once; the trial email's Confirm link
+// (signed, below) extends it to TRIAL_DAYS. An invented address gets one day.
+const APP_BASE_URL = () => (process.env.APP_URL || 'https://musicafricadirect.com').replace(/\/+$/, '');
+const trialConfirmSig = (code) => crypto.createHmac('sha256', process.env.AUTH_SECRET || '')
+  .update(`trial-confirm:${code}`).digest('base64url').slice(0, 32);
+const trialConfirmUrl = (code) =>
+  `${APP_BASE_URL()}/api/payments/trial/confirm?t=${encodeURIComponent(code)}&s=${trialConfirmSig(code)}`;
 router.post('/trial', async (req, res) => {
   try {
     const { email } = req.body;
@@ -204,17 +217,17 @@ router.post('/trial', async (req, res) => {
       console.error('[MASS] FM trial-dedupe lookup failed — JSON-only check in effect:', err?.message || err);
     }
 
-    const token = await createAccessToken(TRIAL_DAYS, '7-day free trial', normalisedEmail, 'trial');
+    const token = await createAccessToken(TRIAL_UNCONFIRMED_DAYS, `${TRIAL_DAYS}-day free trial (1 day until the email is confirmed)`, normalisedEmail, 'trial');
 
     try {
-      await sendTrialEmail(normalisedEmail, token.code);
+      await sendTrialEmail(normalisedEmail, token.code, trialConfirmUrl(token.code));
     } catch (err) {
       // Undelivered token would block this email's retry forever — roll it back.
       await revokeToken(token.code, 'trial email delivery failed');
       return res.status(502).json({ ok: false, error: 'We could not send the email. Please check the address and try again.' });
     }
 
-    console.log(`[MASS] Trial token issued: ${token.code} → ${normalisedEmail} (delivered by email)`);
+    console.log(`[MASS] Trial token issued: ${token.code} → ${normalisedEmail} (1 day until confirmed)`);
 
     // Funnel attribution (optional, client-supplied): a trial that started from
     // a taster landing (/?t=… under a YouTube video) counts against its
@@ -224,11 +237,42 @@ router.post('/trial', async (req, res) => {
       bumpTaster({ kind: 'trial', campaign: via.campaign, track: via.t }).catch(() => {});
     }
 
-    // Deliberately NO token in the response.
-    res.json({ ok: true, sent: true });
+    // Straight on: the browser stores this code and reloads signed in.
+    res.json({ ok: true, sent: true, token: token.code, confirmWithinHours: TRIAL_UNCONFIRMED_DAYS * 24 });
   } catch (err) {
     console.error('[MASS] Trial token creation failed:', err);
     res.status(500).json({ ok: false, error: 'Failed to create trial token' });
+  }
+});
+
+// The Confirm link in the trial email. Signed with AUTH_SECRET, so only the mailbox that
+// received the email can extend the code. Answers with a small page (it's opened from a
+// mail app); "Start listening" signs that device in too via /access?token=.
+router.get('/trial/confirm', async (req, res) => {
+  const code = String(req.query.t || '').trim().toUpperCase();
+  const sig  = String(req.query.s || '');
+  const page = (title, body, listen) => res.status(200).type('html').send(`<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>${title} — MAD</title></head>
+<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#121212;color:#e8e8e8;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:24px;box-sizing:border-box">
+<div style="max-width:420px;text-align:center">
+<img src="/img/Madmusiclogonew-dark.png" alt="MAD — Music Africa Direct" style="height:44px;margin-bottom:18px">
+<h1 style="font-size:1.5rem;margin:0 0 10px">${title}</h1>
+<p style="color:#bbb;line-height:1.5;margin:0 0 22px">${body}</p>
+${listen ? `<a href="${listen}" style="display:inline-block;padding:12px 26px;border-radius:999px;background:linear-gradient(135deg,#8b5cf6,#a78bfa);color:#fff;font-weight:700;text-decoration:none">Start listening</a>` : ''}
+</div></body></html>`);
+  if (!/^[A-Z0-9-]{6,40}$/.test(code) || !sig || !timingSafeEqualStr(sig, trialConfirmSig(code))) {
+    return page('That link didn’t work', 'Please use the Confirm button in your most recent trial email.', null);
+  }
+  const listen = `/access?token=${encodeURIComponent(code)}`;
+  try {
+    const r = await confirmTrialToken(code, TRIAL_DAYS);
+    if (r.ok && r.alreadyConfirmed) return page('Already confirmed', `Your free trial is confirmed — you have the full ${TRIAL_DAYS} days.`, listen);
+    if (r.ok) return page('Email confirmed', `Thanks! Your free trial now runs the full ${TRIAL_DAYS} days.`, listen);
+    return page('We couldn’t confirm this trial', 'It may have ended or been cancelled. You can still buy access on the site.', '/');
+  } catch (err) {
+    console.error('[MASS] Trial confirm failed:', err?.message || err);
+    return page('Something went wrong', 'We couldn’t confirm your email just now. Please try the link again in a minute.', null);
   }
 });
 
