@@ -1,7 +1,7 @@
 // Auth + access-token flow for the mobile app.
 
-import { elements, state } from './state.js?v=22';
-import { showToast } from './util.js?v=22';
+import { elements, state } from './state.js?v=23';
+import { showToast } from './util.js?v=23';
 
 export function logout() {
       localStorage.removeItem('mass_access_token');
@@ -434,14 +434,23 @@ export async function buyAccess() {
     plans = [{ id: '7-day', label: '7 Day Access', days: 7, display: 'R7.50' }];
   }
 
-  showPlanPicker(plans);
+  // The monthly subscription (desktop had it; phones only offered passes until 2026-09-27).
+  // Optional: if the lookup fails the passes still show.
+  let monthly = null;
+  try {
+    const res  = await fetch('/api/payments/subscription-plan');
+    const data = await res.json();
+    if (res.ok && data.plan?.code) monthly = data.plan;
+  } catch { /* passes only */ }
+
+  showPlanPicker(plans, monthly);
 }
 
 function closePlanPicker() {
   document.getElementById('plan-picker')?.remove();
 }
 
-function showPlanPicker(plans) {
+function showPlanPicker(plans, monthly = null) {
   closePlanPicker();
   const overlay = document.createElement('div');
   overlay.id = 'plan-picker';
@@ -451,13 +460,21 @@ function showPlanPicker(plans) {
       <button type="button" class="guest-paywall-close" id="plan-picker-close" aria-label="Close">&times;</button>
       <div class="guest-paywall-icon">🎟️</div>
       <h3>Choose your access</h3>
-      <p>Unlimited streaming for the period you pick. No subscription, no card stored.</p>
+      <p>Unlimited streaming. Subscribe monthly, or buy a pass for the period you pick — passes are paid once, no card stored.</p>
       <div class="plan-list">
+        ${monthly ? `
+          <button type="button" class="plan-row plan-row-best" data-sub="1">
+            <span class="plan-row-main">
+              <span class="plan-row-name">${esc(monthly.label || 'Monthly Subscription')}</span>
+              <span class="plan-row-sub">Renews every month</span>
+            </span>
+            <span class="plan-row-price">${esc(monthly.display || 'Monthly')}</span>
+          </button>` : ''}
         ${plans.map((p, i) => `
-          <button type="button" class="plan-row${i === plans.length - 1 ? ' plan-row-best' : ''}" data-plan="${esc(p.id)}">
+          <button type="button" class="plan-row${!monthly && i === plans.length - 1 ? ' plan-row-best' : ''}" data-plan="${esc(p.id)}">
             <span class="plan-row-main">
               <span class="plan-row-name">${esc(p.label)}</span>
-              <span class="plan-row-sub">${p.days} ${p.days === 1 ? 'day' : 'days'} of unlimited streaming</span>
+              <span class="plan-row-sub">${p.days} ${p.days === 1 ? 'day' : 'days'} of unlimited streaming · pay once</span>
             </span>
             <span class="plan-row-price">${esc(p.display)}</span>
           </button>`).join('')}
@@ -472,12 +489,12 @@ function showPlanPicker(plans) {
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closePlanPicker(); });
   document.getElementById('plan-picker-close').addEventListener('click', closePlanPicker);
   for (const btn of overlay.querySelectorAll('.plan-row')) {
-    btn.addEventListener('click', () => startCheckout(btn.dataset.plan));
+    btn.addEventListener('click', () => startCheckout(btn.dataset.plan, btn.dataset.sub === '1'));
   }
 }
 
-/** Send the chosen plan to Paystack. */
-async function startCheckout(planId) {
+/** Send the chosen plan (or the monthly subscription) to Paystack. */
+async function startCheckout(planId, isSubscription = false) {
   const input  = document.getElementById('plan-email');
   const status = document.getElementById('plan-picker-status');
   const email  = (input?.value || '').trim();
@@ -494,10 +511,12 @@ async function startCheckout(planId) {
   for (const b of document.querySelectorAll('#plan-picker .plan-row')) b.disabled = true;
 
   try {
-    const response = await fetch('/api/payments/initialize', {
+    // Subscription → /subscribe (Paystack plan); passes → /initialize. Both come back to
+    // /mobile.html?payment=success&token=… via the callback (source=mobile).
+    const response = await fetch(isSubscription ? '/api/payments/subscribe' : '/api/payments/initialize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, plan: planId, source: 'mobile' })
+      body: JSON.stringify(isSubscription ? { email, source: 'mobile' } : { email, plan: planId, source: 'mobile' })
     });
     const data = await response.json();
     if (response.ok && data.authorization_url) {
