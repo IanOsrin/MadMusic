@@ -8,6 +8,18 @@ import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
 import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=22';
+
+// Links from MAD emails: ?buy=1 opens the plans (not inside the store app — policy),
+// ?contact=1 opens "Contact us". The param is dropped from the address bar either way.
+function handleEmailLinks() {
+  const p = new URLSearchParams(window.location.search);
+  const buy = p.get('buy') === '1', contact = p.get('contact') === '1';
+  if (!buy && !contact) return;
+  p.delete('buy'); p.delete('contact');
+  const q = p.toString();
+  window.history.replaceState({}, document.title, window.location.pathname + (q ? '?' + q : ''));
+  setTimeout(() => { if (contact) showContactSheet(); else if (!isNativeApp()) buyAccess(); }, 600);
+}
 import { switchTab } from './nav.js?v=22';
 import { renderSearchResults, search } from './search.js?v=22';
 import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=22';
@@ -54,6 +66,11 @@ import { initMaddie } from './maddie.js?v=22';
     document.getElementById('buy-access-btn').addEventListener('click', () => buyAccess());
     document.getElementById('logout-btn').addEventListener('click', logout);
     document.getElementById('contact-btn')?.addEventListener('click', () => showContactSheet());
+    // Android app on Google Play — offered to Android browsers, never inside the app.
+    if (/Android/i.test(navigator.userAgent) && !isNativeApp()) {
+      const getApp = document.getElementById('get-app-btn');
+      if (getApp) getApp.style.display = 'block';
+    }
     document.getElementById('delete-account-btn')?.addEventListener('click', () => deleteAccountFlow());
 
     // ===== Initialize =====
@@ -98,6 +115,7 @@ import { initMaddie } from './maddie.js?v=22';
           loadHomeShelves();
           loadPlaylists();
           handleShareDeepLink();
+          handleEmailLinks();
           return;
         }
         elements.newReleasesContent.innerHTML = `
@@ -124,6 +142,7 @@ import { initMaddie } from './maddie.js?v=22';
           loadHomeShelves();
       loadPlaylists();
       handleShareDeepLink();
+      handleEmailLinks();
     }
 
     // A visitor arriving via a shared track link (/mobile?t=<recordId>) gets
