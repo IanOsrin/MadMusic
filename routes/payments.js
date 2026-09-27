@@ -220,7 +220,12 @@ router.post('/trial', async (req, res) => {
     const token = await createAccessToken(TRIAL_UNCONFIRMED_DAYS, `${TRIAL_DAYS}-day free trial (1 day until the email is confirmed)`, normalisedEmail, 'trial');
 
     try {
-      await sendTrialEmail(normalisedEmail, token.code, trialConfirmUrl(token.code));
+      // Prices for the "keep listening" section — from the same source the checkout uses.
+      // The monthly line uses the same display text the site shows (PAYSTACK_SUBSCRIPTION_DISPLAY,
+      // e.g. "R29.99/Month"); left out if it carries no price.
+      const monthly = /R\s?\d/.test(PAYSTACK_SUBSCRIPTION_PLAN.display || '') ? PAYSTACK_SUBSCRIPTION_PLAN.display : null;
+      const plans = Object.values(PAYSTACK_PLANS).map((pl) => ({ label: pl.label, display: pl.display }));
+      await sendTrialEmail(normalisedEmail, token.code, trialConfirmUrl(token.code), { plans, monthly });
     } catch (err) {
       // Undelivered token would block this email's retry forever — roll it back.
       await revokeToken(token.code, 'trial email delivery failed');

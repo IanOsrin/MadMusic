@@ -2,25 +2,37 @@
 // holds the DOM event wiring + drag/search state + init(), and exposes the
 // inline on*-handlers on window. All app logic lives in the mobile/*.js modules.
 
-import { elements, state } from './state.js?v=22';
-import { showToast } from './util.js?v=22';
-import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=22';
+import { elements, state } from './state.js?v=23';
+import { showToast } from './util.js?v=23';
+import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=23';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=22';
-import { switchTab } from './nav.js?v=22';
-import { renderSearchResults, search } from './search.js?v=22';
-import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=22';
-import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=22';
-import { filterG100Albums, loadG100 } from './rails-g100.js?v=22';
-import { loadNewReleases } from './rails-newreleases.js?v=22';
-import { loadSuggestedForYou } from './rails-suggested.js?v=22';
-import { initMobHero } from './hero.js?v=22';
-import { loadHomeShelves } from './rails-g100.js?v=22';
-import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=22';
-import { showAlbumTracksModal } from './cards.js?v=22';
-import { initRouter } from './router.js?v=22';
-import { initMaddie } from './maddie.js?v=22';
+import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=23';
+
+// Links from MAD emails: ?buy=1 opens the plans (not inside the store app — policy),
+// ?contact=1 opens "Contact us". The param is dropped from the address bar either way.
+function handleEmailLinks() {
+  const p = new URLSearchParams(window.location.search);
+  const buy = p.get('buy') === '1', contact = p.get('contact') === '1';
+  if (!buy && !contact) return;
+  p.delete('buy'); p.delete('contact');
+  const q = p.toString();
+  window.history.replaceState({}, document.title, window.location.pathname + (q ? '?' + q : ''));
+  setTimeout(() => { if (contact) showContactSheet(); else if (!isNativeApp()) buyAccess(); }, 600);
+}
+import { switchTab } from './nav.js?v=23';
+import { renderSearchResults, search } from './search.js?v=23';
+import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=23';
+import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=23';
+import { filterG100Albums, loadG100 } from './rails-g100.js?v=23';
+import { loadNewReleases } from './rails-newreleases.js?v=23';
+import { loadSuggestedForYou } from './rails-suggested.js?v=23';
+import { initMobHero } from './hero.js?v=23';
+import { loadHomeShelves } from './rails-g100.js?v=23';
+import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=23';
+import { showAlbumTracksModal } from './cards.js?v=23';
+import { initRouter } from './router.js?v=23';
+import { initMaddie } from './maddie.js?v=23';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {
@@ -54,6 +66,11 @@ import { initMaddie } from './maddie.js?v=22';
     document.getElementById('buy-access-btn').addEventListener('click', () => buyAccess());
     document.getElementById('logout-btn').addEventListener('click', logout);
     document.getElementById('contact-btn')?.addEventListener('click', () => showContactSheet());
+    // Android app on Google Play — offered to Android browsers, never inside the app.
+    if (/Android/i.test(navigator.userAgent) && !isNativeApp()) {
+      const getApp = document.getElementById('get-app-btn');
+      if (getApp) getApp.style.display = 'block';
+    }
     document.getElementById('delete-account-btn')?.addEventListener('click', () => deleteAccountFlow());
 
     // ===== Initialize =====
@@ -98,6 +115,7 @@ import { initMaddie } from './maddie.js?v=22';
           loadHomeShelves();
           loadPlaylists();
           handleShareDeepLink();
+          handleEmailLinks();
           return;
         }
         elements.newReleasesContent.innerHTML = `
@@ -124,6 +142,7 @@ import { initMaddie } from './maddie.js?v=22';
           loadHomeShelves();
       loadPlaylists();
       handleShareDeepLink();
+      handleEmailLinks();
     }
 
     // A visitor arriving via a shared track link (/mobile?t=<recordId>) gets

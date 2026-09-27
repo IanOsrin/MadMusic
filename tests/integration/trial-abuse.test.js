@@ -44,7 +44,8 @@ describe('free-trial abuse hardening (2026-08-27)', () => {
     expect(res.body.confirmWithinHours).toBe(24);
     expect(sendTrialEmailMock).toHaveBeenCalledWith(
       'first@example.com', res.body.token,
-      expect.stringMatching(/\/api\/payments\/trial\/confirm\?t=MASS-[^&]+&s=[A-Za-z0-9_-]{32}$/));
+      expect.stringMatching(/\/api\/payments\/trial\/confirm\?t=MASS-[^&]+&s=[A-Za-z0-9_-]{32}$/),
+      expect.objectContaining({ plans: expect.arrayContaining([expect.objectContaining({ display: 'R29.99' })]) }));
     const { loadAccessTokens } = await import('../../lib/token-store.js');
     const stored = (await loadAccessTokens()).tokens.find((t) => t.code === res.body.token);
     const days = (new Date(stored.expirationDate) - new Date(stored.issuedDate)) / 86_400_000;

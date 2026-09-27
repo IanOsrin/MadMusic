@@ -36,6 +36,9 @@
     // Where to go after signing in. Only Mad Mixer's own page is allowed (no open redirect):
     // /access?next=/mixer is its "Sign in" button for visitors who arrive there cold.
     const ACCESS_NEXT = IS_ACCESS_PAGE && /^\/mixer(\?song=\d{1,12})?$/.test(_cbp.get('next') || '') ? _cbp.get('next') : '/';
+    // /access?buy=1 — the "See plans & subscribe" link in the trial email: show the plans
+    // even to someone already signed in (a trial listener deciding whether to pay).
+    const ACCESS_BUY = IS_ACCESS_PAGE && _cbp.get('buy') === '1';
     if (accessPagePrefill) {
       // Don't leave the code sitting in the address bar / browser history.
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -707,6 +710,8 @@
         if (tokenSection) tokenSection.classList.add('active');
         if (input) input.value = accessPagePrefill;
         validateToken(accessPagePrefill); // success redirects home (see validateToken)
+      } else if (ACCESS_BUY) {
+        showTokenOverlay();   // purchase tab first, signed in or not
       } else if (existingToken) {
         // Already signed in — nothing to do here.
         window.location.replace(ACCESS_NEXT);
