@@ -1,10 +1,10 @@
 // Home rail: Discover feed (mobile).
 
-import { elements, state } from './state.js?v=24';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getGenreField, hasValidArtwork, hasValidAudio } from './fields.js?v=24';
-import { search } from './search.js?v=24';
-import { createAlbumTile, showAlbumTracksModal } from './cards.js?v=24';
-import { playTrack, renderPlayerQueue } from './player.js?v=24';
+import { elements, state } from './state.js?v=25';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getGenreField, hasValidArtwork, hasValidAudio } from './fields.js?v=25';
+import { search } from './search.js?v=25';
+import { createAlbumTile, showAlbumTracksModal } from './cards.js?v=25';
+import { playTrack, renderPlayerQueue } from './player.js?v=25';
 
 export async function refreshDiscover() {
       // Clear the album cache so fresh counts are fetched after reload
@@ -79,22 +79,20 @@ export function renderDiscoverTracks() {
       // Show filter indicators
       if (state.selectedDecade || state.selectedGenre !== 'All') {
         const indicator = document.createElement('div');
-        indicator.style.cssText = 'padding: 8px 16px; background: var(--bg-card); border-radius: 8px; margin-bottom: 16px;';
+        indicator.className = 'filter-box';
 
         let filterText = 'Filtered by: ';
         const filters = [];
-        if (state.selectedDecade) filters.push(`<strong style="color: var(--accent);">${escapeHtml(state.selectedDecade.label)}</strong>`);
-        if (state.selectedGenre !== 'All') filters.push(`<strong style="color: var(--accent);">${escapeHtml(state.selectedGenre)}</strong>`);
+        if (state.selectedDecade) filters.push(`<strong>${escapeHtml(state.selectedDecade.label)}</strong>`);
+        if (state.selectedGenre !== 'All') filters.push(`<strong>${escapeHtml(state.selectedGenre)}</strong>`);
         filterText += filters.join(' + ');
 
         indicator.innerHTML = `
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-            <span style="font-size: 14px; color: var(--text-secondary);">${filterText}</span>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            ${state.selectedDecade ? '<button onclick="clearDecadeFilter()" style="padding: 4px 12px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 12px; cursor: pointer;">Clear Decade</button>' : ''}
-            ${state.selectedGenre !== 'All' ? '<button onclick="clearGenreFilter()" style="padding: 4px 12px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 12px; cursor: pointer;">Clear Genre</button>' : ''}
-            ${(state.selectedDecade || state.selectedGenre !== 'All') ? '<button onclick="clearAllFilters()" style="padding: 4px 12px; background: var(--accent); border: none; border-radius: 4px; color: white; font-size: 12px; cursor: pointer;">Clear All</button>' : ''}
+          <div class="filter-box-line">${filterText}</div>
+          <div class="filter-box-actions">
+            ${state.selectedDecade ? '<button class="filter-clear" onclick="clearDecadeFilter()">Clear Decade</button>' : ''}
+            ${state.selectedGenre !== 'All' ? '<button class="filter-clear" onclick="clearGenreFilter()">Clear Genre</button>' : ''}
+            ${(state.selectedDecade || state.selectedGenre !== 'All') ? '<button class="filter-clear filter-clear-all" onclick="clearAllFilters()">Clear All</button>' : ''}
           </div>
         `;
         elements.discoverContent.appendChild(indicator);

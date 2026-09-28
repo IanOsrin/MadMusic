@@ -2,12 +2,12 @@
 // holds the DOM event wiring + drag/search state + init(), and exposes the
 // inline on*-handlers on window. All app logic lives in the mobile/*.js modules.
 
-import { elements, state } from './state.js?v=24';
-import { showToast } from './util.js?v=24';
-import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=24';
+import { elements, state } from './state.js?v=25';
+import { showToast } from './util.js?v=25';
+import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=25';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=24';
+import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=25';
 
 // Links from MAD emails: ?buy=1 opens the plans (not inside the store app — policy),
 // ?contact=1 opens "Contact us". The param is dropped from the address bar either way.
@@ -20,19 +20,19 @@ function handleEmailLinks() {
   window.history.replaceState({}, document.title, window.location.pathname + (q ? '?' + q : ''));
   setTimeout(() => { if (contact) showContactSheet(); else if (!isNativeApp()) buyAccess(); }, 600);
 }
-import { switchTab } from './nav.js?v=24';
-import { renderSearchResults, search } from './search.js?v=24';
-import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=24';
-import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=24';
-import { filterG100Albums, loadG100 } from './rails-g100.js?v=24';
-import { loadNewReleases } from './rails-newreleases.js?v=24';
-import { loadSuggestedForYou } from './rails-suggested.js?v=24';
-import { initMobHero } from './hero.js?v=24';
-import { loadHomeShelves } from './rails-g100.js?v=24';
-import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=24';
-import { showAlbumTracksModal } from './cards.js?v=24';
-import { initRouter } from './router.js?v=24';
-import { initMaddie } from './maddie.js?v=24';
+import { switchTab } from './nav.js?v=25';
+import { renderSearchResults, search } from './search.js?v=25';
+import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=25';
+import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=25';
+import { filterG100Albums, loadG100 } from './rails-g100.js?v=25';
+import { loadNewReleases } from './rails-newreleases.js?v=25';
+import { loadSuggestedForYou } from './rails-suggested.js?v=25';
+import { initMobHero } from './hero.js?v=25';
+import { loadHomeShelves } from './rails-g100.js?v=25';
+import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=25';
+import { showAlbumTracksModal } from './cards.js?v=25';
+import { initRouter } from './router.js?v=25';
+import { initMaddie } from './maddie.js?v=25';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {
@@ -314,6 +314,16 @@ import { initMaddie } from './maddie.js?v=24';
     });
 
     document.getElementById('mini-next').addEventListener('click', () => stepQueue(1));
+
+    // × on the mini player (Ian, 2026-09-28): stop and put the bar away. Playing anything
+    // shows it again (player.js adds .visible on every play).
+    document.getElementById('mini-close')?.addEventListener('click', () => {
+      elements.audio.pause();
+      elements.floatingPlayer.classList.remove('visible', 'playing');
+      state.playerModal.visible = false;
+      elements.playerModal.classList.remove('show');
+      try { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none'; } catch (e) { /* older browsers */ }
+    });
 
     // Close player modal
     document.getElementById('player-close').addEventListener('click', () => {
