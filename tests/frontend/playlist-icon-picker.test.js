@@ -135,7 +135,7 @@ describe('mobile picker', () => {
     // Buried under a long playlist's tracks it was effectively undiscoverable.
     const sheet = mobileJs.slice(mobileJs.indexOf('export function showPlaylistTracks'));
     const artIdx   = sheet.indexOf('data-act="artwork"');
-    const trackIdx = sheet.indexOf('No tracks yet');
+    const trackIdx = sheet.indexOf('class="alb-tracks"');
     expect(artIdx).toBeGreaterThan(-1);
     expect(artIdx).toBeLessThan(trackIdx);
   });
