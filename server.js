@@ -473,7 +473,7 @@ const trialLimiter = rateLimit({
 const contactLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 5,
-  message: { ok: false, error: 'Too many messages — please try again later, or email serverdev@gmail.com.' },
+  message: { ok: false, error: 'Too many messages — please try again later, or email serverdev@musicafricadirect.com.' },
   keyGenerator: clientIpKey,
   skip: skipInTest
 });
