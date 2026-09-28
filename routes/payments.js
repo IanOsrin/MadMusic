@@ -9,12 +9,12 @@ import {
 import { handleDownloadWebhook } from './download.js';
 import {
   createAccessToken,
-  createSubscriptionToken, renewSubscriptionToken,
-  disableSubscriptionToken, findSubscriptionToken,
+  createSubscriptionToken,
   findTrialTokenByEmail, findTrialTokenInFM, revokeToken,
   confirmTrialToken, TRIAL_UNCONFIRMED_DAYS
 } from '../lib/token-store.js';
 import { timingSafeEqualStr } from '../lib/crypto-utils.js';
+import { readEvent, isSubscriptionCharge, findSubscriptionRecord, linkSubscription, extendSubscription, noteCancelled } from '../lib/subscriptions.js';
 import { wasAccountDeleted } from '../lib/account-delete.js';
 import { pendingPaymentsCache, processedWebhookEventsCache } from '../cache.js';
 import { isStrictEmail } from '../lib/validators.js';
@@ -388,13 +388,18 @@ router.get('/callback', async (req, res) => {
       const interval         = data.data.plan_object?.interval || 'monthly';
       const billingDays      = SUBSCRIPTION_INTERVAL_DAYS[interval] || 31;
 
-      // If the subscription_code is already in the system (webhook beat the callback), reuse the token
-      let existing = subscriptionCode ? await findSubscriptionToken(subscriptionCode) : null;
+      // If Paystack's webhook already made the code for THIS payment (same reference, found in
+      // FileMaker — the JSON copy doesn't survive deploys), reuse it rather than make a second.
+      let existing = null;
+      try {
+        const rec = await findSubscriptionRecord({ email, subscriptionCode });
+        if (rec && String(rec.fieldData?.Notes || '').includes(`[ref ${reference}]`)) existing = { code: rec.fieldData.Token_Code };
+      } catch (err) { console.warn('[MASS] Subscription callback: FM lookup failed:', err?.message || err); }
       if (existing) {
         token = existing;
-        console.log(`[MASS] Subscription callback: token already exists for sub ${subscriptionCode}`);
+        console.log(`[MASS] Subscription callback: token already exists for ${reference}`);
       } else {
-        token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays);
+        token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays, reference);
         // Fire-and-forget: never block the post-payment redirect on email.
         if (email) {
           Promise.resolve(sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label)).catch((err) =>
@@ -493,10 +498,12 @@ router.post('/webhook', async (req, res) => {
       const interval         = sub.plan?.interval  || 'monthly';
       const billingDays      = SUBSCRIPTION_INTERVAL_DAYS[interval] || 31;
 
-      // Idempotent — callback may have already created it
-      const existing = await findSubscriptionToken(subscriptionCode);
-      if (existing) {
-        console.log(`[MASS] Webhook subscription.create: token already exists for sub ${subscriptionCode}`);
+      // The first payment (callback or charge.success) normally made the code already — with
+      // "sub: null", because the subscription didn't exist yet. Link it; don't make a second.
+      const rec = await findSubscriptionRecord({ email, subscriptionCode });
+      if (rec) {
+        await linkSubscription(rec, subscriptionCode);
+        console.log(`[MASS] Webhook subscription.create: linked sub ${subscriptionCode} to ${rec.fieldData.Token_Code}`);
         return ack();
       }
 
@@ -515,11 +522,29 @@ router.post('/webhook', async (req, res) => {
     }
 
     // ── subscription.disable (cancelled or all retries exhausted) ─────────────
-    if (eventType === 'subscription.disable') {
-      const subscriptionCode = event.data?.subscription_code;
-      if (subscriptionCode) {
-        await disableSubscriptionToken(subscriptionCode, 3); // 3-day grace period
-        console.log(`[MASS] Webhook subscription.disable: grace period set for sub ${subscriptionCode}`);
+    if (eventType === 'subscription.disable' || eventType === 'subscription.not_renew') {
+      // No more renewals will arrive, so the code simply runs out at the end of what they paid
+      // for (renewals are what extend it). Just record it on the code.
+      const info = readEvent(event);
+      const rec = await findSubscriptionRecord(info);
+      if (rec) await noteCancelled(rec, eventType === 'subscription.disable' ? 'subscription ended' : 'cancelled by customer');
+      console.log(`[MASS] Webhook ${eventType}: ${info.subscriptionCode || info.email || 'unknown'}${rec ? ' → ' + rec.fieldData.Token_Code : ' (no code found)'}`);
+      return ack();
+    }
+
+    // ── invoice.update: Paystack's verdict on a monthly charge ────────────────
+    if (eventType === 'invoice.update' || eventType === 'invoice.payment_failed') {
+      const info = readEvent(event);
+      if (eventType === 'invoice.update' && info.paid) {
+        const rec = await findSubscriptionRecord(info);
+        if (rec) {
+          await linkSubscription(rec, info.subscriptionCode);
+          await extendSubscription(rec, { billingDays: SUBSCRIPTION_INTERVAL_DAYS[info.interval] || 31, paidAt: info.paidAt, reference: info.reference });
+        } else {
+          console.warn(`[MASS] Webhook invoice.update: paid, but no MAD code for ${info.email || info.subscriptionCode}`);
+        }
+      } else {
+        console.warn(`[MASS] Webhook ${eventType}: monthly charge not paid for ${info.email || info.subscriptionCode}`);
       }
       return ack();
     }
@@ -538,24 +563,26 @@ router.post('/webhook', async (req, res) => {
       return ack();
     }
 
-    // Subscription renewal: charge.success with a subscription_code
-    if (subscriptionCode) {
-      const existing = await findSubscriptionToken(subscriptionCode);
-      if (existing) {
-        // Renewal — extend expiry
-        const interval    = paymentData.plan_object?.interval || 'monthly';
-        const billingDays = SUBSCRIPTION_INTERVAL_DAYS[interval] || 31;
-        await renewSubscriptionToken(subscriptionCode, billingDays);
-        pendingPayments.set(reference, { tokenCode: existing.code, timestamp: Date.now() });
-        console.log(`[MASS] Webhook charge.success (renewal): sub ${subscriptionCode} extended by ${billingDays} days`);
-      } else {
-        // First charge for this subscription — create token (fallback if subscription.create fires late)
-        const planCode    = paymentData.plan || PAYSTACK_SUBSCRIPTION_PLAN.code;
-        const email       = customerEmail(paymentData.customer?.email);
-        const interval    = paymentData.plan_object?.interval || 'monthly';
-        const billingDays = SUBSCRIPTION_INTERVAL_DAYS[interval] || 31;
+    // Subscription charge (the first month or a renewal): Paystack marks it with the plan
+    // (and sometimes the subscription). Recurring charges usually carry NO subscription_code,
+    // which is why these used to fall through to the one-time path below.
+    const subInfo = readEvent(event);
+    if (isSubscriptionCharge(subInfo)) {
+      const billingDays = SUBSCRIPTION_INTERVAL_DAYS[subInfo.interval] || 31;
+      const rec = await findSubscriptionRecord(subInfo);
+      const firstPayment = rec && String(rec.fieldData?.Notes || '').includes(`[ref ${reference}]`);
+      if (rec && !firstPayment) {
+        // Renewal — extend the customer's own code (idempotent: a duplicate event changes nothing)
+        await linkSubscription(rec, subInfo.subscriptionCode);
+        await extendSubscription(rec, { billingDays, paidAt: subInfo.paidAt, reference });
+        pendingPayments.set(reference, { tokenCode: rec.fieldData.Token_Code, timestamp: Date.now() });
+        console.log(`[MASS] Webhook charge.success (renewal): ${rec.fieldData.Token_Code} extended`);
+      } else if (!rec) {
+        // First payment and the customer never came back to the site — make their code here.
+        const planCode    = subInfo.planCode || PAYSTACK_SUBSCRIPTION_PLAN.code;
+        const email       = customerEmail(subInfo.email);
         if (!pendingPayments.has(reference)) {
-          const token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays);
+          const token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays, reference);
           if (email) {
             try {
               await sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label);
