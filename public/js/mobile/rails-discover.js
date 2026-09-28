@@ -1,10 +1,10 @@
 // Home rail: Discover feed (mobile).
 
-import { elements, state } from './state.js?v=27';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getGenreField, hasValidArtwork, hasValidAudio } from './fields.js?v=27';
-import { search } from './search.js?v=27';
-import { createAlbumTile, showAlbumTracksModal } from './cards.js?v=27';
-import { playTrack, renderPlayerQueue } from './player.js?v=27';
+import { elements, state } from './state.js?v=28';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getGenreField, hasValidArtwork, hasValidAudio } from './fields.js?v=28';
+import { search } from './search.js?v=28';
+import { createAlbumTile, showAlbumTracksModal } from './cards.js?v=28';
+import { playTrack, renderPlayerQueue } from './player.js?v=28';
 
 export async function refreshDiscover() {
       // Clear the album cache so fresh counts are fetched after reload

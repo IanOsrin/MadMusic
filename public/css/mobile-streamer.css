@@ -273,3 +273,15 @@ nav.bottom-tabs {
 .player-control-btn.play-pause:active { filter: brightness(1.08); transform: scale(0.94); }
 #player-modal .btn-secondary { max-width: 342px !important; }
 @media (prefers-reduced-motion: reduce) { .player-artwork-large { animation: none; } }
+
+/* ── Step 4: six-tab dock, Discover highlighted (Ian, 2026-09-28) ───────── */
+nav.bottom-tabs { padding: 0 4px; }
+.tab-button { font-size: 9.5px; gap: 3px; }
+.tab-button .tab-icon svg { width: 19px; height: 19px; }
+/* Discover's ring: soft gradient tile, full gradient with a dark icon when active */
+.tab-disc-ring { width: 34px; height: 30px; border-radius: 10px; margin-bottom: -1px;
+  background: linear-gradient(150deg, rgba(61, 247, 255, 0.16), rgba(167, 47, 255, 0.16));
+  border: 1px solid rgba(255, 255, 255, 0.14); transition: background 0.15s; }
+.tab-button.tab-discover { color: rgba(255, 255, 255, 0.8); }
+.tab-button.tab-discover.active { color: var(--mad-cyan); }
+.tab-button.tab-discover.active .tab-disc-ring { background: var(--mad-gradient); border-color: transparent; color: #08080c; }

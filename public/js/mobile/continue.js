@@ -5,9 +5,9 @@
 // The design's rule applies: nothing invented. A row shows the track's own title and artist and a
 // progress bar — never a "time left" guess (per-track position and duration are real here, but the
 // bar is what the design specifies). Guests hear 30-second previews, so they always start at 0.
-import { elements, state } from './state.js?v=27';
-import { getArtworkUrl, getTitleField, getArtistField, escapeHtml } from './fields.js?v=27';
-import { playTrack } from './player.js?v=27';
+import { elements, state } from './state.js?v=28';
+import { getArtworkUrl, getTitleField, getArtistField, escapeHtml } from './fields.js?v=28';
+import { playTrack } from './player.js?v=28';
 
 const KEY = 'mad_continue_v1';
 const MAX = 12;
