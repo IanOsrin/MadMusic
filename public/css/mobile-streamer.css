@@ -317,6 +317,11 @@ nav.bottom-tabs { padding: 0 4px; }
 .btn.alb-basket { flex: none; min-height: 32px; height: 32px; padding: 0 12px; font-size: 12px; white-space: nowrap; }
 .bottom-sheet:has(.alb-hero) .bs-close-btn { display: block; width: calc(100% - 40px); margin: 14px 20px 0; }
 .bottom-sheet:has(.alb-hero) .mob-suggestions { padding: 0 20px; }
+/* plan picker opened from the welcome's offer slide: the chosen plan is marked, Continue pays for it */
+.plan-row.plan-row-picked { border-color: var(--mad-cyan); background: rgba(61, 247, 255, 0.08); box-shadow: 0 0 0 1px var(--mad-cyan) inset; }
+.plan-continue { display: block; width: 100%; height: 50px; margin-top: 12px; border: 0; border-radius: 999px; background: var(--mad-gradient);
+  color: #08080c; font: inherit; font-size: 15.5px; font-weight: 700; cursor: pointer; }
+.plan-continue:disabled { opacity: 0.5; }
 /* own playlists: the album page plus an artwork pill beside Play, and a small square cover per row */
 .pl-actions { display: flex; align-items: center; gap: 10px; margin: 6px 20px; }
 .pl-actions .alb-play { flex: 1; width: auto; margin: 0; }
@@ -375,10 +380,15 @@ body.welcome-open { overflow: hidden; }
 /* slide 3: the offer card */
 .wel-offer { width: 100%; max-width: 310px; background: #14141d; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 18px;
   padding: 16px 16px 8px; box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5); }
-.wel-offer-badge { font-size: 10px; font-weight: 800; letter-spacing: 0.12em; color: #08080c; background: var(--mad-warm);
-  border-radius: 999px; padding: 6px 12px; text-align: center; margin-bottom: 10px; }
-.wel-offer-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; font-size: 13.5px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07); }
+/* badge and rows are buttons: the badge starts the free trial, a row opens checkout on that plan */
+.wel-offer-badge { display: block; width: 100%; border: 0; font: inherit; cursor: pointer; font-size: 10px; font-weight: 800; letter-spacing: 0.12em;
+  color: #08080c; background: var(--mad-warm); border-radius: 999px; padding: 8px 12px; text-align: center; margin-bottom: 10px; }
+.wel-offer-badge:active { transform: scale(0.97); }
+.wel-offer-row { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 2px; font: inherit;
+  font-size: 13.5px; background: none; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.07); color: inherit; cursor: pointer; }
+.wel-offer-row:active { background: rgba(255, 255, 255, 0.05); }
+.wel-offer-row b::after { content: '›'; margin-left: 8px; font-weight: 600; color: rgba(255, 255, 255, 0.35); }
+.wel-offer-hint { font-size: 11px; color: rgba(255, 255, 255, 0.4); text-align: center; padding: 6px 0 4px; }
 .wel-offer-row:first-child { border-top: 0; }
 .wel-offer-row span { color: rgba(255, 255, 255, 0.72); display: flex; flex-direction: column; text-align: left; }
 .wel-offer-row em { font-style: normal; font-size: 10.5px; color: rgba(255, 255, 255, 0.4); }
