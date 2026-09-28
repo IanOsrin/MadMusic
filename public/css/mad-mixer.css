@@ -108,7 +108,7 @@ header .header-badge { background: rgba(139, 92, 246, 0.15); color: #c4b5fd; bor
 #btnAddTrack, #btnAddTrackSetup, .btn-add-track, #btnFileMenu, #btnRecord { display: none !important; }
 body.dragging .empty-track-drop { outline: none !important; }
 
-/* Mad Mixer front door (DRAFT 2026-09-28): try free / subscribe / have a code */
+/* Mad Mixer front door (2026-09-28): try free / subscribe / have a code */
 .mm-door { width: min(760px, 100%); max-height: 92vh; overflow-y: auto; position: relative; }
 .mm-door-lead { max-width: 560px; }
 .mm-draft-ribbon { position: absolute; top: 14px; left: -34px; transform: rotate(-35deg); background: #f59e0b; color: #111;
