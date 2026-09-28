@@ -6,8 +6,8 @@
 // is filled from the site's own plan list (/api/payments/plans + /subscription-plan), so it can
 // never show a stale price — and inside the store app (isNativeApp) it shows only the free trial:
 // naming outside prices there breaks Google/Apple rules.
-import { switchTab } from './nav.js?v=31';
-import { isNativeApp } from './auth.js?v=31';
+import { switchTab } from './nav.js?v=32';
+import { isNativeApp, buyAccess, startTrial } from './auth.js?v=32';
 
 const KEY = 'mad_welcome_seen_v1';
 const COVERS = [   // real MAD artwork, from the live image server
@@ -68,7 +68,7 @@ export function showWelcome() {
         title: native ? 'Start with 7 days free.' : 'Start free. <span class="wel-from"></span>',
         body: 'Your access code arrives by email and works on up to 3 devices.',
         visual: `<div class="wel-offer">
-            <div class="wel-offer-badge">7 DAYS FREE, NO CARD NEEDED</div>
+            <button type="button" class="wel-offer-badge" data-trial>START 7 DAYS FREE, NO CARD NEEDED</button>
             ${native ? '<div class="wel-offer-note">Full listening for a week. No payment details.</div>' : '<div class="wel-offer-rows"></div>'}
           </div>`,
       })}
@@ -106,6 +106,16 @@ export function showWelcome() {
     sync();
   });
   el.querySelector('.wel-skip').addEventListener('click', () => close(false));
+  // Catch them on the offer slide (Ian): the badge starts the free trial, a price row opens
+  // checkout with that plan already chosen. The trial is allowed in the store app; prices never
+  // render there, so a row can't be tapped in native.
+  el.querySelector('[data-trial]').addEventListener('click', () => { close(false); startTrial(); });
+  el.querySelector('.wel-offer').addEventListener('click', (e) => {
+    const row = e.target.closest('.wel-offer-row');
+    if (!row || isNativeApp()) return;
+    close(false);
+    buyAccess({ pick: row.dataset.pick });
+  });
 
   if (!native) fillPrices(el);
 }
@@ -120,10 +130,11 @@ async function fillPrices(el) {
       fetch('/api/payments/subscription-plan').then((r) => r.json()).catch(() => ({})),
     ]);
     const plans = Array.isArray(p.plans) ? p.plans : [];
-    const list = plans.map((x) => ({ label: x.label, price: x.display, sub: '' }));
-    if (s && s.plan && /R\s?\d/.test(s.plan.display || '')) list.push({ label: s.plan.label || 'Monthly Subscription', price: s.plan.display, sub: 'Renews automatically' });
+    const list = plans.map((x) => ({ pick: x.id, label: x.label, price: x.display, sub: '' }));
+    if (s && s.plan && /R\s?\d/.test(s.plan.display || '')) list.push({ pick: 'sub', label: s.plan.label || 'Monthly Subscription', price: s.plan.display, sub: 'Renews automatically' });
     if (!list.length) { rows.remove(); return; }
-    rows.innerHTML = list.map((x) => `<div class="wel-offer-row"><span>${esc(x.label)}${x.sub ? `<em>${esc(x.sub)}</em>` : ''}</span><b>${esc(x.price)}</b></div>`).join('');
+    rows.innerHTML = list.map((x) => `<button type="button" class="wel-offer-row" data-pick="${esc(x.pick)}"><span>${esc(x.label)}${x.sub ? `<em>${esc(x.sub)}</em>` : ''}</span><b>${esc(x.price)}</b></button>`).join('')
+      + '<div class="wel-offer-hint">Tap a plan to buy it</div>';
     const cheapest = plans.filter((x) => x.amount > 0).sort((a, b) => a.amount - b.amount)[0];
     if (cheapest && from) from.textContent = `Then from ${cheapest.display}.`;
   } catch (_) {

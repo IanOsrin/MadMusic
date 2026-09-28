@@ -1,7 +1,7 @@
 // Auth + access-token flow for the mobile app.
 
-import { elements, state } from './state.js?v=31';
-import { showToast } from './util.js?v=31';
+import { elements, state } from './state.js?v=32';
+import { showToast } from './util.js?v=32';
 
 export function logout() {
       localStorage.removeItem('mass_access_token');
@@ -414,7 +414,10 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) =>
  * The plans come from the server so there is still exactly one source of truth
  * (PAYSTACK_PLANS in lib/paystack.js).
  */
-export async function buyAccess() {
+// `pick` (a plan id, or 'sub' for the monthly subscription) arrives when the listener already chose
+// a price on the welcome's offer slide: that row is marked and a Continue button pays for it, so
+// they only type their email.
+export async function buyAccess({ pick = '' } = {}) {
   // Play/App Store policy: no external purchase channel inside the wrapper,
   // and naming one is itself a violation — so the wording stays neutral.
   if (isNativeApp()) {
@@ -443,15 +446,16 @@ export async function buyAccess() {
     if (res.ok && data.plan?.code) monthly = data.plan;
   } catch { /* passes only */ }
 
-  showPlanPicker(plans, monthly);
+  showPlanPicker(plans, monthly, pick);
 }
 
 function closePlanPicker() {
   document.getElementById('plan-picker')?.remove();
 }
 
-function showPlanPicker(plans, monthly = null) {
+function showPlanPicker(plans, monthly = null, pick = '') {
   closePlanPicker();
+  const picked = pick === 'sub' ? (monthly ? 'sub' : '') : (plans.some((p) => p.id === pick) ? pick : '');
   const overlay = document.createElement('div');
   overlay.id = 'plan-picker';
   overlay.className = 'guest-paywall show';   // same bottom sheet as the paywall
@@ -463,7 +467,7 @@ function showPlanPicker(plans, monthly = null) {
       <p>Unlimited streaming. Subscribe monthly, or buy a pass for the period you pick — passes are paid once, no card stored.</p>
       <div class="plan-list">
         ${monthly ? `
-          <button type="button" class="plan-row plan-row-best" data-sub="1">
+          <button type="button" class="plan-row plan-row-best${picked === 'sub' ? ' plan-row-picked' : ''}" data-sub="1">
             <span class="plan-row-main">
               <span class="plan-row-name">${esc(monthly.label || 'Monthly Subscription')}</span>
               <span class="plan-row-sub">Renews every month</span>
@@ -471,7 +475,7 @@ function showPlanPicker(plans, monthly = null) {
             <span class="plan-row-price">${esc(monthly.display || 'Monthly')}</span>
           </button>` : ''}
         ${plans.map((p, i) => `
-          <button type="button" class="plan-row${!monthly && i === plans.length - 1 ? ' plan-row-best' : ''}" data-plan="${esc(p.id)}">
+          <button type="button" class="plan-row${!monthly && i === plans.length - 1 ? ' plan-row-best' : ''}${picked === p.id ? ' plan-row-picked' : ''}" data-plan="${esc(p.id)}">
             <span class="plan-row-main">
               <span class="plan-row-name">${esc(p.label)}</span>
               <span class="plan-row-sub">${p.days} ${p.days === 1 ? 'day' : 'days'} of unlimited streaming · pay once</span>
@@ -482,6 +486,7 @@ function showPlanPicker(plans, monthly = null) {
       <label class="plan-email-label" for="plan-email">Where should we send your access code?</label>
       <input type="email" id="plan-email" class="plan-email" inputmode="email" autocomplete="email"
              autocapitalize="off" spellcheck="false" placeholder="you@example.com">
+      ${picked ? '<button type="button" class="plan-continue" id="plan-continue">Continue to payment</button>' : ''}
       <div class="plan-picker-status" id="plan-picker-status"></div>
     </div>`;
   document.body.appendChild(overlay);
@@ -490,6 +495,12 @@ function showPlanPicker(plans, monthly = null) {
   document.getElementById('plan-picker-close').addEventListener('click', closePlanPicker);
   for (const btn of overlay.querySelectorAll('.plan-row')) {
     btn.addEventListener('click', () => startCheckout(btn.dataset.plan, btn.dataset.sub === '1'));
+  }
+  if (picked) {
+    const go = () => startCheckout(picked === 'sub' ? '' : picked, picked === 'sub');
+    document.getElementById('plan-continue').addEventListener('click', go);
+    document.getElementById('plan-email').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+    setTimeout(() => document.getElementById('plan-email')?.focus(), 250);
   }
 }
 
@@ -508,7 +519,7 @@ async function startCheckout(planId, isSubscription = false) {
   }
 
   if (status) status.textContent = 'Redirecting to payment…';
-  for (const b of document.querySelectorAll('#plan-picker .plan-row')) b.disabled = true;
+  for (const b of document.querySelectorAll('#plan-picker .plan-row, #plan-continue')) b.disabled = true;
 
   try {
     // Subscription → /subscribe (Paystack plan); passes → /initialize. Both come back to
@@ -523,11 +534,11 @@ async function startCheckout(planId, isSubscription = false) {
       window.location.href = data.authorization_url;
     } else {
       if (status) status.textContent = data.error || 'Could not start payment. Please try again.';
-      for (const b of document.querySelectorAll('#plan-picker .plan-row')) b.disabled = false;
+      for (const b of document.querySelectorAll('#plan-picker .plan-row, #plan-continue')) b.disabled = false;
     }
   } catch (err) {
     console.error('[Mobile] Payment error:', err);
     if (status) status.textContent = 'Payment service unavailable. Please try again.';
-    for (const b of document.querySelectorAll('#plan-picker .plan-row')) b.disabled = false;
+    for (const b of document.querySelectorAll('#plan-picker .plan-row, #plan-continue')) b.disabled = false;
   }
 }
