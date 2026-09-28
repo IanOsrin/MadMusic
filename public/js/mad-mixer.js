@@ -18,17 +18,20 @@
   const MIXER = '/api/mixer';
   let token = '';
   try { token = (localStorage.getItem('mass_access_token') || '').trim(); } catch (_) {}
+  let currentSong = '';   // the MADMixer song on screen — every split is tagged with it
 
   // 1 · API base + token on every Mad Mixer call ─────────────────────────────
   try { API_BASE = MIXER; } catch (_) {}                    // eslint-disable-line no-undef
   const nativeFetch = window.fetch.bind(window);
   window.fetch = function (input, init) {
     const url = typeof input === 'string' ? input : (input && input.url) || '';
-    if (token && (url.startsWith(MIXER) || url.startsWith(location.origin + MIXER))) {
+    const isMixer = url.startsWith(MIXER) || url.startsWith(location.origin + MIXER);
+    if (isMixer && (token || currentSong)) {
       init = Object.assign({}, init);
       const h = new Headers(init.headers || (typeof input !== 'string' && input.headers) || {});
-      h.set('X-Access-Token', token);
+      if (token) h.set('X-Access-Token', token);
       h.delete('X-Access-Code');                           // the app's own header — not used here
+      if (currentSong && url.includes('/mvsep/create')) h.set('X-Mixer-Song', currentSong);
       init.headers = h;
     }
     return nativeFetch(input, init);
@@ -115,6 +118,7 @@
       const a = await nativeFetch(s.audioUrl);
       if (!a.ok) throw new Error('audio ' + a.status);
       const ab = await a.arrayBuffer();
+      currentSong = String(s.id || id);
       handToApp(ab, [s.artist, s.title].filter(Boolean).join(' — ') + '.mp3');
       document.title = `${s.title || 'Song'} · Mad Mixer`;
       banner(`Loaded <strong>${esc(s.title)}</strong>${s.artist ? ' by ' + esc(s.artist) : ''}${s.album ? ' <span class="mm-cat">' + esc(s.album) + '</span>' : ''}.`, 'ok');
@@ -212,6 +216,42 @@
       </div>`;
     document.body.appendChild(w);
   }
+
+  // 3d · Mad Mixer songs only (Ian, 2026-09-28) — no listener's own audio ─────────────
+  // The Stems app can open files, projects, drops and extra tracks; in Mad Mixer the only
+  // way in is 🎵 Songs. Buttons are hidden in mad-mixer.css; here the doors are shut:
+  // file drops and file pickers are swallowed (capture phase, before the app's handlers).
+  // Dragging a stem card to reorder carries no files, so it still works. The server also
+  // refuses splits that aren't tagged with a Mad Mixer song.
+  const hasFiles = (e) => [...((e.dataTransfer && e.dataTransfer.types) || [])].includes('Files');
+  let lastNote = 0;
+  const noOwnAudio = () => {
+    if (Date.now() - lastNote < 4000) return;
+    lastNote = Date.now();
+    banner('Mad Mixer works with songs from the Mad Mixer catalogue — pick one with <b>🎵 Songs</b>.', 'warn');
+  };
+  for (const type of ['dragenter', 'dragover', 'drop']) {
+    window.addEventListener(type, (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+      if (type === 'drop') noOwnAudio();
+    }, true);
+  }
+  // Any file picker the app opens (menus, empty tracks, stem cards): refuse the pick.
+  document.addEventListener('click', (e) => {
+    const inp = e.target && e.target.closest && e.target.closest('input[type="file"]');
+    if (inp) { e.preventDefault(); e.stopImmediatePropagation(); noOwnAudio(); }
+  }, true);
+  // Recording from a microphone is own audio too.
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia = () => { noOwnAudio(); return Promise.reject(new DOMException('Recording is not available in Mad Mixer', 'NotAllowedError')); };
+  }
+  const origInputClick = HTMLInputElement.prototype.click;
+  HTMLInputElement.prototype.click = function () {
+    if (this.type === 'file') { noOwnAudio(); return; }
+    return origInputClick.call(this);
+  };
 
   // 4 · desktop-only bits (the Restore tab doesn't exist in Mad Mixer) ────────
   function hideDesktopOnly() {
