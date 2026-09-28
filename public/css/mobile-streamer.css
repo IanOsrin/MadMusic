@@ -116,8 +116,8 @@ nav.bottom-tabs {
 .btn-secondary:active { transform: scale(0.96); }
 
 /* ── album tiles, NEW badge, play button, hero ─────────────────────────── */
-.nr-album-card { border-radius: 12px; }
-.nr-album-artwork { border-radius: 12px; background: var(--mad-gradient); }
+/* covers stay fully SQUARE — Ian's rule (2026-08-27), kept over the design's 12px */
+.nr-album-artwork { background: var(--mad-gradient); }
 .nr-new-badge {
   left: auto;
   right: 8px;
@@ -136,6 +136,27 @@ nav.bottom-tabs {
 .nr-play-btn:active { background: var(--mad-gradient); }
 .nr-play-btn svg { fill: #08080c; }
 .mob-hero { border-radius: 20px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); }
+
+/* ── Browse → Genres / Decades: pills, as the design's filter chips ────── */
+#genres-content, #decades-content { display: flex !important; flex-wrap: wrap; gap: 8px !important; }
+.genre-btn {
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.genre-btn.active { background: var(--mad-gradient); color: #08080c; border-color: transparent; }
+.genre-btn:active { transform: scale(0.95); }
+
+/* the "Filtered by" box on the results */
+.filter-box { background: #14141c; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; }
+.filter-box-line strong { color: #fff; }
+.filter-clear { border-radius: 999px; background: none; border: 1px solid rgba(255, 255, 255, 0.14); color: rgba(255, 255, 255, 0.8); height: 30px; padding: 0 13px; font-weight: 600; }
+.filter-clear-all { background: var(--mad-gradient); border-color: transparent; color: #08080c; }
 
 /* ── sheets (trial, code, contact, plans, preview pop-up) ──────────────── */
 .guest-paywall-card { background: #14141c; border: 1px solid rgba(255, 255, 255, 0.08); }
@@ -156,3 +177,6 @@ nav.bottom-tabs {
 @media (prefers-reduced-motion: reduce) {
   .tab-button, .btn, .mini-btn, .nr-album-card { transition: none !important; }
 }
+
+/* mini player × */
+.mini-btn.mini-close { color: rgba(255, 255, 255, 0.5); }

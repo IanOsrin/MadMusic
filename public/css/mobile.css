@@ -1266,6 +1266,20 @@
       padding-bottom: 8px;
     }
 
+    /* Grid items default to min-width:auto, so a long no-wrap caption made a column as wide
+       as its text and pushed the second column off-screen (Browse → Genres/Decades results,
+       seen 2026-09-28 on live too). min-width:0 lets 1fr mean half the width again. */
+    .nr-album-grid > * { min-width: 0; }
+
+    /* "Filtered by" box above Discover results (was inline styles in rails-discover.js) */
+    .filter-box { padding: 10px 14px; background: var(--bg-card); border-radius: 12px; margin-bottom: 16px; }
+    .filter-box-line { font-size: 14px; color: var(--text-secondary); margin-bottom: 8px; }
+    .filter-box-line strong { color: var(--accent); }
+    .filter-box-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .filter-clear { padding: 5px 12px; background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text-primary); font: inherit; font-size: 12px; cursor: pointer; }
+    .filter-clear-all { background: var(--accent); border-color: var(--accent); color: #fff; }
+
     .nr-album-card {
       position: relative;
       border-radius: 14px;
@@ -1809,3 +1823,6 @@ body.audio-buffering #player-title::after {
     .help-page .help-item a { color: var(--primary, #8b5cf6); }
     .help-page .help-item code { background: rgba(139,92,246,0.15); padding: 1px 6px; border-radius: 4px; }
     .help-page .help-subhead { margin: 22px 0 10px; font-size: 16px; }
+
+    /* × on the mini player: stop + close (2026-09-28) */
+    .mini-btn.mini-close { width: 34px; height: 34px; font-size: 24px; line-height: 1; color: var(--text-muted); }
