@@ -1,11 +1,11 @@
 // Album/track card builders + their modals for the mobile app.
 
-import { elements, state } from './state.js?v=28';
-import { escapeHtml, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=28';
-import { switchTab } from './nav.js?v=28';
-import { search } from './search.js?v=28';
-import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=28';
-import { pushOverlay } from './router.js?v=28';
+import { elements, state } from './state.js?v=29';
+import { escapeHtml, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=29';
+import { switchTab } from './nav.js?v=29';
+import { search } from './search.js?v=29';
+import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=29';
+import { pushOverlay } from './router.js?v=29';
 
 // ── Shared album tile (the New Releases / G100 look) ─────────────────────────
 // One square-cover tile: first tap reveals the title/artist overlay, second tap
@@ -139,47 +139,80 @@ export function renderAlbumTileGrid(container, albums, optsFor = () => ({})) {
       return grid;
     }
 
+// "3:05" from FileMaker's "00:03:05" — blank when the record has no duration (nothing invented).
+function trackTime(d) {
+  const p = String(d || '').split(':').map(Number);
+  if (!p.length || p.some((n) => !Number.isFinite(n))) return '';
+  const secs = p.reduce((a, n) => a * 60 + n, 0);
+  return secs ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}` : '';
+}
+
+// Album / playlist page — MAD Streamer design, step 5 (2026-09-28): a header with the square
+// cover over its own blurred copy (square art is never stretched — docs/banners.md), the kind
+// label, big title and artist; a wide gradient Play; numbered tracks with their real length.
+// Hooks kept for the rest of the app: [data-track-index] rows, [data-basket-add] buttons
+// (basket.js), .bs-close-btn (the suggestions rail inserts itself before it).
 export function showAlbumTracksModal(album, { refresh = false } = {}) {
       elements.bottomSheet.dataset.albumKey = `${album.title}|||${album.artist}`;
+      const art = album.artwork || '/img/placeholder.png';
+      const kind = album.kind || (album.artist === 'My playlist' ? 'PLAYLIST' : 'ALBUM');
+      const count = album.tracks.length;
       elements.bottomSheet.innerHTML = `
-        <div class="bottom-sheet-header">${escapeHtml(album.title)}</div>
-        <p style="text-align: center; color: var(--text-secondary); margin-bottom: 16px;">${escapeHtml(album.artist)}</p>
+        <div class="alb-hero">
+          <img class="alb-hero-bg" src="${escapeHtml(art)}" alt="" aria-hidden="true" onerror="this.remove()">
+          <div class="alb-hero-row">
+            <img class="alb-cover" src="${escapeHtml(art)}" alt="" onerror="this.onerror=null;this.src='/img/placeholder.png'">
+            <div class="alb-meta">
+              <div class="alb-kind">${escapeHtml(kind)}</div>
+              <div class="bottom-sheet-header alb-title">${escapeHtml(album.title)}</div>
+              <div class="alb-artist">${escapeHtml(album.artist)}</div>
+              <div class="alb-count">${count} ${count === 1 ? 'song' : 'songs'}</div>
+            </div>
+          </div>
+        </div>
+        ${count ? `<button type="button" class="alb-play" data-play-all>
+          <svg width="13" height="14" viewBox="0 0 13 14" fill="currentColor" aria-hidden="true"><path d="M2 1.6 12 7 2 12.4z"/></svg>Play</button>` : ''}
+        <div class="alb-tracks">
         ${album.tracks.map((track, index) => {
           const fields = track.fields || {};
           const trackTitle = getTitleField(fields);
+          const trackArtist = getArtistField(fields);
           // Downloads are sold per track; the basket pays for several at once.
           // Never inside the native shell — store rules forbid it (see
           // native-purchase-guards.test.js).
           const price = parseFloat(fields['Download_Price'] || fields['DownloadPrice'] || 0) || 0;
           const sellable = price > 0 && !document.documentElement.classList.contains('native-app');
           return `
-            <div style="display:flex;gap:8px;align-items:center">
-              <button class="bottom-sheet-option" data-track-index="${index}" style="flex:1">
-                ${escapeHtml(trackTitle)}
+            <div class="alb-row">
+              <button class="bottom-sheet-option alb-track" data-track-index="${index}">
+                <span class="alb-no">${index + 1}</span>
+                <span class="alb-t"><span class="alb-tt">${escapeHtml(trackTitle)}</span>${trackArtist ? `<span class="alb-ta">${escapeHtml(trackArtist)}</span>` : ''}</span>
+                <span class="alb-dur">${escapeHtml(trackTime(fields.Duration))}</span>
               </button>
-              ${sellable ? `<button class="btn btn-secondary" data-basket-add
+              ${sellable ? `<button class="btn btn-secondary alb-basket" data-basket-add
                 data-record-id="${escapeHtml(track.recordId || '')}"
                 data-price="${price}"
                 data-name="${escapeHtml(trackTitle)}"
-                data-artist="${escapeHtml(getArtistField(fields) || album.artist || '')}"
-                style="white-space:nowrap;padding:8px 12px;font-size:13px">+ Basket</button>` : ''}
+                data-artist="${escapeHtml(getArtistField(fields) || album.artist || '')}">+ Basket · R${price.toFixed(2)}</button>` : ''}
             </div>
           `;
         }).join('')}
+        </div>
         <button class="btn btn-secondary bs-close-btn" onclick="closeModal()">Close</button>
       `;
 
       elements.modalOverlay.classList.add('show');
       if (!refresh) pushOverlay('album-tracks', album.recordId || album.title);   // a refresh is the same sheet — one Back closes it
 
+      const playFrom = (trackIndex) => {
+        state.playlistContext = { tracks: album.tracks, currentIndex: trackIndex, name: album.title, playFn: playTrack };
+        playTrack(album.tracks[trackIndex]);
+        upgradeQueueToFullAlbum(album, album.tracks[trackIndex]);
+        closeModal();
+      };
+      elements.bottomSheet.querySelector('[data-play-all]')?.addEventListener('click', () => playFrom(0));
       elements.bottomSheet.querySelectorAll('[data-track-index]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const trackIndex = parseInt(btn.dataset.trackIndex);
-          state.playlistContext = { tracks: album.tracks, currentIndex: trackIndex, name: album.title, playFn: playTrack };
-          playTrack(album.tracks[trackIndex]);
-          upgradeQueueToFullAlbum(album, album.tracks[trackIndex]);
-          closeModal();
-        });
+        btn.addEventListener('click', () => playFrom(parseInt(btn.dataset.trackIndex)));
       });
 
       // Append suggestions rail asynchronously — doesn't block the modal opening.

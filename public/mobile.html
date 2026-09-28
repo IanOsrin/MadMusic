@@ -40,13 +40,13 @@
   </script>
   <style>html.native-app #buy-access-btn,html.native-app #guest-paywall-buy,
          html.native-app #mobileRingtoneBtn,html.native-app .web-only{display:none!important}</style>
-  <link rel="stylesheet" href="/css/mobile.css?v=28"
+  <link rel="stylesheet" href="/css/mobile.css?v=29"
         onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/mobile.css?v=4&r='+Date.now();},1500)">
   <!-- MAD Streamer look (2026-09-28, step 1 of the Streamer App design) — re-skin only. -->
-  <link rel="stylesheet" href="/css/mobile-streamer.css?v=5">
+  <link rel="stylesheet" href="/css/mobile-streamer.css?v=6">
   <!-- Shared field/format helpers (window.MADHelpers); loaded before body scripts
        so mobile's utilities can delegate to the single canonical source. -->
-  <script src="/js/helpers.js?v=28"></script>
+  <script src="/js/helpers.js?v=29"></script>
 </head>
 <body>
   <!-- Crawlable page heading (visually hidden — the app shell has no static H1) -->
@@ -357,10 +357,11 @@
     <!-- Search Tab -->
     <div class="tab-content" id="search-tab">
       <div class="section-header">
-        <h2 class="section-title">Search</h2>
+        <h2 class="section-title page-title">Search</h2>
       </div>
-      <div class="form-group">
-        <input type="text" class="form-input" id="search-input" placeholder="Search tracks, artists, albums...">
+      <div class="form-group search-pill">
+        <svg class="search-pill-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.6" cy="10.6" r="7.1"/><path d="M20.5 20.5l-4.8-4.8"/></svg>
+        <input type="text" class="form-input" id="search-input" placeholder="Albums, artists, songs, year…">
       </div>
       <div class="form-group">
         <select id="mobile-search-decade" class="form-input" style="cursor:pointer;">
@@ -440,8 +441,8 @@
     <!-- Playlists Tab -->
     <div class="tab-content" id="playlists-tab">
       <div class="section-header">
-        <h2 class="section-title">Playlists</h2>
-        <button class="btn btn-primary" id="create-playlist-btn">+ Create</button>
+        <h2 class="section-title page-title">My Playlists</h2>
+        <button class="btn btn-secondary pill-add" id="create-playlist-btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Playlist</button>
       </div>
       <div id="playlists-content">
         <div class="empty-state">
@@ -835,7 +836,7 @@
   </script>
 
   <!-- Access-token fetch patch: classic script, MUST run before the module graph. -->
-  <script src="/js/mobile/fetch-interceptor.js?v=28"></script>
+  <script src="/js/mobile/fetch-interceptor.js?v=29"></script>
   <!-- Download basket: several tracks, one payment. Self-wiring off
        [data-basket-add], and hides itself inside the native shell. -->
   <script src="/js/basket.js?v=1"></script>
@@ -880,6 +881,6 @@
   })();
   </script>
 
-  <script type="module" src="/js/mobile/main.js?v=28"></script>
+  <script type="module" src="/js/mobile/main.js?v=29"></script>
 </body>
 </html>
