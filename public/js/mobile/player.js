@@ -1,8 +1,8 @@
 // Playback engine + now-playing modal for the mobile app.
 
-import { elements, state } from './state.js?v=26';
-import { formatTime, generateSessionId, showToast } from './util.js?v=26';
-import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField } from './fields.js?v=26';
+import { elements, state } from './state.js?v=27';
+import { formatTime, generateSessionId, showToast } from './util.js?v=27';
+import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField } from './fields.js?v=27';
 
 export function closeModal() {
       elements.modalOverlay.classList.remove('show');
@@ -264,6 +264,9 @@ export function updatePlayerModal() {
       document.getElementById('player-title').textContent = title;
       document.getElementById('player-artist').textContent = artist;
       document.getElementById('player-album').textContent = album;
+      // "NOW PLAYING / <where from>": the queue's name (album, playlist, Global Favourites…)
+      const ctx = document.getElementById('player-context');
+      if (ctx) ctx.textContent = (state.playlistContext && state.playlistContext.name) || album || '';
 
       const yearElement = document.getElementById('player-year');
       if (year) {
