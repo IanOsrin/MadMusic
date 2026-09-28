@@ -39,12 +39,12 @@
     }
   </script>
   <style>html.native-app #buy-access-btn,html.native-app #guest-paywall-buy,
-         html.native-app #mobileRingtoneBtn{display:none!important}</style>
-  <link rel="stylesheet" href="/css/mobile.css?v=23"
+         html.native-app #mobileRingtoneBtn,html.native-app .web-only{display:none!important}</style>
+  <link rel="stylesheet" href="/css/mobile.css?v=24"
         onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/mobile.css?v=4&r='+Date.now();},1500)">
   <!-- Shared field/format helpers (window.MADHelpers); loaded before body scripts
        so mobile's utilities can delegate to the single canonical source. -->
-  <script src="/js/helpers.js?v=23"></script>
+  <script src="/js/helpers.js?v=24"></script>
 </head>
 <body>
   <!-- Crawlable page heading (visually hidden — the app shell has no static H1) -->
@@ -456,6 +456,80 @@
         </div>
       </div>
     </div>
+
+    <!-- Help Tab (2026-09-28) — a simple guide + Contact us. In the store app, .web-only
+         (anything about buying on the website or getting the app) is hidden: store rules. -->
+    <div class="tab-content" id="help-tab">
+      <div class="section-header">
+        <h2 class="section-title">Help</h2>
+      </div>
+      <div class="help-page">
+        <p class="help-intro">MAD — Music Africa Direct is a hundred years of South African music, straight from the original master tapes. Here's how it works.</p>
+
+        <details class="help-item" open>
+          <summary>🎧 Getting started</summary>
+          <p><strong>Try it free for 7 days.</strong> Tap <em>Guest</em> at the top right, then <em>Start 7-Day Free Trial</em>. Enter your email and you're in straight away. We email you a <em>Confirm</em> button — tap it within 24 hours to keep all 7 days.</p>
+          <p><strong>Already have an access code?</strong> It looks like <code>MASS-XXX-XXX</code> and arrives by email. Tap <em>Guest</em> → <em>Enter Access Token</em>. One code works on up to 3 devices at a time.</p>
+          <p><strong>Just browsing?</strong> Look around freely and hear 30-second previews of every song.</p>
+        </details>
+
+        <details class="help-item">
+          <summary>🔍 Finding music</summary>
+          <p><strong>Search</strong> (bottom bar): type an artist, album or song, then tap an album cover to open it.</p>
+          <p><strong>Browse</strong>: G100 (100 years of Gallo), genres, decades, themes and MAD About collections.</p>
+        </details>
+
+        <details class="help-item">
+          <summary>▶️ Listening</summary>
+          <p>Tap an album, then a song. The player sits just above the bottom bar — tap it for the full player.</p>
+          <p><strong>Maddie</strong>, our AI assistant (the button at the top), can suggest music — just ask. Available to subscribers.</p>
+        </details>
+
+        <details class="help-item">
+          <summary>📚 Your library and playlists</summary>
+          <p><strong>Library</strong> (bottom bar) holds your playlists. Create one, add songs to it, and share it with a friend as a link.</p>
+        </details>
+
+        <details class="help-item web-only">
+          <summary>💳 Buying access and downloads</summary>
+          <p><strong>Access:</strong> tap <em>Guest</em> → <em>Buy Access</em> for a monthly subscription, or a 1-day, 7-day or 30-day pass (paid once, no card stored). Payment is by Paystack, and your access code is emailed to you.</p>
+          <p><strong>Downloads:</strong> tap <em>+ Basket</em> next to a song in an album; buy several in one payment.</p>
+        </details>
+
+        <details class="help-item web-only">
+          <summary>📱 The MAD app</summary>
+          <p>On Android, get the <a href="https://play.google.com/store/apps/details?id=com.musicafricadirect.app" target="_blank" rel="noopener">MAD app on Google Play</a>. The iPhone app is coming; until then use this website in Safari.</p>
+          <p>Bought access on the website? Open the app and choose <em>Enter access code</em>.</p>
+        </details>
+
+        <details class="help-item">
+          <summary>👤 Your account</summary>
+          <p>Tap <em>Guest</em> (or your name) at the top right to see your access, enter a code, or sign out.</p>
+        </details>
+
+        <h3 class="help-subhead">Common problems</h3>
+        <details class="help-item">
+          <summary>“This code is already in use on the maximum number of devices”</summary>
+          <p>A code works on 3 devices at a time. Sign out on one of them, or wait 15 minutes and try again.</p>
+        </details>
+        <details class="help-item">
+          <summary>I didn't get my email</summary>
+          <p>Check your <strong>Junk</strong> or <strong>Spam</strong> folder for an email from musicafricadirect.com. Still nothing? Contact us below.</p>
+        </details>
+        <details class="help-item">
+          <summary>Songs only play for 30 seconds</summary>
+          <p>That's preview mode — you're not signed in. Start a free trial or enter your access code.</p>
+        </details>
+        <details class="help-item">
+          <summary>My trial ended after one day</summary>
+          <p>The trial runs for 7 days once your email is confirmed. Contact us and we'll sort it out.</p>
+        </details>
+
+        <h3 class="help-subhead">Contact us</h3>
+        <p class="help-intro">Tell us what's wrong and we'll get back to you by email.</p>
+        <button class="btn btn-primary" id="help-contact-btn" style="width: 100%; margin-bottom: 24px;">💬 Contact us</button>
+      </div>
+    </div>
   </main>
 
   <!-- Bottom Tab Navigation -->
@@ -487,6 +561,12 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
       </div>
       <div>Library</div>
+    </button>
+    <button class="tab-button" data-tab="help">
+      <div class="tab-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <div>Help</div>
     </button>
   </nav>
 
@@ -718,7 +798,7 @@
   </script>
 
   <!-- Access-token fetch patch: classic script, MUST run before the module graph. -->
-  <script src="/js/mobile/fetch-interceptor.js?v=23"></script>
+  <script src="/js/mobile/fetch-interceptor.js?v=24"></script>
   <!-- Download basket: several tracks, one payment. Self-wiring off
        [data-basket-add], and hides itself inside the native shell. -->
   <script src="/js/basket.js?v=1"></script>
@@ -763,6 +843,6 @@
   })();
   </script>
 
-  <script type="module" src="/js/mobile/main.js?v=23"></script>
+  <script type="module" src="/js/mobile/main.js?v=24"></script>
 </body>
 </html>

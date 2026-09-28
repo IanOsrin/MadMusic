@@ -292,6 +292,12 @@
         Get the Android app
       </a>
 
+      <!-- Help — a simple guide to the site + Contact us (opens #modalHelp). -->
+      <button class="nav-item" id="navHelp" type="button" title="How to use MAD, and how to reach us">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Help
+      </button>
+
       <!-- Mad Mixer — shown by js/mad-mixer-links.js only when MAD_MIXER_ENABLED.
            A plain link (no data-view), so the view switcher leaves it alone. -->
       <a class="nav-item" id="navMadMixer" href="/mixer" style="display:none;text-decoration:none;" title="Mix and download the stems of MAD songs">
@@ -389,7 +395,6 @@
       <div class="profile-popup" id="profilePopupMenu" role="menu" hidden>
         <button class="profile-popup-item" role="menuitem" data-action="account">View my Account</button>
         <button class="profile-popup-item" role="menuitem" data-action="settings">Settings</button>
-        <button class="profile-popup-item" role="menuitem" data-action="whats-new">What's New</button>
         <button class="profile-popup-item" role="menuitem" data-action="listening-stats">Listening Stats</button>
         <button class="profile-popup-item" role="menuitemcheckbox" id="hqImagesToggle" aria-checked="false" title="Load full-resolution album art (uses more data)">🖼️ High-quality images: Off</button>
         <div class="profile-popup-divider"></div>
@@ -1719,33 +1724,85 @@
       </div>
     </div>
 
-    <!-- What's New -->
-    <div id="modalWhatsNew" class="account-modal" hidden>
+    <!-- Help (DRAFT 2026-09-28 for Ian's review) -->
+    <div id="modalHelp" class="account-modal account-modal-wide help-modal" hidden>
       <div class="account-modal-header">
-        <h2>What's New</h2>
+        <h2>Help</h2>
         <button class="account-modal-close" data-close-modal>&times;</button>
       </div>
       <div class="account-modal-body">
-        <div class="whats-new-entry">
-          <span class="whats-new-date">March 2025</span>
-          <strong>Suggested Playlists</strong>
-          <p>Curated playlists now appear in your sidebar — click any to start listening instantly.</p>
-        </div>
-        <div class="whats-new-entry">
-          <span class="whats-new-date">February 2025</span>
-          <strong>Listening Stats</strong>
-          <p>See your personal top 10 most-played tracks under My Account → Listening Stats.</p>
-        </div>
-        <div class="whats-new-entry">
-          <span class="whats-new-date">January 2025</span>
-          <strong>Shared Playlists</strong>
-          <p>Share any playlist with a friend using a unique link — no account needed to listen.</p>
-        </div>
-        <div class="whats-new-entry">
-          <span class="whats-new-date">December 2024</span>
-          <strong>Improved Search</strong>
-          <p>Search now covers track names, artists, albums, genres and catalogue numbers simultaneously.</p>
-        </div>
+        <p class="help-intro">MAD — Music Africa Direct is a hundred years of South African music, straight from the original master tapes. Here's how it works.</p>
+
+        <details class="help-item" open>
+          <summary>🎧 Getting started</summary>
+          <p><strong>Try it free for 7 days.</strong> Click <em>Start listening</em>, enter your email, and you're in straight away. We email you a <em>Confirm</em> button — tap it within 24 hours to keep all 7 days.</p>
+          <p><strong>Already have an access code?</strong> It looks like <code>MASS-XXX-XXX</code> and arrives by email. Click <em>I have an access code</em> and enter it. One code works on up to 3 devices at a time.</p>
+          <p><strong>Just browsing?</strong> You can look around freely and hear 30-second previews of every song.</p>
+        </details>
+
+        <details class="help-item">
+          <summary>🔍 Finding music</summary>
+          <p>Use the <strong>search bar</strong> at the top for an artist, album, song or year, and narrow it down with <em>Genre</em> and <em>Decades</em>.</p>
+          <p>The <strong>Home</strong> page has New Releases, Themes and MAD About collections. <strong>G100</strong> celebrates 100 years of Gallo.</p>
+        </details>
+
+        <details class="help-item">
+          <summary>▶️ Listening</summary>
+          <p>Click an album to see its songs, then click a song to play it. The player at the bottom of the screen has play/pause, next and previous.</p>
+          <p><strong>Maddie</strong>, our AI assistant (the bell at the bottom right), can suggest music — just ask. Available to subscribers.</p>
+        </details>
+
+        <details class="help-item">
+          <summary>📚 Your library and playlists</summary>
+          <p><strong>My Library</strong> lists Albums, Songs and what was Recently Added to MAD.</p>
+          <p><strong>My Playlists:</strong> click <em>Create playlist</em>, then use <em>Add to playlist</em> on any song. You can share a playlist with a friend as a link.</p>
+        </details>
+
+        <details class="help-item">
+          <summary>💳 Buying access, downloads and ringtones</summary>
+          <p><strong>Access:</strong> a monthly subscription, or a 1-day, 7-day or 30-day pass (paid once, no card stored). Payment is by Paystack, and your access code is emailed to you.</p>
+          <p><strong>Downloads:</strong> click <em>+ Basket</em> next to a song to buy it as a download; buy several in one payment.</p>
+          <p><strong>Ringtones:</strong> click <em>✂ Ringtone</em> on a song to cut your own ringtone.</p>
+        </details>
+
+        <details class="help-item">
+          <summary>📱 On your phone</summary>
+          <p>Open <strong>musicafricadirect.com</strong> on your phone — it works in any browser. On Android you can also get the <a href="https://play.google.com/store/apps/details?id=com.musicafricadirect.app" target="_blank" rel="noopener">MAD app on Google Play</a>. The iPhone app is coming; until then use Safari.</p>
+          <p>Bought access on the website? Open the app and choose <em>Enter access code</em>.</p>
+        </details>
+
+        <details class="help-item">
+          <summary>👤 Your account</summary>
+          <p>Click <strong>My Account</strong> at the bottom left to see your access, settings and your top 10 most-played songs, or to sign out. The <em>Light Mode / Dark Mode</em> switch is just above it.</p>
+        </details>
+
+        <h3 class="help-subhead">Common problems</h3>
+        <details class="help-item">
+          <summary>“This code is already in use on the maximum number of devices”</summary>
+          <p>A code works on 3 devices at a time. Sign out on one of them (My Account → Sign out), or wait 15 minutes and try again.</p>
+        </details>
+        <details class="help-item">
+          <summary>I didn't get my email</summary>
+          <p>Check your <strong>Junk</strong> or <strong>Spam</strong> folder for an email from musicafricadirect.com. Still nothing? Contact us below.</p>
+        </details>
+        <details class="help-item">
+          <summary>Songs only play for 30 seconds</summary>
+          <p>That's preview mode — you're not signed in. Start a free trial or enter your access code.</p>
+        </details>
+        <details class="help-item">
+          <summary>My trial ended after one day</summary>
+          <p>The trial runs for 7 days once your email is confirmed. Contact us and we'll sort it out.</p>
+        </details>
+
+        <h3 class="help-subhead" id="helpContact">Contact us</h3>
+        <form class="help-contact" id="helpContactForm" novalidate>
+          <p>Tell us what's wrong and we'll get back to you by email.</p>
+          <input type="email" name="email" placeholder="Your email address" autocomplete="email" required>
+          <textarea name="message" rows="4" maxlength="3000" placeholder="How can we help?" required></textarea>
+          <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="help-hp">
+          <p class="help-contact-status" id="helpContactStatus" hidden></p>
+          <button type="submit">Send message</button>
+        </form>
       </div>
     </div>
 
@@ -1796,6 +1853,30 @@
     }
     .account-modal-close:hover { color: var(--fg, #fff); }
     .account-modal-body { padding: 20px 24px 24px; }
+    /* Help panel */
+    .help-modal { max-height: 86vh; display: flex; flex-direction: column; }
+    .help-modal .account-modal-body { overflow-y: auto; }
+    .help-intro { margin: 0 0 14px; color: var(--muted, #aaa); line-height: 1.5; }
+    .help-item { border: 1px solid var(--border, rgba(255,255,255,0.1)); border-radius: 10px; margin: 0 0 8px; padding: 0 14px; }
+    .help-item summary { cursor: pointer; padding: 12px 0; font-weight: 600; list-style: none; }
+    .help-item summary::-webkit-details-marker { display: none; }
+    .help-item summary::after { content: '+'; float: right; opacity: 0.6; }
+    .help-item[open] summary::after { content: '–'; }
+    .help-item p { margin: 0 0 12px; line-height: 1.55; font-size: 14px; color: var(--fg, #eee); opacity: 0.9; }
+    .help-item a { color: var(--accent, #8b5cf6); }
+    .help-item code { background: rgba(139,92,246,0.15); padding: 1px 6px; border-radius: 4px; }
+    .help-subhead { margin: 20px 0 10px; font-size: 15px; }
+    .help-contact { display: flex; flex-direction: column; gap: 10px; }
+    .help-contact p { margin: 0; font-size: 14px; opacity: 0.85; }
+    .help-contact input, .help-contact textarea { padding: 11px 12px; border-radius: 10px; border: 1px solid var(--border, rgba(255,255,255,0.15));
+      background: var(--card, #1c1c26); color: var(--fg, #eee); font: inherit; font-size: 14px; }
+    .help-contact textarea { resize: vertical; }
+    .help-contact button { align-self: flex-start; padding: 11px 22px; border-radius: 999px; border: none; cursor: pointer;
+      background: var(--accent, #8b5cf6); color: #fff; font-weight: 600; font-size: 14px; }
+    .help-contact button:disabled { opacity: 0.6; cursor: default; }
+    .help-contact-status { color: #ef4444; }
+    .help-contact-status.ok { color: #22c55e; }
+    .help-hp { position: absolute; left: -9999px; width: 0; height: 0; opacity: 0; }
     .account-row {
       display: flex;
       flex-direction: column;
@@ -1818,12 +1899,6 @@
       background:#fff; border-radius:50%; transition:transform 0.2s;
     }
     .toggle-switch input:checked + .toggle-track .toggle-thumb { transform: translateX(20px); }
-    /* What's New */
-    .whats-new-entry { margin-bottom: 20px; }
-    .whats-new-entry:last-child { margin-bottom: 0; }
-    .whats-new-date { display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--accent,#62f5a9); margin-bottom:4px; }
-    .whats-new-entry strong { font-size:15px; display:block; margin-bottom:4px; color:var(--fg,#1a1a1a); }
-    .whats-new-entry p { margin:0; font-size:13px; color:var(--muted,#888); line-height:1.5; }
     /* Stats list */
     .stats-track-item {
       display: flex; align-items: center; gap: 12px;
@@ -6487,7 +6562,6 @@
           switch(action) {
             case 'account':       openAccountModal();          break;
             case 'settings':      openSettingsModal();         break;
-            case 'whats-new':     openModal('modalWhatsNew');  break;
             case 'listening-stats': openStatsModal();          break;
             case 'signout':
               if (typeof window.performLogout === 'function') {
@@ -6746,6 +6820,8 @@
   <script src="/js/basket.js?v=1"></script>
   <!-- 🎚 Mad Mixer buttons only on MADMixer songs; inert unless __MAD_MIXER. -->
   <script src="/js/mad-mixer-links.js?v=1"></script>
+  <!-- Help panel: left-menu "Help" → #modalHelp (guide + Contact us). -->
+  <script src="/js/help.js?v=1"></script>
 
   <script>
   /* ── Ringtone scissors button — global wiring ────────────────────────────────

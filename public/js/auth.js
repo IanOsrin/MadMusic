@@ -122,7 +122,8 @@
         '/api/access/stream-events', // play tracking — server accepts tokenless
                                      // events (guest preview plays must count)
         '/api/payments/',    // payment flow must work before token exists
-        '/api/download/'     // download purchase flow — token-free by design
+        '/api/download/',    // download purchase flow — token-free by design
+        '/api/contact'       // Help → Contact us: people who can't sign in need it most
       ];
 
       const isPublicEndpoint = publicEndpoints.some(endpoint => url.includes(endpoint));
