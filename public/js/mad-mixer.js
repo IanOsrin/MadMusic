@@ -16,8 +16,19 @@
 (function () {
   'use strict';
   const MIXER = '/api/mixer';
+  // Mad Mixer-only codes (free split, Mixer plan) are kept under their own key so MAD's
+  // pages never pick them up (they don't unlock streaming). MAD / Combined codes live under
+  // MAD's key and work here too.
+  const MIXER_KEY = 'mad_mixer_token', MAD_KEY = 'mass_access_token';
+  const MIXER_ONLY = ['mixer', 'mixer-trial'];
   let token = '';
-  try { token = (localStorage.getItem('mass_access_token') || '').trim(); } catch (_) {}
+  try { token = (localStorage.getItem(MIXER_KEY) || localStorage.getItem(MAD_KEY) || '').trim(); } catch (_) {}
+  function storeCode(code, plan) {
+    try {
+      if (MIXER_ONLY.includes(plan)) localStorage.setItem(MIXER_KEY, code);
+      else { localStorage.setItem(MAD_KEY, code); localStorage.removeItem(MIXER_KEY); }
+    } catch (_) {}
+  }
   let currentSong = '';   // the MADMixer song on screen — every split is tagged with it
 
   // 1 · API base + token on every Mad Mixer call ─────────────────────────────
@@ -64,6 +75,13 @@
       return false;
     }
     if (!token && (r.status === 403 || r.status === 400)) { signedOut = true; return false; }
+    // An expired or cancelled Mad Mixer code: forget it and show the front door.
+    let mixerCode = '';
+    try { mixerCode = localStorage.getItem(MIXER_KEY) || ''; } catch (_) {}
+    if (r.status === 403 && mixerCode && mixerCode === token) {
+      try { localStorage.removeItem(MIXER_KEY); } catch (_) {}
+      token = ''; signedOut = true; return false;
+    }
     if (r.status === 403) {
       banner('Your MAD access has expired or isn’t valid on this device. <a href="/">Open MAD</a> to sign in again.', 'warn');
       return false;
@@ -85,14 +103,28 @@
             const b = $id('btnAiSplit'); if (b) { b.disabled = true; b.title = 'Stem splitting isn’t switched on yet'; }
             return;
           }
+          if (u && u.trial && (!u.confirmed || u.remaining <= 0)) {
+            serverConnected = false;                                             // eslint-disable-line no-undef
+            const lbl = $id('serverLabel');
+            if (lbl) lbl.textContent = u.confirmed ? 'Free split used' : 'Free split — confirm your email to unlock';
+            const d = $id('serverDot'); if (d) d.className = 's-dot';
+            const b = $id('btnAiSplit'); if (b) { b.disabled = true; b.title = u.confirmed ? 'Subscribe for 30 splits a month' : 'Tap the link in the email we sent you'; }
+            return;
+          }
           serverConnected = true;                                                // eslint-disable-line no-undef
           const d = $id('serverDot'); if (d) d.className = 's-dot ready';
           const b = $id('btnAiSplit'); if (b) b.title = '';
           if (typeof audioBuf !== 'undefined' && audioBuf && b) b.disabled = false;   // eslint-disable-line no-undef
+          if (u && u.trial) {
+            const lbl = $id('serverLabel'); if (lbl) lbl.textContent = 'Stem Splitter — your free split is ready';
+            return;
+          }
           appPill(u);
         };
         _renderCreditsPill(info);                                                // eslint-disable-line no-undef
       }
+      if (info.trial && !info.confirmed) banner('Welcome to Mad Mixer! <b>Confirm your email</b> to unlock your free split — tap the link in the email we sent you. Meanwhile, pick a song with 🎵 Songs, play it and mix.', 'ok');
+      else if (info.trial && info.remaining <= 0) banner('You’ve used your free split. Mad Mixer is <b>R99 a month</b> for 30 splits — or <b>R109.99</b> with full MAD streaming. (Subscriptions open soon.)', 'upsell');
       if (serverConnected && typeof audioBuf !== 'undefined' && audioBuf && $id('btnAiSplit')) $id('btnAiSplit').disabled = false;   // eslint-disable-line no-undef
       if (typeof loadMvsepModels === 'function') loadMvsepModels();             // eslint-disable-line no-undef
     } catch (e) { console.warn('[Mad Mixer] could not hand the sign-in to the app', e); }
@@ -196,25 +228,117 @@
     }
   }
 
-  // 3c · arriving cold (no MAD sign-in): Mad Mixer's own front door ─────────────
-  // One account for MAD and Mad Mixer: "Sign in" goes to MAD's access page (which also
-  // handles email claims and the device limit) and comes straight back here — to the same
-  // song, if one was asked for.
+  // 3c · arriving cold (not signed in): Mad Mixer's own front door ─────────────────
+  // DRAFT 2026-09-28 for Ian's review. Three ways in, all on the Mixer's own page:
+  //   · Try it free — 1 free split (email → Mixer-only code at once; the split unlocks on confirm)
+  //   · Subscribe — Mad Mixer R99/month, or Mad Mixer + MAD streaming R109.99 [waits on Paystack]
+  //   · I already have a code — signs in right here (MAD, Combined or Mixer codes)
   function showWelcome() {
-    const song = new URLSearchParams(location.search).get('song');
-    const back = '/mixer' + (song && /^\d{1,12}$/.test(song) ? '?song=' + song : '');
     const w = document.createElement('div');
     w.id = 'mmWelcome'; w.className = 'mm-picker mm-welcome';
-    w.innerHTML = `<div class="mm-picker-box mm-welcome-box" role="dialog" aria-label="Welcome to Mad Mixer">
+    w.innerHTML = `<div class="mm-picker-box mm-welcome-box mm-door" role="dialog" aria-label="Welcome to Mad Mixer">
         <img class="mm-welcome-logo" src="/img/Madmusiclogonew-dark.png" alt="MAD — Music Africa Direct">
         <h2>Mad Mixer</h2>
-        <p>Open South African classics as separate stems — vocals, drums, bass and more.
-           Mix them here, or download them to your DAW.</p>
-        <a class="mm-welcome-btn" href="/access?next=${encodeURIComponent(back)}">Sign in with your MAD access code</a>
-        <p class="mm-welcome-small">No access code yet? The sign-in page also lets you get one.
-           <br><a href="/">Or browse Music Africa Direct</a></p>
+        <p class="mm-door-lead">Open South African classics from the original master tapes as separate stems —
+           vocals, drums, bass and more. Mix them here, or download them to your DAW.</p>
+
+        <div class="mm-door-options">
+          <section class="mm-door-card mm-door-free">
+            <h3>🎁 Try it free</h3>
+            <p>Your first split is on us — no card needed.</p>
+            <form id="mmFreeForm" novalidate>
+              <input type="email" name="email" placeholder="Your email address" autocomplete="email" required>
+              <button type="submit" class="mm-door-btn">Get my free split</button>
+            </form>
+          </section>
+
+
+          <section class="mm-door-card">
+            <h3>🔑 Already have a code?</h3>
+            <form id="mmCodeForm" novalidate>
+              <input type="text" name="code" placeholder="MASS-XXX-XXX" autocomplete="off" autocapitalize="characters" spellcheck="false" required>
+              <button type="submit" class="mm-door-btn mm-door-btn-ghost">Sign in</button>
+            </form>
+          </section>
+          <section class="mm-door-card mm-door-subscribe">
+            <h3>🎚 Subscribe</h3>
+            <div class="mm-door-plans">
+            <button type="button" class="mm-door-plan" data-plan="mixer">
+              <span><strong>Mad Mixer</strong><small>30 splits a month · download stems to your DAW</small></span>
+              <span class="mm-door-price">R99<small>/month</small></span>
+            </button>
+            <button type="button" class="mm-door-plan mm-door-best" data-plan="combined">
+              <span><strong>Mad Mixer + MAD streaming</strong><small>Everything above, plus 100 years of SA music, in full</small></span>
+              <span class="mm-door-price">R109.99<small>/month</small></span>
+            </button>
+            </div>
+          </section>
+        </div>
+
+        <p class="mm-door-msg" id="mmDoorMsg" hidden></p>
+        <p class="mm-welcome-small"><a href="/">Or browse Music Africa Direct</a></p>
       </div>`;
     document.body.appendChild(w);
+
+    const msg = (html, kind) => { const m = $id('mmDoorMsg'); m.innerHTML = html; m.className = 'mm-door-msg' + (kind ? ' mm-' + kind : ''); m.hidden = false; };
+
+    // Try it free — one free split per email: a Mixer-only code straight away (browse, play,
+    // mix); the split unlocks when the emailed link is tapped.
+    $id('mmFreeForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = e.target.email.value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg('Please enter a valid email address.', 'warn'); return; }
+      const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Starting…';
+      try {
+        const r = await nativeFetch(`${MIXER}/trial`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && d.token) {
+          storeCode(String(d.token).toUpperCase(), 'mixer-trial');
+          w.querySelector('.mm-door-options').innerHTML = `<section class="mm-door-card mm-door-done">
+              <h3>✉️ Check your email</h3>
+              <p>We've sent a link to <strong>${esc(email)}</strong>. Tap it to unlock your free split — check Junk if it isn't there.</p>
+              <p>In the meantime you're in — browse the songs, play them and mix.</p>
+              <button type="button" class="mm-door-btn" id="mmDoorContinue">Start exploring</button>
+            </section>`;
+          $id('mmDoorMsg').hidden = true;
+          $id('mmDoorContinue').addEventListener('click', () => location.reload());
+          return;
+        }
+        msg(esc(d.error || 'We couldn’t start your free split. Please try again.'), 'warn');
+      } catch (_) {
+        msg('We couldn’t reach Mad Mixer just now. Please try again.', 'warn');
+      }
+      btn.disabled = false; btn.textContent = 'Get my free split';
+    });
+
+    // Subscribe — DRAFT: waits on the Paystack plans (Mad Mixer R99, Combined R109.99).
+    w.querySelectorAll('.mm-door-plan').forEach((b) => b.addEventListener('click', () =>
+      msg('Subscriptions open as soon as the Paystack plans are set up. (Draft)', 'warn')));
+
+    // Already have a code — REAL: checks the code against Mad Mixer and signs in here.
+    $id('mmCodeForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const code = e.target.code.value.trim().toUpperCase();
+      if (!/^[A-Z0-9-]{6,40}$/.test(code)) { msg('Please enter your access code — it looks like MASS-XXX-XXX.', 'warn'); return; }
+      const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Checking…';
+      try {
+        const r = await nativeFetch(`${MIXER}/auth`, { method: 'POST', headers: { 'X-Access-Token': code } });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok) {
+          storeCode(code, d.plan);
+          location.reload();
+          return;
+        }
+        if (r.status === 402) msg('That code is for MAD streaming. Add Mad Mixer with <b>Mad Mixer + MAD streaming</b> above — R10 more a month.', 'upsell');
+        else {
+          const why = String(d.reason || d.error || '');
+          msg(/in use/i.test(why) ? esc(why) : 'That code wasn’t recognised, or it has expired. Check the email we sent you.', 'warn');
+        }
+      } catch (_) {
+        msg('We couldn’t check your code just now. Please try again.', 'warn');
+      }
+      btn.disabled = false; btn.textContent = 'Sign in';
+    });
   }
 
   // 3d · Mad Mixer songs only (Ian, 2026-09-28) — no listener's own audio ─────────────
@@ -259,7 +383,27 @@
   }
   new MutationObserver(hideDesktopOnly).observe(document.documentElement, { childList: true, subtree: true });
 
+  async function codeFromLink() {
+    const p = new URLSearchParams(location.search);
+    const code = (p.get('code') || '').trim().toUpperCase();
+    if (!code) return false;
+    p.delete('code');
+    history.replaceState({}, document.title, location.pathname + (p.toString() ? '?' + p : ''));
+    if (!/^[A-Z0-9-]{6,40}$/.test(code)) return false;
+    try {
+      const r = await nativeFetch(`${MIXER}/auth`, { method: 'POST', headers: { 'X-Access-Token': code } });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) { storeCode(code, d.plan); location.reload(); return true; }
+    } catch (_) {}
+    return false;
+  }
+
   function boot() {
+    // An emailed link (/mixer?code=…) signs this device in first; a bad code just carries on.
+    if (new URLSearchParams(location.search).get('code')) { codeFromLink().then((ok) => { if (!ok) startUp(); }); return; }
+    startUp();
+  }
+  function startUp() {
     hideDesktopOnly();
     addSongsButton();
     signIn().then(() => {

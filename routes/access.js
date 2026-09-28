@@ -4,6 +4,7 @@ import { parseCookies, getClientIP } from '../lib/http.js';
 import { formatTimestampUTC, toCleanString, normalizeSeconds, parseFileMakerTimestamp } from '../lib/format.js';
 import { validateSessionId, isStrictEmail, fmExactMatch, validators } from '../lib/validators.js';
 import { getAccessTokensCacheData } from '../lib/token-store.js';
+import { isMixerOnly } from '../lib/mixer-plans.js';
 import { timingSafeEqualStr } from '../lib/crypto-utils.js';
 import { LRUCache } from 'lru-cache';
 import {
@@ -68,6 +69,14 @@ router.post('/validate', async (req, res) => {
     }
 
     const result = await validateAccessToken(token, sessionId, req);
+
+    // A Mad Mixer-only code (free split / Mixer plan) opens the Mixer, not MAD streaming.
+    if (result.valid && isMixerOnly(result.type)) {
+      return res.status(403).json({
+        ok: false, valid: false, mixerOnly: true,
+        reason: 'This is a Mad Mixer code — it opens Mad Mixer at musicafricadirect.com/mixer. For full streaming, choose Mad Mixer + MAD streaming there.'
+      });
+    }
 
     if (result.valid) {
       res.json({

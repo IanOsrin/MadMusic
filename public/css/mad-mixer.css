@@ -107,3 +107,36 @@ header .header-badge { background: rgba(139, 92, 246, 0.15); color: #c4b5fd; bor
 #btnBrowse, #btnBrowseProj, #btnLoadProject, #btnSaveProject, #btnNew, .file-menu-sep,
 #btnAddTrack, #btnAddTrackSetup, .btn-add-track, #btnFileMenu, #btnRecord { display: none !important; }
 body.dragging .empty-track-drop { outline: none !important; }
+
+/* Mad Mixer front door (2026-09-28): try free / subscribe / have a code */
+.mm-door { width: min(760px, 100%); max-height: 92vh; overflow-y: auto; position: relative; }
+.mm-door-lead { max-width: 560px; }
+.mm-draft-ribbon { position: absolute; top: 14px; left: -34px; transform: rotate(-35deg); background: #f59e0b; color: #111;
+  font-weight: 800; font-size: 11px; letter-spacing: 0.1em; padding: 4px 40px; }
+.mm-door-options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; margin-top: 6px; text-align: left; }
+.mm-door-subscribe { grid-column: 1 / -1; }
+.mm-door-plans { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 620px) { .mm-door-options, .mm-door-plans { grid-template-columns: 1fr; } }
+.mm-door-card { background: #1b1b1b; border: 1px solid #2e2e2e; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.mm-door-card h3 { margin: 0; font-size: 1rem; }
+.mm-door-card p { margin: 0; font-size: 0.85rem; color: #bbb; line-height: 1.45; }
+.mm-door-free { border-color: rgba(34, 211, 238, 0.45); }
+.mm-door-card form { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+.mm-door-card input { padding: 10px 12px; border-radius: 9px; border: 1.5px solid #333; background: #121212; color: #e8e8e8; font: inherit; font-size: 0.9rem; }
+.mm-door-card input:focus { outline: none; border-color: #8b5cf6; }
+.mm-door-btn { padding: 10px 14px; border-radius: 999px; border: none; cursor: pointer; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #8b5cf6, #a78bfa); font-size: 0.9rem; }
+.mm-door-btn:disabled { opacity: 0.6; cursor: default; }
+.mm-door-btn-ghost { background: transparent; border: 1.5px solid #8b5cf6; color: #c4b5fd; }
+.mm-door-plan { display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: left; cursor: pointer;
+  background: #121212; border: 1.5px solid #333; border-radius: 10px; padding: 10px 12px; color: #e8e8e8; font: inherit; }
+.mm-door-plan:hover { border-color: #8b5cf6; }
+.mm-door-plan strong { display: block; font-size: 0.9rem; }
+.mm-door-plan small { display: block; color: #999; font-size: 0.74rem; margin-top: 2px; }
+.mm-door-best { border-color: rgba(139, 92, 246, 0.7); background: linear-gradient(90deg, rgba(139,92,246,0.14), rgba(34,211,238,0.05)); }
+.mm-door-price { font-weight: 800; white-space: nowrap; font-size: 1rem; }
+.mm-door-price small { display: inline; color: #999; font-weight: 400; }
+.mm-door-done { grid-column: 1 / -1; align-items: flex-start; }
+.mm-door-msg { margin: 4px 0 0; font-size: 0.86rem; padding: 10px 12px; border-radius: 10px; border: 1px solid #333; width: 100%; box-sizing: border-box; }
+.mm-door-msg.mm-warn { border-color: rgba(217, 64, 64, 0.55); }
+.mm-door-msg.mm-upsell { border-color: rgba(139, 92, 246, 0.6); }

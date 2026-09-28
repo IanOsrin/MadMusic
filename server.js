@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import accessRouter from './routes/access.js';
 import paymentsRouter from './routes/payments.js';
 import contactRouter from './routes/contact.js';
+import { isMixerOnly } from './lib/mixer-plans.js';
 import playlistsRouter from './routes/playlists.js';
 import catalogRouter from './routes/catalog.js';
 import libraryRouter from './routes/library.js';
@@ -486,6 +487,7 @@ app.use(['/api/explore', '/api/trending', '/api/featured-albums', '/api/missing-
 app.use(['/api/payments/initialize', '/api/payments/subscribe', '/api/ringtone/initiate'], paymentLimiter);
 app.use('/api/payments/trial', trialLimiter);
 app.use('/api/contact', contactLimiter);
+app.use('/api/mixer/trial', trialLimiter);   // Mad Mixer free split — same limit as the MAD trial
 
 // Add Cache-Control headers
 app.use((req, res, next) => {
@@ -609,8 +611,18 @@ app.use('/api/', async (req, res, next) => {
     '/catalog/',
     // Mad Mixer, LOCAL TESTING ONLY: with MIXER_DEV_NO_TOKEN=true (ignored in production)
     // the mixer API works without a MAD sign-in so the page can be tried on localhost.
-    ...(MAD_MIXER_ENABLED && process.env.MIXER_DEV_NO_TOKEN === 'true' && process.env.NODE_ENV !== 'production' ? ['/mixer/'] : [])
+    ...(MAD_MIXER_ENABLED && process.env.MIXER_DEV_NO_TOKEN === 'true' && process.env.NODE_ENV !== 'production' ? ['/mixer/'] : []),
+    // Mad Mixer free split: signing up and the email's Confirm link come before any code exists.
+    ...(MAD_MIXER_ENABLED ? ['/mixer/trial'] : [])
   ];
+
+  // Mad Mixer-only codes (free split / Mixer plan) open /api/mixer/* and nothing else —
+  // above all, never full streaming. Checked on every path that lets a token through below.
+  const mixerOnlyRefused = (data) => {
+    if (!data || !isMixerOnly(data.type) || req.path.startsWith('/mixer/')) return false;
+    res.status(403).json({ ok: false, error: 'This Mad Mixer code does not include MAD streaming.', mixerOnly: true, requiresAccessToken: true });
+    return true;
+  };
 
   if (skipPaths.some(path => req.path === path || req.path.startsWith(path))) {
     return next();
@@ -629,6 +641,7 @@ app.use('/api/', async (req, res, next) => {
   const cacheKey = accessToken.trim().toUpperCase();
   const cached = tokenValidationCache.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) {
+    if (mixerOnlyRefused(cached.data)) return;
     req.accessToken = cached.data;
     return next();
   }
@@ -644,6 +657,7 @@ app.use('/api/', async (req, res, next) => {
     const fmUnavailable = validation.definitive !== true;
     if (fmUnavailable && cached?.data && (Date.now() - cached.expiresAt) < STALE_GRACE_MS) {
       console.warn(`[MASS] FM unreachable (${validation.reason}), using stale cache for token ${cacheKey.slice(0, 8)}…`);
+      if (mixerOnlyRefused(cached.data)) return;
       req.accessToken = cached.data;
       return next();
     }
@@ -668,6 +682,7 @@ app.use('/api/', async (req, res, next) => {
 
   tokenValidationCache.set(cacheKey, { data: tokenData, expiresAt: Date.now() + TOKEN_CACHE_TTL_MS });
 
+  if (mixerOnlyRefused(tokenData)) return;
   req.accessToken = tokenData;
   next();
 });
