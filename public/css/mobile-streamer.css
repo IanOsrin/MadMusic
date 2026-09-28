@@ -317,6 +317,15 @@ nav.bottom-tabs { padding: 0 4px; }
 .btn.alb-basket { flex: none; min-height: 32px; height: 32px; padding: 0 12px; font-size: 12px; white-space: nowrap; }
 .bottom-sheet:has(.alb-hero) .bs-close-btn { display: block; width: calc(100% - 40px); margin: 14px 20px 0; }
 .bottom-sheet:has(.alb-hero) .mob-suggestions { padding: 0 20px; }
+/* own playlists: the album page plus an artwork pill beside Play, and a small square cover per row */
+.pl-actions { display: flex; align-items: center; gap: 10px; margin: 6px 20px; }
+.pl-actions .alb-play { flex: 1; width: auto; margin: 0; }
+.pl-art-btn { flex: none; height: 50px; padding: 0 18px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06); color: #fff; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.pl-actions .pl-art-btn:only-child { flex: 1; }
+.pl-art-btn:active { transform: scale(0.96); }
+.pl-empty { margin: 14px 24px 4px; text-align: center; font-size: 13.5px; line-height: 1.45; color: rgba(255, 255, 255, 0.55); }
+.pl-row-art { width: 40px; height: 40px; flex: none; object-fit: cover; background: #1a1a24; }
 
 /* Page titles (Search, My Playlists) as the design: big and tight */
 .section-title.page-title { font-size: 28px; letter-spacing: -0.035em; }
