@@ -6,8 +6,8 @@
 // server answers eligible:false until the listener has 100 different songs,
 // and the shelf, heading included, stays hidden until there are cards to show.
 
-import { escapeHtml } from './fields.js?v=26';
-import { showAlbumTracksModal } from './cards.js?v=26';
+import { escapeHtml } from './fields.js?v=27';
+import { showAlbumTracksModal } from './cards.js?v=27';
 
 export async function loadSuggestedForYou() {
   const header = document.getElementById('home-sfy-header');

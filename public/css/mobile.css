@@ -1826,3 +1826,12 @@ body.audio-buffering #player-title::after {
 
     /* × on the mini player: stop + close (2026-09-28) */
     .mini-btn.mini-close { width: 34px; height: 34px; font-size: 24px; line-height: 1; color: var(--text-muted); }
+
+    /* Now Playing header (2026-09-28): ⌄ close · NOW PLAYING / context. Base layout; the
+       Streamer look (mobile-streamer.css) styles it. */
+    .np-head { width: 100%; max-width: 420px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .np-head .player-close { position: static; }
+    .np-context { flex: 1; min-width: 0; text-align: center; }
+    .np-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; color: var(--text-muted); }
+    .np-ctx { font-size: 13px; font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .np-spacer { width: var(--touch-target-min); height: var(--touch-target-min); flex: none; }
