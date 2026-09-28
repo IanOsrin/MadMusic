@@ -180,3 +180,53 @@ nav.bottom-tabs {
 
 /* mini player × */
 .mini-btn.mini-close { color: rgba(255, 255, 255, 0.5); }
+
+/* ── Step 2: Home (2026-09-28) ─────────────────────────────────────────── */
+/* Featured carousel: the banners keep their own shape (the artist name is painted into the
+   artwork — cropping it is off-limits, docs/banners.md); the design's FEATURED tag, gradient
+   Play and dots-below are added around them. Tall Tawanda-style cards need taller artwork. */
+.mob-hero { overflow: visible; background: transparent; box-shadow: none; aspect-ratio: auto; border-radius: 0; margin-bottom: 22px; }
+.mob-hero-track { border-radius: 20px; overflow-x: auto; aspect-ratio: 16 / 10; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  background: var(--mad-gradient); height: auto; }
+.mob-hero.editorial { aspect-ratio: auto; }
+.mob-hero.editorial .mob-hero-track { aspect-ratio: 7500 / 1750; border-radius: 16px; }
+.mob-hero-tag { position: absolute; top: 8px; left: 10px; font-size: 9px; font-weight: 700; letter-spacing: 0.16em;
+  color: #fff; padding: 4px 9px; border-radius: 999px; background: rgba(8, 8, 12, 0.55); backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px); pointer-events: none; }
+.mob-hero-play { position: absolute; right: 10px; bottom: 8px; height: 28px; padding: 0 12px; border-radius: 999px;
+  background: var(--mad-gradient); color: #08080c; font-size: 12px; font-weight: 700; display: inline-flex;
+  align-items: center; gap: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); pointer-events: none; }
+.mob-hero:not(.editorial) .mob-hero-play { height: 36px; padding: 0 16px; font-size: 13.5px; bottom: 14px; right: 14px; }
+.mob-hero-dots { position: static; justify-content: center; gap: 6px; margin-top: 11px; }
+.mob-hero-dots span { width: 6px; height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.25);
+  transition: width 0.22s, background 0.22s; transform: none; }
+.mob-hero-dots span.on { width: 20px; background: var(--mad-gradient); transform: none; }
+
+/* Pick up where you left off */
+.home-continue { margin: 0 0 18px; }
+.home-continue .section-header { margin-bottom: 10px; }
+.cont-rail { display: flex; gap: 12px; overflow-x: auto; padding: 2px 0 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.cont-rail::-webkit-scrollbar { display: none; }
+.cont-card { flex: none; width: 224px; display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 14px;
+  background: #14141c; border: 1px solid rgba(255, 255, 255, 0.08); position: relative; overflow: hidden; cursor: pointer;
+  color: #fff; font: inherit; text-align: left; transition: transform 0.15s, background 0.15s; }
+.cont-card:active { transform: scale(0.975); background: #1a1a25; }
+.cont-art { width: 46px; height: 46px; flex: none; object-fit: cover; background: var(--mad-gradient); }
+.cont-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cont-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cont-meta { font-size: 11px; color: rgba(255, 255, 255, 0.5); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cont-play { width: 30px; height: 30px; flex: none; border-radius: 50%; background: rgba(255, 255, 255, 0.1);
+  display: flex; align-items: center; justify-content: center; color: #fff; }
+.cont-bar { position: absolute; left: 0; bottom: 0; height: 2px; background: linear-gradient(90deg, #3df7ff, #a72fff); }
+
+/* Global Favourites — numbered list */
+.gf-list { display: flex; flex-direction: column; margin: 0 -8px 8px; }
+.gf-row { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 12px; border: 0; background: none;
+  color: #fff; font: inherit; text-align: left; cursor: pointer; transition: transform 0.15s, background 0.15s; }
+.gf-row:active { transform: scale(0.975); background: rgba(255, 255, 255, 0.05); }
+.gf-rank { width: 18px; text-align: center; font-size: 13px; font-weight: 800; color: rgba(255, 255, 255, 0.35); flex: none; }
+.gf-art { width: 46px; height: 46px; flex: none; object-fit: cover; background: var(--mad-gradient); }
+.gf-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.gf-title { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gf-artist { font-size: 12px; color: rgba(255, 255, 255, 0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gf-time { font-size: 12px; color: rgba(255, 255, 255, 0.4); flex: none; }

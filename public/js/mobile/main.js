@@ -2,12 +2,12 @@
 // holds the DOM event wiring + drag/search state + init(), and exposes the
 // inline on*-handlers on window. All app logic lives in the mobile/*.js modules.
 
-import { elements, state } from './state.js?v=25';
-import { showToast } from './util.js?v=25';
-import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=25';
+import { elements, state } from './state.js?v=26';
+import { showToast } from './util.js?v=26';
+import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=26';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=25';
+import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=26';
 
 // Links from MAD emails: ?buy=1 opens the plans (not inside the store app — policy),
 // ?contact=1 opens "Contact us". The param is dropped from the address bar either way.
@@ -20,19 +20,21 @@ function handleEmailLinks() {
   window.history.replaceState({}, document.title, window.location.pathname + (q ? '?' + q : ''));
   setTimeout(() => { if (contact) showContactSheet(); else if (!isNativeApp()) buyAccess(); }, 600);
 }
-import { switchTab } from './nav.js?v=25';
-import { renderSearchResults, search } from './search.js?v=25';
-import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=25';
-import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=25';
-import { filterG100Albums, loadG100 } from './rails-g100.js?v=25';
-import { loadNewReleases } from './rails-newreleases.js?v=25';
-import { loadSuggestedForYou } from './rails-suggested.js?v=25';
-import { initMobHero } from './hero.js?v=25';
-import { loadHomeShelves } from './rails-g100.js?v=25';
-import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=25';
-import { showAlbumTracksModal } from './cards.js?v=25';
-import { initRouter } from './router.js?v=25';
-import { initMaddie } from './maddie.js?v=25';
+import { switchTab } from './nav.js?v=26';
+import { renderSearchResults, search } from './search.js?v=26';
+import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=26';
+import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=26';
+import { filterG100Albums, loadG100 } from './rails-g100.js?v=26';
+import { loadNewReleases } from './rails-newreleases.js?v=26';
+import { loadSuggestedForYou } from './rails-suggested.js?v=26';
+import { initMobHero } from './hero.js?v=26';
+import { loadHomeShelves } from './rails-g100.js?v=26';
+import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=26';
+import { showAlbumTracksModal } from './cards.js?v=26';
+import { initRouter } from './router.js?v=26';
+import { initMaddie } from './maddie.js?v=26';
+import { initContinue } from './continue.js?v=26';
+import { loadGlobalFavourites } from './rails-globalfav.js?v=26';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {
@@ -114,6 +116,8 @@ import { initMaddie } from './maddie.js?v=25';
           loadNewReleases();
           initMobHero();
           loadHomeShelves();
+          initContinue();
+          loadGlobalFavourites();
           loadPlaylists();
           handleShareDeepLink();
           handleEmailLinks();
@@ -141,6 +145,8 @@ import { initMaddie } from './maddie.js?v=25';
       loadNewReleases();
           initMobHero();
           loadHomeShelves();
+          initContinue();
+          loadGlobalFavourites();
       loadPlaylists();
       handleShareDeepLink();
       handleEmailLinks();

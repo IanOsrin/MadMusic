@@ -1,8 +1,8 @@
 // Playback engine + now-playing modal for the mobile app.
 
-import { elements, state } from './state.js?v=25';
-import { formatTime, generateSessionId, showToast } from './util.js?v=25';
-import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField } from './fields.js?v=25';
+import { elements, state } from './state.js?v=26';
+import { formatTime, generateSessionId, showToast } from './util.js?v=26';
+import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField } from './fields.js?v=26';
 
 export function closeModal() {
       elements.modalOverlay.classList.remove('show');
@@ -91,6 +91,9 @@ export async function playTrack(track) {
 
       // Generate a new session ID for this track — stream event fired by the audio 'play' listener
       state.streamSessionId = generateSessionId();
+
+      // "Pick up where you left off" (continue.js) remembers every play.
+      window.dispatchEvent(new CustomEvent('mad:played', { detail: { track } }));
     }
 
 // ── Lock-screen / Control Centre playback controls ──────────────────────────
