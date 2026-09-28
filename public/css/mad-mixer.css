@@ -100,3 +100,10 @@ header .header-badge { background: rgba(139, 92, 246, 0.15); color: #c4b5fd; bor
 .mm-welcome-btn:hover { filter: brightness(1.08); }
 .mm-welcome-box .mm-welcome-small { font-size: 0.8rem; color: #999; }
 .mm-welcome-small a { color: #a78bfa; }
+
+/* Mad Mixer songs only (2026-09-28): no "open your own audio" doors. The adapter also swallows
+   file drops and pickers; this just removes the buttons that lead there. */
+#dropZone, #dropFlash, .drop-zone-drag-hint,
+#btnBrowse, #btnBrowseProj, #btnLoadProject, #btnSaveProject, #btnNew, .file-menu-sep,
+#btnAddTrack, #btnFileMenu, #btnRecord { display: none !important; }
+body.dragging .empty-track-drop { outline: none !important; }
