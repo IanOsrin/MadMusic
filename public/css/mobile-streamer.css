@@ -330,3 +330,58 @@ nav.bottom-tabs { padding: 0 4px; }
 
 /* "+ Playlist" pill beside the Library title */
 .btn.pill-add { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; height: 34px; padding: 0 14px; font-size: 12.5px; }
+
+/* ── Step 6: three-slide welcome (2026-09-28) ─────────────────────────── */
+body.welcome-open { overflow: hidden; }
+#welcome { position: fixed; inset: 0; z-index: 4000; background: #050509; display: flex; flex-direction: column;
+  animation: welIn 0.22s ease; }
+#welcome.wel-out { opacity: 0; transition: opacity 0.2s; }
+@keyframes welIn { from { opacity: 0; } to { opacity: 1; } }
+.wel-skip { position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 14px; z-index: 6; border: 0; background: none;
+  color: rgba(255, 255, 255, 0.6); font: inherit; font-size: 13px; font-weight: 700; padding: 8px 12px; border-radius: 999px; cursor: pointer; }
+.wel-skip:active { color: #fff; }
+.wel-track { flex: 1; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.wel-track::-webkit-scrollbar { display: none; }
+.wel-slide { flex: none; width: 100%; scroll-snap-align: start; scroll-snap-stop: always; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; padding: calc(64px + env(safe-area-inset-top)) 28px 12px; }
+.wel-glow { position: absolute; width: 360px; height: 360px; border-radius: 50%; filter: blur(4px); pointer-events: none; }
+.wel-glow-a { top: 40px; left: -90px; background: radial-gradient(circle, rgba(61, 247, 255, 0.24), rgba(167, 47, 255, 0.14) 46%, transparent 70%); }
+.wel-glow-b { bottom: -120px; right: -110px; background: radial-gradient(circle, rgba(167, 47, 255, 0.3), transparent 68%); }
+.wel-visual { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; z-index: 1; margin-bottom: 20px; }
+.wel-text { position: relative; z-index: 3; text-align: center; }
+.wel-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; color: var(--mad-cyan); margin-bottom: 12px; }
+.wel-title { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.06; margin: 0; color: #fff; }
+.wel-body { font-size: 15px; color: rgba(255, 255, 255, 0.66); margin: 11px auto 0; max-width: 300px; line-height: 1.46; }
+/* slide 1: three fanned covers (square, Ian's rule) */
+.wel-covers { position: relative; width: 236px; height: 220px; }
+.wel-cover { position: absolute; width: 150px; height: 150px; object-fit: cover; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.1); background: var(--mad-gradient); }
+.wel-cover-0 { left: -2px; top: 20px; transform: rotate(-9deg); }
+.wel-cover-1 { right: -2px; top: 4px; transform: rotate(8deg); }
+.wel-cover-2 { left: 43px; top: 58px; transform: rotate(-1deg); z-index: 2; }
+/* slide 2: Maddie */
+/* Maddie's profile portrait (Ian's "Option 1", caption cropped off) — clipped to its cyan ring so the grey backing never shows */
+.wel-maddie { width: min(72vw, 100%, 300px); aspect-ratio: 1; height: auto; max-height: 100%; object-fit: cover; border-radius: 50%;
+  box-shadow: 0 0 36px rgba(61, 247, 255, 0.28), 0 24px 44px rgba(0, 0, 0, 0.6); }
+/* slide 3: the offer card */
+.wel-offer { width: 100%; max-width: 310px; background: #14141d; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 18px;
+  padding: 16px 16px 8px; box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5); }
+.wel-offer-badge { font-size: 10px; font-weight: 800; letter-spacing: 0.12em; color: #08080c; background: var(--mad-warm);
+  border-radius: 999px; padding: 6px 12px; text-align: center; margin-bottom: 10px; }
+.wel-offer-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; font-size: 13.5px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.wel-offer-row:first-child { border-top: 0; }
+.wel-offer-row span { color: rgba(255, 255, 255, 0.72); display: flex; flex-direction: column; text-align: left; }
+.wel-offer-row em { font-style: normal; font-size: 10.5px; color: rgba(255, 255, 255, 0.4); }
+.wel-offer-row b { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; color: #fff; }
+.wel-offer-note { font-size: 13.5px; color: rgba(255, 255, 255, 0.72); text-align: center; padding: 6px 0 10px; }
+/* footer: dots + Next / Discover Now */
+.wel-foot { position: relative; z-index: 6; padding: 6px 28px calc(26px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
+.wel-dots { display: flex; gap: 7px; justify-content: center; }
+.wel-dots span { width: 7px; height: 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.22); transition: width 0.2s, background 0.2s; }
+.wel-dots span.on { width: 22px; background: var(--mad-cyan); }
+.wel-next { width: 100%; height: 54px; border: 0; border-radius: 999px; background: var(--mad-gradient); color: #08080c; font: inherit;
+  font-size: 16px; font-weight: 700; box-shadow: 0 10px 30px rgba(89, 195, 255, 0.26); cursor: pointer; }
+.wel-next:active { transform: scale(0.97); filter: brightness(1.08); }
+@media (max-height: 640px) { .wel-covers { transform: scale(0.8); } .wel-title { font-size: 26px; } .wel-slide { padding-top: calc(48px + env(safe-area-inset-top)); } }
+@media (prefers-reduced-motion: reduce) { #welcome, #welcome.wel-out { animation: none; transition: none; } }

@@ -2,12 +2,12 @@
 // holds the DOM event wiring + drag/search state + init(), and exposes the
 // inline on*-handlers on window. All app logic lives in the mobile/*.js modules.
 
-import { elements, state } from './state.js?v=29';
-import { showToast } from './util.js?v=29';
-import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=29';
+import { elements, state } from './state.js?v=30';
+import { showToast } from './util.js?v=30';
+import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=30';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=29';
+import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=30';
 
 // Links from MAD emails: ?buy=1 opens the plans (not inside the store app — policy),
 // ?contact=1 opens "Contact us". The param is dropped from the address bar either way.
@@ -20,21 +20,22 @@ function handleEmailLinks() {
   window.history.replaceState({}, document.title, window.location.pathname + (q ? '?' + q : ''));
   setTimeout(() => { if (contact) showContactSheet(); else if (!isNativeApp()) buyAccess(); }, 600);
 }
-import { switchTab } from './nav.js?v=29';
-import { renderSearchResults, search } from './search.js?v=29';
-import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=29';
-import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=29';
-import { filterG100Albums, loadG100 } from './rails-g100.js?v=29';
-import { loadNewReleases } from './rails-newreleases.js?v=29';
-import { loadSuggestedForYou } from './rails-suggested.js?v=29';
-import { initMobHero } from './hero.js?v=29';
-import { loadHomeShelves } from './rails-g100.js?v=29';
-import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=29';
-import { showAlbumTracksModal } from './cards.js?v=29';
-import { initRouter } from './router.js?v=29';
-import { initMaddie } from './maddie.js?v=29';
-import { initContinue } from './continue.js?v=29';
-import { loadGlobalFavourites } from './rails-globalfav.js?v=29';
+import { switchTab } from './nav.js?v=30';
+import { renderSearchResults, search } from './search.js?v=30';
+import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=30';
+import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=30';
+import { filterG100Albums, loadG100 } from './rails-g100.js?v=30';
+import { loadNewReleases } from './rails-newreleases.js?v=30';
+import { loadSuggestedForYou } from './rails-suggested.js?v=30';
+import { initMobHero } from './hero.js?v=30';
+import { loadHomeShelves } from './rails-g100.js?v=30';
+import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=30';
+import { showAlbumTracksModal } from './cards.js?v=30';
+import { initRouter } from './router.js?v=30';
+import { initMaddie } from './maddie.js?v=30';
+import { initContinue } from './continue.js?v=30';
+import { loadGlobalFavourites } from './rails-globalfav.js?v=30';
+import { maybeShowWelcome, showWelcome } from './welcome.js?v=30';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {
@@ -69,6 +70,7 @@ import { loadGlobalFavourites } from './rails-globalfav.js?v=29';
     document.getElementById('logout-btn').addEventListener('click', logout);
     document.getElementById('contact-btn')?.addEventListener('click', () => showContactSheet());
     document.getElementById('help-contact-btn')?.addEventListener('click', () => showContactSheet());
+    document.getElementById('help-welcome-btn')?.addEventListener('click', () => showWelcome());
     // Android app on Google Play — offered to Android browsers, never inside the app.
     if (/Android/i.test(navigator.userAgent) && !isNativeApp()) {
       const getApp = document.getElementById('get-app-btn');
@@ -82,6 +84,9 @@ import { loadGlobalFavourites } from './rails-globalfav.js?v=29';
       // per track: the OS keeps the handlers, and re-registering on every play
       // is wasted work.
       initMediaSession();
+
+      // First visit on this device, no access code: the three-slide welcome (step 6).
+      maybeShowWelcome();
 
       // Check URL for payment result first (redirect back from Paystack)
       const urlParams = new URLSearchParams(window.location.search);
