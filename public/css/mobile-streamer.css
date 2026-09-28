@@ -1,0 +1,158 @@
+/* MAD Streamer look for the phone site — step 1 of bringing the MAD Streamer App design
+ * (Tawanda Mujaji / Claude Design hand-off, signed off 2026-09-16) into the existing app.
+ *
+ * Loaded AFTER mobile.css and only re-skins: colours, the floating dock, buttons, cards, the
+ * mini player and headings. No markup or behaviour changes, so it can be reviewed (or removed)
+ * on its own. Tokens come from the hand-off's design system (_ds/.../tokens/*.css):
+ *   gradient #3DF7FF → #59C3FF → #A72FFF (an ACCENT — never page wallpaper), ink #08080C…,
+ *   heritage gold #F5B13D / terracotta #E8552D, Barlow, pill controls, hairline borders.
+ */
+:root {
+  --mad-cyan: #3df7ff;
+  --mad-blue: #59c3ff;
+  --mad-purple: #a72fff;
+  --mad-gold: #f5b13d;
+  --mad-terracotta: #e8552d;
+  --mad-gradient: linear-gradient(150deg, #3df7ff 0%, #59c3ff 45%, #a72fff 100%);
+  --mad-warm: linear-gradient(150deg, #f5b13d, #e8552d);
+
+  /* the existing variables, re-pointed at the Streamer palette */
+  --bg-primary: #08080c;
+  --bg-secondary: #0e0e15;
+  --bg-card: #1a1a25;
+  --card-bg: #14141c;
+  --text-primary: #ffffff;
+  --text-secondary: #c7c7d0;
+  --text-muted: #9a9aa6;
+  --accent: #59c3ff;
+  --accent-hover: #3df7ff;
+  --primary: #59c3ff;
+  --border: rgba(255, 255, 255, 0.12);
+  --shadow: rgba(0, 0, 0, 0.5);
+  --g100-gold: #f5b13d;
+  --g100-gold-dim: rgba(245, 177, 61, 0.15);
+
+  /* the dock floats 10px above the bottom edge; everything sized off this clears it */
+  --tab-bar-height: 72px;
+}
+
+body {
+  background: #08080c radial-gradient(120% 60% at 50% 0%, #15121f 0%, #08080c 55%) fixed;
+  color: var(--text-primary);
+}
+
+/* ── header ─────────────────────────────────────────────────────────────── */
+body > header, header {
+  background: rgba(8, 8, 12, 0.86) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  box-shadow: none !important;
+}
+
+/* ── floating dock (bottom tabs) ───────────────────────────────────────── */
+nav.bottom-tabs {
+  left: 12px;
+  right: 12px;
+  bottom: calc(10px + var(--safe-bottom));
+  height: 62px;
+  padding-bottom: 0;
+  border-radius: 22px;
+  background: rgba(20, 20, 28, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.tab-button { color: rgba(255, 255, 255, 0.5); font-size: 10px; font-weight: 600; }
+.tab-button.active { color: var(--mad-cyan); }
+.tab-button.active[data-tab="g100"] { color: var(--mad-gold); }
+.tab-button:active { transform: scale(0.94); }
+.tab-icon svg { width: 20px; height: 20px; stroke-width: 1.9; }
+
+/* ── mini player (docked above the dock) ───────────────────────────────── */
+#floating-player {
+  bottom: calc(62px + 19px + var(--safe-bottom));
+  left: 12px;
+  right: 12px;
+  height: 60px;
+  border-radius: 16px;
+  background: #1a1a25;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+#floating-player.playing { border-color: rgba(89, 195, 255, 0.35); }
+#floating-player img { width: 44px; height: 44px; border-radius: 10px; }
+.mini-title { font-weight: 700; }
+.mini-artist { color: rgba(255, 255, 255, 0.55); }
+#mini-progress-fill { background: linear-gradient(90deg, #3df7ff, #a72fff); }
+.mini-btn.mini-play {
+  width: 38px;
+  height: 38px;
+  background: linear-gradient(150deg, #3df7ff, #a72fff);
+  color: #08080c;
+  box-shadow: 0 0 20px rgba(89, 195, 255, 0.35);
+}
+.mini-btn:active { transform: scale(0.92); }
+
+/* ── headings ──────────────────────────────────────────────────────────── */
+.section-title { font-size: 19px; font-weight: 800; letter-spacing: -0.025em; }
+.section-subtitle { font-size: 12.5px; color: rgba(255, 255, 255, 0.48); margin-top: 1px; }
+
+/* ── buttons: primary = the brand gradient, secondary = hairline pill ──── */
+.btn { border-radius: 999px; font-weight: 700; }
+.btn-primary {
+  background: var(--mad-gradient);
+  color: #08080c;
+  border: 0;
+}
+.btn-primary:active { background: var(--mad-gradient); filter: brightness(1.08); transform: scale(0.96); }
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.btn-secondary:active { transform: scale(0.96); }
+
+/* ── album tiles, NEW badge, play button, hero ─────────────────────────── */
+.nr-album-card { border-radius: 12px; }
+.nr-album-artwork { border-radius: 12px; background: var(--mad-gradient); }
+.nr-new-badge {
+  left: auto;
+  right: 8px;
+  background: #08080c;
+  color: var(--mad-cyan);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 3px 7px;
+  border-radius: 999px;
+}
+.nr-play-btn {
+  background: var(--mad-gradient);
+  color: #08080c;
+  box-shadow: 0 0 18px rgba(89, 195, 255, 0.35);
+}
+.nr-play-btn:active { background: var(--mad-gradient); }
+.nr-play-btn svg { fill: #08080c; }
+.mob-hero { border-radius: 20px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); }
+
+/* ── sheets (trial, code, contact, plans, preview pop-up) ──────────────── */
+.guest-paywall-card { background: #14141c; border: 1px solid rgba(255, 255, 255, 0.08); }
+.guest-pill {
+  bottom: calc(62px + 10px + 70px + var(--safe-bottom));
+  background: rgba(20, 20, 28, 0.92);
+  border: 1px solid rgba(245, 177, 61, 0.35);
+  color: #fff;
+}
+.guest-pill strong { color: var(--mad-gold); }
+.ask-sheet-input:focus { border-color: var(--mad-blue); }
+
+/* ── Help tab cards ────────────────────────────────────────────────────── */
+.help-page .help-item { background: #14141c; border-color: rgba(255, 255, 255, 0.08); }
+.help-page .help-item a, .help-page .help-item code { color: var(--mad-blue); }
+.help-page .help-item code { background: rgba(89, 195, 255, 0.12); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-button, .btn, .mini-btn, .nr-album-card { transition: none !important; }
+}
