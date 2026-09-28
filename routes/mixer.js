@@ -15,7 +15,9 @@
  *   GET  /mixable                      → { tracks: { madStreamerRecordId: madMixerSongId } } —
  *                                        which MAD tracks get the 🎚 button (any signed-in token)
  *   GET  /mvsep/algorithms             → MVSEP model catalogue (cached 1 h)
- *   POST /mvsep/create?sep_type=…      → raw WAV body, STREAMED to MVSEP as multipart (never buffered)
+ *   POST /mvsep/create?sep_type=…      → raw WAV body, STREAMED to MVSEP as multipart (never buffered).
+ *                                        Needs X-Mixer-Song: <MADMixer id> — Mad Mixer only splits its own
+ *                                        songs (or their stems), never listeners' own files (Ian, 2026-09-28)
  *   GET  /mvsep/get?hash=…             → MVSEP job status / result links
  *   GET  /audio-proxy?url=…            → streams a finished stem from MVSEP (mvsep hosts only)
  *   POST /dcx/register?id=&sha=&name=  → provenance line for every export (DCX Sample Registry)
@@ -309,6 +311,22 @@ router.post('/mvsep/create', requireMixer, async (req, res) => {
   if (!len) return res.status(400).json({ ok: false, error: 'No audio received' });
   if (len > MAX_UPLOAD) return res.status(413).json({ ok: false, error: 'That file is too large to split.' });
 
+  // Only Mad Mixer songs (Ian, 2026-09-28): the page tags every split with the MADMixer song it
+  // came from; the song must exist and have audio, and the upload can't be longer than the song
+  // (a 32-bit float stereo WAV is ~353 kB/s; allow 400 kB/s + 5 MB). Stem-of-stem splits pass —
+  // they carry the same song and length.
+  // Refusals drain the upload first, so the browser gets the message, not a broken connection.
+  const refuse = (status, error) => { req.resume(); req.on('end', () => { if (!res.headersSent) res.status(status).json({ ok: false, error }); }); };
+  const songId = String(req.headers['x-mixer-song'] || '');
+  const song = /^\d{1,12}$/.test(songId) ? (await allSongs().catch(() => [])).find((s) => s.id === songId) : null;
+  if (!song || !song.playable) {
+    return refuse(403, 'Mad Mixer splits songs from the Mad Mixer catalogue. Pick one with 🎵 Songs.');
+  }
+  const secs = String(song.duration || '').split(':').map(Number).reduce((a, n) => a * 60 + (Number.isFinite(n) ? n : 0), 0);
+  if (secs > 0 && len > secs * 400_000 + 5_000_000) {
+    return refuse(400, 'That audio is longer than the song.');
+  }
+
   const q = req.query;
   const fields = { api_token: key, is_demo: '0', sep_type: String(q.sep_type || '28'), output_format: String(q.output_format || '1') };
   for (let i = 1; i <= 4; i++) if (q[`add_opt${i}`]) fields[`add_opt${i}`] = String(q[`add_opt${i}`]);
@@ -321,7 +339,7 @@ router.post('/mvsep/create', requireMixer, async (req, res) => {
   const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
   const body = Readable.from((async function* () { yield head; for await (const c of req) yield c; yield tail; })());
 
-  console.log(`[mixer] split by ${tokenKey(req.accessToken).slice(0, 8)}… sep_type=${fields.sep_type} ${(len / 1e6).toFixed(1)} MB`);
+  console.log(`[mixer] split by ${tokenKey(req.accessToken).slice(0, 8)}… song=${songId} sep_type=${fields.sep_type} ${(len / 1e6).toFixed(1)} MB`);
   try {
     const r = await fetch(`${MVSEP}/api/separation/create`, {
       method: 'POST', duplex: 'half', body: Readable.toWeb(body),
