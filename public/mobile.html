@@ -40,13 +40,13 @@
   </script>
   <style>html.native-app #buy-access-btn,html.native-app #guest-paywall-buy,
          html.native-app #mobileRingtoneBtn,html.native-app .web-only{display:none!important}</style>
-  <link rel="stylesheet" href="/css/mobile.css?v=29"
+  <link rel="stylesheet" href="/css/mobile.css?v=30"
         onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/mobile.css?v=4&r='+Date.now();},1500)">
   <!-- MAD Streamer look (2026-09-28, step 1 of the Streamer App design) — re-skin only. -->
-  <link rel="stylesheet" href="/css/mobile-streamer.css?v=6">
+  <link rel="stylesheet" href="/css/mobile-streamer.css?v=8">
   <!-- Shared field/format helpers (window.MADHelpers); loaded before body scripts
        so mobile's utilities can delegate to the single canonical source. -->
-  <script src="/js/helpers.js?v=29"></script>
+  <script src="/js/helpers.js?v=30"></script>
 </head>
 <body>
   <!-- Crawlable page heading (visually hidden — the app shell has no static H1) -->
@@ -548,7 +548,8 @@
 
         <h3 class="help-subhead">Contact us</h3>
         <p class="help-intro">Tell us what's wrong and we'll get back to you by email.</p>
-        <button class="btn btn-primary" id="help-contact-btn" style="width: 100%; margin-bottom: 24px;">💬 Contact us</button>
+        <button class="btn btn-primary" id="help-contact-btn" style="width: 100%; margin-bottom: 12px;">💬 Contact us</button>
+        <button type="button" class="sheet-help-link" id="help-welcome-btn" style="margin-bottom: 24px;">Show the welcome screens again</button>
       </div>
     </div>
   </main>
@@ -836,7 +837,7 @@
   </script>
 
   <!-- Access-token fetch patch: classic script, MUST run before the module graph. -->
-  <script src="/js/mobile/fetch-interceptor.js?v=29"></script>
+  <script src="/js/mobile/fetch-interceptor.js?v=30"></script>
   <!-- Download basket: several tracks, one payment. Self-wiring off
        [data-basket-add], and hides itself inside the native shell. -->
   <script src="/js/basket.js?v=1"></script>
@@ -881,6 +882,6 @@
   })();
   </script>
 
-  <script type="module" src="/js/mobile/main.js?v=29"></script>
+  <script type="module" src="/js/mobile/main.js?v=30"></script>
 </body>
 </html>
