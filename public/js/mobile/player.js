@@ -1,8 +1,8 @@
 // Playback engine + now-playing modal for the mobile app.
 
-import { elements, state } from './state.js?v=34';
-import { formatTime, generateSessionId, showToast } from './util.js?v=34';
-import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getGenreField, getTitleField, getYearField } from './fields.js?v=34';
+import { elements, state } from './state.js?v=35';
+import { formatTime, generateSessionId, showToast } from './util.js?v=35';
+import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getGenreField, getTitleField, getYearField } from './fields.js?v=35';
 
 export function closeModal() {
       elements.modalOverlay.classList.remove('show');

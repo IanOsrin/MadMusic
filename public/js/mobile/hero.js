@@ -4,10 +4,10 @@
 // blur behind, contain in front; never stretched, per docs/banners.md).
 // Swipe-driven scroll-snap with dots; auto-advance 6.5s that pauses on touch,
 // when the tab is hidden, and entirely under prefers-reduced-motion.
-import { state } from './state.js?v=34';
-import { getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField } from './fields.js?v=34';
-import { showAlbumTracksModal } from './cards.js?v=34';
-import { playTrack } from './player.js?v=34';
+import { state } from './state.js?v=35';
+import { getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField } from './fields.js?v=35';
+import { showAlbumTracksModal } from './cards.js?v=35';
+import { playTrack } from './player.js?v=35';
 
 const DWELL_MS = 6500, MAX_SLIDES = 6;
 const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;

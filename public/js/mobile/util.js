@@ -1,6 +1,6 @@
 // Small stateless UI/format helpers for the mobile app.
 
-import { elements } from './state.js?v=34';
+import { elements } from './state.js?v=35';
 
 export function showToast(message, type = 'success') {
   const toast = document.createElement('div');
