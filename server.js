@@ -1179,6 +1179,18 @@ if (!serverStarted) {
   server.listen(PORT, HOST, () => logServerReady('HTTP/1.1'));
 }
 
+// ── Trial reminder emails ────────────────────────────────────────────────────
+// "Your trial ends tomorrow / has ended" — hourly, first worker only, and only where
+// TRIAL_REMINDERS_ENABLED=true (the LIVE service; both sites share one FileMaker).
+// Deliberately NOT inside the pre-warm block below: that block only runs with PREWARM_CACHES=true,
+// which is off on live — the reminders sat there for their first day and never started.
+try {
+  const { startTrialReminders } = await import('./lib/trial-reminders.js');
+  startTrialReminders();
+} catch (err) {
+  console.warn('[MASS] Trial reminders not started:', err?.message || err);
+}
+
 // ── Cache pre-warm ──────────────────────────────────────────────────────────
 // Each worker has its own in-memory LRU caches, so every worker needs to warm
 // its own. We invoke the in-process SWR warmers directly (no HTTP round-trip)
@@ -1227,14 +1239,6 @@ if (process.env.PREWARM_CACHES === 'true' && (process.env.WORKER_INDEX || '0') =
   prewarm('Explore decades',  exploreWarmer,               6000);
   prewarm('Genres',           genresWarmer,                8000);
 
-  // "Your trial ends tomorrow / has ended" emails — hourly, first worker only, and only where
-  // TRIAL_REMINDERS_ENABLED=true (the LIVE service; both sites share one FileMaker).
-  try {
-    const { startTrialReminders } = await import('./lib/trial-reminders.js');
-    startTrialReminders();
-  } catch (err) {
-    console.warn('[MASS] Trial reminders not started:', err?.message || err);
-  }
 
   // The albums home view requests a RANDOM decade per load, so all 8 explore
   // entries must stay warm — the hour hard-TTL would otherwise evict them on
