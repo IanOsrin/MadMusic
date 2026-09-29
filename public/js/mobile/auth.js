@@ -1,7 +1,7 @@
 // Auth + access-token flow for the mobile app.
 
-import { elements, state } from './state.js?v=34';
-import { showToast } from './util.js?v=34';
+import { elements, state } from './state.js?v=35';
+import { showToast } from './util.js?v=35';
 
 export function logout() {
       localStorage.removeItem('mass_access_token');
@@ -57,6 +57,58 @@ export function updateAuthUI() {
         elements.userBadge.textContent = 'Guest';
       }
     }
+
+// ── Is the saved code still good? (2026-09-29) ─────────────────────────────────
+// The app used to trust whatever code was saved on the phone: an EXPIRED code still read "Active",
+// music played, and only account features refused it — Maddie told a subscriber "I chat with
+// subscribers". Now, once per start, the server is asked (/api/access/check: the plain token
+// check, no 3-device session logic). A good answer fills in the email and expiry; a definite "no"
+// (expired / switched off / unknown) is said plainly with a way to enter a new code. Anything
+// else (offline, server busy) changes nothing — nobody is logged out by a hiccup.
+export async function checkStoredCode() {
+  if (!localStorage.getItem('mass_access_token')) return;
+  let res, data = {};
+  try {
+    res = await fetch('/api/access/check');
+    data = await res.json().catch(() => ({}));
+  } catch { return; }
+  if (res.ok && data.valid) {
+    if (data.email) localStorage.setItem('mass_token_email', data.email);
+    state.currentUser = { ...(state.currentUser || {}), email: data.email || state.currentUser?.email || '', expirationDate: data.expirationDate || null, tokenType: data.type };
+    updateAuthUI();
+    return;
+  }
+  // Only a definite verdict from the server (expired / switched off / no such code) — an outage
+  // or a busy server must never tell a paying listener their code has stopped working.
+  if (res.status === 403 && data.definitive === true) showCodeProblem(String(data.reason || ''));
+}
+
+export function showCodeProblem(reason = '') {
+  document.getElementById('code-problem')?.remove();
+  const expired = /expired/i.test(reason);
+  const wrap = document.createElement('div');
+  wrap.id = 'code-problem';
+  wrap.className = 'guest-paywall show';
+  wrap.innerHTML = `
+    <div class="guest-paywall-card">
+      <button type="button" class="guest-paywall-close" aria-label="Close">&times;</button>
+      <div class="guest-paywall-icon">🔑</div>
+      <h3>${expired ? 'Your access code has expired' : 'This access code isn’t working'}</h3>
+      <p>${expired
+        ? 'The code saved on this device has run out. Enter your current code to carry on listening.'
+        : 'The code saved on this device isn’t accepted any more. Enter your current code to carry on listening.'}</p>
+      <button type="button" class="btn btn-primary" data-act="enter">Enter access code</button>
+      ${isNativeApp() ? '' : '<button type="button" class="btn btn-secondary" data-act="buy">See plans</button>'}
+      <button type="button" class="sheet-help-link" data-act="help">Having trouble? Contact us</button>
+    </div>`;
+  document.body.appendChild(wrap);
+  const close = () => wrap.remove();
+  wrap.querySelector('.guest-paywall-close').addEventListener('click', close);
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
+  wrap.querySelector('[data-act="enter"]').addEventListener('click', () => { close(); setAccessToken(); });
+  wrap.querySelector('[data-act="buy"]')?.addEventListener('click', () => { close(); buyAccess(); });
+  wrap.querySelector('[data-act="help"]').addEventListener('click', () => { close(); showContactSheet(); });
+}
 
 // A one-field bottom sheet instead of window.prompt(): in-app browsers (WhatsApp, Facebook,
 // Instagram) silently block prompt(), and switching to the mail app dismisses it — both left

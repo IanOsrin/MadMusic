@@ -383,6 +383,17 @@ router.post('/email/confirm', async (req, res) => {
   }
 });
 
+// "Is the code saved on this device still good?" — the phone app asks at start-up (2026-09-29).
+// It never re-checked, so an EXPIRED code still read "Active", played music (catalogue + S3 are
+// public) and only failed at account features — Maddie said "I chat with subscribers" to a
+// subscriber holding an old code. This route is NOT on the auth skip-list: the global token check
+// runs first (no session/3-device logic, unlike /validate) and answers 403 with its reason when
+// the code is expired, disabled or unknown. Getting here means the code is valid.
+router.get('/check', (req, res) => {
+  const t = req.accessToken || {};
+  res.json({ ok: true, valid: true, type: t.type || 'valid', email: t.email || null, expirationDate: t.expirationDate || null });
+});
+
 router.post('/logout', async (req, res) => {
   try {
     const { token, sessionId } = req.body;
