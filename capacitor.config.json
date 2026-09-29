@@ -8,6 +8,7 @@
     "allowNavigation": [
       "musicafricadirect.com",
       "*.musicafricadirect.com"
-    ]
+    ],
+    "errorPath": "offline.html"
   }
 }
