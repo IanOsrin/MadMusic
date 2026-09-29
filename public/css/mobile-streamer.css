@@ -404,3 +404,12 @@ body.welcome-open { overflow: hidden; }
 .wel-next:active { transform: scale(0.97); filter: brightness(1.08); }
 @media (max-height: 640px) { .wel-covers { transform: scale(0.8); } .wel-title { font-size: 26px; } .wel-slide { padding-top: calc(48px + env(safe-area-inset-top)); } }
 @media (prefers-reduced-motion: reduce) { #welcome, #welcome.wel-out { animation: none; transition: none; } }
+
+/* Tappable names (client, 2026-09-29): artist → the artist's songs, album → the album's songs.
+   Shown as links only where the tap does something different from the row around them. */
+.alb-artist-link, #player-artist, #player-album, .gf-link { cursor: pointer; text-decoration: underline; text-decoration-color: rgba(255, 255, 255, 0.28); text-underline-offset: 3px; }
+.alb-artist-link:active, #player-artist:active, #player-album:active, .gf-link:active { color: var(--mad-cyan); }
+#player-artwork, .cont-art, .gf-art { cursor: pointer; }
+/* The tile overlay is no longer revealed by a first tap; keep it from catching taps meant for the cover. */
+.nr-card-overlay { pointer-events: none; }
+.nr-album-card.overlay-active .nr-card-overlay { pointer-events: auto; }

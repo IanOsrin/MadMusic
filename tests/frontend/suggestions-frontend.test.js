@@ -56,11 +56,15 @@ describe('Similar-albums endless radio (2026-07-06)', () => {
     expect(adv.indexOf('shuffleRefillFn')).toBeLessThan(adv.indexOf('stopShufflePlay()'));
   });
 
-  it('non-radio shuffles clear the refill hook (no cross-contamination)', () => {
-    // startShufflePlay / startShuffleFromItems / stopShufflePlay must all reset
-    // the hook, or a random-cards shuffle would inherit the similar-albums refill.
-    const resets = playerJs.match(/shuffleRefillFn = null/g) || [];
-    expect(resets.length).toBeGreaterThanOrEqual(3);
+  it('every shuffle sets its OWN refill hook (no cross-contamination)', () => {
+    // A random-cards or artist shuffle must never inherit the similar-albums refill. Since
+    // 2026-09-29 each start* assigns its own hook (home shuffle: more random songs; artist
+    // shuffle: reshuffle and carry on) instead of clearing it, and stop still clears it.
+    const body = (name) => playerJs.slice(playerJs.indexOf(`function ${name}`), playerJs.indexOf('\n      }\n', playerJs.indexOf(`function ${name}`)));
+    expect(body('startShufflePlay')).toMatch(/shuffleRefillFn = _randomSongsRefill;/);
+    expect(body('startShuffleFromItems')).toMatch(/shuffleRefillFn = async \(\) => ids\.slice\(\);/);
+    expect(body('startShuffleTracks')).toMatch(/shuffleRefillFn = \(opts && typeof opts\.refill === 'function'\) \? opts\.refill : null;/);
+    expect(body('stopShufflePlay')).toMatch(/shuffleRefillFn = null;/);
   });
 
   it('"Shuffle these" registers a refill seeded by the last-played catalogue', () => {

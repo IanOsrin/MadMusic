@@ -16,8 +16,8 @@
 // the floor (re-assert home, stay in app); a second Back leaves — "stay on home once,
 // then exit".
 
-import { state, elements } from './state.js?v=33';
-import { switchTab } from './nav.js?v=33';
+import { state, elements } from './state.js?v=34';
+import { switchTab } from './nav.js?v=34';
 
 const HOME = 'newreleases';
 let _seq = 0;
@@ -51,13 +51,27 @@ export function pushOverlay(type, id) {
   } catch { /* history API unavailable */ }
 }
 
-// Close any open modal WITHOUT touching history (popstate already moved us).
+// Swap the CURRENT overlay entry for another (one sheet opened from inside another — an album
+// from "You might also like", an artist page from an album header, an album from Now Playing):
+// still one Back to close, and no dead entry left behind.
+export function replaceOverlay(type, id) {
+  if (_restoring) return;
+  try {
+    history.replaceState({ mad: true, seq: _seq, kind: 'overlay',
+                           view: state.currentTab, overlay: { type: type, id: id || '' } }, '');
+  } catch { /* history API unavailable */ }
+}
+
+// Close the TOP modal WITHOUT touching history (popstate already moved us). Now Playing sits
+// above an album/playlist sheet, so Back closes it first and a second Back closes the sheet —
+// each has its own history entry (client, 2026-09-29: Back must return to the previous screen).
 function _closeAnyModal() {
-  if (elements.modalOverlay) elements.modalOverlay.classList.remove('show');
-  if (elements.playerModal) {
+  if (elements.playerModal && elements.playerModal.classList.contains('show')) {
     if (state.playerModal) state.playerModal.visible = false;
     elements.playerModal.classList.remove('show');
+    return;
   }
+  if (elements.modalOverlay) elements.modalOverlay.classList.remove('show');
 }
 
 function _onPop(e) {

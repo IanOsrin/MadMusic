@@ -380,7 +380,10 @@
           // run its cleanup.  For shuffle, all we do is call playSong() for the
           // next track — which goes through _PLAYER just like any other play,
           // so the player bar at the bottom stays fully in control.
-          if (isShuffleActive) {
+          // Descriptor shuffles (album / "Shuffle these") advance from their own persistent
+          // listener (_wireDescEnded). Advancing here too moved the queue twice per song, so
+          // Shuffle Album played every other track and "finished" halfway (client, 2026-09-29).
+          if (isShuffleActive && !isDescShuffle) {
             setTimeout(_shuffleAdvance, 400);
           }
         }, { signal });
@@ -418,6 +421,7 @@
             isSwitchingTracks = false;
             console.error('[PlaySong] ✗ Playback failed:', err);
             isPlaying = false;
+            if (!err || err.name !== 'AbortError') _shuffleSkipFailed('play() rejected');
           });
 
         // Show ringtone button in the player bar for this track
@@ -527,7 +531,14 @@
       // Before the first track it just restarts the current one.
       function _shuffleBack() {
         if (!isShuffleActive) return;
-        if (shuffleQueueIdx > 0) shuffleQueueIdx--;
+        // On the first song there is nothing before it: restart it. Replaying the same id
+        // through playSong read as "click the playing card = stop" and killed the shuffle.
+        if (shuffleQueueIdx === 0) {
+          const p = document.getElementById('player');
+          if (p) p.currentTime = 0;
+          return;
+        }
+        shuffleQueueIdx--;
         console.log('[Shuffle] Back to track', shuffleQueueIdx + 1, 'of', shuffleQueue.length);
         if (isDescShuffle) _playDescriptor(shuffleQueue[shuffleQueueIdx]);
         else playSong(shuffleQueue[shuffleQueueIdx]);
@@ -544,7 +555,7 @@
         try {
           const next = await shuffleRefillFn(last);
           if (!isShuffleActive) return; // user stopped while we were fetching
-          const list = (next || []).filter(t => t && (t.url || t.recordId));
+          const list = (next || []).filter(t => t && (typeof t === 'string' || t.url || t.recordId));
           if (!list.length) {
             console.log('[Shuffle] Refill returned nothing — stopping');
             stopShufflePlay();
@@ -575,11 +586,54 @@
         shuffleQueueIdx = 0;
         isShuffleActive = true;
         isDescShuffle   = false;
-        shuffleRefillFn = null;
+        // Endless: the home shuffle used to stop once its ~20 random cards had played ("shuffle
+        // randomly stops", client 2026-09-29). Top up with more songs in the genre of the last
+        // one (then any genre), like a radio.
+        shuffleRefillFn = _randomSongsRefill;
+        _wireFailureSkip();
+        _shuffleFailures = 0;
         _updateShuffleBtn();
 
         console.log('[Shuffle] Starting with', shuffleQueue.length, 'tracks');
         playSong(shuffleQueue[0]);
+      }
+
+      async function _randomSongsRefill(lastId) {
+        const last = itemsStore.get(lastId);
+        const f = (last && last.fields) || {};
+        const genre = f['Local Genre'] || f['Genre'] || '';
+        const fetchIds = async (g) => {
+          const r = await fetch('/api/random-songs?count=20' + (g ? '&genre=' + encodeURIComponent(g) : '') + '&_t=' + Date.now());
+          if (!r.ok) return [];
+          const d = await r.json();
+          return ((d && d.items) || []).filter(it => it && it.recordId && hasValidAudio(it)).map(it => {
+            itemsStore.set(it.recordId, it);
+            return it.recordId;
+          });
+        };
+        let ids = genre ? await fetchIds(genre) : [];
+        if (ids.length < 3) ids = ids.concat(await fetchIds(''));
+        return ids;
+      }
+
+      // A song that fails during shuffle is skipped, not left silent; three in a row stops it.
+      let _shuffleFailures = 0;
+      function _shuffleSkipFailed(why) {
+        if (!isShuffleActive) return;
+        if (_shuffleFailures >= 3) { console.warn('[Shuffle] Several tracks failed — stopping'); stopShufflePlay(); return; }
+        _shuffleFailures++;
+        console.warn('[Shuffle] Track failed (' + why + ') — skipping');
+        setTimeout(_shuffleAdvance, 400);
+      }
+      // Wired on first use (the <audio id="player"> may not exist when this file loads).
+      let _failureSkipWired = false;
+      function _wireFailureSkip() {
+        if (_failureSkipWired) return;
+        const p = document.getElementById('player');
+        if (!p) return;
+        p.addEventListener('error', () => _shuffleSkipFailed('audio error'));
+        p.addEventListener('playing', () => { _shuffleFailures = 0; });
+        _failureSkipWired = true;
       }
 
       function stopShufflePlay() {
@@ -614,7 +668,10 @@
         shuffleQueueIdx = 0;
         isShuffleActive = true;
         isDescShuffle   = false;
-        shuffleRefillFn = null;
+        // An artist shuffle keeps going: when every song has played, reshuffle and carry on.
+        shuffleRefillFn = async () => ids.slice();
+        _wireFailureSkip();
+        _shuffleFailures = 0;
         _updateShuffleBtn();
 
         console.log('[Shuffle] Catalogue shuffle with', shuffleQueue.length, 'tracks');
@@ -641,6 +698,8 @@
         isShuffleActive = true;
         isDescShuffle   = true;
         shuffleRefillFn = (opts && typeof opts.refill === 'function') ? opts.refill : null;
+        _wireFailureSkip();
+        _shuffleFailures = 0;
         _wireDescEnded();
         _updateShuffleBtn();
 
@@ -670,7 +729,7 @@
         if (url && /^https?:\/\//i.test(url) && !/\.s3[.-]/.test(url) && !(window.__MEDIA_CDN && url.includes('//' + window.__MEDIA_CDN + '/')) && !url.includes('/api/container?')) {
           url = `/api/container?u=${encodeURIComponent(url)}`;
         }
-        if (!url) { console.warn('[Shuffle] No URL for track, skipping'); _shuffleAdvance(); return; }
+        if (!url) { _shuffleSkipFailed('no URL'); return; }
 
         window._PLAYER.playTrack(url, { title: d.title || 'Unknown Track', artist: d.artist || '', artUrl: d.artUrl || '', recordId: d.recordId || '', leadSilence });
         showRingtoneBtn(url, d.title || '', d.artist || '', d.artUrl || '');

@@ -4990,3 +4990,12 @@
 
 
   
+
+/* Clickable names (client, 2026-09-29): an artist's name opens the artist view, an album's
+   name opens the album. Underline on hover so it reads as a link without cluttering the cards. */
+.card-artist, .trending-artist, .random-artist, .similar-album-artist, #upArtist, #playlistDetailArtist,
+[data-album-text], .card .heading h3 { cursor: pointer; }
+.card-artist:hover, .trending-artist:hover, .random-artist:hover, .similar-album-artist:hover, #upArtist:hover,
+#playlistDetailArtist:hover, [data-album-text]:hover, .card .heading h3:hover {
+  text-decoration: underline; text-underline-offset: 3px;
+}

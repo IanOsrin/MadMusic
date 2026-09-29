@@ -127,6 +127,7 @@
         "navigateToView",
         "openAlbumByCatalogue",
         "openAlbumDirect",
+        "openArtistView",
         "openLibraryAlbum",
         "openTracksModal",
         "performLogout",
@@ -1146,6 +1147,7 @@
     "view-user-playlist",
     "waveform",
     "waveform-wrap",
+    "welcome",
     "wheelIcon"
   ],
   "dependedOnIds": {
