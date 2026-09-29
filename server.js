@@ -667,6 +667,9 @@ app.use('/api/', async (req, res, next) => {
       ok: false,
       error: 'Invalid or expired access token',
       reason: validation.reason,
+      // true = FileMaker gave a real verdict (expired / disabled / no such code), not an outage —
+      // the phone app only tells the listener their saved code is bad when this is set.
+      definitive: validation.definitive === true,
       requiresAccessToken: true
     });
   }

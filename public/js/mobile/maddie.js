@@ -2,10 +2,11 @@
 // Same API as desktop (POST /api/maddie/chat → { reply, tracks }), rendered as
 // a full-screen chat sheet. Gated on window.__MADDIE (MADDIE_ENABLED).
 
-import { state } from './state.js?v=34';
-import { escapeHtml } from './fields.js?v=34';
-import { playTrack, renderPlayerQueue } from './player.js?v=34';
-import { showAlbumTracksModal } from './cards.js?v=34';
+import { state } from './state.js?v=35';
+import { escapeHtml } from './fields.js?v=35';
+import { playTrack, renderPlayerQueue } from './player.js?v=35';
+import { showAlbumTracksModal } from './cards.js?v=35';
+import { showCodeProblem } from './auth.js?v=35';
 
 // Shorter greetings than desktop — a phone screen, not a panel.
 const GREETINGS = [
@@ -151,8 +152,16 @@ async function sendMessage(text) {
       : await res.json().catch(() => ({}));
     thinking.remove();
     if (res.status === 401 || res.status === 403) {
-      // Maddie is subscriber-only (every message costs real money, 2026-07-17)
-      addMsg('maddie', 'I chat with subscribers — but your first seven days are free. Start the trial and come ring my bell again.');
+      // Maddie is subscriber-only (every message costs real money, 2026-07-17). But a refusal
+      // with a code saved means the CODE was refused (expired / switched off) — say that, and
+      // offer the fix, rather than telling a subscriber to go and subscribe (2026-09-29).
+      if (localStorage.getItem('mass_access_token')) {
+        addMsg('maddie', 'The access code saved on this device wasn’t accepted — it may have expired. Enter your current code and ring my bell again.');
+        closeSheet();
+        showCodeProblem(data.reason || '');
+      } else {
+        addMsg('maddie', 'I chat with subscribers — but your first seven days are free. Start the trial and come ring my bell again.');
+      }
       return;
     }
     if (!res.ok) {
