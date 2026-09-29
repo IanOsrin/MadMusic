@@ -1,12 +1,12 @@
 // User playlists (load/render/play/create/add-to) for the mobile app.
 
-import { elements, state } from './state.js?v=24';
-import { showToast } from './util.js?v=24';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, getTitleField } from './fields.js?v=24';
-import { switchTab } from './nav.js?v=24';
-import { closeModal, playTrack } from './player.js?v=24';
-import { pushOverlay } from './router.js?v=24';
-import { createAlbumTile } from './cards.js?v=24';
+import { elements, state } from './state.js?v=33';
+import { showToast } from './util.js?v=33';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, getTitleField } from './fields.js?v=33';
+import { switchTab } from './nav.js?v=33';
+import { closeModal, playTrack } from './player.js?v=33';
+import { pushOverlay } from './router.js?v=33';
+import { createAlbumTile } from './cards.js?v=33';
 
 // ── Playlist icons ───────────────────────────────────────────────────────────
 // Choices come from /data/playlist-icons.json (served no-cache) so adding one
@@ -182,32 +182,63 @@ export function renderPlaylists() {
       elements.playlistsContent.appendChild(grid);
     }
 
+// The playlist page — same design detail page as an album (MAD Streamer step 5 styles, 2026-09-28):
+// blurred square cover, PLAYLIST label, gradient Play, numbered rows. Cover = the icon the owner
+// chose, else the first track's art (same rule as the Library tile). Playlist tracks carry no
+// duration, so each row shows its own small cover instead of a time.
 export function showPlaylistTracks(playlist) {
       const tracks = playlist.tracks || [];
+      const count = tracks.length;
+      const firstArt = tracks.map(t => t.artworkUrl || t.artwork || getArtworkUrl(t.fields || {})).find(u => u && /^https?:/.test(u));
+      const art = (playlist.artwork ? playlistIconThumb(playlist.artwork, 300) : '') || firstArt || '/img/default-album.svg';
       elements.bottomSheet.innerHTML = `
-        <div class="bottom-sheet-header">${escapeHtml(playlist.name)}</div>
-        <button class="btn btn-secondary" style="width:100%;margin-bottom:16px;" data-act="artwork">${playlist.artwork ? 'Change artwork' : 'Add artwork'}</button>
-        ${tracks.length === 0 ? '<p style="text-align:center;color:var(--text-muted);padding:16px;">No tracks yet</p>' :
-          tracks.map((t, i) => `
-            <button class="bottom-sheet-option" data-index="${i}" style="display:flex;align-items:center;gap:10px;text-align:left;">
-              <span style="flex:1;">${escapeHtml(t.name || 'Unknown')}<br><small style="color:var(--text-muted)">${escapeHtml(t.albumArtist || t.albumTitle || '')}</small></span>
-              <span>▶</span>
-            </button>
-          `).join('')}
-        <button class="btn btn-secondary" style="width:100%;margin-top:16px;" onclick="closeModal()">Close</button>
+        <div class="alb-hero">
+          <img class="alb-hero-bg" src="${escapeHtml(art)}" alt="" aria-hidden="true" onerror="this.remove()">
+          <div class="alb-hero-row">
+            <img class="alb-cover" src="${escapeHtml(art)}" alt="" onerror="this.onerror=null;this.src='/img/default-album.svg'">
+            <div class="alb-meta">
+              <div class="alb-kind">PLAYLIST</div>
+              <div class="bottom-sheet-header alb-title">${escapeHtml(playlist.name)}</div>
+              <div class="alb-artist">My playlist</div>
+              <div class="alb-count">${count} ${count === 1 ? 'song' : 'songs'}</div>
+            </div>
+          </div>
+        </div>
+        <div class="pl-actions">
+          ${count ? `<button type="button" class="alb-play" data-play-all>
+            <svg width="13" height="14" viewBox="0 0 13 14" fill="currentColor" aria-hidden="true"><path d="M2 1.6 12 7 2 12.4z"/></svg>Play</button>` : ''}
+          <button type="button" class="pl-art-btn" data-act="artwork">${playlist.artwork ? 'Change artwork' : 'Add artwork'}</button>
+        </div>
+        ${count ? '' : '<p class="pl-empty">No songs yet. While a song plays, tap <b>+ Add to Playlist</b> to put it here.</p>'}
+        <div class="alb-tracks">
+        ${tracks.map((t, i) => {
+          const rowArt = t.artworkUrl || t.artwork || '';
+          const sub = [t.albumArtist || t.trackArtist, t.albumTitle].filter(Boolean).join(' · ');
+          return `
+            <div class="alb-row">
+              <button class="bottom-sheet-option alb-track" data-index="${i}">
+                <span class="alb-no">${i + 1}</span>
+                <img class="pl-row-art" src="${escapeHtml(/^https?:/.test(rowArt) ? rowArt : '/img/placeholder.png')}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/img/placeholder.png'">
+                <span class="alb-t"><span class="alb-tt">${escapeHtml(t.name || 'Unknown')}</span>${sub ? `<span class="alb-ta">${escapeHtml(sub)}</span>` : ''}</span>
+              </button>
+            </div>`;
+        }).join('')}
+        </div>
+        <button class="btn btn-secondary bs-close-btn" onclick="closeModal()">Close</button>
       `;
       elements.modalOverlay.classList.add('show');
       pushOverlay('playlist-tracks', playlist.id);
       elements.bottomSheet.querySelector('[data-act="artwork"]').addEventListener('click', () => {
         editPlaylistArtwork(playlist);
       });
+      const playFrom = (idx) => {
+        state.playlistContext = { tracks, currentIndex: idx, name: playlist.name, playFn: playPlaylistTrack };
+        playPlaylistTrack(tracks[idx]);
+        closeModal();
+      };
+      elements.bottomSheet.querySelector('[data-play-all]')?.addEventListener('click', () => playFrom(0));
       elements.bottomSheet.querySelectorAll('[data-index]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const idx = parseInt(btn.dataset.index);
-          state.playlistContext = { tracks, currentIndex: idx, name: playlist.name, playFn: playPlaylistTrack };
-          playPlaylistTrack(tracks[idx]);
-          closeModal();
-        });
+        btn.addEventListener('click', () => playFrom(parseInt(btn.dataset.index)));
       });
     }
 

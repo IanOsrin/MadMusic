@@ -1,0 +1,406 @@
+/* MAD Streamer look for the phone site — step 1 of bringing the MAD Streamer App design
+ * (Tawanda Mujaji / Claude Design hand-off, signed off 2026-09-16) into the existing app.
+ *
+ * Loaded AFTER mobile.css and only re-skins: colours, the floating dock, buttons, cards, the
+ * mini player and headings. No markup or behaviour changes, so it can be reviewed (or removed)
+ * on its own. Tokens come from the hand-off's design system (_ds/.../tokens/*.css):
+ *   gradient #3DF7FF → #59C3FF → #A72FFF (an ACCENT — never page wallpaper), ink #08080C…,
+ *   heritage gold #F5B13D / terracotta #E8552D, Barlow, pill controls, hairline borders.
+ */
+:root {
+  --mad-cyan: #3df7ff;
+  --mad-blue: #59c3ff;
+  --mad-purple: #a72fff;
+  --mad-gold: #f5b13d;
+  --mad-terracotta: #e8552d;
+  --mad-gradient: linear-gradient(150deg, #3df7ff 0%, #59c3ff 45%, #a72fff 100%);
+  --mad-warm: linear-gradient(150deg, #f5b13d, #e8552d);
+
+  /* the existing variables, re-pointed at the Streamer palette */
+  --bg-primary: #08080c;
+  --bg-secondary: #0e0e15;
+  --bg-card: #1a1a25;
+  --card-bg: #14141c;
+  --text-primary: #ffffff;
+  --text-secondary: #c7c7d0;
+  --text-muted: #9a9aa6;
+  --accent: #59c3ff;
+  --accent-hover: #3df7ff;
+  --primary: #59c3ff;
+  --border: rgba(255, 255, 255, 0.12);
+  --shadow: rgba(0, 0, 0, 0.5);
+  --g100-gold: #f5b13d;
+  --g100-gold-dim: rgba(245, 177, 61, 0.15);
+
+  /* the dock floats 10px above the bottom edge; everything sized off this clears it */
+  --tab-bar-height: 72px;
+}
+
+body {
+  background: #08080c radial-gradient(120% 60% at 50% 0%, #15121f 0%, #08080c 55%) fixed;
+  color: var(--text-primary);
+}
+
+/* ── header ─────────────────────────────────────────────────────────────── */
+body > header, header {
+  background: rgba(8, 8, 12, 0.86) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  box-shadow: none !important;
+}
+
+/* ── floating dock (bottom tabs) ───────────────────────────────────────── */
+nav.bottom-tabs {
+  left: 12px;
+  right: 12px;
+  bottom: calc(10px + var(--safe-bottom));
+  height: 62px;
+  padding-bottom: 0;
+  border-radius: 22px;
+  background: rgba(20, 20, 28, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.tab-button { color: rgba(255, 255, 255, 0.5); font-size: 10px; font-weight: 600; }
+.tab-button.active { color: var(--mad-cyan); }
+.tab-button.active[data-tab="g100"] { color: var(--mad-gold); }
+.tab-button:active { transform: scale(0.94); }
+.tab-icon svg { width: 20px; height: 20px; stroke-width: 1.9; }
+
+/* ── mini player (docked above the dock) ───────────────────────────────── */
+#floating-player {
+  bottom: calc(62px + 19px + var(--safe-bottom));
+  left: 12px;
+  right: 12px;
+  height: 60px;
+  border-radius: 16px;
+  background: #1a1a25;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+#floating-player.playing { border-color: rgba(89, 195, 255, 0.35); }
+#floating-player img { width: 44px; height: 44px; border-radius: 10px; }
+.mini-title { font-weight: 700; }
+.mini-artist { color: rgba(255, 255, 255, 0.55); }
+#mini-progress-fill { background: linear-gradient(90deg, #3df7ff, #a72fff); }
+.mini-btn.mini-play {
+  width: 38px;
+  height: 38px;
+  background: linear-gradient(150deg, #3df7ff, #a72fff);
+  color: #08080c;
+  box-shadow: 0 0 20px rgba(89, 195, 255, 0.35);
+}
+.mini-btn:active { transform: scale(0.92); }
+
+/* ── headings ──────────────────────────────────────────────────────────── */
+.section-title { font-size: 19px; font-weight: 800; letter-spacing: -0.025em; }
+.section-subtitle { font-size: 12.5px; color: rgba(255, 255, 255, 0.48); margin-top: 1px; }
+
+/* ── buttons: primary = the brand gradient, secondary = hairline pill ──── */
+.btn { border-radius: 999px; font-weight: 700; }
+.btn-primary {
+  background: var(--mad-gradient);
+  color: #08080c;
+  border: 0;
+}
+.btn-primary:active { background: var(--mad-gradient); filter: brightness(1.08); transform: scale(0.96); }
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.btn-secondary:active { transform: scale(0.96); }
+
+/* ── album tiles, NEW badge, play button, hero ─────────────────────────── */
+/* covers stay fully SQUARE — Ian's rule (2026-08-27), kept over the design's 12px */
+.nr-album-artwork { background: var(--mad-gradient); }
+.nr-new-badge {
+  left: auto;
+  right: 8px;
+  background: #08080c;
+  color: var(--mad-cyan);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 3px 7px;
+  border-radius: 999px;
+}
+.nr-play-btn {
+  background: var(--mad-gradient);
+  color: #08080c;
+  box-shadow: 0 0 18px rgba(89, 195, 255, 0.35);
+}
+.nr-play-btn:active { background: var(--mad-gradient); }
+.nr-play-btn svg { fill: #08080c; }
+.mob-hero { border-radius: 20px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); }
+
+/* ── Browse → Genres / Decades: pills, as the design's filter chips ────── */
+#genres-content, #decades-content { display: flex !important; flex-wrap: wrap; gap: 8px !important; }
+.genre-btn {
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.genre-btn.active { background: var(--mad-gradient); color: #08080c; border-color: transparent; }
+.genre-btn:active { transform: scale(0.95); }
+
+/* the "Filtered by" box on the results */
+.filter-box { background: #14141c; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; }
+.filter-box-line strong { color: #fff; }
+.filter-clear { border-radius: 999px; background: none; border: 1px solid rgba(255, 255, 255, 0.14); color: rgba(255, 255, 255, 0.8); height: 30px; padding: 0 13px; font-weight: 600; }
+.filter-clear-all { background: var(--mad-gradient); border-color: transparent; color: #08080c; }
+
+/* ── sheets (trial, code, contact, plans, preview pop-up) ──────────────── */
+.guest-paywall-card { background: #14141c; border: 1px solid rgba(255, 255, 255, 0.08); }
+.guest-pill {
+  bottom: calc(62px + 10px + 70px + var(--safe-bottom));
+  background: rgba(20, 20, 28, 0.92);
+  border: 1px solid rgba(245, 177, 61, 0.35);
+  color: #fff;
+}
+.guest-pill strong { color: var(--mad-gold); }
+.ask-sheet-input:focus { border-color: var(--mad-blue); }
+
+/* ── Help tab cards ────────────────────────────────────────────────────── */
+.help-page .help-item { background: #14141c; border-color: rgba(255, 255, 255, 0.08); }
+.help-page .help-item a, .help-page .help-item code { color: var(--mad-blue); }
+.help-page .help-item code { background: rgba(89, 195, 255, 0.12); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-button, .btn, .mini-btn, .nr-album-card { transition: none !important; }
+}
+
+/* mini player × */
+.mini-btn.mini-close { color: rgba(255, 255, 255, 0.5); }
+
+/* ── Step 2: Home (2026-09-28) ─────────────────────────────────────────── */
+/* Featured carousel: the banners keep their own shape (the artist name is painted into the
+   artwork — cropping it is off-limits, docs/banners.md); the design's FEATURED tag, gradient
+   Play and dots-below are added around them. Tall Tawanda-style cards need taller artwork. */
+.mob-hero { overflow: visible; background: transparent; box-shadow: none; aspect-ratio: auto; border-radius: 0; margin-bottom: 22px; }
+.mob-hero-track { border-radius: 20px; overflow-x: auto; aspect-ratio: 16 / 10; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  background: var(--mad-gradient); height: auto; }
+.mob-hero.editorial { aspect-ratio: auto; }
+.mob-hero.editorial .mob-hero-track { aspect-ratio: 7500 / 1750; border-radius: 16px; }
+.mob-hero-tag { position: absolute; top: 8px; left: 10px; font-size: 9px; font-weight: 700; letter-spacing: 0.16em;
+  color: #fff; padding: 4px 9px; border-radius: 999px; background: rgba(8, 8, 12, 0.55); backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px); pointer-events: none; }
+.mob-hero-play { position: absolute; right: 10px; bottom: 8px; height: 28px; padding: 0 12px; border-radius: 999px;
+  background: var(--mad-gradient); color: #08080c; font-size: 12px; font-weight: 700; display: inline-flex;
+  align-items: center; gap: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); pointer-events: none; }
+.mob-hero:not(.editorial) .mob-hero-play { height: 36px; padding: 0 16px; font-size: 13.5px; bottom: 14px; right: 14px; }
+.mob-hero-dots { position: static; justify-content: center; gap: 6px; margin-top: 11px; }
+.mob-hero-dots span { width: 6px; height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.25);
+  transition: width 0.22s, background 0.22s; transform: none; }
+.mob-hero-dots span.on { width: 20px; background: var(--mad-gradient); transform: none; }
+
+/* Pick up where you left off */
+.home-continue { margin: 0 0 18px; }
+.home-continue .section-header { margin-bottom: 10px; }
+.cont-rail { display: flex; gap: 12px; overflow-x: auto; padding: 2px 0 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.cont-rail::-webkit-scrollbar { display: none; }
+.cont-card { flex: none; width: 224px; display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 14px;
+  background: #14141c; border: 1px solid rgba(255, 255, 255, 0.08); position: relative; overflow: hidden; cursor: pointer;
+  color: #fff; font: inherit; text-align: left; transition: transform 0.15s, background 0.15s; }
+.cont-card:active { transform: scale(0.975); background: #1a1a25; }
+.cont-art { width: 46px; height: 46px; flex: none; object-fit: cover; background: var(--mad-gradient); }
+.cont-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cont-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cont-meta { font-size: 11px; color: rgba(255, 255, 255, 0.5); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cont-play { width: 30px; height: 30px; flex: none; border-radius: 50%; background: rgba(255, 255, 255, 0.1);
+  display: flex; align-items: center; justify-content: center; color: #fff; }
+.cont-bar { position: absolute; left: 0; bottom: 0; height: 2px; background: linear-gradient(90deg, #3df7ff, #a72fff); }
+
+/* Global Favourites — numbered list */
+.gf-list { display: flex; flex-direction: column; margin: 0 -8px 8px; }
+.gf-row { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 12px; border: 0; background: none;
+  color: #fff; font: inherit; text-align: left; cursor: pointer; transition: transform 0.15s, background 0.15s; }
+.gf-row:active { transform: scale(0.975); background: rgba(255, 255, 255, 0.05); }
+.gf-rank { width: 18px; text-align: center; font-size: 13px; font-weight: 800; color: rgba(255, 255, 255, 0.35); flex: none; }
+.gf-art { width: 46px; height: 46px; flex: none; object-fit: cover; background: var(--mad-gradient); }
+.gf-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.gf-title { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gf-artist { font-size: 12px; color: rgba(255, 255, 255, 0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gf-time { font-size: 12px; color: rgba(255, 255, 255, 0.4); flex: none; }
+
+/* ── Step 3: Now Playing (2026-09-28) ──────────────────────────────────── */
+#player-modal { background: #08080c; }
+#player-modal::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 420px; pointer-events: none;
+  background: radial-gradient(90% 70% at 50% 0%, rgba(167, 47, 255, 0.34), rgba(61, 247, 255, 0.12) 45%, transparent 72%); }
+.player-modal-content { position: relative; gap: 22px; padding: calc(14px + env(safe-area-inset-top)) 24px 30px; }
+.np-btn.player-close, .np-spacer { width: 38px; height: 38px; }
+.np-btn.player-close { border-radius: 50%; background: rgba(255, 255, 255, 0.07); color: #fff; border: 0; }
+.np-btn.player-close:active { transform: scale(0.94); }
+.np-eyebrow { font-size: 9.5px; color: rgba(255, 255, 255, 0.45); }
+.np-ctx { font-size: 12.5px; color: #fff; }
+.player-artwork-large {
+  width: 100%;
+  max-width: 342px;
+  border-radius: 0;                     /* square — Ian's cover rule */
+  background: var(--mad-gradient);
+  animation: npGlow 2s ease-in-out infinite alternate;
+}
+@keyframes npGlow {
+  from { box-shadow: 0 26px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 40px rgba(89, 195, 255, 0.14); }
+  to   { box-shadow: 0 26px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.12), 0 0 80px rgba(167, 47, 255, 0.3); }
+}
+.player-track-info { text-align: left; max-width: 342px; }
+.player-track-title { font-size: 25px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.05; margin-bottom: 6px; }
+.player-track-artist { font-size: 15px; color: rgba(255, 255, 255, 0.58); margin-bottom: 2px; }
+.player-track-album { font-size: 13px; color: rgba(255, 255, 255, 0.4); }
+.player-progress, .player-controls, .player-queue { max-width: 342px; }
+.progress-bar { height: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.13); overflow: hidden; margin: 4px 0 8px; }
+.progress-fill { background: var(--mad-gradient); border-radius: 999px; }
+.progress-time { font-size: 11.5px; color: rgba(255, 255, 255, 0.45); }
+.player-controls { justify-content: center; gap: 28px; }
+.player-control-btn { width: 52px; height: 52px; background: none; border: 0; color: #fff; }
+.player-control-btn:active { transform: scale(0.92); }
+.player-control-btn.play-pause {
+  width: 76px;
+  height: 76px;
+  background: var(--mad-gradient);
+  color: #08080c;
+  box-shadow: 0 0 44px rgba(89, 195, 255, 0.4);
+}
+.player-control-btn.play-pause:active { filter: brightness(1.08); transform: scale(0.94); }
+#player-modal .btn-secondary { max-width: 342px !important; }
+@media (prefers-reduced-motion: reduce) { .player-artwork-large { animation: none; } }
+
+/* ── Step 4: six-tab dock, Discover highlighted (Ian, 2026-09-28) ───────── */
+nav.bottom-tabs { padding: 0 4px; }
+.tab-button { font-size: 9.5px; gap: 3px; }
+.tab-button .tab-icon svg { width: 19px; height: 19px; }
+/* Discover's ring: soft gradient tile, full gradient with a dark icon when active */
+.tab-disc-ring { width: 34px; height: 30px; border-radius: 10px; margin-bottom: -1px;
+  background: linear-gradient(150deg, rgba(61, 247, 255, 0.16), rgba(167, 47, 255, 0.16));
+  border: 1px solid rgba(255, 255, 255, 0.14); transition: background 0.15s; }
+.tab-button.tab-discover { color: rgba(255, 255, 255, 0.8); }
+.tab-button.tab-discover.active { color: var(--mad-cyan); }
+.tab-button.tab-discover.active .tab-disc-ring { background: var(--mad-gradient); border-color: transparent; color: #08080c; }
+
+/* ── Step 5: album pages, Search, Library (2026-09-28) ─────────────────── */
+/* Album / playlist page. A sheet holding an album header gets the full-page treatment. */
+.bottom-sheet:has(.alb-hero) { max-height: 92vh; background: #0e0e15; padding: 0 0 calc(18px + env(safe-area-inset-bottom)); }
+.alb-hero { position: relative; overflow: hidden; padding: 26px 20px 20px; border-radius: 20px 20px 0 0; }
+.alb-hero-bg { position: absolute; inset: -20%; width: 140%; height: 140%; object-fit: cover; filter: blur(26px) brightness(0.45) saturate(1.2); }
+.alb-hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, #0e0e15 2%, rgba(14, 14, 21, 0.35) 60%, rgba(14, 14, 21, 0.2)); }
+.alb-hero-row { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 16px; }
+.alb-cover { width: 124px; height: 124px; flex: none; object-fit: cover; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55); background: var(--mad-gradient); }
+.alb-meta { min-width: 0; }
+.alb-kind { font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em; color: var(--mad-cyan); margin-bottom: 6px; }
+.bottom-sheet-header.alb-title { font-size: 24px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.02; margin: 0; text-align: left;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.alb-artist { font-size: 13.5px; color: rgba(255, 255, 255, 0.65); margin-top: 6px; }
+.alb-count { font-size: 12px; color: rgba(255, 255, 255, 0.4); margin-top: 2px; }
+.alb-play { display: flex; align-items: center; justify-content: center; gap: 8px; width: calc(100% - 40px); height: 50px; margin: 6px 20px 6px;
+  border: 0; border-radius: 999px; background: var(--mad-gradient); color: #08080c; font: inherit; font-size: 15.5px; font-weight: 700;
+  box-shadow: 0 10px 28px rgba(89, 195, 255, 0.26); cursor: pointer; }
+.alb-play:active { transform: scale(0.96); filter: brightness(1.08); }
+.alb-tracks { padding: 4px 12px 0; }
+.alb-row { display: flex; align-items: center; gap: 6px; }
+.bottom-sheet-option.alb-track { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; margin: 0; padding: 9px 8px;
+  background: none; border: 0; border-radius: 12px; }
+.bottom-sheet-option.alb-track:active { background: rgba(255, 255, 255, 0.05); transform: scale(0.985); }
+.alb-no { width: 22px; flex: none; text-align: center; font-size: 13px; font-weight: 800; color: rgba(255, 255, 255, 0.35); }
+.alb-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.alb-tt { font-size: 14.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alb-ta { font-size: 12px; color: rgba(255, 255, 255, 0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alb-dur { flex: none; font-size: 12px; color: rgba(255, 255, 255, 0.4); }
+.btn.alb-basket { flex: none; min-height: 32px; height: 32px; padding: 0 12px; font-size: 12px; white-space: nowrap; }
+.bottom-sheet:has(.alb-hero) .bs-close-btn { display: block; width: calc(100% - 40px); margin: 14px 20px 0; }
+.bottom-sheet:has(.alb-hero) .mob-suggestions { padding: 0 20px; }
+/* plan picker opened from the welcome's offer slide: the chosen plan is marked, Continue pays for it */
+.plan-row.plan-row-picked { border-color: var(--mad-cyan); background: rgba(61, 247, 255, 0.08); box-shadow: 0 0 0 1px var(--mad-cyan) inset; }
+.plan-continue { display: block; width: 100%; height: 50px; margin-top: 12px; border: 0; border-radius: 999px; background: var(--mad-gradient);
+  color: #08080c; font: inherit; font-size: 15.5px; font-weight: 700; cursor: pointer; }
+.plan-continue:disabled { opacity: 0.5; }
+/* own playlists: the album page plus an artwork pill beside Play, and a small square cover per row */
+.pl-actions { display: flex; align-items: center; gap: 10px; margin: 6px 20px; }
+.pl-actions .alb-play { flex: 1; width: auto; margin: 0; }
+.pl-art-btn { flex: none; height: 50px; padding: 0 18px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06); color: #fff; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.pl-actions .pl-art-btn:only-child { flex: 1; }
+.pl-art-btn:active { transform: scale(0.96); }
+.pl-empty { margin: 14px 24px 4px; text-align: center; font-size: 13.5px; line-height: 1.45; color: rgba(255, 255, 255, 0.55); }
+.pl-row-art { width: 40px; height: 40px; flex: none; object-fit: cover; background: #1a1a24; }
+
+/* Page titles (Search, My Playlists) as the design: big and tight */
+.section-title.page-title { font-size: 28px; letter-spacing: -0.035em; }
+
+/* Search box as a pill with the magnifier inside */
+.search-pill { position: relative; }
+.search-pill-icon { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: rgba(255, 255, 255, 0.5); pointer-events: none; }
+.search-pill .form-input { height: 48px; padding-left: 44px; border-radius: 999px; background: #14141c; border: 1px solid rgba(255, 255, 255, 0.1); font-size: 15px; }
+.search-pill .form-input:focus { border-color: var(--mad-blue); }
+#mobile-search-decade, #mobile-discover-decade { border-radius: 999px; background: #14141c; border: 1px solid rgba(255, 255, 255, 0.1); height: 42px; }
+
+/* "+ Playlist" pill beside the Library title */
+.btn.pill-add { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; height: 34px; padding: 0 14px; font-size: 12.5px; }
+
+/* ── Step 6: three-slide welcome (2026-09-28) ─────────────────────────── */
+body.welcome-open { overflow: hidden; }
+#welcome { position: fixed; inset: 0; z-index: 4000; background: #050509; display: flex; flex-direction: column;
+  animation: welIn 0.22s ease; }
+#welcome.wel-out { opacity: 0; transition: opacity 0.2s; }
+@keyframes welIn { from { opacity: 0; } to { opacity: 1; } }
+.wel-skip { position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 14px; z-index: 6; border: 0; background: none;
+  color: rgba(255, 255, 255, 0.6); font: inherit; font-size: 13px; font-weight: 700; padding: 8px 12px; border-radius: 999px; cursor: pointer; }
+.wel-skip:active { color: #fff; }
+.wel-track { flex: 1; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.wel-track::-webkit-scrollbar { display: none; }
+.wel-slide { flex: none; width: 100%; scroll-snap-align: start; scroll-snap-stop: always; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; padding: calc(64px + env(safe-area-inset-top)) 28px 12px; }
+.wel-glow { position: absolute; width: 360px; height: 360px; border-radius: 50%; filter: blur(4px); pointer-events: none; }
+.wel-glow-a { top: 40px; left: -90px; background: radial-gradient(circle, rgba(61, 247, 255, 0.24), rgba(167, 47, 255, 0.14) 46%, transparent 70%); }
+.wel-glow-b { bottom: -120px; right: -110px; background: radial-gradient(circle, rgba(167, 47, 255, 0.3), transparent 68%); }
+.wel-visual { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; z-index: 1; margin-bottom: 20px; }
+.wel-text { position: relative; z-index: 3; text-align: center; }
+.wel-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; color: var(--mad-cyan); margin-bottom: 12px; }
+.wel-title { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.06; margin: 0; color: #fff; }
+.wel-body { font-size: 15px; color: rgba(255, 255, 255, 0.66); margin: 11px auto 0; max-width: 300px; line-height: 1.46; }
+/* slide 1: three fanned covers (square, Ian's rule) */
+.wel-covers { position: relative; width: 236px; height: 220px; }
+.wel-cover { position: absolute; width: 150px; height: 150px; object-fit: cover; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.1); background: var(--mad-gradient); }
+.wel-cover-0 { left: -2px; top: 20px; transform: rotate(-9deg); }
+.wel-cover-1 { right: -2px; top: 4px; transform: rotate(8deg); }
+.wel-cover-2 { left: 43px; top: 58px; transform: rotate(-1deg); z-index: 2; }
+/* slide 2: Maddie */
+/* Maddie's profile portrait (Ian's "Option 1", caption cropped off) — clipped to its cyan ring so the grey backing never shows */
+.wel-maddie { width: min(72vw, 100%, 300px); aspect-ratio: 1; height: auto; max-height: 100%; object-fit: cover; border-radius: 50%;
+  box-shadow: 0 0 36px rgba(61, 247, 255, 0.28), 0 24px 44px rgba(0, 0, 0, 0.6); }
+/* slide 3: the offer card */
+.wel-offer { width: 100%; max-width: 310px; background: #14141d; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 18px;
+  padding: 16px 16px 8px; box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5); }
+/* badge and rows are buttons: the badge starts the free trial, a row opens checkout on that plan */
+.wel-offer-badge { display: block; width: 100%; border: 0; font: inherit; cursor: pointer; font-size: 10px; font-weight: 800; letter-spacing: 0.12em;
+  color: #08080c; background: var(--mad-warm); border-radius: 999px; padding: 8px 12px; text-align: center; margin-bottom: 10px; }
+.wel-offer-badge:active { transform: scale(0.97); }
+.wel-offer-row { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 2px; font: inherit;
+  font-size: 13.5px; background: none; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.07); color: inherit; cursor: pointer; }
+.wel-offer-row:active { background: rgba(255, 255, 255, 0.05); }
+.wel-offer-row b::after { content: '›'; margin-left: 8px; font-weight: 600; color: rgba(255, 255, 255, 0.35); }
+.wel-offer-hint { font-size: 11px; color: rgba(255, 255, 255, 0.4); text-align: center; padding: 6px 0 4px; }
+.wel-offer-row:first-child { border-top: 0; }
+.wel-offer-row span { color: rgba(255, 255, 255, 0.72); display: flex; flex-direction: column; text-align: left; }
+.wel-offer-row em { font-style: normal; font-size: 10.5px; color: rgba(255, 255, 255, 0.4); }
+.wel-offer-row b { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; color: #fff; }
+.wel-offer-note { font-size: 13.5px; color: rgba(255, 255, 255, 0.72); text-align: center; padding: 6px 0 10px; }
+/* footer: dots + Next / Discover Now */
+.wel-foot { position: relative; z-index: 6; padding: 6px 28px calc(26px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
+.wel-dots { display: flex; gap: 7px; justify-content: center; }
+.wel-dots span { width: 7px; height: 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.22); transition: width 0.2s, background 0.2s; }
+.wel-dots span.on { width: 22px; background: var(--mad-cyan); }
+.wel-next { width: 100%; height: 54px; border: 0; border-radius: 999px; background: var(--mad-gradient); color: #08080c; font: inherit;
+  font-size: 16px; font-weight: 700; box-shadow: 0 10px 30px rgba(89, 195, 255, 0.26); cursor: pointer; }
+.wel-next:active { transform: scale(0.97); filter: brightness(1.08); }
+@media (max-height: 640px) { .wel-covers { transform: scale(0.8); } .wel-title { font-size: 26px; } .wel-slide { padding-top: calc(48px + env(safe-area-inset-top)); } }
+@media (prefers-reduced-motion: reduce) { #welcome, #welcome.wel-out { animation: none; transition: none; } }

@@ -2,12 +2,12 @@
 // holds the DOM event wiring + drag/search state + init(), and exposes the
 // inline on*-handlers on window. All app logic lives in the mobile/*.js modules.
 
-import { elements, state } from './state.js?v=24';
-import { showToast } from './util.js?v=24';
-import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=24';
+import { elements, state } from './state.js?v=33';
+import { showToast } from './util.js?v=33';
+import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=33';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=24';
+import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=33';
 
 // Links from MAD emails: ?buy=1 opens the plans (not inside the store app — policy),
 // ?contact=1 opens "Contact us". The param is dropped from the address bar either way.
@@ -20,25 +20,28 @@ function handleEmailLinks() {
   window.history.replaceState({}, document.title, window.location.pathname + (q ? '?' + q : ''));
   setTimeout(() => { if (contact) showContactSheet(); else if (!isNativeApp()) buyAccess(); }, 600);
 }
-import { switchTab } from './nav.js?v=24';
-import { renderSearchResults, search } from './search.js?v=24';
-import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=24';
-import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=24';
-import { filterG100Albums, loadG100 } from './rails-g100.js?v=24';
-import { loadNewReleases } from './rails-newreleases.js?v=24';
-import { loadSuggestedForYou } from './rails-suggested.js?v=24';
-import { initMobHero } from './hero.js?v=24';
-import { loadHomeShelves } from './rails-g100.js?v=24';
-import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=24';
-import { showAlbumTracksModal } from './cards.js?v=24';
-import { initRouter } from './router.js?v=24';
-import { initMaddie } from './maddie.js?v=24';
+import { switchTab } from './nav.js?v=33';
+import { renderSearchResults, search } from './search.js?v=33';
+import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=33';
+import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=33';
+import { filterG100Albums, loadG100 } from './rails-g100.js?v=33';
+import { loadNewReleases } from './rails-newreleases.js?v=33';
+import { loadSuggestedForYou } from './rails-suggested.js?v=33';
+import { initMobHero } from './hero.js?v=33';
+import { loadHomeShelves } from './rails-g100.js?v=33';
+import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=33';
+import { showAlbumTracksModal } from './cards.js?v=33';
+import { initRouter } from './router.js?v=33';
+import { initMaddie } from './maddie.js?v=33';
+import { initContinue } from './continue.js?v=33';
+import { loadGlobalFavourites } from './rails-globalfav.js?v=33';
+import { maybeShowWelcome, showWelcome } from './welcome.js?v=33';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = btn.dataset.tab;
-        switchTab(tab);
+        switchTab(tab, { viaDock: true });
       });
     });
 
@@ -67,6 +70,7 @@ import { initMaddie } from './maddie.js?v=24';
     document.getElementById('logout-btn').addEventListener('click', logout);
     document.getElementById('contact-btn')?.addEventListener('click', () => showContactSheet());
     document.getElementById('help-contact-btn')?.addEventListener('click', () => showContactSheet());
+    document.getElementById('help-welcome-btn')?.addEventListener('click', () => showWelcome());
     // Android app on Google Play — offered to Android browsers, never inside the app.
     if (/Android/i.test(navigator.userAgent) && !isNativeApp()) {
       const getApp = document.getElementById('get-app-btn');
@@ -80,6 +84,9 @@ import { initMaddie } from './maddie.js?v=24';
       // per track: the OS keeps the handlers, and re-registering on every play
       // is wasted work.
       initMediaSession();
+
+      // First visit on this device, no access code: the three-slide welcome (step 6).
+      maybeShowWelcome();
 
       // Check URL for payment result first (redirect back from Paystack)
       const urlParams = new URLSearchParams(window.location.search);
@@ -114,6 +121,8 @@ import { initMaddie } from './maddie.js?v=24';
           loadNewReleases();
           initMobHero();
           loadHomeShelves();
+          initContinue();
+          loadGlobalFavourites();
           loadPlaylists();
           handleShareDeepLink();
           handleEmailLinks();
@@ -141,6 +150,8 @@ import { initMaddie } from './maddie.js?v=24';
       loadNewReleases();
           initMobHero();
           loadHomeShelves();
+          initContinue();
+          loadGlobalFavourites();
       loadPlaylists();
       handleShareDeepLink();
       handleEmailLinks();
@@ -315,6 +326,16 @@ import { initMaddie } from './maddie.js?v=24';
 
     document.getElementById('mini-next').addEventListener('click', () => stepQueue(1));
 
+    // × on the mini player (Ian, 2026-09-28): stop and put the bar away. Playing anything
+    // shows it again (player.js adds .visible on every play).
+    document.getElementById('mini-close')?.addEventListener('click', () => {
+      elements.audio.pause();
+      elements.floatingPlayer.classList.remove('visible', 'playing');
+      state.playerModal.visible = false;
+      elements.playerModal.classList.remove('show');
+      try { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none'; } catch (e) { /* older browsers */ }
+    });
+
     // Close player modal
     document.getElementById('player-close').addEventListener('click', () => {
       state.playerModal.visible = false;
@@ -341,16 +362,20 @@ import { initMaddie } from './maddie.js?v=24';
     });
 
     // Audio events
+    // Drawn play / pause icons (MAD Streamer design) instead of the ▶ / ⏸ characters,
+    // which render differently — or as emoji — from phone to phone.
+    const PAUSE_ICON = (w, h) => `<svg width="${w}" height="${h}" viewBox="0 0 13 14" fill="currentColor" aria-hidden="true"><rect x="1" y="1" width="4" height="12" rx="1.4"/><rect x="8" y="1" width="4" height="12" rx="1.4"/></svg>`;
+    const PLAY_ICON = (w, h) => `<svg width="${w}" height="${h}" viewBox="0 0 13 14" fill="currentColor" aria-hidden="true"><path d="M2.4 1.4 12 7 2.4 12.6z"/></svg>`;
     elements.audio.addEventListener('play', () => {
-      document.getElementById('play-pause-btn').textContent = '⏸';
-      document.getElementById('mini-play-pause').textContent = '⏸';
+      document.getElementById('play-pause-btn').innerHTML = PAUSE_ICON(22, 24);
+      document.getElementById('mini-play-pause').innerHTML = PAUSE_ICON(13, 14);
       elements.floatingPlayer.classList.add('playing');
       sendStreamEvent('PLAY');
     });
 
     elements.audio.addEventListener('pause', () => {
-      document.getElementById('play-pause-btn').textContent = '▶';
-      document.getElementById('mini-play-pause').textContent = '▶';
+      document.getElementById('play-pause-btn').innerHTML = PLAY_ICON(22, 24);
+      document.getElementById('mini-play-pause').innerHTML = PLAY_ICON(13, 14);
       elements.floatingPlayer.classList.remove('playing');
       sendStreamEvent('PAUSE');
     });
@@ -396,6 +421,15 @@ import { initMaddie } from './maddie.js?v=24';
       const artist = getArtistField(f) || '';
       const url = `${window.location.origin}/?t=${encodeURIComponent(track.recordId)}`;
       const text = `${title}${artist ? ` — ${artist}` : ''} on MAD Music`;
+      // Inside the store apps: the phone's own share sheet (@capacitor/share, 2026-09-29). The
+      // web view's navigator.share is missing on Android and patchy on iOS, and a real native
+      // sheet is one of the things Apple's reviewers look for. Only builds that carry the plugin
+      // report it available, so older app builds fall through to the web path below.
+      const cap = window.Capacitor;
+      if (cap?.isNativePlatform?.() && cap.isPluginAvailable?.('Share')) {
+        try { await cap.Plugins.Share.share({ title, text, url, dialogTitle: 'Share this track' }); return; }
+        catch (err) { if (/cancel/i.test(String(err?.message || err))) return; }
+      }
       if (navigator.share) {
         try { await navigator.share({ title, text, url }); return; }
         catch (err) { if (err?.name === 'AbortError') return; }

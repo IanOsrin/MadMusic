@@ -1,25 +1,38 @@
 // Tab navigation + genre/decade filters for the mobile app.
 
-import { DECADES, GENRES } from './data.js?v=24';
-import { state } from './state.js?v=24';
-import { loadPlaylists } from './playlists.js?v=24';
-import { loadDiscover } from './rails-discover.js?v=24';
-import { loadG100, loadG100Playlists, loadScenes } from './rails-g100.js?v=24';
-import { loadNewReleases } from './rails-newreleases.js?v=24';
-import { pushTab, isRestoring } from './router.js?v=24';
+import { DECADES, GENRES } from './data.js?v=33';
+import { state } from './state.js?v=33';
+import { loadPlaylists } from './playlists.js?v=33';
+import { loadDiscover } from './rails-discover.js?v=33';
+import { loadG100, loadG100Playlists, loadScenes } from './rails-g100.js?v=33';
+import { loadNewReleases } from './rails-newreleases.js?v=33';
+import { pushTab, isRestoring } from './router.js?v=33';
 
 // Tabs reached through the Browse hub rather than the bottom bar. They keep
 // the bar at four thumb-reachable items — a new rail gets a Browse card, not a
 // fifth, sixth, seventh bottom-bar slot.
 export const BROWSE_TABS = ['g100', 'discover', 'genres', 'decades', 'scenes', 'madabout'];
 
-export function switchTab(tabName) {
+export function switchTab(tabName, { viaDock = false } = {}) {
       const wasAlreadyActive = state.currentTab === tabName;
       state.currentTab = tabName;
+      // Discover has its own dock button now (2026-09-28) but is still reached from
+      // Browse (its card, or picking a genre/decade). Remember which, for the back link.
+      if (tabName === 'discover') state.discoverViaDock = viaDock;
+      // The dock's Discover is "fresh picks": leave any genre/decade filter from Browse behind.
+      let droppedFilter = false;
+      if (tabName === 'discover' && viaDock && (state.selectedGenre !== 'All' || state.selectedDecade)) {
+        state.selectedGenre = 'All';
+        state.selectedDecade = null;
+        const dec = document.getElementById('mobile-discover-decade');
+        if (dec) dec.value = '';
+        droppedFilter = true;
+      }
 
       // Inside a Browse sub-tab the bar highlights Browse, so the user can see
       // where they are. 'profile' lights nothing — it lives in the header badge.
-      const navTab = BROWSE_TABS.includes(tabName) ? 'browse' : tabName;
+      // Discover lights its own dock button, however it was reached.
+      const navTab = tabName === 'discover' ? 'discover' : (BROWSE_TABS.includes(tabName) ? 'browse' : tabName);
       document.querySelectorAll('.tab-button').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tab === navTab);
       });
@@ -27,7 +40,7 @@ export function switchTab(tabName) {
       // …and the sub-tab gets an explicit way back up, so nobody is stranded
       // if they don't use the system back gesture.
       const back = document.getElementById('browse-back');
-      if (back) back.hidden = !BROWSE_TABS.includes(tabName);
+      if (back) back.hidden = !BROWSE_TABS.includes(tabName) || (tabName === 'discover' && state.discoverViaDock);
 
       // Update tab content
       document.querySelectorAll('.tab-content').forEach(content => {
@@ -47,7 +60,7 @@ export function switchTab(tabName) {
         if (!state.g100PlaylistsLoaded || wasAlreadyActive) loadG100Playlists();
       } else if (tabName === 'discover') {
         // Refresh if tapping active tab, genre is selected, or first load
-        if (wasAlreadyActive || state.selectedGenre !== 'All' || state.randomTracks.length === 0) {
+        if (wasAlreadyActive || droppedFilter || state.selectedGenre !== 'All' || state.randomTracks.length === 0) {
           loadDiscover();
         }
       } else if (tabName === 'genres') {

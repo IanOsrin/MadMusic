@@ -4,10 +4,10 @@
 // blur behind, contain in front; never stretched, per docs/banners.md).
 // Swipe-driven scroll-snap with dots; auto-advance 6.5s that pauses on touch,
 // when the tab is hidden, and entirely under prefers-reduced-motion.
-import { state } from './state.js?v=24';
-import { getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField } from './fields.js?v=24';
-import { showAlbumTracksModal } from './cards.js?v=24';
-import { playTrack } from './player.js?v=24';
+import { state } from './state.js?v=33';
+import { getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField } from './fields.js?v=33';
+import { showAlbumTracksModal } from './cards.js?v=33';
+import { playTrack } from './player.js?v=33';
 
 const DWELL_MS = 6500, MAX_SLIDES = 6;
 const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -37,7 +37,9 @@ function render(slides) {
     el.innerHTML = `
       <img class="mob-hero-ambient" src="${esc(s.image)}" alt="" aria-hidden="true">
       <img class="mob-hero-art" src="${esc(s.image)}" alt="${esc(s.title)}" loading="${i ? 'lazy' : 'eager'}">
-      ${s.clean ? '' : `<div class="mob-hero-caption"><div class="t">${esc(s.title)}</div><div class="a">${esc(s.subtitle)}</div></div>`}`;
+      ${s.clean ? '' : `<div class="mob-hero-caption"><div class="t">${esc(s.title)}</div><div class="a">${esc(s.subtitle)}</div></div>`}
+      <span class="mob-hero-tag">FEATURED</span>
+      ${s.playable ? `<span class="mob-hero-play" aria-label="Play"><svg width="11" height="12" viewBox="0 0 13 14" fill="currentColor"><path d="M2 1.6 12 7 2 12.4z"/></svg><span>Play</span></span>` : ''}`;
     // a broken banner never shows: drop the slide, like desktop
     el.querySelector('.mob-hero-art').addEventListener('error', () => { el.remove(); });
     el.addEventListener('click', () => s.onTap && s.onTap());
@@ -82,7 +84,7 @@ function albumSlides(tracks) {
   albums.forEach(a => window.MADHelpers.sortTracksBySeq(a.tracks));
   return albums.slice(0, MAX_SLIDES).map(a => ({
     image: heroRes(a.artwork), title: a.title, subtitle: a.artist,
-    editorial: false, onTap: () => showAlbumTracksModal(a),
+    editorial: false, playable: true, onTap: () => showAlbumTracksModal(a),
   }));
 }
 
@@ -146,6 +148,8 @@ export function initMobHero() {
       const slides = live.filter(s => s && s.imageUrl).slice(0, MAX_SLIDES).map(s => ({
         image: s.imageUrl, title: s.title || '', subtitle: s.eyebrow || '',
         editorial: true, clean: s.textBaked !== false,
+        // a Play button only where the banner leads to music (a track or an album)
+        playable: ['track', 'album'].includes(String(s.targetType || '')),
         onTap: editorialAction(s),
       }));
       if (slides.length) return render(slides);
