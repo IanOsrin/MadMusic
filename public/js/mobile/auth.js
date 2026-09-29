@@ -1,7 +1,7 @@
 // Auth + access-token flow for the mobile app.
 
-import { elements, state } from './state.js?v=32';
-import { showToast } from './util.js?v=32';
+import { elements, state } from './state.js?v=33';
+import { showToast } from './util.js?v=33';
 
 export function logout() {
       localStorage.removeItem('mass_access_token');
@@ -370,7 +370,10 @@ function injectGuestPaywall() {
   pill.id = 'guest-pill';
   pill.className = 'guest-pill';
   pill.setAttribute('role', 'button');
-  pill.innerHTML = 'Preview mode &middot; <strong>Subscribe</strong>';
+  // In the store apps nothing can be bought, so "Subscribe" would read as a nudge to pay
+  // elsewhere (Apple 3.1.1 / Play payments policy). There the pill offers what the sheet can
+  // actually do: the free trial.
+  pill.innerHTML = `Preview mode &middot; <strong>${isNativeApp() ? 'Free trial' : 'Subscribe'}</strong>`;
   pill.addEventListener('click', showGuestPaywall);
   document.body.appendChild(pill);
 }

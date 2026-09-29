@@ -2,12 +2,12 @@
 // holds the DOM event wiring + drag/search state + init(), and exposes the
 // inline on*-handlers on window. All app logic lives in the mobile/*.js modules.
 
-import { elements, state } from './state.js?v=32';
-import { showToast } from './util.js?v=32';
-import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=32';
+import { elements, state } from './state.js?v=33';
+import { showToast } from './util.js?v=33';
+import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=33';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=32';
+import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=33';
 
 // Links from MAD emails: ?buy=1 opens the plans (not inside the store app — policy),
 // ?contact=1 opens "Contact us". The param is dropped from the address bar either way.
@@ -20,22 +20,22 @@ function handleEmailLinks() {
   window.history.replaceState({}, document.title, window.location.pathname + (q ? '?' + q : ''));
   setTimeout(() => { if (contact) showContactSheet(); else if (!isNativeApp()) buyAccess(); }, 600);
 }
-import { switchTab } from './nav.js?v=32';
-import { renderSearchResults, search } from './search.js?v=32';
-import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=32';
-import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=32';
-import { filterG100Albums, loadG100 } from './rails-g100.js?v=32';
-import { loadNewReleases } from './rails-newreleases.js?v=32';
-import { loadSuggestedForYou } from './rails-suggested.js?v=32';
-import { initMobHero } from './hero.js?v=32';
-import { loadHomeShelves } from './rails-g100.js?v=32';
-import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=32';
-import { showAlbumTracksModal } from './cards.js?v=32';
-import { initRouter } from './router.js?v=32';
-import { initMaddie } from './maddie.js?v=32';
-import { initContinue } from './continue.js?v=32';
-import { loadGlobalFavourites } from './rails-globalfav.js?v=32';
-import { maybeShowWelcome, showWelcome } from './welcome.js?v=32';
+import { switchTab } from './nav.js?v=33';
+import { renderSearchResults, search } from './search.js?v=33';
+import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=33';
+import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=33';
+import { filterG100Albums, loadG100 } from './rails-g100.js?v=33';
+import { loadNewReleases } from './rails-newreleases.js?v=33';
+import { loadSuggestedForYou } from './rails-suggested.js?v=33';
+import { initMobHero } from './hero.js?v=33';
+import { loadHomeShelves } from './rails-g100.js?v=33';
+import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=33';
+import { showAlbumTracksModal } from './cards.js?v=33';
+import { initRouter } from './router.js?v=33';
+import { initMaddie } from './maddie.js?v=33';
+import { initContinue } from './continue.js?v=33';
+import { loadGlobalFavourites } from './rails-globalfav.js?v=33';
+import { maybeShowWelcome, showWelcome } from './welcome.js?v=33';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {
@@ -421,6 +421,15 @@ import { maybeShowWelcome, showWelcome } from './welcome.js?v=32';
       const artist = getArtistField(f) || '';
       const url = `${window.location.origin}/?t=${encodeURIComponent(track.recordId)}`;
       const text = `${title}${artist ? ` — ${artist}` : ''} on MAD Music`;
+      // Inside the store apps: the phone's own share sheet (@capacitor/share, 2026-09-29). The
+      // web view's navigator.share is missing on Android and patchy on iOS, and a real native
+      // sheet is one of the things Apple's reviewers look for. Only builds that carry the plugin
+      // report it available, so older app builds fall through to the web path below.
+      const cap = window.Capacitor;
+      if (cap?.isNativePlatform?.() && cap.isPluginAvailable?.('Share')) {
+        try { await cap.Plugins.Share.share({ title, text, url, dialogTitle: 'Share this track' }); return; }
+        catch (err) { if (/cancel/i.test(String(err?.message || err))) return; }
+      }
       if (navigator.share) {
         try { await navigator.share({ title, text, url }); return; }
         catch (err) { if (err?.name === 'AbortError') return; }
