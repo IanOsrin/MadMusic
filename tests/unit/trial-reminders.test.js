@@ -116,3 +116,15 @@ describe('runTrialReminders', () => {
     expect(sent).toHaveLength(0);
   });
 });
+
+describe('server start-up', () => {
+  it('starts the reminders OUTSIDE the PREWARM_CACHES block (which is off on live)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const server = readFileSync(new URL('../../server.js', import.meta.url), 'utf8');
+    const start = server.indexOf('startTrialReminders()');
+    const prewarm = server.indexOf("if (process.env.PREWARM_CACHES === 'true'");
+    expect(start).toBeGreaterThan(-1);
+    expect(prewarm).toBeGreaterThan(-1);
+    expect(start).toBeLessThan(prewarm);
+  });
+});
