@@ -78,3 +78,22 @@ describe('attribution fallback (F5)', () => {
     expect(fn).toMatch(/getAccessTokensCacheData/);
   });
 });
+
+describe('attribution survives a restart (2026-09-29)', () => {
+  // After a deploy the validation cache is empty AND the JSON token store is wiped, so the two
+  // in-memory lookups both missed and subscribers' listens were saved with no code and no email.
+  it('stream-events falls back to a read-only FileMaker code → email lookup', () => {
+    const accessJs = read('routes', 'access.js');
+    const route = accessJs.slice(accessJs.indexOf("router.post('/stream-events'"));
+    expect(route.indexOf('tryEnrichToken(req)')).toBeGreaterThan(-1);
+    expect(route.indexOf('await enrichTokenFromFileMaker(req)')).toBeGreaterThan(route.indexOf('tryEnrichToken(req)'));
+    const fn = accessJs.slice(accessJs.indexOf('function lookupTokenAttribution'), accessJs.indexOf('async function enrichTokenFromFileMaker'));
+    expect(fn).toMatch(/fmFindRecords\(/);
+    expect(fn).not.toMatch(/fmUpdateRecord|validateAccessToken/);   // attribution only — never a write
+  });
+  it('the wait is bounded so a listen is never held up', () => {
+    const accessJs = read('routes', 'access.js');
+    expect(accessJs).toMatch(/async function enrichTokenFromFileMaker\(req, waitMs = 1500\)/);
+    expect(accessJs).toMatch(/Promise\.race\(\[lookupTokenAttribution\(raw\)/);
+  });
+});

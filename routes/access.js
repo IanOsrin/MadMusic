@@ -555,6 +555,39 @@ function tryEnrichToken(req) {
   } catch { /* attribution is best-effort */ }
 }
 
+// Last resort for attribution (2026-09-29): after a restart the validation cache is empty and the
+// JSON token store has been wiped with the deploy, so both misses above left subscribers' listens
+// with NO code and NO email — 60 of the 84 blank "full" listens in Aug–Sep came from sessions that
+// played with a code before and after. A read-only FileMaker lookup (code → email; no usage-stat
+// write, unlike validateAccessToken), remembered for an hour and shared by concurrent events, fills
+// the gap. Bounded wait so a listen is never delayed; a late answer still serves the next event.
+const tokenAttribution = new LRUCache({ max: 5000, ttl: 60 * 60 * 1000 });
+const tokenAttributionInFlight = new Map();
+function lookupTokenAttribution(code) {
+  const hit = tokenAttribution.get(code);
+  if (hit !== undefined) return Promise.resolve(hit);
+  if (tokenAttributionInFlight.has(code)) return tokenAttributionInFlight.get(code);
+  const layout = process.env.FM_TOKENS_LAYOUT || 'API_Access_Tokens';
+  const p = fmFindRecords(layout, [{ Token_Code: fmExactMatch(code) }], { limit: 1 })
+    .then((r) => {
+      const f = r?.data?.[0]?.fieldData;
+      const found = f ? { code, email: normalizeEmail(f.Issued_To || f.Email || '') || null } : null;
+      tokenAttribution.set(code, found);
+      return found;
+    })
+    .catch(() => null)
+    .finally(() => tokenAttributionInFlight.delete(code));
+  tokenAttributionInFlight.set(code, p);
+  return p;
+}
+async function enrichTokenFromFileMaker(req, waitMs = 1500) {
+  if (req.accessToken) return;
+  const raw = (req.headers['x-access-token'] || req.body?.accessToken || '').toString().trim().toUpperCase();
+  if (!raw || !/^[A-Z0-9-]{6,40}$/.test(raw)) return;
+  const found = await Promise.race([lookupTokenAttribution(raw), new Promise((r) => setTimeout(() => r(null), waitMs))]);
+  if (found) req.accessToken = found;
+}
+
 async function resolveTerminalRecord(normalizedType, hasCachedSession, sessionId, normalizedTrackRecordId, res) {
   if (!STREAM_TERMINAL_EVENTS.has(normalizedType) || hasCachedSession) return true;
   const existing = await findStreamRecord(sessionId, normalizedTrackRecordId);
@@ -578,6 +611,7 @@ router.post('/stream-events', async (req, res) => {
     // in-memory validation cache (populated by any prior authenticated request) to
     // get the token code and Issued_To email without a FileMaker round-trip.
     tryEnrichToken(req);
+    await enrichTokenFromFileMaker(req);
 
     if (STREAM_EVENT_DEBUG) {
       console.log('[MASS] Stream event - Access Token:', req.accessToken?.code || 'NO TOKEN');
