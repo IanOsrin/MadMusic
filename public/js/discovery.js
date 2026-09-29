@@ -583,7 +583,7 @@
           <div class="random-info">
             <div class="random-title">${escapeHtml(title)}</div>
             <div class="random-artist">${escapeHtml(artist)}</div>
-            <div class="random-album">${escapeHtml(album)}</div>
+            <div class="random-album" data-album-text data-album="${escapeHtml(album)}" data-artist="${escapeHtml(getAlbumArtist(fields) || artist)}">${escapeHtml(album)}</div>
             ${genre ? `<div class="random-genre"><span class="genre-badge">${escapeHtml(genre)}</span></div>` : ''}
             <div class="card-quick-actions">
               <button class="track-action-btn card-playlist-btn" title="Add to playlist">+ Playlist</button>
@@ -958,8 +958,14 @@
             window.playSong(recordId);
             return;
           }
-          // Clicking anywhere else on the cover shows the artist prompt
-          showArtistAlbumsPrompt(recordId);
+          // Clicking anywhere else on the cover opens the song's album (client, 2026-09-29:
+          // "clicking the album artwork should open the songs in the album").
+          const it = window.MADPlayer && window.MADPlayer.itemsStore && window.MADPlayer.itemsStore.get(recordId);
+          const f = (it && it.fields) || {};
+          const albumTitle = f['Album Title'] || f['Tape Files::Album Title'] || '';
+          const albumArtist = f['Album Artist'] || f['Tape Files::Album Artist'] || f['Track Artist'] || '';
+          if (albumTitle && window.openAlbumDirect) window.openAlbumDirect(albumTitle, albumArtist);
+          else showArtistAlbumsPrompt(recordId);
         });
       }
 
@@ -1044,7 +1050,7 @@
           return `
             <div class="trending-card" data-record-id="${escapeHtml(item.recordId)}">
               ${badgeHtml}
-              <div class="trending-artwork" style="cursor:pointer" data-album-view data-album="${escapeHtml(album)}" data-artist="${escapeHtml(artist)}">
+              <div class="trending-artwork" style="cursor:pointer" data-album-view data-album="${escapeHtml(album)}" data-artist="${escapeHtml(getAlbumArtist(fields) || artist)}">
                 ${artworkUrl
                   ? `<img src="${escapeHtml(artworkUrl)}" alt="${escapeHtml(title)}" onerror="this.closest('.trending-card').style.display='none'" />`
                   : ''
@@ -1054,7 +1060,7 @@
               <div class="trending-info">
                 <div class="trending-title">${escapeHtml(title)}</div>
                 <div class="trending-artist">${escapeHtml(artist)}</div>
-                <div class="trending-meta">${escapeHtml(album)}</div>
+                <div class="trending-meta" data-album-text data-album="${escapeHtml(album)}" data-artist="${escapeHtml(getAlbumArtist(fields) || artist)}">${escapeHtml(album)}</div>
                 <div class="card-quick-actions">
                   <button class="track-action-btn card-playlist-btn" title="Add to playlist">+ Playlist</button>
                   <button class="track-action-btn card-library-btn" title="Save to library">♡ Save</button>

@@ -2,12 +2,12 @@
 // holds the DOM event wiring + drag/search state + init(), and exposes the
 // inline on*-handlers on window. All app logic lives in the mobile/*.js modules.
 
-import { elements, state } from './state.js?v=33';
-import { showToast } from './util.js?v=33';
-import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=33';
+import { elements, state } from './state.js?v=34';
+import { showToast } from './util.js?v=34';
+import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=34';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=33';
+import { buyAccess, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=34';
 
 // Links from MAD emails: ?buy=1 opens the plans (not inside the store app — policy),
 // ?contact=1 opens "Contact us". The param is dropped from the address bar either way.
@@ -20,22 +20,22 @@ function handleEmailLinks() {
   window.history.replaceState({}, document.title, window.location.pathname + (q ? '?' + q : ''));
   setTimeout(() => { if (contact) showContactSheet(); else if (!isNativeApp()) buyAccess(); }, 600);
 }
-import { switchTab } from './nav.js?v=33';
-import { renderSearchResults, search } from './search.js?v=33';
-import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=33';
-import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=33';
-import { filterG100Albums, loadG100 } from './rails-g100.js?v=33';
-import { loadNewReleases } from './rails-newreleases.js?v=33';
-import { loadSuggestedForYou } from './rails-suggested.js?v=33';
-import { initMobHero } from './hero.js?v=33';
-import { loadHomeShelves } from './rails-g100.js?v=33';
-import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=33';
-import { showAlbumTracksModal } from './cards.js?v=33';
-import { initRouter } from './router.js?v=33';
-import { initMaddie } from './maddie.js?v=33';
-import { initContinue } from './continue.js?v=33';
-import { loadGlobalFavourites } from './rails-globalfav.js?v=33';
-import { maybeShowWelcome, showWelcome } from './welcome.js?v=33';
+import { switchTab } from './nav.js?v=34';
+import { renderSearchResults, search } from './search.js?v=34';
+import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=34';
+import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=34';
+import { filterG100Albums, loadG100 } from './rails-g100.js?v=34';
+import { loadNewReleases } from './rails-newreleases.js?v=34';
+import { loadSuggestedForYou } from './rails-suggested.js?v=34';
+import { initMobHero } from './hero.js?v=34';
+import { loadHomeShelves } from './rails-g100.js?v=34';
+import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, trackFailed, trackPlayedOk, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=34';
+import { openAlbumForTrack, showAlbumTracksModal, showArtistTracks } from './cards.js?v=34';
+import { initRouter, pushOverlay } from './router.js?v=34';
+import { initMaddie } from './maddie.js?v=34';
+import { initContinue } from './continue.js?v=34';
+import { loadGlobalFavourites } from './rails-globalfav.js?v=34';
+import { maybeShowWelcome, showWelcome } from './welcome.js?v=34';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {
@@ -51,7 +51,12 @@ import { maybeShowWelcome, showWelcome } from './welcome.js?v=33';
     });
 
     // Back out of a Browse sub-tab.
-    document.getElementById('browse-back')?.addEventListener('click', () => switchTab('browse'));
+    // ‹ Browse steps BACK through history (the Browse entry is the one before this filtered view),
+    // rather than pushing Browse again — which grew history and made the phone's Back bounce.
+    document.getElementById('browse-back')?.addEventListener('click', () => {
+      const st = history.state;
+      if (st && st.mad && st.seq > 1) history.back(); else switchTab('browse');
+    });
 
     // Account is no longer a bottom-bar item; the header badge opens it, which
     // is where people look for their account anyway.
@@ -311,10 +316,21 @@ import { maybeShowWelcome, showWelcome } from './welcome.js?v=33';
     // above the tab bar so the playing area is always in the same place.
     elements.floatingPlayer.addEventListener('click', (e) => {
       if (e.target.closest('.mini-btn')) return;
+      if (elements.playerModal.classList.contains('show')) return;
       state.playerModal.visible = true;
       elements.playerModal.classList.add('show');
+      pushOverlay('player', '');   // so the phone's Back closes Now Playing instead of leaving
       updatePlayerModal();
     });
+    // Put Now Playing away. If it owns the current history entry, go back through history
+    // (the router closes it on popstate) so Back and the ⌄ button stay in step.
+    const hidePlayer = () => {
+      if (!elements.playerModal.classList.contains('show')) return;
+      const st = history.state;
+      if (st && st.mad && st.kind === 'overlay' && st.overlay && st.overlay.type === 'player') { history.back(); return; }
+      state.playerModal.visible = false;
+      elements.playerModal.classList.remove('show');
+    };
 
     document.getElementById('mini-play-pause').addEventListener('click', () => {
       if (elements.audio.paused) {
@@ -331,16 +347,26 @@ import { maybeShowWelcome, showWelcome } from './welcome.js?v=33';
     document.getElementById('mini-close')?.addEventListener('click', () => {
       elements.audio.pause();
       elements.floatingPlayer.classList.remove('visible', 'playing');
-      state.playerModal.visible = false;
-      elements.playerModal.classList.remove('show');
+      hidePlayer();
       try { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none'; } catch (e) { /* older browsers */ }
     });
 
     // Close player modal
-    document.getElementById('player-close').addEventListener('click', () => {
+    document.getElementById('player-close').addEventListener('click', hidePlayer);
+
+    // Now Playing: the cover and the album name open the album's songs, the artist's name opens
+    // the artist's songs (client, 2026-09-29). Now Playing is put away first and the new page
+    // takes over its Back step.
+    const fromNowPlaying = (open) => () => {
+      const t = state.currentTrack;
+      if (!t) return;
       state.playerModal.visible = false;
       elements.playerModal.classList.remove('show');
-    });
+      open(t);
+    };
+    document.getElementById('player-artwork')?.addEventListener('click', fromNowPlaying(openAlbumForTrack));
+    document.getElementById('player-album')?.addEventListener('click', fromNowPlaying(openAlbumForTrack));
+    document.getElementById('player-artist')?.addEventListener('click', fromNowPlaying((t) => showArtistTracks(getArtistField(t.fields || {}))));
 
     // Play/pause
     document.getElementById('play-pause-btn').addEventListener('click', () => {
@@ -355,8 +381,11 @@ import { maybeShowWelcome, showWelcome } from './welcome.js?v=33';
     document.getElementById('prev-btn').addEventListener('click', () => stepQueue(-1));
     document.getElementById('next-btn').addEventListener('click', () => stepQueue(1));
 
+    let previewAdvancedFor = null;
+    let previewNudged = false;
     // Auto-advance to next track on end (works for both album and playlist contexts)
     elements.audio.addEventListener('ended', () => {
+      if (window.__GUEST && previewAdvancedFor === state.currentTrack?.recordId) return;   // already moved on at 30 s
       sendStreamEvent('END');
       stepQueue(1);
     });
@@ -383,9 +412,17 @@ import { maybeShowWelcome, showWelcome } from './welcome.js?v=33';
     elements.audio.addEventListener('timeupdate', () => {
       // Guest preview: hard client stop at 30 s (the server already caps the
       // stream bytes at ~30 s — this just makes the ending clean + nudges).
+      // Guests hear 30 s previews: at the end of each, move on to the next one (a pause here
+      // used to stop the whole queue after the first song — client, 2026-09-29), with the
+      // subscribe nudge shown once per visit rather than on every song.
       if (window.__GUEST && elements.audio.currentTime >= 30 && !elements.audio.paused) {
-        elements.audio.pause();
-        showToast('Preview ended — subscribe to hear the full track', 'success');
+        const id = state.currentTrack?.recordId;
+        if (id && previewAdvancedFor !== id) {
+          previewAdvancedFor = id;
+          elements.audio.pause();
+          if (!previewNudged) { previewNudged = true; showToast('Preview mode — 30 seconds per song. Start your free trial for full tracks.', 'success'); }
+          stepQueue(1);
+        }
       }
       updateProgress();
       updateMediaSessionPosition();   // keeps the lock-screen scrubber honest
@@ -399,8 +436,11 @@ import { maybeShowWelcome, showWelcome } from './welcome.js?v=33';
 
     elements.audio.addEventListener('error', () => {
       sendStreamEvent('ERROR');
-      showToast('Playback error', 'error');
+      trackFailed('audio element error');   // skip to the next song rather than stop
     });
+    elements.audio.addEventListener('playing', trackPlayedOk);
+    // A new song is loading: its own 30-second preview advance is armed again (replaying a song counts).
+    elements.audio.addEventListener('loadstart', () => { previewAdvancedFor = null; });
 
     // Progress bar seek
     document.getElementById('progress-bar').addEventListener('click', (e) => {
@@ -457,6 +497,34 @@ import { maybeShowWelcome, showWelcome } from './welcome.js?v=33';
     // Wire browser Back/Forward history (after init's synchronous payment-URL cleanup,
     // so the seed re-stamps the real starting tab).
     initRouter();
+
+    // Android app Back button / back gesture (client, 2026-09-29: "the app exits instead of
+    // returning to the previous screen"). Without a listener Capacitor lets Android close the app
+    // on the first Back. Now Back steps through the site's own history (tabs, album sheets, Now
+    // Playing — router.js); on the first screen it sends the app to the background instead of
+    // quitting, so music carries on. Only app builds that carry @capacitor/app report it.
+    {
+      const cap = window.Capacitor;
+      const AppPlugin = cap?.isNativePlatform?.() && cap.isPluginAvailable?.('App') ? cap.Plugins.App : null;
+      if (AppPlugin) {
+        AppPlugin.addListener('backButton', () => {
+          // Pop-up sheets that keep no history entry (sign-up, plan picker, contact, paywall,
+          // welcome) are closed first, with their own close button, so nothing is left dangling.
+          const welcome = document.querySelector('#welcome .wel-skip');
+          if (welcome) { welcome.click(); return; }
+          const sheets = [...document.querySelectorAll('.guest-paywall.show')];
+          const top = sheets[sheets.length - 1];
+          if (top) {
+            const x = top.querySelector('.guest-paywall-close');
+            if (x) x.click(); else top.classList.remove('show');
+            return;
+          }
+          const st = history.state;
+          if (st && st.mad && st.kind !== 'root') history.back();
+          else AppPlugin.minimizeApp().catch(() => AppPlugin.exitApp());
+        });
+      }
+    }
 
     // Maddie (shop assistant) — no-op unless window.__MADDIE
     initMaddie();
