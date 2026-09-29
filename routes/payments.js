@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import crypto from 'node:crypto';
 import { sendTokenEmail, sendSubscriptionWelcomeEmail, sendTrialEmail, emailTransporter } from '../lib/email.js';
 import {
   paystackRequest, verifyPaystackWebhook,
@@ -14,6 +13,7 @@ import {
   confirmTrialToken, TRIAL_UNCONFIRMED_DAYS
 } from '../lib/token-store.js';
 import { timingSafeEqualStr } from '../lib/crypto-utils.js';
+import { trialConfirmSig, trialConfirmUrl } from '../lib/trial-links.js';
 import { readEvent, isSubscriptionCharge, findSubscriptionRecord, linkSubscription, extendSubscription, noteCancelled } from '../lib/subscriptions.js';
 import { wasAccountDeleted } from '../lib/account-delete.js';
 import { pendingPaymentsCache, processedWebhookEventsCache } from '../cache.js';
@@ -170,11 +170,7 @@ const TRIAL_DAYS = 7;
 // and a second "Start trial" hit "already used". Now the response carries a
 // 1-day code, so the listener is in at once; the trial email's Confirm link
 // (signed, below) extends it to TRIAL_DAYS. An invented address gets one day.
-const APP_BASE_URL = () => (process.env.APP_URL || 'https://musicafricadirect.com').replace(/\/+$/, '');
-const trialConfirmSig = (code) => crypto.createHmac('sha256', process.env.AUTH_SECRET || '')
-  .update(`trial-confirm:${code}`).digest('base64url').slice(0, 32);
-const trialConfirmUrl = (code) =>
-  `${APP_BASE_URL()}/api/payments/trial/confirm?t=${encodeURIComponent(code)}&s=${trialConfirmSig(code)}`;
+// The signed Confirm link lives in lib/trial-links.js (the reminder emails mint it too).
 router.post('/trial', async (req, res) => {
   try {
     const { email } = req.body;
