@@ -48,8 +48,8 @@
        the page must never flash white-with-purple-links. Inline floor styles keep
        a failed render dark, and the onerror retries the sheet once it recovers. -->
   <style>html{background:#0b0b10;color:#e8e8ee}body{background:#0b0b10}a{color:inherit}</style>
-  <link rel="stylesheet" href="/css/app.css?v=12"
-        onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/app.css?v=12&r='+Date.now();},1500)">
+  <link rel="stylesheet" href="/css/app.css?v=13"
+        onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/app.css?v=13&r='+Date.now();},1500)">
 </head>
 <body>
   <!-- Crawlable page heading (visually hidden — the app shell has no static H1) -->
@@ -65,7 +65,8 @@
         // Carry the query string across: a catalogue page links to
         // /?album=…&artist=…, and dropping it landed search visitors on a
         // generic home screen with no idea where their album went.
-        window.location.href = '/mobile' + window.location.search;
+        // replace, not href: Back from the phone site must not land here and bounce straight back.
+        window.location.replace('/mobile' + window.location.search);
       }
     })();
   </script>
@@ -2475,6 +2476,9 @@
 
     // Auto-advance when track ends — fires before app.min.js handler
     player.addEventListener('ended', function(e) {
+      // A running shuffle owns "what plays next" — an open album page must not take over and
+      // play its own list in order, or stop the shuffle at its last album (client, 2026-09-29).
+      if (window.MADPlayer && window.MADPlayer.isShuffleActive && window.MADPlayer.isShuffleActive()) return;
       const pv = document.getElementById('playlistView');
       if (!pv || !pv.classList.contains('active')) return;
 
@@ -4337,6 +4341,8 @@
         if (window.__GUEST && player.currentTime >= 30 && !player.paused) {
           player.pause();
           if (typeof window.__guestPreviewEnded === 'function') window.__guestPreviewEnded();
+          // In a shuffle, a guest moves on to the next 30-second preview instead of stopping.
+          if (window.MADPlayer && window.MADPlayer.isShuffleActive && window.MADPlayer.isShuffleActive() && window.MADPlayer.next) window.MADPlayer.next();
         }
         if (seeking) return;
         var pct = effDuration() ? (player.currentTime / effDuration() * 100) : 0;
@@ -4774,6 +4780,14 @@
           }
         }
 
+        // Artist view (opened from an artist's name, client 2026-09-29): no album was clicked —
+        // show every album of theirs on the left and the first one's songs on the right.
+        const artistOnly = !album.title;
+        if (artistOnly) {
+          renderArtistAlbumList(artistAlbums);
+          return;
+        }
+
         // Always ensure the clicked album is in the list with its original (high-quality) track data
         const clickedEntry = {
           title: album.title,
@@ -4846,6 +4860,9 @@
           }
         }
 
+        renderArtistAlbumList(artistAlbums);
+
+        function renderArtistAlbumList(artistAlbums) {
         // Populate album list (left column). A sticky count header makes the
         // size of the list (and that there's more than one) obvious.
         const albumsCount = `<div class="playlist-albums-count">${artistAlbums.length} album${artistAlbums.length === 1 ? '' : 's'}</div>`;
@@ -4891,10 +4908,58 @@
         updateAlbumScrollCue();
         setTimeout(updateAlbumScrollCue, 60); // re-check after thumbnails/layout settle
 
-        // Show the selected album in the right panel
+        // Show the selected album in the right panel (artist view: the first album)
         const selectedAlbum = artistAlbums.find(a => a.title === album.title) || artistAlbums[0];
+        if (!selectedAlbum) {
+          albumsList.innerHTML = '<div class="playlist-albums-count">No albums found for this artist</div>';
+          return;
+        }
+        if (artistOnly) {
+          const first = albumsList.querySelector('.playlist-album-item');
+          if (first) first.classList.add('selected');
+        }
         showAlbumDetailPanel(selectedAlbum);
+        }
       };
+
+      // Artist view: the same two-column page, opened on an artist rather than an album.
+      window.openArtistView = function (artistName) {
+        // "X feat. Y" names a single song's line-up; the artist page is X's.
+        const a = String(artistName || '').replace(/\s+(feat\.?|ft\.?|featuring)\s.*$/i, '').trim();
+        if (!a) return;
+        return window.showAlbumDetailView({ title: '', artist: a, tracks: [] });
+      };
+
+      // One click rule for every card on the site (client, 2026-09-29):
+      //   artist name → that artist's view (albums + songs);  album name → the album's songs.
+      // Covers already open the album. Runs in the CAPTURE phase so a whole-card handler
+      // (which opens the album, or plays) doesn't also fire. Buttons and links keep their jobs.
+      document.addEventListener('click', function (e) {
+        if (e.target.closest('button, a, input, select, textarea')) return;
+        const stop = () => { e.preventDefault(); e.stopPropagation(); };
+
+        const albumText = e.target.closest('[data-album-text]');
+        if (albumText && albumText.dataset.album && typeof window.openAlbumDirect === 'function') {
+          stop();
+          window.openAlbumDirect(albumText.dataset.album, albumText.dataset.artist || '');
+          return;
+        }
+        // Album-grid cards (featured, search results, genre/decade grids): the title opens the
+        // album the same way the cover does.
+        const cardTitle = e.target.closest('.card .heading h3');
+        if (cardTitle) {
+          const cover = cardTitle.closest('.card').querySelector('.cover-wrap');
+          if (cover) { stop(); cover.click(); }
+          return;
+        }
+        const artistEl = e.target.closest('.card-artist, .trending-artist, .random-artist, .similar-album-artist, #upArtist');
+        if (artistEl && !artistEl.closest('.playlist-album-item')) {
+          const name = (artistEl.textContent || '').trim();
+          if (!name || typeof window.openArtistView !== 'function') return;
+          stop();
+          window.openArtistView(name);
+        }
+      }, true);
 
       // Function to show album details in the right panel
       window.showAlbumDetailPanel = async function(album) {
@@ -4922,22 +4987,10 @@
         if (genre) genre.textContent = album.genre || 'MUSIC';
         if (year) year.textContent = album.year || '';
 
-        // Clicking the artist name fills the search field and closes the album
-        // panel, but does NOT auto-fire the search — the user presses Search.
+        // Clicking the artist name opens that artist's view (all their albums and songs).
         if (artist && album.artist) {
           artist.style.cursor = 'pointer';
-          artist.onclick = () => {
-            const searchArtist = document.getElementById('searchArtist');
-            const searchFields = document.getElementById('searchFields');
-            if (searchArtist) {
-              searchArtist.value = album.artist;
-              if (searchFields) searchFields.hidden = false;
-            }
-            if (typeof window.hideAlbumDetailView === 'function') {
-              window.hideAlbumDetailView();
-            }
-            if (searchArtist) searchArtist.focus();
-          };
+          artist.onclick = () => window.openArtistView(album.artist);
         }
 
         // Wire up album-level action buttons
@@ -6811,11 +6864,11 @@
 
   <script src="/js/helpers.js?v=1"></script>
   <script src="/js/auth.js?v=2"></script>
-  <script src="/js/player.js?v=5"></script>
+  <script src="/js/player.js?v=6"></script>
   <script src="/js/playlists.js?v=1"></script>
   <script src="/js/catalog.js?v=3"></script>
   <script src="/js/currency.js?v=2"></script>
-  <script src="/js/discovery.js?v=5"></script>
+  <script src="/js/discovery.js?v=6"></script>
   <!-- Buy several downloads in one payment; self-wiring off [data-basket-add]. -->
   <script src="/js/basket.js?v=1"></script>
   <!-- 🎚 Mad Mixer buttons only on MADMixer songs; inert unless __MAD_MIXER. -->

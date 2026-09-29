@@ -1,11 +1,12 @@
 // Album/track card builders + their modals for the mobile app.
 
-import { elements, state } from './state.js?v=33';
-import { escapeHtml, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=33';
-import { switchTab } from './nav.js?v=33';
-import { search } from './search.js?v=33';
-import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=33';
-import { pushOverlay } from './router.js?v=33';
+import { elements, state } from './state.js?v=34';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=34';
+import { switchTab } from './nav.js?v=34';
+import { search } from './search.js?v=34';
+import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=34';
+import { pushOverlay, replaceOverlay } from './router.js?v=34';
+import { showToast } from './util.js?v=34';
 
 // ── Shared album tile (the New Releases / G100 look) ─────────────────────────
 // One square-cover tile: first tap reveals the title/artist overlay, second tap
@@ -52,18 +53,20 @@ export function createAlbumTile(album, opts = {}) {
         </div>
       `;
 
+      // One tap, everywhere (client, 2026-09-29): the cover or the album name opens the album's
+      // songs; the ARTIST name under the cover opens that artist's songs. The old first-tap
+      // "reveal the overlay" step read as "nothing happened". (`openOnTap` is now the only mode;
+      // the option is kept so existing callers still read naturally.)
+      void openOnTap;
       card.addEventListener('click', (e) => {
         if (e.target.closest('.nr-play-btn')) return;
-        // openOnTap (search results): the cover opens the album straight away — no
-        // first-tap overlay, which people took for "nothing happened".
-        if (openOnTap && !e.target.closest('.nr-overlay-artist')) { (onOpen || showAlbumTracksModal)(album); return; }
-        if (!card.classList.contains('overlay-active')) {
-          document.querySelectorAll('.nr-album-card.overlay-active').forEach(c => c.classList.remove('overlay-active'));
-          card.classList.add('overlay-active');
+        const artistEl = e.target.closest('.nr-card-caption .t, .nr-overlay-artist');
+        if (artistEl && album.artist && album.artist !== 'My playlist') {
           e.stopPropagation();
-        } else {
-          (onOpen || showAlbumTracksModal)(album);
+          showArtistTracks(album.artist);
+          return;
         }
+        (onOpen || showAlbumTracksModal)(album);
       });
 
       const playBtn = card.querySelector('.nr-play-btn');
@@ -79,14 +82,6 @@ export function createAlbumTile(album, opts = {}) {
           card.classList.remove('overlay-active');
         });
       }
-
-      // Artist name in the open overlay → offer "all albums by this artist"
-      // (carried over from the old Discover cards, now on every surface)
-      card.querySelector('.nr-overlay-artist').addEventListener('click', (e) => {
-        if (!album.artist || album.artist === 'My playlist') return;
-        e.stopPropagation();
-        showMobileArtistPrompt(album.artist);
-      });
 
       return card;
     }
@@ -165,7 +160,7 @@ export function showAlbumTracksModal(album, { refresh = false } = {}) {
             <div class="alb-meta">
               <div class="alb-kind">${escapeHtml(kind)}</div>
               <div class="bottom-sheet-header alb-title">${escapeHtml(album.title)}</div>
-              <div class="alb-artist">${escapeHtml(album.artist)}</div>
+              <div class="alb-artist${kind === 'ALBUM' && album.artist ? ' alb-artist-link' : ''}">${escapeHtml(album.artist)}</div>
               <div class="alb-count">${count} ${count === 1 ? 'song' : 'songs'}</div>
             </div>
           </div>
@@ -176,7 +171,8 @@ export function showAlbumTracksModal(album, { refresh = false } = {}) {
         ${album.tracks.map((track, index) => {
           const fields = track.fields || {};
           const trackTitle = getTitleField(fields);
-          const trackArtist = getArtistField(fields);
+          // On an artist page every row is the same artist — show which album each song is from.
+          const trackArtist = kind === 'ARTIST' ? getAlbumField(fields) : getArtistField(fields);
           // Downloads are sold per track; the basket pays for several at once.
           // Never inside the native shell — store rules forbid it (see
           // native-purchase-guards.test.js).
@@ -201,22 +197,33 @@ export function showAlbumTracksModal(album, { refresh = false } = {}) {
         <button class="btn btn-secondary bs-close-btn" onclick="closeModal()">Close</button>
       `;
 
+      // A refresh is the same sheet; a sheet opened from inside another sheet takes over its
+      // history entry — either way one Back closes it.
+      const sheetOpen = elements.modalOverlay.classList.contains('show');
       elements.modalOverlay.classList.add('show');
-      if (!refresh) pushOverlay('album-tracks', album.recordId || album.title);   // a refresh is the same sheet — one Back closes it
+      if (!refresh) {
+        const st = history.state;
+        // …or opened from Now Playing, which has just been put away but still owns the entry.
+        const fromPlayer = st && st.overlay && st.overlay.type === 'player' && !elements.playerModal.classList.contains('show');
+        if (st && st.mad && st.kind === 'overlay' && (sheetOpen || fromPlayer)) replaceOverlay('album-tracks', album.recordId || album.title);
+        else pushOverlay('album-tracks', album.recordId || album.title);
+      }
 
       const playFrom = (trackIndex) => {
         state.playlistContext = { tracks: album.tracks, currentIndex: trackIndex, name: album.title, playFn: playTrack };
         playTrack(album.tracks[trackIndex]);
-        upgradeQueueToFullAlbum(album, album.tracks[trackIndex]);
+        if (kind === 'ALBUM') upgradeQueueToFullAlbum(album, album.tracks[trackIndex]);
         closeModal();
       };
+      // The artist's name in an album header opens that artist's songs.
+      elements.bottomSheet.querySelector('.alb-artist-link')?.addEventListener('click', () => showArtistTracks(album.artist));
       elements.bottomSheet.querySelector('[data-play-all]')?.addEventListener('click', () => playFrom(0));
       elements.bottomSheet.querySelectorAll('[data-track-index]').forEach(btn => {
         btn.addEventListener('click', () => playFrom(parseInt(btn.dataset.trackIndex)));
       });
 
       // Append suggestions rail asynchronously — doesn't block the modal opening.
-      if (window.__SUGGESTIONS !== false) {
+      if (window.__SUGGESTIONS !== false && kind === 'ALBUM') {
         appendMobileSuggestions(elements.bottomSheet, album);
       }
     }
@@ -281,6 +288,47 @@ async function appendMobileSuggestions(sheet, album) {
     if (rail.isConnected) rail.remove();
   }
 }
+
+// ── Artist page (client, 2026-09-29: "clicking the artist should open the songs associated with
+// the artist") ── the album-page design, labelled ARTIST, listing the artist's songs from the
+// catalogue (/api/search?artist=, which matches the artist fields). Play plays them in order.
+export async function showArtistTracks(name) {
+      // "X feat. Y" names a single song's line-up; the artist page is X's.
+      const artist = String(name || '').replace(/\s+(feat\.?|ft\.?|featuring)\s.*$/i, '').trim();
+      if (!artist) return;
+      const load = async (a) => {
+        const r = await fetch(`/api/search?${new URLSearchParams({ artist: a, limit: '100' })}`);
+        if (!r.ok) return null;
+        const d = await r.json();
+        return (d && d.items) || [];
+      };
+      try {
+        // Names carrying characters the search refuses (e.g. "&", "*") are retried without them.
+        let tracks = await load(artist);
+        if (tracks === null) tracks = (await load(artist.replace(/[^\p{L}\p{N}\s'.-]/gu, ' ').replace(/\s+/g, ' ').trim())) || [];
+        if (!tracks.length) { showToast(`No songs found for ${artist}`, 'error'); return; }
+        const withArt = tracks.find((t) => getArtworkUrl(t.fields || {}));
+        showAlbumTracksModal({
+          kind: 'ARTIST',
+          title: artist,
+          artist: 'Songs by this artist',
+          artwork: withArt ? getArtworkUrl(withArt.fields) : '/img/placeholder.png',
+          tracks,
+        });
+      } catch (err) {
+        console.warn('[Mobile] Artist page failed:', err);
+        showToast('Could not load this artist just now', 'error');
+      }
+    }
+
+// The album a single track belongs to (Now Playing, Global Favourites, "Pick up where you left
+// off"): open it at once with what we have, then the full track list replaces it.
+export function openAlbumForTrack(track) {
+      const f = (track && track.fields) || {};
+      const title = getAlbumField(f);
+      if (!title) { showToast('No album details for this song', 'error'); return; }
+      openFullAlbum({ title, artist: getAlbumArtist(f), artwork: getArtworkUrl(f) || '/img/placeholder.png', tracks: [track] });
+    }
 
 export function showMobileArtistPrompt(artistName) {
       document.getElementById('mobileArtistPrompt')?.remove();

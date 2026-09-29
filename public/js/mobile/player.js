@@ -1,8 +1,8 @@
 // Playback engine + now-playing modal for the mobile app.
 
-import { elements, state } from './state.js?v=33';
-import { formatTime, generateSessionId, showToast } from './util.js?v=33';
-import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField } from './fields.js?v=33';
+import { elements, state } from './state.js?v=34';
+import { formatTime, generateSessionId, showToast } from './util.js?v=34';
+import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getGenreField, getTitleField, getYearField } from './fields.js?v=34';
 
 export function closeModal() {
       elements.modalOverlay.classList.remove('show');
@@ -14,7 +14,29 @@ export function closeModal() {
       }
     }
 
+// Every play gets a number; a play whose awaited URL lookup comes back after a NEWER play has
+// started is dropped, so a slow lookup can't replace the song the listener just chose.
+let playSeq = 0;
+
+// A song that can't play is skipped, not left silent — "shuffle stops after a while" (client,
+// 2026-09-29) was largely one bad track ending the whole queue. Capped so a dead network or
+// a run of broken tracks doesn't race through the queue; any successful play resets it.
+let failuresInARow = 0;
+const MAX_SKIPS = 3;
+export function trackFailed(why) {
+  console.warn('[Mobile] Track failed:', why);
+  if (failuresInARow >= MAX_SKIPS) {
+    showToast('Playback stopped — several tracks could not be played', 'error');
+    return;
+  }
+  failuresInARow += 1;
+  showToast('Track unavailable — skipping', 'error');
+  stepQueue(1);
+}
+export function trackPlayedOk() { failuresInARow = 0; }
+
 export async function playTrack(track) {
+      const seq = ++playSeq;
       state.currentTrack = track;
       const fields = track.fields || {};
 
@@ -47,7 +69,8 @@ export async function playTrack(track) {
           // recordId (PG-mirror-backed server-side).
           try {
             const response = await fetch(`/api/track/${track.recordId}/container`);
-            const data = await response.json();
+            // A 401/404/500 has no url — treat it as "not available" (skip), not as a crash.
+            const data = response.ok ? await response.json() : {};
             if (data.url) {
               audioUrl = isS3(data.url) ? data.url : `/api/container?u=${encodeURIComponent(data.url)}`;
             }
@@ -57,8 +80,10 @@ export async function playTrack(track) {
         }
       }
 
+      if (seq !== playSeq) return;   // the listener has already moved on to another track
+
       if (!audioUrl) {
-        showToast('Audio not available', 'error');
+        trackFailed('no audio URL');
         return;
       }
 
@@ -79,7 +104,11 @@ export async function playTrack(track) {
       // stream ERROR event). The desktop player likewise catches play().
       elements.audio.src = audioUrl;
       elements.audio.play().catch((err) => {
-        if (err && err.name !== 'AbortError') console.warn('Audio play() failed:', err.name || err);
+        if (!err || err.name === 'AbortError') return;
+        console.warn('Audio play() failed:', err.name || err);
+        // Blocked from starting while the phone is locked/backgrounded (autoplay rules):
+        // start it the moment the listener comes back, instead of staying silently paused.
+        if (err.name === 'NotAllowedError' && document.hidden) resumeWhenVisible = true;
       });
 
       // Update UI
@@ -197,17 +226,64 @@ export function updateFloatingPlayer() {
       if (artistEl) artistEl.textContent = getArtistField(fields);
     }
 
+let resumeWhenVisible = false;
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && resumeWhenVisible) {
+    resumeWhenVisible = false;
+    elements.audio.play().catch(() => {});
+  }
+});
+
 // Step the now-playing queue (state.playlistContext) by ±1. Shared by the
 // modal's prev/next, the mini bar's next, and auto-advance on 'ended'.
+// At the END of the queue, going forward keeps the music playing (client, 2026-09-29: "shuffle
+// stops after an undetermined time" — every mobile queue simply ran out, and many start as 1–10
+// songs): more songs in the same genre are appended, like a radio, then the next one plays.
 export function stepQueue(dir) {
       const ctx = state.playlistContext;
       if (!ctx || !ctx.tracks || ctx.tracks.length === 0) return;
+      if (dir > 0 && ctx.currentIndex >= ctx.tracks.length - 1) {
+        continueWithMore(ctx);
+        return;
+      }
       const newIdx = Math.min(ctx.tracks.length - 1, Math.max(0, ctx.currentIndex + dir));
       if (newIdx !== ctx.currentIndex) {
         ctx.currentIndex = newIdx;
         (ctx.playFn || playTrack)(ctx.tracks[newIdx]);
       }
     }
+
+let refilling = false;
+async function continueWithMore(ctx) {
+  if (refilling) return;
+  refilling = true;
+  try {
+    const last = ctx.tracks[ctx.tracks.length - 1] || {};
+    const genre = getGenreField(last.fields || {}) || '';
+    const have = new Set(ctx.tracks.map((t) => String(t.recordId || t.trackRecordId || '')));
+    const fetchSongs = async (g) => {
+      const r = await fetch(`/api/random-songs?count=25${g ? `&genre=${encodeURIComponent(g)}` : ''}`);
+      if (!r.ok) return [];
+      const d = await r.json();
+      return ((d && d.items) || []).filter((t) => t.recordId && !have.has(String(t.recordId)));
+    };
+    let more = genre ? await fetchSongs(genre) : [];
+    if (more.length < 3) more = more.concat(await fetchSongs(''));
+    if (!more.length || state.playlistContext !== ctx) return;   // nothing found, or the listener started something else
+    // Refilled songs are catalogue records: they play through playTrack even when the queue
+    // itself is a saved playlist (whose own tracks need playPlaylistTrack).
+    const base = ctx.playFn || playTrack;
+    ctx.playFn = (t) => (t && t.__more ? playTrack(t) : base(t));
+    more.forEach((t) => { t.__more = true; });
+    ctx.tracks.push(...more);
+    ctx.currentIndex += 1;
+    ctx.playFn(ctx.tracks[ctx.currentIndex]);
+  } catch (err) {
+    console.warn('[Mobile] Could not continue the queue:', err);
+  } finally {
+    refilling = false;
+  }
+}
 
 // The tracklist inside the player modal: the album/playlist being played,
 // with the current row highlighted (animated EQ) and tap-to-jump.
