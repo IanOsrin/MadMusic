@@ -1224,6 +1224,15 @@ if (process.env.PREWARM_CACHES === 'true' && (process.env.WORKER_INDEX || '0') =
   prewarm('Explore decades',  exploreWarmer,               6000);
   prewarm('Genres',           genresWarmer,                8000);
 
+  // "Your trial ends tomorrow / has ended" emails — hourly, first worker only, and only where
+  // TRIAL_REMINDERS_ENABLED=true (the LIVE service; both sites share one FileMaker).
+  try {
+    const { startTrialReminders } = await import('./lib/trial-reminders.js');
+    startTrialReminders();
+  } catch (err) {
+    console.warn('[MASS] Trial reminders not started:', err?.message || err);
+  }
+
   // The albums home view requests a RANDOM decade per load, so all 8 explore
   // entries must stay warm — the hour hard-TTL would otherwise evict them on
   // quiet sites and the next visitor pays the full cold load for the grid.
