@@ -546,8 +546,13 @@ router.get('/album', async (req, res) => {
 
     let queries = [];
 
+    // Catalogue numbers match EXACTLY (2026-09-30). A plain find is "starts with" in FileMaker (and
+    // mirrored in Postgres), so cat=BL 30 also returned BL 300, 302, 303, 304, 308A/B, 30A/30B — six
+    // albums — and a YouTube song link for The Creations' "Groovy Love" (BL 30) opened Abafana Base
+    // Goli's single (BL 302), whichever came first. Postgres reads '==' literally, so it gets the raw
+    // value; FileMaker gets the escaped form.
     if (cat) {
-      queries = [{ 'Reference Catalogue Number': cat }];
+      queries = [{ 'Reference Catalogue Number': usePostgresMetadata() ? '==' + cat : fmExactMatch(cat) }];
     } else if (title && artist) {
       queries = [{ 'Album Title': title, 'Album Artist': artist }];
     } else if (title) {
