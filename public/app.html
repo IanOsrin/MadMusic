@@ -8032,9 +8032,9 @@
     + '.maddie-msg.maddie{align-self:flex-start;background:rgba(127,127,127,0.14);color:var(--fg,#eee);border-bottom-left-radius:4px;}'
     + '.maddie-msg.err{align-self:flex-start;color:var(--muted,#999);font-style:italic;background:none;padding:2px 4px;}'
     + '#maddieHead .who{display:flex;align-items:center;gap:10px;}'
-    + '#maddieHead .who img{width:38px;height:38px;border-radius:50%;flex:0 0 38px;}'
-    + '.maddie-row{align-self:flex-start;display:flex;align-items:flex-end;gap:8px;max-width:94%;}'
-    + '.maddie-row>img{width:28px;height:28px;border-radius:50%;flex:0 0 28px;}'
+    + '#maddieHead .who img{width:64px;height:64px;border-radius:50%;flex:0 0 64px;}'
+    + '.maddie-row{align-self:flex-start;display:flex;align-items:flex-end;gap:10px;max-width:96%;}'
+    + '.maddie-row>img{width:64px;height:64px;border-radius:50%;flex:0 0 64px;}'  /* ~2.5x — the client wants her clearly present (2026-10-01) */
     + '.maddie-row .maddie-msg{max-width:none;}'
     + '.maddie-msg.thinking{color:var(--muted,#999);font-style:italic;}'
     + '.maddie-card{align-self:flex-start;display:flex;align-items:center;gap:10px;width:88%;background:rgba(127,127,127,0.10);'
@@ -8078,7 +8078,7 @@
     + '<circle cx="12" cy="3" r="1.6"/>'
     + '<path d="M12 5.2a1 1 0 0 1 1 1v.35A7 7 0 0 1 19 13.5v1H5v-1a7 7 0 0 1 6-6.95v-.35a1 1 0 0 1 1-1z"/>'
     + '<rect x="3.2" y="16" width="17.6" height="2.6" rx="1.3"/></svg>'
-    + '<img class="face" src="/img/maddie-avatar-96.webp" alt="" aria-hidden="true">'
+    + '<img class="face" src="/img/maddie-avatar-256.webp" alt="" aria-hidden="true">'
     + 'Ring the bell for Maddie';
 
   // The counter bell: a short synthesized "ding" (three decaying partials of a
@@ -8144,7 +8144,7 @@
   var panel = document.createElement('div');
   panel.id = 'maddiePanel';
   panel.innerHTML = ''
-    + '<div id="maddieHead"><div class="who"><img src="/img/maddie-avatar-96.webp" alt=""><div><b>MADDIE</b><span>behind the counter at MAD Music</span></div></div>'
+    + '<div id="maddieHead"><div class="who"><img src="/img/maddie-avatar-256.webp" alt=""><div><b>MADDIE</b><span>behind the counter at MAD Music</span></div></div>'
     + '<button id="maddieClose" aria-label="Close">×</button></div>'
     + '<div id="maddieLog"></div>'
     + '<form id="maddieForm"><input id="maddieInput" type="text" maxlength="500" autocomplete="off" '
@@ -8182,7 +8182,7 @@
     if (role === 'maddie' || role === 'thinking') {
       node = document.createElement('div');
       node.className = 'maddie-row';
-      node.innerHTML = '<img src="/img/maddie-avatar-96.webp" alt="">';
+      node.innerHTML = '<img src="/img/maddie-avatar-256.webp" alt="">';
       node.appendChild(div);
     }
     div.row = node;

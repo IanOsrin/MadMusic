@@ -466,10 +466,11 @@
     #maddie-bell { padding-left: 3px; }
     #maddie-bell .maddie-face { width: 30px; height: 30px; border-radius: 50%; flex: none; }
     .maddie-sheet-who { display: flex; align-items: center; gap: 10px; }
-    .maddie-sheet-who img { width: 40px; height: 40px; border-radius: 50%; flex: none; }
+    .maddie-sheet-who img { width: 64px; height: 64px; border-radius: 50%; flex: none; }
     /* Her messages and her "checking the shelves…" line carry her face. */
-    .maddie-row { align-self: flex-start; display: flex; align-items: flex-end; gap: 8px; max-width: 92%; }
-    .maddie-row > img { width: 28px; height: 28px; border-radius: 50%; flex: none; }
+    .maddie-row { align-self: flex-start; display: flex; align-items: flex-end; gap: 10px; max-width: 96%; }
+    /* ~2.5x — the client wants her clearly present when you ask her (2026-10-01) */
+    .maddie-row > img { width: 64px; height: 64px; border-radius: 50%; flex: none; }
     .maddie-row .maddie-msg { max-width: none; }
     .maddie-msg.thinking { color: var(--text-muted); font-style: italic; padding: 6px 4px; }
 
