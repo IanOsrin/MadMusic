@@ -1,7 +1,7 @@
 // Auth + access-token flow for the mobile app.
 
-import { elements, state } from './state.js?v=36';
-import { showToast } from './util.js?v=36';
+import { elements, state } from './state.js?v=37';
+import { showToast } from './util.js?v=37';
 
 export function logout() {
       localStorage.removeItem('mass_access_token');

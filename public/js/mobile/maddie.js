@@ -2,11 +2,11 @@
 // Same API as desktop (POST /api/maddie/chat → { reply, tracks }), rendered as
 // a full-screen chat sheet. Gated on window.__MADDIE (MADDIE_ENABLED).
 
-import { state } from './state.js?v=36';
-import { escapeHtml } from './fields.js?v=36';
-import { playTrack, renderPlayerQueue } from './player.js?v=36';
-import { showAlbumTracksModal } from './cards.js?v=36';
-import { showCodeProblem } from './auth.js?v=36';
+import { state } from './state.js?v=37';
+import { escapeHtml } from './fields.js?v=37';
+import { playTrack, renderPlayerQueue } from './player.js?v=37';
+import { showAlbumTracksModal } from './cards.js?v=37';
+import { showCodeProblem } from './auth.js?v=37';
 
 // Shorter greetings than desktop — a phone screen, not a panel.
 const GREETINGS = [
@@ -30,7 +30,7 @@ function addMsg(role, text) {
   if (role === 'maddie' || role === 'thinking') {
     node = document.createElement('div');
     node.className = 'maddie-row';
-    node.innerHTML = '<img src="/img/maddie-avatar-96.webp" alt="">';
+    node.innerHTML = '<img src="/img/maddie-avatar-256.webp" alt="">';
     node.appendChild(div);
   }
   div.row = node;
