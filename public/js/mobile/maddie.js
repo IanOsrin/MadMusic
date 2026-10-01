@@ -2,11 +2,11 @@
 // Same API as desktop (POST /api/maddie/chat → { reply, tracks }), rendered as
 // a full-screen chat sheet. Gated on window.__MADDIE (MADDIE_ENABLED).
 
-import { state } from './state.js?v=35';
-import { escapeHtml } from './fields.js?v=35';
-import { playTrack, renderPlayerQueue } from './player.js?v=35';
-import { showAlbumTracksModal } from './cards.js?v=35';
-import { showCodeProblem } from './auth.js?v=35';
+import { state } from './state.js?v=36';
+import { escapeHtml } from './fields.js?v=36';
+import { playTrack, renderPlayerQueue } from './player.js?v=36';
+import { showAlbumTracksModal } from './cards.js?v=36';
+import { showCodeProblem } from './auth.js?v=36';
 
 // Shorter greetings than desktop — a phone screen, not a panel.
 const GREETINGS = [
@@ -20,11 +20,21 @@ let greeted = false;
 
 function log() { return document.getElementById('maddie-log'); }
 
+// Her messages (and her "checking the shelves…" line) carry her face, so the
+// answer is visibly hers. Returns the bubble; .row is the node to remove.
 function addMsg(role, text) {
   const div = document.createElement('div');
   div.className = 'maddie-msg ' + role;
   div.textContent = text;
-  log().appendChild(div);
+  let node = div;
+  if (role === 'maddie' || role === 'thinking') {
+    node = document.createElement('div');
+    node.className = 'maddie-row';
+    node.innerHTML = '<img src="/img/maddie-avatar-96.webp" alt="">';
+    node.appendChild(div);
+  }
+  div.row = node;
+  log().appendChild(node);
   log().scrollTop = log().scrollHeight;
   return div;
 }
@@ -137,7 +147,7 @@ async function sendMessage(text) {
   history.push({ role: 'user', content: text });
   input.value = '';
   send.disabled = true;
-  const thinking = addMsg('err', WAITING.shelves);
+  const thinking = addMsg('thinking', WAITING.shelves);
   try {
     const res = await fetch('/api/maddie/chat', {
       method: 'POST',
@@ -150,7 +160,7 @@ async function sendMessage(text) {
           log().scrollTop = log().scrollHeight;
         })
       : await res.json().catch(() => ({}));
-    thinking.remove();
+    thinking.row.remove();
     if (res.status === 401 || res.status === 403) {
       // Maddie is subscriber-only (every message costs real money, 2026-07-17). But a refusal
       // with a code saved means the CODE was refused (expired / switched off) — say that, and
@@ -178,7 +188,7 @@ async function sendMessage(text) {
       history.push({ role: 'assistant', content: data.reply });
     }
   } catch {
-    thinking.remove();
+    thinking.row.remove();
     addMsg('err', 'Lost the connection to the counter — try again.');
   } finally {
     send.disabled = false;
@@ -201,6 +211,9 @@ function closeSheet() {
 
 export function initMaddie() {
   if (!window.__MADDIE) return; // flag off → bell stays hidden
+  // Subscribers only — guests in preview mode don't see Maddie at all (Ian,
+  // 2026-10-01). Signing in reloads the page, so checking once at start is enough.
+  if (!localStorage.getItem('mass_access_token')) return;
   const bell = document.getElementById('maddie-bell');
   if (!bell) return;
   bell.hidden = false;

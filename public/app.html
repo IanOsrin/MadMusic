@@ -7976,12 +7976,12 @@
 (function () {
   if (!window.__MADDIE) return;
   // Chat is subscriber-only (2026-07-17): every Maddie message costs real
-  // API money. Since 2026-08-24 guests DO get the floating corner bell as a
-  // signpost (Ian's call) — but clicking it opens the sign-up gate, never
-  // the chat, so the guest path costs nothing. Token presence is known
-  // synchronously at load; if the token later fails validation the server
-  // 401s the chat anyway (this gate is UX, auth middleware is enforcement).
+  // API money. Guests in preview mode don't see Maddie at all (Ian,
+  // 2026-10-01 — replaces the 2026-08-24 corner-bell signpost). Token presence
+  // is known synchronously at load; if the token later fails validation the
+  // server 401s the chat anyway (this gate is UX, auth middleware is enforcement).
   var MADDIE_GUEST = !localStorage.getItem('mass_access_token');
+  if (MADDIE_GUEST) return;
 
   var css = ''
     /* Lives INSIDE the New Releases section-header, absolutely centered on the
@@ -7998,7 +7998,14 @@
     + '#maddieFab.floating{position:fixed;right:22px;bottom:78px;z-index:3000;width:54px;height:54px;'
     + 'border-radius:50%;padding:0;font-size:0;display:flex;align-items:center;justify-content:center;'
     + 'box-shadow:0 4px 14px rgba(0,0,0,0.4);}'
-    + '#maddieFab.floating .bell{width:26px;height:26px;flex:0 0 26px;}'
+    + '#maddieFab.floating .bell{display:none;}'
+    /* Her face, not a bell (Ian, 2026-10-01): the portrait fills the circle;
+       its own cyan rim is the border. */
+    + '#maddieFab .face{display:none;}'
+    + '#maddieFab.floating{border:none;background:transparent;}'
+    + '#maddieFab.floating .face{display:block;width:100%;height:100%;border-radius:50%;object-fit:cover;}'
+    + '#maddieFab.floating:hover .face{filter:brightness(1.12);}'
+    + '#maddieFab.ringing .face{animation:maddieRing 0.8s ease;}'
     + '#maddieFab.floating .dot{display:none;}'
     /* Tiny caption under the circle (Ian, 2026-08-24) — names the thing for
        visitors who don't know the bell convention. */
@@ -8024,6 +8031,12 @@
     + '.maddie-msg.user{align-self:flex-end;background:var(--accent,#8b5cf6);color:#fff;border-bottom-right-radius:4px;}'
     + '.maddie-msg.maddie{align-self:flex-start;background:rgba(127,127,127,0.14);color:var(--fg,#eee);border-bottom-left-radius:4px;}'
     + '.maddie-msg.err{align-self:flex-start;color:var(--muted,#999);font-style:italic;background:none;padding:2px 4px;}'
+    + '#maddieHead .who{display:flex;align-items:center;gap:10px;}'
+    + '#maddieHead .who img{width:38px;height:38px;border-radius:50%;flex:0 0 38px;}'
+    + '.maddie-row{align-self:flex-start;display:flex;align-items:flex-end;gap:8px;max-width:94%;}'
+    + '.maddie-row>img{width:28px;height:28px;border-radius:50%;flex:0 0 28px;}'
+    + '.maddie-row .maddie-msg{max-width:none;}'
+    + '.maddie-msg.thinking{color:var(--muted,#999);font-style:italic;}'
     + '.maddie-card{align-self:flex-start;display:flex;align-items:center;gap:10px;width:88%;background:rgba(127,127,127,0.10);'
     + 'border:1px solid var(--border,rgba(255,255,255,0.10));border-radius:10px;padding:8px;}'
     + '.maddie-card img{width:42px;height:42px;border-radius:6px;object-fit:cover;background:#333;}'
@@ -8049,7 +8062,10 @@
     + '#maddieTopBell:hover{filter:brightness(1.18);}'
     + '#maddieTopBell.ringing svg{animation:maddieRing 0.8s ease;}'
     + 'body.light-mode .maddie-msg.maddie{background:rgba(0,0,0,0.06);color:#1a1a2e;}'
-    + 'body.light-mode .maddie-card{background:rgba(0,0,0,0.04);}';
+    + 'body.light-mode .maddie-card{background:rgba(0,0,0,0.04);}'
+    /* A saved code the server refuses (expired) drops the page into preview
+       mode after load — no Maddie there either. */
+    + 'body.guest-mode #maddieFab,body.guest-mode #maddieTopBell,body.guest-mode #maddiePanel{display:none !important;}';
 
   var style = document.createElement('style');
   style.textContent = css;
@@ -8062,6 +8078,7 @@
     + '<circle cx="12" cy="3" r="1.6"/>'
     + '<path d="M12 5.2a1 1 0 0 1 1 1v.35A7 7 0 0 1 19 13.5v1H5v-1a7 7 0 0 1 6-6.95v-.35a1 1 0 0 1 1-1z"/>'
     + '<rect x="3.2" y="16" width="17.6" height="2.6" rx="1.3"/></svg>'
+    + '<img class="face" src="/img/maddie-avatar-96.webp" alt="" aria-hidden="true">'
     + 'Ring the bell for Maddie';
 
   // The counter bell: a short synthesized "ding" (three decaying partials of a
@@ -8112,9 +8129,7 @@
     fab.click();
   });
   var clearBtn = document.getElementById('clear');
-  // Top-bar bell stays subscriber-only (Ian, 2026-08-24) — guests get just
-  // the corner bell below.
-  if (!MADDIE_GUEST && clearBtn && clearBtn.parentElement) clearBtn.insertAdjacentElement('afterend', topBell);
+  if (clearBtn && clearBtn.parentElement) clearBtn.insertAdjacentElement('afterend', topBell);
 
   // The in-rail bell is retired (2026-07-20). Since 2026-08-24 the fab is
   // back ON-DOM as a floating bottom-right bell (the now-conventional
@@ -8126,26 +8141,10 @@
   fab.setAttribute('aria-label', 'Ring the bell for Maddie, our shop assistant');
   document.body.appendChild(fab);
 
-  // Guest path ends here: the corner bell is a signpost, not a chat. Clicking
-  // rings the counter bell and opens the access gate (auth.js owns its
-  // guest-mode dismissibility). No panel, no chat wiring, no API cost.
-  if (MADDIE_GUEST) {
-    fab.addEventListener('click', function () {
-      dingBell();
-      fab.classList.remove('ringing');
-      void fab.offsetWidth;
-      fab.classList.add('ringing');
-      var gate = document.getElementById('paymentOverlay');
-      if (gate) gate.classList.remove('hidden');
-      try { window.umami && window.umami.track('maddie-guest-nudge'); } catch (e) {}
-    });
-    return;
-  }
-
   var panel = document.createElement('div');
   panel.id = 'maddiePanel';
   panel.innerHTML = ''
-    + '<div id="maddieHead"><div><b>MADDIE</b><span>behind the counter at MAD Music</span></div>'
+    + '<div id="maddieHead"><div class="who"><img src="/img/maddie-avatar-96.webp" alt=""><div><b>MADDIE</b><span>behind the counter at MAD Music</span></div></div>'
     + '<button id="maddieClose" aria-label="Close">×</button></div>'
     + '<div id="maddieLog"></div>'
     + '<form id="maddieForm"><input id="maddieInput" type="text" maxlength="500" autocomplete="off" '
@@ -8173,11 +8172,21 @@
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  // Her messages (and her "checking the shelves…" line) carry her face, so the
+  // answer is visibly hers. Returns the bubble; .row is what to remove.
   function addMsg(role, text) {
     var div = document.createElement('div');
     div.className = 'maddie-msg ' + role;
     div.textContent = text;
-    log.appendChild(div);
+    var node = div;
+    if (role === 'maddie' || role === 'thinking') {
+      node = document.createElement('div');
+      node.className = 'maddie-row';
+      node.innerHTML = '<img src="/img/maddie-avatar-96.webp" alt="">';
+      node.appendChild(div);
+    }
+    div.row = node;
+    log.appendChild(node);
     log.scrollTop = log.scrollHeight;
     return div;
   }
@@ -8266,7 +8275,7 @@
     history.push({ role: 'user', content: text });
     input.value = '';
     send.disabled = true;
-    var thinking = addMsg('err', WAITING.shelves);
+    var thinking = addMsg('thinking', WAITING.shelves);
     try {
       var res = await fetch('/api/maddie/chat', {
         method: 'POST',
@@ -8279,7 +8288,7 @@
             log.scrollTop = log.scrollHeight;
           })
         : await res.json().catch(function () { return {}; });
-      thinking.remove();
+      thinking.row.remove();
       if (!res.ok) {
         addMsg('err', data.error || 'Maddie stepped away for a moment — try again shortly.');
         return;
@@ -8293,7 +8302,7 @@
         history.push({ role: 'assistant', content: data.reply });
       }
     } catch (e) {
-      thinking.remove();
+      thinking.row.remove();
       addMsg('err', 'Lost the connection to the counter — try again.');
     } finally {
       send.disabled = false;
