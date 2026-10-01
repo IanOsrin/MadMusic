@@ -460,6 +460,18 @@
     @media (prefers-reduced-motion: reduce) { #maddie-bell { animation: none; } }
 
     #maddie-bell[hidden] { display: none; }
+    /* Preview mode (no code, or a refused one) — no Maddie (Ian, 2026-10-01). */
+    body.guest-mode #maddie-bell, body.guest-mode #maddie-sheet { display: none !important; }
+    /* Her face in the pill (Ian, 2026-10-01) — sits flush left, the pill keeps her name. */
+    #maddie-bell { padding-left: 3px; }
+    #maddie-bell .maddie-face { width: 30px; height: 30px; border-radius: 50%; flex: none; }
+    .maddie-sheet-who { display: flex; align-items: center; gap: 10px; }
+    .maddie-sheet-who img { width: 40px; height: 40px; border-radius: 50%; flex: none; }
+    /* Her messages and her "checking the shelves…" line carry her face. */
+    .maddie-row { align-self: flex-start; display: flex; align-items: flex-end; gap: 8px; max-width: 92%; }
+    .maddie-row > img { width: 28px; height: 28px; border-radius: 50%; flex: none; }
+    .maddie-row .maddie-msg { max-width: none; }
+    .maddie-msg.thinking { color: var(--text-muted); font-style: italic; padding: 6px 4px; }
 
     #maddie-sheet {
       position: fixed;
