@@ -66,4 +66,25 @@ describe('the filter is wired where it must be', () => {
     const fn = src.slice(src.indexOf('async function loadPlaylistTracks'))
     expect(fn.slice(0, fn.indexOf('\n}'))).toMatch(/recordIsVisible/)
   })
+
+  // 2026-10-01: album/artist pages listed songs that search and Maddie hid
+  // (Josiah Hadebe: 7 there, 2 everywhere else). Every list obeys one rule now.
+  const src = async (rel) => (await import('node:fs')).readFileSync(new URL(rel, import.meta.url), 'utf8')
+  const routeBody = (text, marker) => { const at = text.indexOf(marker); return text.slice(at, text.indexOf('\n});', at)) }
+
+  it('is applied to album (and so artist) pages', async () => {
+    expect(routeBody(await src('../../routes/catalog/discovery.js'), "router.get('/album'")).toMatch(/recordIsVisible/)
+  })
+  it('is applied to random songs (shuffle refills, random rails)', async () => {
+    expect(routeBody(await src('../../routes/catalog/discovery.js'), "router.get('/random-songs'")).toMatch(/recordIsVisible/)
+  })
+  it('is applied to G100 on both the FileMaker and Postgres paths', async () => {
+    expect(await src('../../routes/catalog/featured.js')).toMatch(/trackIsEligible\(r\.fieldData/)
+    const pg = await src('../../lib/catalog-store-pg.js')
+    expect(pg.slice(pg.indexOf('export async function pgG100'), pg.indexOf('export async function pgNewReleases'))).toMatch(/trackIsEligible/)
+  })
+  it("is applied to Maddie's semantic (feel) search", async () => {
+    const m = await src('../../routes/maddie.js')
+    expect(m.slice(m.indexOf("case 'feel_search'"), m.indexOf("case 'similar_albums'"))).toMatch(/pgVisibleIds/)
+  })
 })

@@ -22,6 +22,7 @@ import { createSwrCache } from '../../lib/swr-cache.js';
 import { createLogger } from '../../lib/logger.js';
 import { usePostgresMetadata } from '../../lib/metadata-source.js';
 import { pgFeatured, pgNewReleases, pgSingles, pgGlobalFavorites, pgG100 } from '../../lib/catalog-store-pg.js';
+import { trackIsEligible } from '../../lib/track-eligibility.js';
 
 const router = Router();
 const log    = createLogger('featured');
@@ -304,7 +305,9 @@ async function fetchG100Records(limit = 400) {
         return null;
       }
       const rawData      = json?.response?.data || [];
-      const afterAudio   = rawData.filter(r => hasValidAudio(r.fieldData || {}));
+      // G100 ignores the Visibility field on purpose, but not the client's
+      // ISRC + UPC + cover rule — that applies everywhere (2026-10-01).
+      const afterAudio   = rawData.filter(r => trackIsEligible(r.fieldData || {}) && hasValidAudio(r.fieldData || {}));
       const afterArtwork = afterAudio.filter(r => hasValidArtwork(r.fieldData || {}));
       const filtered     = afterArtwork.filter(r => {
         const val = (r.fieldData?.[field] || '').toLowerCase().trim();

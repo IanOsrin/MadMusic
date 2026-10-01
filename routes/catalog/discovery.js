@@ -221,9 +221,11 @@ router.get('/random-songs', async (req, res) => {
       data = result.data;
     }
 
+    // recordIsVisible carries the client's ISRC + UPC + cover rule — shuffle
+    // refills and random rails must not slip in songs hidden everywhere else.
     const validRecords = data.filter(record => {
       const fields = record.fieldData || {};
-      return hasValidAudio(fields) && hasValidArtwork(fields);
+      return recordIsVisible(fields) && hasValidAudio(fields) && hasValidArtwork(fields);
     });
 
     const shuffled = cryptoShuffle(validRecords);
@@ -580,7 +582,11 @@ router.get('/album', async (req, res) => {
       actualTotal = json?.response?.dataInfo?.foundCount ?? rawData.length;
     }
 
-    const data = rawData.filter(d => hasValidAudio(d.fieldData || {}));
+    // Album and artist pages obey the same rule as search and Maddie (Ian,
+    // 2026-10-01): no ISRC / UPC / cover → not shown. They checked audio only,
+    // so an artist page listed songs that search (and Maddie) rightly hid —
+    // Josiah Hadebe showed 7 songs there and 2 everywhere else.
+    const data = rawData.filter(d => recordIsVisible(d.fieldData || {}) && hasValidAudio(d.fieldData || {}));
 
     const response = {
       ok: true,
