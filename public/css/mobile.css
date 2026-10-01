@@ -485,6 +485,8 @@
     }
 
     #maddie-sheet.open { display: flex; }
+    /* The page behind stays put while she's open (see fitToViewport in maddie.js). */
+    html.maddie-open, html.maddie-open body { overflow: hidden; }
 
     .maddie-sheet-head {
       display: flex;
