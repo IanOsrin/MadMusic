@@ -2,12 +2,12 @@
 // holds the DOM event wiring + drag/search state + init(), and exposes the
 // inline on*-handlers on window. All app logic lives in the mobile/*.js modules.
 
-import { elements, state } from './state.js?v=37';
-import { showToast } from './util.js?v=37';
-import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=37';
+import { elements, state } from './state.js?v=38';
+import { showToast } from './util.js?v=38';
+import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=38';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, checkStoredCode, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=37';
+import { buyAccess, checkStoredCode, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=38';
 
 // Links from MAD emails: ?buy=1 opens the plans (not inside the store app — policy),
 // ?contact=1 opens "Contact us". The param is dropped from the address bar either way.
@@ -20,22 +20,22 @@ function handleEmailLinks() {
   window.history.replaceState({}, document.title, window.location.pathname + (q ? '?' + q : ''));
   setTimeout(() => { if (contact) showContactSheet(); else if (!isNativeApp()) buyAccess(); }, 600);
 }
-import { switchTab } from './nav.js?v=37';
-import { renderSearchResults, search } from './search.js?v=37';
-import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=37';
-import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=37';
-import { filterG100Albums, loadG100 } from './rails-g100.js?v=37';
-import { loadNewReleases } from './rails-newreleases.js?v=37';
-import { loadSuggestedForYou } from './rails-suggested.js?v=37';
-import { initMobHero } from './hero.js?v=37';
-import { loadHomeShelves } from './rails-g100.js?v=37';
-import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, trackFailed, trackPlayedOk, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=37';
-import { openAlbumForTrack, showAlbumTracksModal, showArtistTracks } from './cards.js?v=37';
-import { initRouter, pushOverlay } from './router.js?v=37';
-import { initMaddie } from './maddie.js?v=37';
-import { initContinue } from './continue.js?v=37';
-import { loadGlobalFavourites } from './rails-globalfav.js?v=37';
-import { maybeShowWelcome, showWelcome } from './welcome.js?v=37';
+import { switchTab } from './nav.js?v=38';
+import { renderSearchResults, search } from './search.js?v=38';
+import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=38';
+import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=38';
+import { filterG100Albums, loadG100 } from './rails-g100.js?v=38';
+import { loadNewReleases } from './rails-newreleases.js?v=38';
+import { loadSuggestedForYou } from './rails-suggested.js?v=38';
+import { initMobHero } from './hero.js?v=38';
+import { loadHomeShelves } from './rails-g100.js?v=38';
+import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, trackFailed, trackPlayedOk, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=38';
+import { openAlbumForTrack, showAlbumTracksModal, showArtistTracks } from './cards.js?v=38';
+import { initRouter, pushOverlay } from './router.js?v=38';
+import { initMaddie } from './maddie.js?v=38';
+import { initContinue } from './continue.js?v=38';
+import { loadGlobalFavourites } from './rails-globalfav.js?v=38';
+import { maybeShowWelcome, showWelcome } from './welcome.js?v=38';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {

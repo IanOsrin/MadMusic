@@ -2,11 +2,11 @@
 // Same API as desktop (POST /api/maddie/chat → { reply, tracks }), rendered as
 // a full-screen chat sheet. Gated on window.__MADDIE (MADDIE_ENABLED).
 
-import { state } from './state.js?v=37';
-import { escapeHtml } from './fields.js?v=37';
-import { playTrack, renderPlayerQueue } from './player.js?v=37';
-import { showAlbumTracksModal } from './cards.js?v=37';
-import { showCodeProblem } from './auth.js?v=37';
+import { state } from './state.js?v=38';
+import { escapeHtml } from './fields.js?v=38';
+import { playTrack, renderPlayerQueue } from './player.js?v=38';
+import { showAlbumTracksModal } from './cards.js?v=38';
+import { showCodeProblem } from './auth.js?v=38';
 
 // Shorter greetings than desktop — a phone screen, not a panel.
 const GREETINGS = [
@@ -196,17 +196,41 @@ async function sendMessage(text) {
   }
 }
 
+// iPhone keyboard (2026-10-01): with the keyboard up, iOS shifts the page and a
+// position:fixed sheet slides down with it — her header went off the top and the
+// screen showed black. So: no keyboard until the person taps the box, the page
+// behind is frozen, and the sheet is pinned to the VISIBLE area (visualViewport)
+// so the header stays on top and the box sits just above the keyboard.
+function fitToViewport() {
+  const sheet = document.getElementById('maddie-sheet');
+  const vv = window.visualViewport;
+  if (!sheet || !vv || !sheet.classList.contains('open')) return;
+  sheet.style.top = vv.offsetTop + 'px';
+  sheet.style.height = vv.height + 'px';
+  sheet.style.bottom = 'auto';
+  log().scrollTop = log().scrollHeight;
+}
+
 function openSheet() {
   document.getElementById('maddie-sheet').classList.add('open');
+  document.documentElement.classList.add('maddie-open');
   if (!greeted) {
     greeted = true;
     addMsg('maddie', GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
   }
-  document.getElementById('maddie-input').focus();
+  fitToViewport();
+  window.visualViewport?.addEventListener('resize', fitToViewport);
+  window.visualViewport?.addEventListener('scroll', fitToViewport);
 }
 
 function closeSheet() {
-  document.getElementById('maddie-sheet').classList.remove('open');
+  const sheet = document.getElementById('maddie-sheet');
+  sheet.classList.remove('open');
+  document.documentElement.classList.remove('maddie-open');
+  window.visualViewport?.removeEventListener('resize', fitToViewport);
+  window.visualViewport?.removeEventListener('scroll', fitToViewport);
+  sheet.style.top = sheet.style.height = sheet.style.bottom = '';
+  document.getElementById('maddie-input').blur();
 }
 
 export function initMaddie() {
