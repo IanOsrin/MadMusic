@@ -19,6 +19,8 @@
 import { Router } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import { knnRaw } from '../lib/semantic-shelves.js';
+import { pgVisibleIds } from '../lib/catalog-store-pg.js';
+import { usePostgresMetadata } from '../lib/metadata-source.js';
 import { answerFromShelves, QUESTION_LINE } from '../lib/maddie-lite.js';
 import { fmFindRecords, fmCreateRecord } from '../fm-client.js';
 import { searchSubjects, saveSubject } from '../lib/shop-knowledge.js';
@@ -267,7 +269,14 @@ async function executeTool(name, input, ctx) {
       const kCount = Math.max(1, Math.min(50, parseInt(input?.count, 10) || 24));
       const hits = await knnRaw(String(input?.description || '').slice(0, 300), kCount);
       if (hits === null) return { found: 0, note: 'semantic index unavailable — use search_shelves instead' };
-      const items = hits.map((h) => ({
+      // The semantic index holds every track; only hand Maddie the ones the
+      // shop may show (ISRC + UPC + cover, Visibility) — same rule as search.
+      let shown = null;
+      if (usePostgresMetadata()) {
+        try { shown = await pgVisibleIds(hits.map((h) => h.recordId)); }
+        catch (e) { console.warn('[maddie-tools] feel_search visibility check failed:', e.message); }
+      }
+      const items = hits.filter((h) => !shown || shown.has(String(h.recordId))).map((h) => ({
         recordId: h.recordId,
         title:  h.m.track || '',
         artist: (h.m.artist || h.m.albumArtist || '').slice(0, 60),
