@@ -73,7 +73,8 @@ describe('Mad Mixer free split', () => {
     code = res.body.token;
     expect(code).toMatch(/^MASS-/);
     expect(fm.rows[0].fieldData.Token_Type).toBe('mixer-trial');
-    [, , confirmUrl] = sent[0];
+    [, , { confirmUrl }] = sent[0];
+    expect(sent[0][2].openUrl).toMatch(/\/mixer\?code=MASS-/);
     expect(confirmUrl).toMatch(/\/api\/mixer\/trial\/confirm\?t=MASS-[^&]+&s=[\w-]{32}$/);
   });
 

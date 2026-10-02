@@ -40,14 +40,12 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
 import { execFileSync } from 'node:child_process';
-import { fmFindRecords, fmUpdateRecord } from '../fm-client.js';
+import { fmFindRecords } from '../fm-client.js';
 import { createSwrCache } from '../lib/swr-cache.js';
 import { buildMixableMap } from '../lib/mixer-match.js';
-import { isMixerPlan, MIXER_TRIAL_TYPE, MIXER_TRIAL_SPLITS, MIXER_TRIAL_DAYS } from '../lib/mixer-plans.js';
-import { createAccessToken, findTrialTokenByEmail, findTrialTokenInFM, revokeToken, loadAccessTokens, saveAccessTokens } from '../lib/token-store.js';
-import { sendMixerTrialEmail, emailTransporter } from '../lib/email.js';
-import { isStrictEmail, fmExactMatch } from '../lib/validators.js';
-import { timingSafeEqualStr } from '../lib/crypto-utils.js';
+import { isMixerPlan, MIXER_TRIAL_TYPE, MIXER_TRIAL_SPLITS } from '../lib/mixer-plans.js';
+import { allSongs, mmGet, songsLayout, songSummary, cdnUrl } from '../lib/mixer-catalogue.js';
+import { trialConfirmed, startTrial, confirmTrial, madTrialLinks } from '../lib/mixer-trial.js';
 
 const router = Router();
 
@@ -76,8 +74,6 @@ const FM_LAYOUT = process.env.FM_LAYOUT || 'API_Album_Songs';
 const DATA_DIR = path.resolve(process.env.MIXER_DATA_DIR || 'data');
 const USAGE_FILE = path.join(DATA_DIR, 'mixer-usage.json');
 const DCX_FILE = path.join(DATA_DIR, 'mixer-dcx.jsonl');
-const MEDIA_HOST = (process.env.MEDIA_CDN_HOST || 'media.musicafricadirect.com').replace(/^https?:\/\//, '').replace(/\/+$/, '');
-const S3_MEDIA_HOST = 'mass-music-audio-files.s3.eu-north-1.amazonaws.com';
 const MAX_UPLOAD = 400 * 1024 * 1024;   // a 20-min 24-bit stereo WAV is ~300 MB
 
 // ── entitlement + metering ────────────────────────────────────────────────────
@@ -131,9 +127,6 @@ function requireMixer(req, res, next) {
   return res.status(402).json({ ok: false, error: 'Mad Mixer is part of the Mad Mixer subscription.', upgrade: true });
 }
 
-// ── small helpers ─────────────────────────────────────────────────────────────
-const cdnUrl = (u) => String(u || '').replace(`https://${S3_MEDIA_HOST}/`, `https://${MEDIA_HOST}/`);
-
 // ── routes ────────────────────────────────────────────────────────────────────
 router.get('/ping', (req, res) => {
   res.json({ ok: true, engine: 'mad-mixer', entitled: entitled(req.accessToken), splitterReady: !!MVSEP_KEY() });
@@ -157,61 +150,7 @@ router.get('/usage', requireMixer, async (req, res) => {
   res.json({ ok: true, gated: true, splitterReady: !!MVSEP_KEY(), ...(await usageFor(req.accessToken)) });
 });
 
-// ── the MadMixer catalogue (FileMaker "MADMixer" on FM Cloud, a MAM clone) ─────────
-// MADMIXER_FM_HOST / _DB / _USER / _PASS. The song list changes rarely, so it is cached for
-// five minutes; one FM session is reused until it expires (~15 min idle on FM Cloud).
-const MM = {
-  host: () => (process.env.MADMIXER_FM_HOST || '').replace(/^https?:\/\//, '').replace(/\/+$/, ''),
-  db: () => process.env.MADMIXER_FM_DB || 'MADMixer',
-  layout: () => process.env.MADMIXER_FM_SONGS_LAYOUT || 'Songs',
-  token: null,
-};
-const mmBase = () => `https://${MM.host()}/fmi/data/vLatest/databases/${encodeURIComponent(MM.db())}`;
-async function mmLogin() {
-  const r = await fetch(`${mmBase()}/sessions`, {
-    method: 'POST', signal: AbortSignal.timeout(20_000),
-    headers: { 'Content-Type': 'application/json', Authorization: 'Basic ' + Buffer.from(`${process.env.MADMIXER_FM_USER}:${process.env.MADMIXER_FM_PASS}`).toString('base64') },
-    body: '{}',
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!j.response?.token) throw new Error('MadMixer login failed: ' + (j.messages?.[0]?.message || r.status));
-  MM.token = j.response.token;
-}
-async function mmGet(pathAndQuery) {
-  if (!MM.host() || !process.env.MADMIXER_FM_USER) throw new Error('MadMixer database not configured (MADMIXER_FM_*)');
-  for (let attempt = 0; attempt < 2; attempt++) {
-    if (!MM.token) await mmLogin();
-    const r = await fetch(`${mmBase()}${pathAndQuery}`, { headers: { Authorization: `Bearer ${MM.token}` }, signal: AbortSignal.timeout(30_000) });
-    const j = await r.json().catch(() => ({}));
-    if (j.messages?.[0]?.code === '952') { MM.token = null; continue; }   // session expired → log in again
-    if (j.messages?.[0]?.code !== '0') throw new Error('MadMixer: ' + (j.messages?.[0]?.message || r.status));
-    return j.response;
-  }
-  throw new Error('MadMixer session could not be renewed');
-}
-const songSummary = (rec) => {
-  const f = rec.fieldData || {};
-  const mp3 = cdnUrl(f.Audio_S3_URL || '');
-  return {
-    id: String(rec.recordId), title: f['Track Name'] || '', artist: f['Track Artist'] || '', album: f['Album Title'] || '',
-    duration: f.Duration || '', genre: f['Local Genre'] || f.Genre || '', isrc: f.ISRC || '',
-    playable: /^https:\/\//.test(mp3), hasMaster: !!String(f.Audio_Vision_URL || '').trim(),
-  };
-};
-const songsSwr = createSwrCache({
-  name: 'mixer-songs', label: 'mixer-songs', ttlMs: 5 * 60_000, max: 1,
-  loader: async () => {
-    const all = [];
-    for (let off = 1; ; off += 500) {
-      const resp = await mmGet(`/layouts/${encodeURIComponent(MM.layout())}/records?_offset=${off}&_limit=500`);
-      all.push(...(resp.data || []));
-      if ((resp.data || []).length < 500) break;
-    }
-    return all.map(songSummary).sort((a, b) => (a.artist + a.title).localeCompare(b.artist + b.title));
-  },
-});
-const allSongs = async () => (await songsSwr.get('all')).value;
-
+// ── the MadMixer catalogue (lib/mixer-catalogue.js: FM client + 5-min SWR song list) ──────────
 router.get('/songs', requireMixer, async (req, res) => {
   try {
     const songs = await allSongs();
@@ -228,7 +167,7 @@ router.get('/songs/:id', requireMixer, async (req, res) => {
   const id = String(req.params.id || '');
   if (!/^\d{1,12}$/.test(id)) return res.status(400).json({ ok: false, error: 'Bad song id' });
   try {
-    const resp = await mmGet(`/layouts/${encodeURIComponent(MM.layout())}/records/${id}`);
+    const resp = await mmGet(`/layouts/${encodeURIComponent(songsLayout())}/records/${id}`);
     const rec = (resp.data || [])[0];
     if (!rec) return res.status(404).json({ ok: false, error: 'Song not found' });
     const s = songSummary(rec);
@@ -480,53 +419,15 @@ router.post('/dcx/check', requireMixer, (req, res) => {
 });
 
 // ── Mad Mixer free split (2026-09-28) ─────────────────────────────────────────────
-// One free split per email. Sign-up gives a Mixer-only code at once (browse, play, mix);
-// the split itself unlocks when the email is confirmed (each split costs MVSEP credits,
-// so an invented address gets no split). Confirmation = "[email confirmed" in the FM
-// token's Notes (Notes is already on the API layout), mirrored in the JSON copy.
-const MIXER_TRIAL_TOKENS_LAYOUT = () => process.env.FM_TOKENS_LAYOUT || 'API_Access_Tokens';
-const APP_BASE_URL = () => (process.env.APP_URL || 'https://musicafricadirect.com').replace(/\/+$/, '');
-const trialSig = (code) => crypto.createHmac('sha256', process.env.AUTH_SECRET || '')
-  .update(`mixer-trial-confirm:${code}`).digest('base64url').slice(0, 32);
-
-async function trialConfirmed(code) {
-  const c = String(code || '').trim().toUpperCase();
-  try {
-    const r = await fmFindRecords(MIXER_TRIAL_TOKENS_LAYOUT(), [{ Token_Code: fmExactMatch(c) }], { limit: 1 });
-    if (r.ok && r.data?.length) return /\[email confirmed/.test(String(r.data[0].fieldData?.Notes || ''));
-  } catch { /* fall back to the JSON copy */ }
-  const local = (await loadAccessTokens()).tokens.find((t) => t.code === c);
-  return !!local?.emailConfirmed;
-}
-
+// lib/mixer-trial.js: one free split per email, a Mixer-only code at once, the split unlocks when
+// the emailed Confirm link is opened. Here the links point at Mad Mixer inside MAD.
 router.post('/trial', async (req, res) => {
-  const email = String(req.body?.email || '').trim().toLowerCase();
-  if (!isStrictEmail(email)) return res.status(400).json({ ok: false, error: 'Please enter a valid email address.' });
-  if (!emailTransporter) return res.status(503).json({ ok: false, error: 'Free splits are unavailable right now. Please try again later.' });
-  try {
-    const already = (await findTrialTokenByEmail(email, MIXER_TRIAL_TYPE)) ||
-      (await findTrialTokenInFM(email, MIXER_TRIAL_TYPE).catch((err) => { console.warn('[mixer] trial FM dedupe failed:', err.message); return null; }));
-    if (already) return res.status(409).json({ ok: false, error: 'This email has already had its free split. Sign in with your code, or subscribe.' });
-
-    const token = await createAccessToken(MIXER_TRIAL_DAYS, 'Mad Mixer free split (1 split, unlocks when the email is confirmed)', email, MIXER_TRIAL_TYPE);
-    const confirmUrl = `${APP_BASE_URL()}/api/mixer/trial/confirm?t=${encodeURIComponent(token.code)}&s=${trialSig(token.code)}`;
-    try {
-      await sendMixerTrialEmail(email, token.code, confirmUrl);
-    } catch (err) {
-      await revokeToken(token.code, 'mixer trial email delivery failed');
-      return res.status(502).json({ ok: false, error: 'We could not send the email. Please check the address and try again.' });
-    }
-    console.log(`[mixer] free split issued: ${token.code} → ${email}`);
-    res.json({ ok: true, token: token.code });
-  } catch (err) {
-    console.error('[mixer] free split signup failed:', err?.message || err);
-    res.status(500).json({ ok: false, error: 'Could not start your free split. Please try again.' });
-  }
+  const r = await startTrial({ email: req.body?.email, links: madTrialLinks });
+  if (!r.ok) return res.status(r.status).json({ ok: false, error: r.error });
+  res.json({ ok: true, token: r.code });
 });
 
 router.get('/trial/confirm', async (req, res) => {
-  const code = String(req.query.t || '').trim().toUpperCase();
-  const sig = String(req.query.s || '');
   const page = (title, body, href, label) => res.status(200).type('html').send(`<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
 <title>${title} — Mad Mixer</title></head>
@@ -537,29 +438,13 @@ router.get('/trial/confirm', async (req, res) => {
 <p style="color:#bbb;line-height:1.5;margin:0 0 22px">${body}</p>
 ${href ? `<a href="${href}" style="display:inline-block;padding:12px 26px;border-radius:999px;background:linear-gradient(135deg,#8b5cf6,#a78bfa);color:#fff;font-weight:700;text-decoration:none">${label}</a>` : ''}
 </div></body></html>`);
-  if (!/^[A-Z0-9-]{6,40}$/.test(code) || !sig || !timingSafeEqualStr(sig, trialSig(code))) {
-    return page('That link didn’t work', 'Please use the Confirm button in your most recent Mad Mixer email.', null);
+  const r = await confirmTrial(String(req.query.t || ''), String(req.query.s || ''));
+  if (r.ok) {
+    return page('Your free split is ready', 'Email confirmed. Pick a song in Mad Mixer and press <b>AI Split</b> to separate it into stems.', `/mixer?code=${encodeURIComponent(r.code)}`, 'Open Mad Mixer');
   }
-  const open = `/mixer?code=${encodeURIComponent(code)}`;
-  try {
-    const r = await fmFindRecords(MIXER_TRIAL_TOKENS_LAYOUT(), [{ Token_Code: fmExactMatch(code) }], { limit: 1 });
-    const rec = r.ok ? r.data?.[0] : null;
-    const f = rec?.fieldData || {};
-    if (!rec || f.Token_Type !== MIXER_TRIAL_TYPE || String(f.Active) !== '1') {
-      return page('We couldn’t confirm this', 'This free split may have ended. You can still subscribe to Mad Mixer.', '/mixer', 'Open Mad Mixer');
-    }
-    if (!/\[email confirmed/.test(String(f.Notes || ''))) {
-      await fmUpdateRecord(MIXER_TRIAL_TOKENS_LAYOUT(), rec.recordId, { Notes: `${f.Notes || ''} [email confirmed ${new Date().toISOString().slice(0, 10)}]`.trim() });
-      const data = await loadAccessTokens();
-      const local = data.tokens.find((t) => t.code === code);
-      if (local) { local.emailConfirmed = true; await saveAccessTokens(data); }
-      console.log(`[mixer] free split confirmed: ${code}`);
-    }
-    return page('Your free split is ready', 'Email confirmed. Pick a song in Mad Mixer and press <b>AI Split</b> to separate it into stems.', open, 'Open Mad Mixer');
-  } catch (err) {
-    console.error('[mixer] free split confirm failed:', err?.message || err);
-    return page('Something went wrong', 'We couldn’t confirm your email just now. Please try the link again in a minute.', null);
-  }
+  if (r.reason === 'bad-link') return page('That link didn’t work', 'Please use the Confirm button in your most recent Mad Mixer email.', null);
+  if (r.reason === 'ended') return page('We couldn’t confirm this', 'This free split may have ended. You can still subscribe to Mad Mixer.', '/mixer', 'Open Mad Mixer');
+  return page('Something went wrong', 'We couldn’t confirm your email just now. Please try the link again in a minute.', null);
 });
 
 export default router;
