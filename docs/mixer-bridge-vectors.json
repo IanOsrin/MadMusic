@@ -1,0 +1,63 @@
+{
+  "about": "Mad Mixer <-> MAD bridge: the exact request-signing algorithm, with fixed-input test vectors. MAD implements it in lib/mixer-bridge.js and tests it in tests/integration/mixer-internal.test.js; the Vercel repo (mad-mixer, lib/crypto.js) must reproduce every value below byte for byte. Never put a real secret in this file.",
+  "version": 2,
+  "changes": "v2 (2026-10-02): the sign-in hand-off (K_handoff, AES-256-GCM handoffs) is gone - owner decision: MAD links to MIXER_URL plainly and listeners sign in on the Mixer. Signing and its vectors are unchanged from v1.",
+  "algorithm": {
+    "secret": "MIXER_SHARED_SECRET, surrounding whitespace trimmed, taken as its UTF-8 bytes (not base64-decoded). Same value on Render (MAD) and Vercel.",
+    "key": {
+      "kdf": "HKDF-SHA256 (RFC 5869)",
+      "ikm": "UTF-8 bytes of the trimmed secret",
+      "salt": "empty (zero-length)",
+      "info": "mm-sign-v1",
+      "length": 32,
+      "name": "K_sign"
+    },
+    "request_signature": {
+      "direction": "Vercel -> MAD, every call to MAD_INTERNAL_URL/internal/mixer/*",
+      "headers": {
+        "X-MM-Ts": "Unix time in whole seconds, decimal string",
+        "X-MM-Sig": "signature below"
+      },
+      "canonical": "ts + \"\\n\" + METHOD (upper case) + \"\\n\" + path + \"\\n\" + lowercase hex SHA-256 of the exact raw body bytes (empty body for GET -> e3b0c442...b855)",
+      "path": "the request path INCLUDING any query string, exactly as sent, starting /internal/mixer/ (e.g. /internal/mixer/songs)",
+      "signature": "base64url without padding of HMAC-SHA256(K_sign, canonical as UTF-8)",
+      "verify": "MAD rejects |now - ts| > 60 s (401 'skew') and compares signatures in constant time (401 'bad-signature'). The body is hashed from the RAW bytes received, before any JSON parsing; POST bodies are JSON (Content-Type: application/json), at most 16 KB."
+    }
+  },
+  "secret": "mm-test-secret-0123456789abcdef",
+  "derived": {
+    "K_sign_hex": "7a581540821c805a8f286020844b9bb1240e34c2034b1c94cdbfe57f5a850b84"
+  },
+  "signatures": [
+    {
+      "name": "entitlement",
+      "method": "POST",
+      "path": "/internal/mixer/entitlement",
+      "ts": 1790000000,
+      "body": "{\"code\":\"MASS-TST-001\"}",
+      "bodySha256": "50badce8116e4bbb678d9dcc213955ca54eebeb85bf199e7825f1cda149f6f59",
+      "canonical": "1790000000\nPOST\n/internal/mixer/entitlement\n50badce8116e4bbb678d9dcc213955ca54eebeb85bf199e7825f1cda149f6f59",
+      "sig": "uZJW2Joup-H-cSUg-BonNreG0XaRqQfEZf7rYW0Om88"
+    },
+    {
+      "name": "songs (GET, empty body)",
+      "method": "GET",
+      "path": "/internal/mixer/songs",
+      "ts": 1790000060,
+      "body": "",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": "1790000060\nGET\n/internal/mixer/songs\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sig": "h2pdLETkcsu4JFKrIPTuI-9eh6sSguNEvetK1gdznHk"
+    },
+    {
+      "name": "trial",
+      "method": "POST",
+      "path": "/internal/mixer/trial",
+      "ts": 1790000123,
+      "body": "{\"email\":\"fan@example.com\",\"ip\":\"203.0.113.7\"}",
+      "bodySha256": "3e96b47937ef6be1873d81e006839dc57fa354a7817e73750b6e90ef891fbc35",
+      "canonical": "1790000123\nPOST\n/internal/mixer/trial\n3e96b47937ef6be1873d81e006839dc57fa354a7817e73750b6e90ef891fbc35",
+      "sig": "ghaWG7F4CEqi9MhHYkjz7knCoJbjLBHycBz_a647bVE"
+    }
+  ]
+}

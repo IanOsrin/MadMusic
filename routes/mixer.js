@@ -22,6 +22,10 @@
  *   GET  /audio-proxy?url=…            → streams a finished stem from MVSEP (mvsep hosts only)
  *   POST /dcx/register?id=&sha=&name=  → provenance line for every export (DCX Sample Registry)
  *
+ * Once Mad Mixer has its own home (MAD_MIXER_ENABLED + MIXER_URL), server.js cuts this router down
+ * to GET /mixable (the 🎚 buttons, which then link to MIXER_URL/?song=ID); everything else here is
+ * the old in-MAD Mixer, removed in the clean-up phase.
+ *
  * ENTITLEMENT (the "Mad Mixer" tier): a token is entitled when its FM record has
  * Audio_Lab_Enabled = 1 (the existing flag, reused so no FM field changes are needed yet),
  * or — local testing only — when MIXER_OPEN_TO_ALL_TOKENS=true. The Paystack tier that sets

@@ -83,6 +83,11 @@ helpers live in `public/js/helpers.js` as `window.MADHelpers`.
   from the DCMax master — never hand-edit; API in `routes/mixer.js`) is dark unless
   `MAD_MIXER_ENABLED=true`. It replaced the old Audio Lab (audio-lab.html, Replicate proxy,
   /api/audio-proxy), retired 2026-09-25 on Ian's word.
+- **Mad Mixer on its own home (Vercel)** — MAD keeps only: the signed internal API
+  (`routes/mixer-internal.js`, mounted by `MIXER_SHARED_SECRET`; entitlement BY PLAN, MADMixer
+  songs, free split + emails + confirm), the `/mixable` map and the 🎚/menu links, which become plain
+  links to `MIXER_URL/?song=ID` once `MIXER_URL` is set (no hand-off). Payments and codes stay in MAD.
+  Contract: `docs/mad-mixer-vercel-design.md` §2j; signing vectors: `docs/mixer-bridge-vectors.json`.
 
 ## Mobile (`/mobile` → `public/mobile.html`) — read before editing
 
