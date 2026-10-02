@@ -293,14 +293,35 @@ router.get('/mixable', async (req, res) => {
   }
 });
 
+// The models Mad Mixer offers (Ian, 2026-10-02: "make BS Roformer the default and offer both, cut
+// down model list to 4"). MVSEP has ~120; these are picked by sep_type (MVSEP's render_id), in this
+// order. "Quick" is the default: ~1 min and ~3 credits for a 3-min song vs ~5 min and ~13 for "Best",
+// whose extra Instrumental stem also doubles the backing on Play All.
+const MODELS = [
+  { sep: 63, label: 'Quick — vocals, bass, drums, guitar, piano, other (about a minute)', isDefault: true },
+  { sep: 28, label: 'Best — vocals, instrumental, bass, drums, other (about 5 minutes)' },
+  { sep: 40, label: 'Vocals and backing track — vocals, instrumental' },
+  { sep: 49, label: 'Lead and backing vocals — lead singer, backing vocals' },
+];
+const DEFAULT_SEP = String(MODELS.find((m) => m.isDefault).sep);
+const offered = (sep) => MODELS.some((m) => String(m.sep) === String(sep));
+
 let algoCache = { at: 0, body: null };
 router.get('/mvsep/algorithms', requireMixer, async (req, res) => {
   if (algoCache.body && Date.now() - algoCache.at < 3600_000) return res.type('application/json').send(algoCache.body);
   try {
     const r = await fetch(`${MVSEP}/api/app/algorithms`, { signal: AbortSignal.timeout(30_000) });
-    const text = await r.text();
-    if (r.ok) algoCache = { at: Date.now(), body: text };
-    res.status(r.status).type('application/json').send(text);
+    if (!r.ok) return res.status(r.status).type('application/json').send(await r.text());
+    const all = await r.json();
+    // MVSEP's own entries (they carry each model's option fields), cut to ours, in our order, with
+    // our names; the page shows display_name and pre-selects is_default.
+    const list = MODELS.map((m, i) => {
+      const a = (Array.isArray(all) ? all : []).find((x) => Number(x?.render_id ?? x?.id) === m.sep);
+      return a && { ...a, is_active: 1, order_id: i + 1, display_name: m.label, is_default: !!m.isDefault };
+    }).filter(Boolean);
+    const body = JSON.stringify(list);
+    if (list.length) algoCache = { at: Date.now(), body };
+    res.type('application/json').send(body);
   } catch (err) {
     res.status(502).json({ ok: false, error: 'Could not load the model list' });
   }
@@ -340,7 +361,9 @@ router.post('/mvsep/create', requireMixer, async (req, res) => {
   }
 
   const q = req.query;
-  const fields = { api_token: key, is_demo: '0', sep_type: String(q.sep_type || '28'), output_format: String(q.output_format || '1') };
+  const sep = String(q.sep_type || DEFAULT_SEP);
+  if (!offered(sep)) return refuse(400, 'That model isn’t offered in Mad Mixer — pick one from the list.');
+  const fields = { api_token: key, is_demo: '0', sep_type: sep, output_format: String(q.output_format || '1') };
   for (let i = 1; i <= 4; i++) if (q[`add_opt${i}`]) fields[`add_opt${i}`] = String(q[`add_opt${i}`]);
   for (const v of Object.values(fields)) if (!/^[\w.-]{0,200}$/.test(v)) return res.status(400).json({ ok: false, error: 'Bad option' });
 
