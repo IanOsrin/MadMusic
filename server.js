@@ -341,6 +341,9 @@ app.use(compression({
   threshold: 1024,
   filter: (req, res) => {
     if (req.headers['x-no-compression']) return false;
+    // Mad Mixer stems are WAV streamed from MVSEP (70 MB each): gzip saves ~8% and costs the small
+    // instance CPU on every byte. Send them as they come.
+    if (req.path.startsWith('/api/mixer/audio-proxy')) return false;
     return compression.filter(req, res);
   }
 }));
@@ -1176,6 +1179,9 @@ if (HTTP2_ENABLED) {
 
 if (!serverStarted) {
   server = http.createServer(app);
+  // Node cuts off any request body still arriving after 5 min (requestTimeout default). A Mad
+  // Mixer upload (~36 MB for a 3½-min song) on a slow uplink can take longer; give it 30 min.
+  server.requestTimeout = 30 * 60 * 1000;
   server.listen(PORT, HOST, () => logServerReady('HTTP/1.1'));
 }
 

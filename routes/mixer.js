@@ -132,16 +132,6 @@ function requireMixer(req, res, next) {
 }
 
 // ── small helpers ─────────────────────────────────────────────────────────────
-async function passJson(res, url, init) {
-  try {
-    const r = await fetch(url, { ...init, signal: AbortSignal.timeout(30_000) });
-    const text = await r.text();
-    res.status(r.status).type('application/json').send(text || '{}');
-  } catch (err) {
-    console.warn('[mixer] upstream error:', err.message);
-    res.status(502).json({ ok: false, error: 'Upstream request failed' });
-  }
-}
 const cdnUrl = (u) => String(u || '').replace(`https://${S3_MEDIA_HOST}/`, `https://${MEDIA_HOST}/`);
 
 // ── routes ────────────────────────────────────────────────────────────────────
@@ -369,9 +359,11 @@ router.post('/mvsep/create', requireMixer, async (req, res) => {
       signal: AbortSignal.timeout(10 * 60_000),
     });
     const text = await r.text();
-    let ok = r.ok;
-    try { ok = ok && JSON.parse(text).success !== false; } catch { /* non-JSON → trust the status */ }
+    let ok = r.ok, hash = null;
+    try { const j = JSON.parse(text); ok = ok && j.success !== false; hash = j?.data?.hash || null; } catch { /* non-JSON → trust the status */ }
     if (ok) await countSplit(req.accessToken);          // MVSEP charges at create
+    // The job id makes every split traceable — and recoverable from MVSEP for ~72 h if the page loses it.
+    console.log(`[mixer] job ${hash || '(none)'} ${ok ? 'created' : 'refused'} for ${tokenKey(req.accessToken).slice(0, 8)}… song=${songId} (HTTP ${r.status})`);
     res.status(r.status).type('application/json').send(text);
   } catch (err) {
     console.warn('[mixer] create failed:', err.message);
@@ -379,10 +371,33 @@ router.post('/mvsep/create', requireMixer, async (req, res) => {
   }
 });
 
-router.get('/mvsep/get', requireMixer, (req, res) => {
+// Last status logged per job, so the log shows each change once (waiting → processing → done).
+const jobStatus = new Map();
+router.get('/mvsep/get', requireMixer, async (req, res) => {
   const hash = String(req.query.hash || '');
-  if (!/^[\w-]{4,128}$/.test(hash)) return res.status(400).json({ ok: false, error: 'Bad job id' });
-  return passJson(res, `${MVSEP}/api/separation/get?hash=${encodeURIComponent(hash)}`);
+  // MVSEP job ids end in the uploaded file's name — "20261002125247-b15a4d8ded-audio.wav" — so the
+  // dot must be allowed. Without it every poll was refused "Bad job id", the page kept saying
+  // "processing" and gave up after 20 min while MVSEP had finished in ~4 (fixed 2026-10-02).
+  // status:'failed' + message: the page stops on 'failed' and shows the reason, instead of reading
+  // a refusal as "still processing" for 20 minutes.
+  if (!/^[\w.-]{4,128}$/.test(hash)) return res.status(400).json({ ok: false, status: 'failed', message: 'Bad job id', error: 'Bad job id' });
+  try {
+    const r = await fetch(`${MVSEP}/api/separation/get?hash=${encodeURIComponent(hash)}`, { signal: AbortSignal.timeout(30_000) });
+    const text = await r.text();
+    try {
+      const st = JSON.parse(text).status;
+      if (st && jobStatus.get(hash) !== st) {
+        jobStatus.set(hash, st);
+        if (jobStatus.size > 500) jobStatus.delete(jobStatus.keys().next().value);
+        console.log(`[mixer] job ${hash} → ${st}`);
+      }
+    } catch { /* not JSON: pass it on as is */ }
+    res.status(r.status).type('application/json').send(text || '{}');
+  } catch (err) {
+    // MVSEP unreachable: no status, so the page keeps polling (the job is still running there).
+    console.warn('[mixer] poll failed:', hash, err.message);
+    res.status(502).json({ ok: false, error: 'Could not reach the stem splitter just now' });
+  }
 });
 
 // Finished stems live on mvsep.com without CORS; stream them through, MVSEP hosts only.
@@ -392,12 +407,21 @@ router.get('/audio-proxy', requireMixer, async (req, res) => {
   const hostOk = target.protocol === 'https:' && (target.hostname === 'mvsep.com' || target.hostname.endsWith('.mvsep.com'));
   if (!hostOk) return res.status(400).json({ ok: false, error: 'Only MVSEP result files can be fetched here' });
   try {
-    const up = await fetch(target, { redirect: 'follow', signal: AbortSignal.timeout(5 * 60_000) });
+    // Give up only if MVSEP goes quiet for a minute — not after 5 minutes in total: a 70 MB stem on a
+    // slow connection legitimately takes longer than that.
+    const ac = new AbortController();
+    let idle = setTimeout(() => ac.abort(), 60_000);
+    const poke = () => { clearTimeout(idle); idle = setTimeout(() => ac.abort(), 60_000); };
+    res.on('close', () => clearTimeout(idle));
+    const up = await fetch(target, { redirect: 'follow', signal: ac.signal });
+    poke();
     if (!up.ok || !up.body) return res.status(up.status || 502).json({ ok: false, error: `Upstream ${up.status}` });
     res.setHeader('Content-Type', up.headers.get('content-type') || 'audio/wav');
     if (up.headers.get('content-length')) res.setHeader('Content-Length', up.headers.get('content-length'));
     res.setHeader('Cache-Control', 'private, max-age=3600');
     const s = Readable.fromWeb(up.body);
+    s.on('data', poke);
+    s.on('end', () => clearTimeout(idle));
     s.on('error', () => res.destroy());
     res.on('close', () => { if (!s.destroyed) s.destroy(); });
     s.pipe(res);
