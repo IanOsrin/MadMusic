@@ -433,16 +433,26 @@ describe('Mad Mixer on its own home, through server.js', () => {
       expect(await loc('/mad-mixer.html')).toBe(`${MIXER_URL}/`);
     });
 
-    it('/api/mixer/* is cut to /mixable; there is no hand-off route', async () => {
-      const songs = await request(app).get('/api/mixer/songs').set('X-Access-Token', 'MASS-MIX-PLN');
-      expect(songs.status).toBe(404);
-      expect(songs.body.movedTo).toBe(MIXER_URL);
-      expect((await request(app).post('/api/mixer/trial').send({ email: 'x@example.com' })).status).toBe(404);
-      expect((await request(app).post('/api/mixer/mvsep/create').set('X-Access-Token', 'MASS-MIX-PLN')).status).toBe(404);
-      expect((await request(app).post('/api/mixer/handoff').set('X-Access-Token', 'MASS-MAD-ONL').send({ song: '282' })).status).toBe(404);
+    it('/api/mixer/* is only /mixable: no splitting, songs, sign-up or hand-off routes in MAD', async () => {
+      for (const [method, path] of [['get', '/api/mixer/songs'], ['get', '/api/mixer/songs/282'], ['get', '/api/mixer/ping'],
+        ['post', '/api/mixer/auth'], ['get', '/api/mixer/usage'], ['get', '/api/mixer/mvsep/algorithms'],
+        ['post', '/api/mixer/mvsep/create'], ['get', '/api/mixer/mvsep/get?hash=abcd.wav'],
+        ['get', '/api/mixer/audio-proxy?url=https://mvsep.com/x.wav'], ['post', '/api/mixer/dcx/register'],
+        ['post', '/api/mixer/handoff']]) {
+        const res = await request(app)[method](path).set('X-Access-Token', 'MASS-MAD-ONL');
+        expect(res.status, path).toBe(404);
+        expect(res.body.movedTo, path).toBe(MIXER_URL);
+      }
+      expect((await request(app).post('/api/mixer/trial').send({ email: 'x@example.com' })).status).toBe(403);   // no token, no route
       const mixable = await request(app).get('/api/mixer/mixable').set('X-Access-Token', 'MASS-MAD-ONL');
       expect(mixable.status).toBe(200);
       expect(mixable.body.ok).toBe(true);
+    });
+
+    it('a Mixer-only code opens nothing in MAD, /api/mixer included', async () => {
+      const res = await request(app).get('/api/mixer/mixable').set('X-Access-Token', 'MASS-MIX-PLN');
+      expect(res.status).toBe(403);
+      expect(res.body.mixerOnly).toBe(true);
     });
 
     it('a Confirm link from an email sent before the move is forwarded to the Mixer', async () => {
@@ -462,8 +472,9 @@ describe('Mad Mixer on its own home, through server.js', () => {
   });
 });
 
-// ── 4 · today's deployments: MIXER_URL and MIXER_SHARED_SECRET unset ─────────────────
-describe('with MIXER_URL and MIXER_SHARED_SECRET unset nothing changes', () => {
+// ── 4 · MIXER_URL and MIXER_SHARED_SECRET unset: no Mad Mixer in MAD at all ─────────────────
+// (The old in-MAD Mixer — its page, MVSEP relay and usage file — was removed 2026-10-03.)
+describe('with MIXER_URL and MIXER_SHARED_SECRET unset there is no Mad Mixer in MAD', () => {
   let app;
   beforeAll(async () => {
     vi.resetModules();
@@ -473,13 +484,12 @@ describe('with MIXER_URL and MIXER_SHARED_SECRET unset nothing changes', () => {
     ({ app } = await import('../../server.js'));
   });
 
-  it('/mixer is still Mad Mixer itself', async () => {
-    const res = await request(app).get('/mixer?song=282');
-    expect(res.status).toBe(200);
-    expect(res.text).toContain('window.__MAD_MIXER_URL=false');
-    expect(res.text).toContain('mad-mixer.js');
-    expect(res.headers['content-security-policy']).toContain('blob:');   // the Stems app's own policy
-    expect((await request(app).get('/')).text).toContain('window.__MAD_MIXER_URL=false');
+  it('no /mixer page, no 🎚 buttons, no menu item', async () => {
+    expect((await request(app).get('/mixer?song=282')).status).toBe(404);
+    expect((await request(app).get('/mad-mixer.html')).status).toBe(404);
+    const home = await request(app).get('/');
+    expect(home.text).toContain('window.__MAD_MIXER=false');
+    expect(home.text).toContain('window.__MAD_MIXER_URL=false');
   });
 
   it('the internal API is not mounted', async () => {
@@ -487,10 +497,12 @@ describe('with MIXER_URL and MIXER_SHARED_SECRET unset nothing changes', () => {
     expect((await signed(app, 'GET', '/internal/mixer/songs')).status).toBe(404);
   });
 
-  it('the in-MAD Mad Mixer API still answers', async () => {
-    const res = await request(app).get('/api/mixer/ping').set('X-Access-Token', 'MASS-MIX-PLN');
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ ok: true, engine: 'mad-mixer', entitled: true });
+  it('every old in-MAD Mad Mixer endpoint is gone', async () => {
+    for (const path of ['/api/mixer/ping', '/api/mixer/songs', '/api/mixer/mixable', '/api/mixer/mvsep/algorithms', '/api/mixer/audio-proxy?url=https://mvsep.com/x.wav']) {
+      expect((await request(app).get(path).set('X-Access-Token', 'MASS-MAD-ONL')).status, path).toBe(404);
+    }
+    expect((await request(app).post('/api/mixer/mvsep/create').set('X-Access-Token', 'MASS-MAD-ONL')).status).toBe(404);
+    expect((await request(app).post('/api/mixer/trial').send({ email: 'x@example.com' })).status).toBe(404);
   });
 
   it('MAD sign-in still points a Mixer-only code at /mixer inside MAD', async () => {

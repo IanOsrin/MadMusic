@@ -203,30 +203,19 @@ const EDITORIAL_HERO_ENABLED = process.env.EDITORIAL_HERO_ENABLED === 'true';
 // Mirrors routes/artist-bio.js — surfaced to the client so the artist view can
 // skip the /api/artist-bio round-trip (which returns { found:false }) when off.
 const ARTIST_BIO_ENABLED = process.env.ARTIST_BIO_ENABLED === 'true';
-// ── Mad Mixer feature flag ────────────────────────────────────────────────────
-// Mad Mixer = the Digital Cupboard Stems app adapted for MAD (public/mad-mixer.html, built
-// from the DCMax master by scripts/build-mad-mixer.mjs; API in routes/mixer.js). OFF by
-// default: the page and every /api/mixer/* endpoint 404 until MAD_MIXER_ENABLED=true.
-// (It replaces the old Audio Lab page, retired 2026-09-25.)
+// ── Mad Mixer (its own home on Vercel since 2026-10-03, docs/mad-mixer-vercel-design.md) ──
+// MAD hosts no Mixer page and no stem splitting. What MAD keeps:
+//   MIXER_SHARED_SECRET (the same value on Vercel) mounts the signed internal API Mad Mixer calls:
+//     /internal/mixer/* (routes/mixer-internal.js — entitlement by plan, MADMixer songs, free split
+//     + its emails + confirm). Payments and codes stay in MAD.
+//   MAD_MIXER_ENABLED=true + MIXER_URL (Mad Mixer's address) switch on the 🎚 buttons and the
+//     left-menu item — plain links to MIXER_URL/?song=<id> — plus GET /api/mixer/mixable (which
+//     tracks get a button), and send old /mixer links there. Otherwise all of that is 404.
 const MAD_MIXER_ENABLED = process.env.MAD_MIXER_ENABLED === 'true';
-app.use((req, res, next) => {
-  if (MAD_MIXER_ENABLED) return next();
-  const p = req.path.toLowerCase();
-  if (p === '/mixer' || p === '/mad-mixer.html' || p.startsWith('/api/mixer')) {
-    return res.status(404).send('Not found');
-  }
-  next();
-});
-// ── Mad Mixer on its own home (2026-10-02, docs/mad-mixer-vercel-design.md) ─────────────
-// MIXER_SHARED_SECRET (the same value on Vercel) mounts the signed internal API that Mad Mixer
-// calls: /internal/mixer/* (routes/mixer-internal.js — entitlement by plan, MADMixer songs, free
-// split + its emails + confirm). MIXER_URL (Mad Mixer's address) — with MAD_MIXER_ENABLED — makes
-// the 🎚 buttons and the left-menu item plain links to MIXER_URL, sends /mixer and /mad-mixer.html
-// there, and cuts /api/mixer/* down to /mixable. Both unset = Mad Mixer stays inside MAD as before.
 const MIXER_SHARED_SECRET_SET = Boolean(mixerSharedSecret());
 const MIXER_URL = mixerPublicUrl();
-if (process.env.MIXER_URL && !MIXER_URL) console.warn('[MASS] MIXER_URL is not a usable https address — Mad Mixer stays inside MAD.');
-const MIXER_MOVED = MAD_MIXER_ENABLED && Boolean(MIXER_URL);
+if (process.env.MIXER_URL && !MIXER_URL) console.warn('[MASS] MIXER_URL is not a usable https address — the Mad Mixer links stay off.');
+const MIXER_LINKS = MAD_MIXER_ENABLED && Boolean(MIXER_URL);
 // Where an old /mixer link goes: MIXER_URL/?song=ID (a MADMixer record id — not a secret). An old
 // free-split email's /mixer?code=… moves into the fragment, so the code never reaches a server log.
 function mixerAddress(query = {}) {
@@ -234,12 +223,13 @@ function mixerAddress(query = {}) {
   const code = String(query.code || '').trim().toUpperCase();
   return `${MIXER_URL}/${song ? `?song=${song}` : ''}${/^[A-Z0-9-]{4,64}$/.test(code) ? `#code=${encodeURIComponent(code)}` : ''}`;
 }
-if (MIXER_MOVED) app.get('/mad-mixer.html', (req, res) => res.redirect(302, mixerAddress(req.query)));
-// Local mixer server (the "mad-mixer" server panel entry): the panel always opens the server's
-// front page, so send "/" to the mixer. Never in production.
-if (MAD_MIXER_ENABLED && process.env.MIXER_AS_HOME === 'true' && process.env.NODE_ENV !== 'production') {
-  app.get('/', (req, res) => res.redirect(302, '/mixer'));
-}
+app.use((req, res, next) => {
+  const p = req.path.toLowerCase();
+  if (p !== '/mixer' && p !== '/mad-mixer.html' && !p.startsWith('/api/mixer')) return next();
+  if (!MIXER_LINKS) return res.status(404).send('Not found');
+  if (p === '/mixer' || p === '/mad-mixer.html') return res.redirect(302, mixerAddress(req.query));
+  next();
+});
 
 // ── Telkom feature flag ───────────────────────────────────────────────────────
 // Telkom integration is OFF by default (ring-fenced June 2026 — waiting on
@@ -361,9 +351,6 @@ app.use(compression({
   threshold: 1024,
   filter: (req, res) => {
     if (req.headers['x-no-compression']) return false;
-    // Mad Mixer stems are WAV streamed from MVSEP (70 MB each): gzip saves ~8% and costs the small
-    // instance CPU on every byte. Send them as they come.
-    if (req.path.startsWith('/api/mixer/audio-proxy')) return false;
     return compression.filter(req, res);
   }
 }));
@@ -520,7 +507,6 @@ app.use(['/api/explore', '/api/trending', '/api/featured-albums', '/api/missing-
 app.use(['/api/payments/initialize', '/api/payments/subscribe', '/api/ringtone/initiate'], paymentLimiter);
 app.use('/api/payments/trial', trialLimiter);
 app.use('/api/contact', contactLimiter);
-app.use('/api/mixer/trial', trialLimiter);   // Mad Mixer free split — same limit as the MAD trial
 
 // Add Cache-Control headers
 app.use((req, res, next) => {
@@ -602,7 +588,6 @@ async function resolveTokenForMixer(code) {
     type:            validation.type,
     expirationDate:  validation.expirationDate,
     email:           validation.email || null,
-    audioLabEnabled: validation.audioLabEnabled || false,
     recordId:        validation.recordId || null
   };
   tokenValidationCache.set(cacheKey, { data, expiresAt: Date.now() + TOKEN_CACHE_TTL_MS });
@@ -674,17 +659,15 @@ app.use('/api/', async (req, res, next) => {
     '/taster/event',
     '/taster/report',
     '/catalog/',
-    // Mad Mixer, LOCAL TESTING ONLY: with MIXER_DEV_NO_TOKEN=true (ignored in production)
-    // the mixer API works without a MAD sign-in so the page can be tried on localhost.
-    ...(MAD_MIXER_ENABLED && process.env.MIXER_DEV_NO_TOKEN === 'true' && process.env.NODE_ENV !== 'production' ? ['/mixer/'] : []),
-    // Mad Mixer free split: signing up and the email's Confirm link come before any code exists.
-    ...(MAD_MIXER_ENABLED ? ['/mixer/trial'] : [])
+    // An old free-split email's Confirm link (sent before Mad Mixer moved) — it carries no access
+    // token; it is forwarded to MIXER_URL below.
+    ...(MIXER_LINKS ? ['/mixer/trial/confirm'] : [])
   ];
 
-  // Mad Mixer-only codes (free split / Mixer plan) open /api/mixer/* and nothing else —
-  // above all, never full streaming. Checked on every path that lets a token through below.
+  // Mad Mixer-only codes (free split / Mixer plan) open Mad Mixer on its own home and nothing in
+  // MAD — above all, never full streaming. Checked on every path that lets a token through below.
   const mixerOnlyRefused = (data) => {
-    if (!data || !isMixerOnly(data.type) || req.path.startsWith('/mixer/')) return false;
+    if (!data || !isMixerOnly(data.type)) return false;
     res.status(403).json({ ok: false, error: 'This Mad Mixer code does not include MAD streaming.', mixerOnly: true, requiresAccessToken: true });
     return true;
   };
@@ -744,7 +727,6 @@ app.use('/api/', async (req, res, next) => {
     type:            validation.type,
     expirationDate:  validation.expirationDate,
     email:           validation.email || null,
-    audioLabEnabled: validation.audioLabEnabled || false,
     recordId:        validation.recordId || null
   };
 
@@ -806,11 +788,10 @@ async function loadHtml(filename) {
     + `window.__ARTIST_BIO=${ARTIST_BIO_ENABLED ? 'true' : 'false'};`
     + `window.__GUEST_PREVIEW=${GUEST_PREVIEW_ENABLED ? 'true' : 'false'};`
     + `window.__MADDIE=${MADDIE_ENABLED ? 'true' : 'false'};`
-    + `window.__MAD_MIXER=${MAD_MIXER_ENABLED ? 'true' : 'false'};`
-    //   __MAD_MIXER_URL — Mad Mixer's own address once it has one (MIXER_URL, with
-    //     MAD_MIXER_ENABLED): js/mad-mixer-links.js points the 🎚 buttons and the left-menu
-    //     item there. false = Mad Mixer inside MAD (/mixer).
-    + `window.__MAD_MIXER_URL=${MIXER_MOVED ? inlineJson(MIXER_URL) : 'false'};`
+    //   __MAD_MIXER / __MAD_MIXER_URL — the 🎚 buttons and the left-menu item, plain links to
+    //     Mad Mixer's own home (MAD_MIXER_ENABLED + MIXER_URL; js/mad-mixer-links.js).
+    + `window.__MAD_MIXER=${MIXER_LINKS ? 'true' : 'false'};`
+    + `window.__MAD_MIXER_URL=${MIXER_LINKS ? inlineJson(MIXER_URL) : 'false'};`
     //   __MEDIA_CDN — CloudFront host for bucket media (false = serve S3 direct).
     //   The client treats this host as direct-playable (no container proxy) and
     //   playTrack/artwork paths rewrite S3 URLs onto it. Set MEDIA_CDN_HOST on
@@ -951,7 +932,7 @@ if (PODCASTS_ENABLED) app.use('/api', podcastsRouter);    // dark until PODCASTS
 if (SUGGESTIONS_ENABLED) app.use('/api', suggestionsRouter); // dark until SUGGESTIONS_ENABLED=true
 if (PERSONAL_RAIL_ENABLED) app.use('/api', suggestedForYouRouter); // dark until PERSONAL_RAIL_ENABLED=true
 if (GUEST_PREVIEW_ENABLED) app.use('/api', previewRouter);   // dark until GUEST_PREVIEW_ENABLED=true
-if (MIXER_MOVED) {
+if (MIXER_LINKS) {
   // Mad Mixer lives at MIXER_URL: only the 🎚 button map stays here. A Confirm link from an email
   // sent before the move is forwarded to the Mixer (code + sig in the fragment).
   app.use('/api/mixer', (req, res, next) => {
@@ -964,8 +945,8 @@ if (MIXER_MOVED) {
     }
     res.status(404).json({ ok: false, error: 'Mad Mixer has moved.', movedTo: MIXER_URL });
   });
+  app.use('/api/mixer', mixerRouter);                         // GET /mixable only
 }
-if (MAD_MIXER_ENABLED) app.use('/api/mixer', mixerRouter);   // dark until MAD_MIXER_ENABLED=true
 if (MADDIE_ENABLED) app.use('/api/maddie', maddieRouter);     // dark until MADDIE_ENABLED=true
 if (CATALOG_PAGES_ENABLED) {                                  // dark until CATALOG_PAGES_ENABLED=true
   // Public server-rendered catalogue pages (SEO tier 2): /browse, /artist/:slug,
@@ -1127,29 +1108,6 @@ app.get('/mobile',   async (req, res) => {
 app.get('/m',        (_req, res) => sendHtml(res, 'mobile.html'));
 app.get('/ringtone', (_req, res) => sendHtml(res, 'ringtone.html'));
 app.get('/privacy',  (_req, res) => sendHtml(res, 'privacy.html')); // required by the app stores; POPIA statement
-app.get('/mixer', (req, res) => {
-  // Mad Mixer on its own home: MAD has no Mixer page — old links and bookmarks go to MIXER_URL.
-  if (MIXER_MOVED) return res.redirect(302, mixerAddress(req.query));
-  // The Stems app builds its DSP AudioWorklet from a blob: URL (script-src blob:) and
-  // loads the chosen track straight from the media CDN (connect-src). Page-scoped: the
-  // rest of the site keeps the stricter global policy above.
-  const media = MEDIA_CDN_HOST || 'media.musicafricadirect.com';
-  res.setHeader('Content-Security-Policy', [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' blob: https://cdnjs.cloudflare.com",
-    "worker-src 'self' blob:",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "img-src 'self' https: data: blob:",
-    "media-src 'self' https: blob:",
-    `connect-src 'self' blob: data: https://${media}`,
-    "font-src 'self' https:",
-    "frame-src 'none'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'"
-  ].join('; '));
-  sendHtml(res, 'mad-mixer.html');
-});
 
 // ── Taster funnel beacons ─────────────────────────────────────────────────────
 // Cookie-free counterpart to the Umami events: the client pings 'play' when a
@@ -1261,9 +1219,6 @@ if (HTTP2_ENABLED) {
 
 if (!serverStarted) {
   server = http.createServer(app);
-  // Node cuts off any request body still arriving after 5 min (requestTimeout default). A Mad
-  // Mixer upload (~36 MB for a 3½-min song) on a slow uplink can take longer; give it 30 min.
-  server.requestTimeout = 30 * 60 * 1000;
   server.listen(PORT, HOST, () => logServerReady('HTTP/1.1'));
 }
 

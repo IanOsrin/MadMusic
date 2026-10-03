@@ -5,12 +5,13 @@
  * { tracks: { recordId: madMixerSongId } }. Track rows (the tracks modal, the artist view's
  * album panel) render the button hidden with data-mix-rec="<recordId>"; this file reveals the
  * ones on that list and points them at the song in Mad Mixer. Rows drawn later are picked up by
- * a debounced MutationObserver. Does nothing unless Mad Mixer is switched on (window.__MAD_MIXER);
- * the buttons need a signed-in listener (guests have no token for the API).
+ * a debounced MutationObserver. Does nothing unless the links are switched on (window.__MAD_MIXER,
+ * server.js: MAD_MIXER_ENABLED + MIXER_URL); the buttons need a signed-in listener (guests have no
+ * token for the API).
  *
- * Where Mad Mixer lives: window.__MAD_MIXER_URL (server.js, from MIXER_URL) = its own home →
- * plain links to MIXER_URL/?song=<id> (new tab) and MIXER_URL/ for the left-menu item; listeners
- * sign in there with their code. false → Mad Mixer inside MAD, /mixer?song=<id>.
+ * Mad Mixer lives on its own home, window.__MAD_MIXER_URL (MIXER_URL): plain links to
+ * MIXER_URL/?song=<id> (new tab) and MIXER_URL/ for the left-menu item; listeners sign in there
+ * with their code.
  */
 (function () {
   'use strict';
@@ -18,17 +19,16 @@
 
   const raw = typeof window.__MAD_MIXER_URL === 'string' ? window.__MAD_MIXER_URL : '';
   const home = /^https?:\/\/[^/?#]+(\/[^?#]*)?$/.test(raw) ? raw.replace(/\/+$/, '') : '';
-  const songUrl = (song) => (home ? home + '/?song=' : '/mixer?song=') + encodeURIComponent(song);
+  if (!home) return;
+  const songUrl = (song) => home + '/?song=' + encodeURIComponent(song);
 
   // The "Mad Mixer" item in the left menu (app.html) — the way in from MAD.
   function showNavItem() {
     const n = document.getElementById('navMadMixer');
     if (!n) return;
-    if (home) {
-      n.href = home + '/';
-      n.target = '_blank';                        // MAD keeps playing in its own tab
-      n.rel = 'noopener';
-    }
+    n.href = home + '/';
+    n.target = '_blank';                          // MAD keeps playing in its own tab
+    n.rel = 'noopener';
     n.style.display = '';
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', showNavItem); else showNavItem();

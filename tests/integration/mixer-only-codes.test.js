@@ -23,6 +23,7 @@ let app;
 beforeAll(async () => {
   process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'mad-mixer-only-'));
   process.env.MAD_MIXER_ENABLED = 'true';
+  process.env.MIXER_URL = 'https://mixer.test';
   ({ app } = await import('../../server.js'));
 });
 
@@ -41,14 +42,14 @@ describe('Mad Mixer-only codes', () => {
     expect(res.body.reason).toMatch(/Mad Mixer/);
   });
 
-  it('get past the token check on /api/mixer/*', async () => {
-    const res = await request(app).get('/api/mixer/ping').set('X-Access-Token', 'MASS-MIX-001');
-    expect(res.status).toBe(200);
-    expect(res.body.entitled).toBe(true);
+  it('open nothing in MAD now that Mad Mixer has its own home, /api/mixer included', async () => {
+    const res = await request(app).get('/api/mixer/mixable').set('X-Access-Token', 'MASS-MIX-001');
+    expect(res.status).toBe(403);
+    expect(res.body.mixerOnly).toBe(true);
   });
 
   it('leave ordinary MAD codes alone', async () => {
-    const res = await request(app).get('/api/mixer/ping').set('X-Access-Token', 'MASS-MAD-001');
+    const res = await request(app).get('/api/mixer/mixable').set('X-Access-Token', 'MASS-MAD-001');
     expect(res.status).toBe(200);
     const mad = await request(app).get('/api/playlists').set('X-Access-Token', 'MASS-MAD-001');
     expect(mad.body.mixerOnly).toBeUndefined();

@@ -93,7 +93,6 @@ router.post('/validate', async (req, res) => {
         type: result.type,
         expirationDate: result.expirationDate,
         email: result.email || null,
-        audioLabEnabled: result.audioLabEnabled || false,
         message: result.message || 'Token is valid'
       });
     } else {

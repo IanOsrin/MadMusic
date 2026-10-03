@@ -33,9 +33,8 @@
     // so a plain token param here is unambiguous).
     const IS_ACCESS_PAGE = window.location.pathname === '/access';
     const accessPagePrefill = IS_ACCESS_PAGE ? (_cbp.get('token') || '').trim() : '';
-    // Where to go after signing in. Only Mad Mixer's own page is allowed (no open redirect):
-    // /access?next=/mixer is its "Sign in" button for visitors who arrive there cold.
-    const ACCESS_NEXT = IS_ACCESS_PAGE && /^\/mixer(\?song=\d{1,12})?$/.test(_cbp.get('next') || '') ? _cbp.get('next') : '/';
+    // Where to go after signing in on /access (Mad Mixer has its own sign-in on its own home).
+    const ACCESS_NEXT = '/';
     // /access?buy=1 — the "See plans & subscribe" link in the trial email: show the plans
     // even to someone already signed in (a trial listener deciding whether to pay).
     const ACCESS_BUY = IS_ACCESS_PAGE && _cbp.get('buy') === '1';
@@ -371,9 +370,6 @@
             return true;
           }
 
-          // Mad Mixer entitlement (FM Audio_Lab_Enabled — the field predates Mad Mixer)
-          window.massAudioLabEnabled = data.audioLabEnabled || false;
-
           hideTokenOverlay();
           console.log('[Access Token] Token validated successfully');
 
@@ -381,7 +377,7 @@
           window.massAccessReady = true;
           window.massAccessToken = normalized;
           window.dispatchEvent(new CustomEvent('mass:access-ready', {
-            detail: { token: normalized, email: data.email || null, audioLabEnabled: data.audioLabEnabled || false }
+            detail: { token: normalized, email: data.email || null }
           }));
 
           return true;
@@ -716,8 +712,6 @@
       } else if (existingToken) {
         // Already signed in — nothing to do here.
         window.location.replace(ACCESS_NEXT);
-      } else if (ACCESS_NEXT !== '/') {
-        showTokenEntry();   // sent here by Mad Mixer's "Sign in": open on the access-code tab
       } else {
         showTokenOverlay();
       }
