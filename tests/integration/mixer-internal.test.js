@@ -32,6 +32,8 @@ const row = (code, f) => fm.rows.push({ recordId: String(fm.nextId++), fieldData
 row('MASS-MIX-TRL', { Token_Type: 'mixer-trial', Email: 'trial@example.com', Token_Duration_Hours: String(30 * 86400) });
 row('MASS-MIX-PLN', { Token_Type: 'mixer', Email: 'plan@example.com' });
 row('MASS-CMB-001', { Token_Type: 'combined', Email: 'both@example.com' });
+row('MASS-CMB-CAP', { Token_Type: 'Combined', Email: 'typed@example.com' });   // typed by hand in FileMaker
+row('MASS-MIX-SPC', { Token_Type: ' Mixer ', Email: 'spaces@example.com' });
 row('MASS-MAD-ONL', { Token_Type: 'valid', Email: 'listener@example.com', Audio_Lab_Enabled: 0 });
 row('MASS-MAD-LAB', { Token_Type: 'valid', Email: 'lab@example.com', Audio_Lab_Enabled: 1 });
 row('MASS-OFF-001', { Token_Type: 'mixer', Active: 0 });
@@ -288,6 +290,11 @@ describe('Mad Mixer on its own home, through server.js', () => {
       expect((await entitlement('MASS-CMB-001')).body).toMatchObject({ valid: true, entitled: true, plan: 'combined', trial: false });
     });
 
+    it('plan names typed by hand count whatever their capitals and spaces ("Combined", " Mixer ")', async () => {
+      expect((await entitlement('MASS-CMB-CAP')).body).toMatchObject({ valid: true, entitled: true, plan: 'combined', trial: false });
+      expect((await entitlement('MASS-MIX-SPC')).body).toMatchObject({ valid: true, entitled: true, plan: 'mixer', trial: false });
+    });
+
     it('a MAD-only code is valid but NOT entitled (the Mixer offers the upgrade)', async () => {
       expect((await entitlement('MASS-MAD-ONL')).body).toMatchObject({ valid: true, entitled: false, plan: 'valid', trial: false, confirmed: true, email: 'listener@example.com' });
     });
@@ -453,6 +460,8 @@ describe('Mad Mixer on its own home, through server.js', () => {
       const res = await request(app).get('/api/mixer/mixable').set('X-Access-Token', 'MASS-MIX-PLN');
       expect(res.status).toBe(403);
       expect(res.body.mixerOnly).toBe(true);
+      // " Mixer " typed by hand is still a Mixer-only code: no streaming.
+      expect((await request(app).get('/api/playlists').set('X-Access-Token', 'MASS-MIX-SPC')).body.mixerOnly).toBe(true);
     });
 
     it('a Confirm link from an email sent before the move is forwarded to the Mixer', async () => {

@@ -28,7 +28,7 @@ import { Router } from 'express';
 import net from 'node:net';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { verifyRequest, mixerSharedSecret, mixerPublicUrl } from '../lib/mixer-bridge.js';
-import { mixerEntitled, MIXER_TRIAL_TYPE } from '../lib/mixer-plans.js';
+import { mixerEntitled, isMixerTrial, planOf } from '../lib/mixer-plans.js';
 import { songsWithAudio } from '../lib/mixer-catalogue.js';
 import { trialConfirmedCached, startTrial, confirmTrial, mixerTrialLinks } from '../lib/mixer-trial.js';
 
@@ -103,7 +103,7 @@ export function createMixerInternalRouter({ resolveToken, secret = mixerSharedSe
     let r, confirmed = true;
     try {
       r = await resolveToken(code);
-      if (r?.valid && r.data?.type === MIXER_TRIAL_TYPE) confirmed = await trialConfirmedCached(code);
+      if (r?.valid && isMixerTrial(r.data?.type)) confirmed = await trialConfirmedCached(code);
     } catch (err) {
       console.warn('[mixer-internal] entitlement check failed:', err?.message || err);
       return res.status(503).json({ ok: false, error: 'Could not check the code just now.' });
@@ -114,9 +114,9 @@ export function createMixerInternalRouter({ resolveToken, secret = mixerSharedSe
       ok: true, valid: true,
       definitive: r.source === 'fm' || r.source === 'cache',
       source: r.source,
-      entitled: mixerEntitled(d.type),        // by plan only (lib/mixer-plans.js)
-      plan: d.type || null,
-      trial: d.type === MIXER_TRIAL_TYPE,
+      entitled: mixerEntitled(d.type),        // by plan only (lib/mixer-plans.js), any capitalisation
+      plan: planOf(d.type) || null,
+      trial: isMixerTrial(d.type),
       confirmed,
       email: d.email || null,
       expiresAt: d.expirationDate || null,
