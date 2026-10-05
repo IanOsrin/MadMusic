@@ -76,6 +76,15 @@ const GENRE_FIELDS = ['Local Genre'];
 // resolve to the right album.
 const ARTIST_FIELDS = ['Album Artist', 'Track Artist'];
 
+// The trigram indexes behind "contains" search only work from 3 characters. A free-text query
+// with no word that long ("ub", "xu") matched by reading the whole catalogue once per search
+// field — 20-25 s on live, holding one of the 10 database connections the whole time, and the
+// phone search fires on every pause while typing (2026-10-05). Such a query now answers
+// "tooShort" without touching the database. A short word next to a long one is fine ("dj sbu":
+// the index finds "sbu", then "dj" filters those rows).
+export const MIN_INDEXED_WORD = 3;
+export const hasIndexableWord = (q) => String(q || '').trim().split(/\s+/).some(w => w.length >= MIN_INDEXED_WORD);
+
 const buildQueries = ({ q, artist, album, track, genres }) => {
   // Genre-only search: build one OR clause per genre × per field candidate
   if (genres.length && !q && !artist && !album && !track) {
@@ -109,7 +118,8 @@ const buildQueries = ({ q, artist, album, track, genres }) => {
 // nothing; relaxed matches the "Thandiswa" records (1 of 2 words) which
 // runSearch then ranks to the top by word-match count.
 const buildRelaxedQueries = (q) => {
-  const words = (q || '').trim().split(/\s+/).filter(Boolean).slice(0, 6);
+  // Each word is its own OR clause here, so a short one would scan the whole table (see hasIndexableWord).
+  const words = (q || '').trim().split(/\s+/).filter(w => w.length >= MIN_INDEXED_WORD).slice(0, 6);
   return SEARCH_FIELDS_DEFAULT.flatMap(f => words.map(w => ({ [f]: `*${w}*` })));
   return [{ 'Album Title': '*' }];
 };
@@ -119,6 +129,9 @@ const buildRelaxedQueries = (q) => {
 // the right HTTP status. The returned object is the exact response shape the
 // frontend expects (do not change without checking pagination/genreOffset).
 async function runSearch({ q, artist, album, track, genres, yearRange, limit, uiOff0, fmOff }) {
+  if (q && !artist && !album && !track && !genres.length && !hasIndexableWord(q)) {
+    return { items: [], rawReturnedCount: 0, total: 0, offset: uiOff0, limit, relaxed: false, tooShort: true };
+  }
   const fmLimit = Math.min(500, limit * 10);
 
   // One FM _find + the post-filters (genre false-positive prune, audio/artwork
@@ -203,7 +216,7 @@ async function runSearch({ q, artist, album, track, genres, yearRange, limit, ui
   // only part of it. Retry matching ANY word and rank by word-match count.
   // Plain free-text q only — structured artist/album/track/genre keep precise semantics.
   const words = (q || '').trim().split(/\s+/).filter(Boolean);
-  if (q && words.length > 1 && !artist && !album && !track && !genres.length && validRecords.length === 0) {
+  if (q && words.length > 1 && hasIndexableWord(q) && !artist && !album && !track && !genres.length && validRecords.length === 0) {
     const r = await fetchFiltered(buildRelaxedQueries(q));
     validRecords = r.validRecords;
     fmReturnedCount = r.fmReturnedCount;
@@ -550,5 +563,5 @@ router.get('/ai-search', async (req, res) => {
 });
 
 // Export normalizeAiValue so other modules can reuse it if needed
-export { normalizeAiValue, buildQueries, buildRelaxedQueries, SEARCH_FIELDS_DEFAULT };
+export { normalizeAiValue, buildQueries, buildRelaxedQueries, SEARCH_FIELDS_DEFAULT, runSearch };
 export default router;
