@@ -1,10 +1,16 @@
 // Catalogue search for the mobile app.
 
-import { elements, state } from './state.js?v=41';
-import { groupTracksByAlbum, hasValidArtwork, hasValidAudio, escapeHtml } from './fields.js?v=41';
-import { openFullAlbum, renderAlbumTileGrid } from './cards.js?v=41';
+import { elements, state } from './state.js?v=42';
+import { groupTracksByAlbum, hasValidArtwork, hasValidAudio, escapeHtml } from './fields.js?v=42';
+import { openFullAlbum, renderAlbumTileGrid } from './cards.js?v=42';
 
 export async function search(query) {
+      // Needs one word of 3+ letters — the server answers shorter searches with nothing (they
+      // read the whole catalogue: 20-25 s each, routes/catalog/search.js hasIndexableWord).
+      if (!String(query).trim().split(/\s+/).some(w => w.length >= 3)) {
+        elements.searchResults.innerHTML = '<div class="empty-state"><p>Keep typing…</p></div>';
+        return;
+      }
       try {
         elements.searchResults.innerHTML = '<div class="skeleton-card skeleton"></div><div class="skeleton-card skeleton"></div>';
 

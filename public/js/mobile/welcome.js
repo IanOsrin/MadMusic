@@ -6,8 +6,8 @@
 // is filled from the site's own plan list (/api/payments/plans + /subscription-plan), so it can
 // never show a stale price — and inside the store app (isNativeApp) it shows only the free trial:
 // naming outside prices there breaks Google/Apple rules.
-import { switchTab } from './nav.js?v=41';
-import { isNativeApp, buyAccess, startTrial } from './auth.js?v=41';
+import { switchTab } from './nav.js?v=42';
+import { isNativeApp, buyAccess, startTrial } from './auth.js?v=42';
 
 const KEY = 'mad_welcome_seen_v1';
 const COVERS = [   // real MAD artwork, from the live image server
