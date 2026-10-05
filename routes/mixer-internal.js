@@ -9,6 +9,10 @@
  *   GET  /songs                       → { ok, builtAt, count, songs: [{ id, title, …, playable, hasMaster, audioUrl }] }
  *   POST /trial          {email, ip}  → { ok, code } · 400 · 409 · 429 · 502 (email failed, code revoked) · 503
  *   POST /trial/confirm  {code, sig}  → { ok, confirmed: true } · 400 { reason: 'bad-link' | 'ended' } · 503
+ *   POST /subscribe      {email}      → { ok, url } — a Paystack checkout for the Mad Mixer plan · 400 · 503
+ *                                        (MAD takes the payment and makes the code; Paystack returns the
+ *                                        listener to MAD's /api/payments/callback?source=mixer, which sends
+ *                                        them on to Mad Mixer signed in — routes/payments.js)
  *
  * Every request carries X-MM-Ts + X-MM-Sig (lib/mixer-bridge.js, docs/mixer-bridge-vectors.json);
  * a missing, stale (±60 s) or wrong signature is 401 before anything else runs. The listener's code
@@ -31,6 +35,26 @@ import { verifyRequest, mixerSharedSecret, mixerPublicUrl } from '../lib/mixer-b
 import { mixerEntitled, isMixerTrial, planOf } from '../lib/mixer-plans.js';
 import { songsWithAudio } from '../lib/mixer-catalogue.js';
 import { trialConfirmedCached, startTrial, confirmTrial, mixerTrialLinks } from '../lib/mixer-trial.js';
+import { paystackRequest, PAYSTACK_MIXER_PLAN } from '../lib/paystack.js';
+import { isStrictEmail } from '../lib/validators.js';
+
+// A Paystack checkout for the Mad Mixer plan (2026-10-05). Same shape as MAD's own subscription
+// checkout (routes/payments.js /subscribe), with the Mixer plan and source=mixer on the callback.
+async function startMixerCheckout({ email, appBase }) {
+  const plan = PAYSTACK_MIXER_PLAN.code();
+  if (!plan || !process.env.PAYSTACK_SECRET_KEY) return { ok: false, status: 503, error: 'Mad Mixer subscriptions aren’t open yet.' };
+  const data = await paystackRequest('POST', '/transaction/initialize', {
+    email,
+    amount: PAYSTACK_MIXER_PLAN.amount,
+    plan,
+    callback_url: `${appBase}/api/payments/callback?source=mixer&type=subscription`,
+    metadata: { payment_type: 'subscription', plan_code: plan, product: 'mixer', source: 'mixer' },
+  });
+  const url = data?.data?.authorization_url;
+  if (!url) return { ok: false, status: 503, error: 'Payments are unavailable right now. Please try again later.' };
+  console.log(`[mixer-internal] Mad Mixer checkout opened: ${data.data.reference}`);
+  return { ok: true, url };
+}
 
 const EMPTY = Buffer.alloc(0);
 const CODE_RE = /^[A-Z0-9][A-Z0-9_.-]{3,63}$/;
@@ -48,8 +72,9 @@ const notEntitled = (r) => ({
  * @param {Function} [opts.mixerUrl]    → Mad Mixer's public address for email links (default MIXER_URL)
  * @param {Function} [opts.now]         → ms clock for the ±60 s check (tests pin it)
  * @param {object}   [opts.limits]      { trialsPerHour = 5 per signed ip, callsPerMinute = 300 in total }
+ * @param {Function} [opts.startCheckout] async ({ email, appBase }) → { ok, url } | { ok: false, status, error } (tests stub it)
  */
-export function createMixerInternalRouter({ resolveToken, secret = mixerSharedSecret, mixerUrl = mixerPublicUrl, now = () => Date.now(), limits = {} } = {}) {
+export function createMixerInternalRouter({ resolveToken, secret = mixerSharedSecret, mixerUrl = mixerPublicUrl, now = () => Date.now(), limits = {}, startCheckout = startMixerCheckout } = {}) {
   if (typeof resolveToken !== 'function') throw new Error('createMixerInternalRouter needs resolveToken');
   const { trialsPerHour = 5, callsPerMinute = 300 } = limits;
   const router = Router();
@@ -159,6 +184,23 @@ export function createMixerInternalRouter({ resolveToken, secret = mixerSharedSe
     if (r.ok) return res.json({ ok: true, confirmed: true });
     if (r.reason === 'error') return res.status(503).json({ ok: false, reason: 'error', error: 'Could not confirm just now. Please try again in a minute.' });
     res.status(400).json({ ok: false, reason: r.reason });
+  });
+
+  // Subscribe: Mad Mixer never takes payments — it asks MAD for a Paystack checkout and sends the
+  // listener there. Needs MIXER_URL (where Paystack's return trip ends up) and the Mixer plan code.
+  router.post('/subscribe', jsonBody, async (req, res) => {
+    const email = typeof req.mm.email === 'string' ? req.mm.email.trim().toLowerCase() : '';
+    if (!isStrictEmail(email)) return res.status(400).json({ ok: false, error: 'Please enter a valid email address.' });
+    if (!mixerUrl()) return res.status(503).json({ ok: false, error: 'Mad Mixer subscriptions aren’t open yet.' });
+    const appBase = (process.env.APP_URL || process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+    try {
+      const r = await startCheckout({ email, appBase });
+      if (r.ok) return res.json({ ok: true, url: r.url });
+      return res.status(r.status || 503).json({ ok: false, error: r.error || 'Payments are unavailable right now.' });
+    } catch (err) {
+      console.error('[mixer-internal] Mad Mixer checkout failed:', err?.message || err);
+      res.status(503).json({ ok: false, error: 'Payments are unavailable right now. Please try again later.' });
+    }
   });
 
   router.use((_req, res) => res.status(404).json({ ok: false, error: 'Not found.' }));

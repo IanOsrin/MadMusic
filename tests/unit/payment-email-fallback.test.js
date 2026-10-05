@@ -33,7 +33,8 @@ describe('Paystack payloads without a customer email', () => {
   it('logs a manual-action line wherever a token cannot be emailed', () => {
     // One per send site: two subscription paths in the webhook, one in the
     // callback, plus the two one-time paths.
-    const sends = (payments.match(/send(?:Token|SubscriptionWelcome)Email\(/g) || []).length;
+    // Subscription codes are emailed through sendWelcomeFor() (MAD or Mad Mixer welcome, by plan).
+    const sends = (payments.match(/sendTokenEmail\(|(?<!function )sendWelcomeFor\(/g) || []).length;
     // Call sites only — `function warnUndeliverable(` is the declaration.
     const warns = (payments.match(/(?<!function )warnUndeliverable\(/g) || []).length;
     expect(warns).toBe(sends);

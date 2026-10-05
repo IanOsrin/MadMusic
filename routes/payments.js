@@ -1,9 +1,10 @@
 import { Router } from 'express';
-import { sendTokenEmail, sendSubscriptionWelcomeEmail, sendTrialEmail, emailTransporter } from '../lib/email.js';
+import { sendTokenEmail, sendSubscriptionWelcomeEmail, sendMixerSubscriptionEmail, sendTrialEmail, emailTransporter } from '../lib/email.js';
+import { mixerPublicUrl } from '../lib/mixer-bridge.js';
 import {
   paystackRequest, verifyPaystackWebhook,
   PAYSTACK_PLANS, PAYSTACK_SUBSCRIPTION_PLAN, SUBSCRIPTION_INTERVAL_DAYS,
-  getSubscriptionPlanAmount
+  getSubscriptionPlanAmount, tokenTypeForPlan
 } from '../lib/paystack.js';
 import { handleDownloadWebhook } from './download.js';
 import {
@@ -277,6 +278,16 @@ ${listen ? `<a href="${listen}" style="display:inline-block;padding:12px 26px;bo
   }
 });
 
+// The welcome email for a new subscription code: a Mad Mixer plan gets the Mad Mixer email (with a
+// link that opens Mad Mixer signed in), any other plan the MAD subscription email.
+function sendWelcomeFor(planCode, email, code) {
+  if (tokenTypeForPlan(planCode) === 'mixer') {
+    const base = mixerPublicUrl();
+    return sendMixerSubscriptionEmail(email, code, { openUrl: base ? `${base}/#code=${encodeURIComponent(code)}` : null });
+  }
+  return sendSubscriptionWelcomeEmail(email, code, PAYSTACK_SUBSCRIPTION_PLAN.label);
+}
+
 // ── Subscription checkout ─────────────────────────────────────────────────────
 // Initialises a Paystack subscription checkout (uses plan code, not amount).
 router.post('/subscribe', async (req, res) => {
@@ -334,21 +345,32 @@ router.get('/callback', async (req, res) => {
   // Detect mobile source from a query param passed through the Paystack flow
   // (Paystack preserves query params on the callback_url)
   const mobileCallback = req.query.source === 'mobile';
+  // A Mad Mixer checkout (source=mixer, opened by Mad Mixer through /internal/mixer/subscribe) goes
+  // back to Mad Mixer: a paid code signs straight in there (MIXER_URL/#code=…, the same link its
+  // emails use), anything else lands on Mad Mixer with ?payment=<state> for it to explain.
+  const mixerBase = req.query.source === 'mixer' ? mixerPublicUrl() : '';
+  const back = (query) => {
+    if (mixerBase) {
+      const q = new URLSearchParams(query);
+      if (q.get('payment') === 'success' && q.get('token')) return res.redirect(`${mixerBase}/?payment=success#code=${encodeURIComponent(q.get('token'))}`);
+      return res.redirect(`${mixerBase}/?payment=${encodeURIComponent(q.get('payment') || 'error')}`);
+    }
+    return res.redirect(`${mobileCallback ? '/mobile.html' : '/'}?${query}`);
+  };
 
   if (!reference) {
-    return res.redirect(`${mobileCallback ? '/mobile.html' : '/'}?payment=error&reason=missing_reference`);
+    return back(`payment=error&reason=missing_reference`);
   }
 
   try {
     const existing = pendingPayments.get(reference);
     if (existing) {
-      const base = mobileCallback ? '/mobile.html' : '/';
       if (existing.processing) {
         console.log(`[MASS] Payment callback already in progress for ${reference}, redirecting to pending`);
-        return res.redirect(`${base}?payment=pending&reason=processing`);
+        return back('payment=pending&reason=processing');
       }
       console.log(`[MASS] Payment callback duplicate for ${reference}, returning existing token ${existing.tokenCode}`);
-      return res.redirect(`${base}?payment=success&token=${encodeURIComponent(existing.tokenCode)}`);
+      return back(`payment=success&token=${encodeURIComponent(existing.tokenCode)}`);
     }
 
     // Mark as in-progress immediately to block concurrent requests for the same reference
@@ -365,10 +387,10 @@ router.get('/callback', async (req, res) => {
       // (and rely on the emailed token) rather than a false "failed".
       if (verifyStatus === 'pending' || verifyStatus === 'ongoing') {
         console.log(`[MASS] Payment ${reference} still ${verifyStatus} (awaiting bank auth) — webhook will finalise`);
-        return res.redirect(`${mobileCallback ? '/mobile.html' : '/'}?payment=pending&reason=bank_auth`);
+        return back(`payment=pending&reason=bank_auth`);
       }
       console.warn(`[MASS] Payment verification failed for ${reference}: status=${verifyStatus}`);
-      return res.redirect(`${mobileCallback ? '/mobile.html' : '/'}?payment=failed&reason=not_successful`);
+      return back(`payment=failed&reason=not_successful`);
     }
 
     const metadata   = data.data.metadata || {};
@@ -388,7 +410,7 @@ router.get('/callback', async (req, res) => {
       // FileMaker — the JSON copy doesn't survive deploys), reuse it rather than make a second.
       let existing = null;
       try {
-        const rec = await findSubscriptionRecord({ email, subscriptionCode });
+        const rec = await findSubscriptionRecord({ email, subscriptionCode, planCode });
         if (rec && String(rec.fieldData?.Notes || '').includes(`[ref ${reference}]`)) existing = { code: rec.fieldData.Token_Code };
       } catch (err) { console.warn('[MASS] Subscription callback: FM lookup failed:', err?.message || err); }
       if (existing) {
@@ -398,7 +420,7 @@ router.get('/callback', async (req, res) => {
         token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays, reference);
         // Fire-and-forget: never block the post-payment redirect on email.
         if (email) {
-          Promise.resolve(sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label)).catch((err) =>
+          Promise.resolve(sendWelcomeFor(planCode, email, token.code)).catch((err) =>
             console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. ref=${reference} token=${token.code} email=${email} error=${err?.message || err}`));
         } else {
           warnUndeliverable('subscription', token.code, reference);
@@ -426,11 +448,10 @@ router.get('/callback', async (req, res) => {
       timestamp: Date.now()
     });
 
-    const successBase = mobileCallback ? '/mobile.html' : '/';
-    res.redirect(`${successBase}?payment=success&token=${encodeURIComponent(token.code)}`);
+    back(`payment=success&token=${encodeURIComponent(token.code)}`);
   } catch (err) {
     console.error(`[MASS] Payment callback error for ${reference}:`, err);
-    res.redirect(`${mobileCallback ? '/mobile.html' : '/'}?payment=error&reason=verification_failed`);
+    back('payment=error&reason=verification_failed');
   }
 });
 
@@ -496,7 +517,7 @@ router.post('/webhook', async (req, res) => {
 
       // The first payment (callback or charge.success) normally made the code already — with
       // "sub: null", because the subscription didn't exist yet. Link it; don't make a second.
-      const rec = await findSubscriptionRecord({ email, subscriptionCode });
+      const rec = await findSubscriptionRecord({ email, subscriptionCode, planCode });
       if (rec) {
         await linkSubscription(rec, subscriptionCode);
         console.log(`[MASS] Webhook subscription.create: linked sub ${subscriptionCode} to ${rec.fieldData.Token_Code}`);
@@ -506,7 +527,7 @@ router.post('/webhook', async (req, res) => {
       const token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays);
       if (email) {
         try {
-          await sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label);
+          await sendWelcomeFor(planCode, email, token.code);
         } catch (err) {
           console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. sub=${subscriptionCode} token=${token.code} email=${email} error=${err?.message || err}`);
         }
@@ -581,7 +602,7 @@ router.post('/webhook', async (req, res) => {
           const token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays, reference);
           if (email) {
             try {
-              await sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label);
+              await sendWelcomeFor(planCode, email, token.code);
             } catch (err) {
               console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. sub=${subscriptionCode} token=${token.code} error=${err?.message || err}`);
             }

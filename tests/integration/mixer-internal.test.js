@@ -248,6 +248,40 @@ describe('internal router: signature, clock skew, raw-body ordering', () => {
 });
 
 // ── 3 · through the real server.js, with MIXER_SHARED_SECRET + MIXER_URL set ────────────
+// ── 2b · subscribe: Mad Mixer asks MAD for a Paystack checkout (2026-10-05) ─────────────────────
+describe('POST /internal/mixer/subscribe', () => {
+  const resolveToken = vi.fn();
+  const checkout = vi.fn(async ({ email }) => ({ ok: true, url: `https://checkout.paystack.com/test-${email.length}` }));
+  const appWith = (opts = {}) => {
+    const a = express();
+    a.use('/internal/mixer', express.raw({ type: () => true, limit: '16kb' }));
+    a.use(express.json());
+    a.use('/internal/mixer', createMixerInternalRouter({ resolveToken, secret: () => SECRET, mixerUrl: () => MIXER_URL, startCheckout: checkout, ...opts }));
+    return a;
+  };
+
+  it('opens a checkout for a valid email (lower-cased) and returns its address', async () => {
+    const res = await signed(appWith(), 'POST', '/internal/mixer/subscribe', { email: ' Fan@Example.com ' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, url: 'https://checkout.paystack.com/test-15' });
+    expect(checkout).toHaveBeenLastCalledWith(expect.objectContaining({ email: 'fan@example.com' }));
+  });
+
+  it('refuses a bad email, and answers 503 when MIXER_URL or the plan is missing', async () => {
+    expect((await signed(appWith(), 'POST', '/internal/mixer/subscribe', { email: 'not-an-email' })).status).toBe(400);
+    expect((await signed(appWith({ mixerUrl: () => '' }), 'POST', '/internal/mixer/subscribe', { email: 'fan@example.com' })).status).toBe(503);
+    const closed = appWith({ startCheckout: async () => ({ ok: false, status: 503, error: 'Mad Mixer subscriptions aren’t open yet.' }) });
+    const r = await signed(closed, 'POST', '/internal/mixer/subscribe', { email: 'fan@example.com' });
+    expect(r.status).toBe(503);
+    expect(r.body.error).toMatch(/aren’t open yet/);
+  });
+
+  it('is signed like every other bridge call', async () => {
+    const res = await request(appWith()).post('/internal/mixer/subscribe').set('Content-Type', 'application/json').send({ email: 'fan@example.com' });
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('Mad Mixer on its own home, through server.js', () => {
   let app, tokenValidationCache, tokenStore;
   const realFetch = globalThis.fetch;
