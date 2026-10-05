@@ -16,8 +16,8 @@
 // the floor (re-assert home, stay in app); a second Back leaves — "stay on home once,
 // then exit".
 
-import { state, elements } from './state.js?v=38';
-import { switchTab } from './nav.js?v=38';
+import { state, elements } from './state.js?v=39';
+import { switchTab } from './nav.js?v=39';
 
 const HOME = 'newreleases';
 let _seq = 0;
@@ -66,6 +66,14 @@ export function replaceOverlay(type, id) {
 // above an album/playlist sheet, so Back closes it first and a second Back closes the sheet —
 // each has its own history entry (client, 2026-09-29: Back must return to the previous screen).
 function _closeAnyModal() {
+  // "Add to Playlist" opened on top of Now Playing: Back closes only that sheet. It never had a
+  // history entry of its own, so this Back used up Now Playing's — put one back for it.
+  if (elements.modalOverlay && elements.modalOverlay.classList.contains('over-player')
+      && elements.modalOverlay.classList.contains('show')) {
+    elements.modalOverlay.classList.remove('show', 'over-player');
+    pushOverlay('player');
+    return true;
+  }
   if (elements.playerModal && elements.playerModal.classList.contains('show')) {
     if (state.playerModal) state.playerModal.visible = false;
     elements.playerModal.classList.remove('show');
@@ -77,7 +85,7 @@ function _closeAnyModal() {
 function _onPop(e) {
   const st = e.state;
   if (!st || !st.mad) return;          // foreign entry — not ours
-  _closeAnyModal();                     // hardware Back closes an open modal first
+  if (_closeAnyModal()) return;         // hardware Back closes an open modal first
   const target = st.kind === 'root' ? (st.view || HOME) : st.view;
   if (target && target !== state.currentTab) {
     _restoring = true;

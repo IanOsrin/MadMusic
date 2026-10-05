@@ -2,12 +2,12 @@
 // holds the DOM event wiring + drag/search state + init(), and exposes the
 // inline on*-handlers on window. All app logic lives in the mobile/*.js modules.
 
-import { elements, state } from './state.js?v=38';
-import { showToast } from './util.js?v=38';
-import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=38';
+import { elements, state } from './state.js?v=39';
+import { showToast } from './util.js?v=39';
+import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=39';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, checkStoredCode, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=38';
+import { buyAccess, checkStoredCode, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=39';
 
 // Links from MAD emails: ?buy=1 opens the plans (not inside the store app — policy),
 // ?contact=1 opens "Contact us". The param is dropped from the address bar either way.
@@ -20,22 +20,22 @@ function handleEmailLinks() {
   window.history.replaceState({}, document.title, window.location.pathname + (q ? '?' + q : ''));
   setTimeout(() => { if (contact) showContactSheet(); else if (!isNativeApp()) buyAccess(); }, 600);
 }
-import { switchTab } from './nav.js?v=38';
-import { renderSearchResults, search } from './search.js?v=38';
-import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=38';
-import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=38';
-import { filterG100Albums, loadG100 } from './rails-g100.js?v=38';
-import { loadNewReleases } from './rails-newreleases.js?v=38';
-import { loadSuggestedForYou } from './rails-suggested.js?v=38';
-import { initMobHero } from './hero.js?v=38';
-import { loadHomeShelves } from './rails-g100.js?v=38';
-import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, trackFailed, trackPlayedOk, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=38';
-import { openAlbumForTrack, showAlbumTracksModal, showArtistTracks } from './cards.js?v=38';
-import { initRouter, pushOverlay } from './router.js?v=38';
-import { initMaddie } from './maddie.js?v=38';
-import { initContinue } from './continue.js?v=38';
-import { loadGlobalFavourites } from './rails-globalfav.js?v=38';
-import { maybeShowWelcome, showWelcome } from './welcome.js?v=38';
+import { switchTab } from './nav.js?v=39';
+import { renderSearchResults, search } from './search.js?v=39';
+import { createPlaylistFlow, loadPlaylists, showAddToPlaylistModal } from './playlists.js?v=39';
+import { loadDiscover, refreshDiscover, renderDiscoverTracks } from './rails-discover.js?v=39';
+import { filterG100Albums, loadG100 } from './rails-g100.js?v=39';
+import { loadNewReleases } from './rails-newreleases.js?v=39';
+import { loadSuggestedForYou } from './rails-suggested.js?v=39';
+import { initMobHero } from './hero.js?v=39';
+import { loadHomeShelves } from './rails-g100.js?v=39';
+import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, trackFailed, trackPlayedOk, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=39';
+import { openAlbumForTrack, showAlbumTracksModal, showArtistTracks } from './cards.js?v=39';
+import { initRouter, pushOverlay } from './router.js?v=39';
+import { initMaddie } from './maddie.js?v=39';
+import { initContinue } from './continue.js?v=39';
+import { loadGlobalFavourites } from './rails-globalfav.js?v=39';
+import { maybeShowWelcome, showWelcome } from './welcome.js?v=39';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {
@@ -303,7 +303,9 @@ import { maybeShowWelcome, showWelcome } from './welcome.js?v=38';
 
     elements.modalOverlay.addEventListener('click', (e) => {
       if (e.target === elements.modalOverlay) {
-        closeModal();
+        // Sheet on top of Now Playing: close just the sheet (no history.back — that's Now Playing's)
+        if (elements.modalOverlay.classList.contains('over-player')) elements.modalOverlay.classList.remove('show', 'over-player');
+        else closeModal();
       }
     });
 

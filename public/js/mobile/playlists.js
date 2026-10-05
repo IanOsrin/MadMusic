@@ -1,12 +1,12 @@
 // User playlists (load/render/play/create/add-to) for the mobile app.
 
-import { elements, state } from './state.js?v=38';
-import { showToast } from './util.js?v=38';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, getTitleField } from './fields.js?v=38';
-import { switchTab } from './nav.js?v=38';
-import { closeModal, playTrack } from './player.js?v=38';
-import { pushOverlay } from './router.js?v=38';
-import { createAlbumTile } from './cards.js?v=38';
+import { elements, state } from './state.js?v=39';
+import { showToast } from './util.js?v=39';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, getTitleField } from './fields.js?v=39';
+import { switchTab } from './nav.js?v=39';
+import { closeModal, playTrack } from './player.js?v=39';
+import { pushOverlay } from './router.js?v=39';
+import { createAlbumTile } from './cards.js?v=39';
 
 // ── Playlist icons ───────────────────────────────────────────────────────────
 // Choices come from /data/playlist-icons.json (served no-cache) so adding one
@@ -337,17 +337,29 @@ export function showAddToPlaylistModal(track) {
             ${escapeHtml(playlist.name)}
           </button>
         `).join('')}
-        <button class="btn btn-secondary" style="width: 100%; margin-top: 16px;" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-secondary" style="width: 100%; margin-top: 16px;" data-sheet-cancel>Cancel</button>
       `;
+
+      // Opened from Now Playing (full screen, layer 2000): lift this sheet above it — it opened
+      // BEHIND Now Playing (layer 1500), so "+ Add to Playlist" looked dead (client, 2026-10-05).
+      // And close it without closeModal()'s history.back(): this sheet never pushed a history
+      // entry, so that Back closed Now Playing too.
+      const overPlayer = !!(elements.playerModal && elements.playerModal.classList.contains('show'));
+      elements.modalOverlay.classList.toggle('over-player', overPlayer);
+      const close = () => {
+        if (overPlayer) elements.modalOverlay.classList.remove('show', 'over-player');
+        else closeModal();
+      };
 
       elements.modalOverlay.classList.add('show');
 
       elements.bottomSheet.querySelectorAll('[data-playlist-id]').forEach(btn => {
         btn.addEventListener('click', () => {
           addTrackToPlaylist(btn.dataset.playlistId, track);
-          closeModal();
+          close();
         });
       });
+      elements.bottomSheet.querySelector('[data-sheet-cancel]').addEventListener('click', close);
     }
 
 export async function addTrackToPlaylist(playlistId, track) {
