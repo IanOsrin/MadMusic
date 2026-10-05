@@ -16,8 +16,8 @@
 // the floor (re-assert home, stay in app); a second Back leaves — "stay on home once,
 // then exit".
 
-import { state, elements } from './state.js?v=39';
-import { switchTab } from './nav.js?v=39';
+import { state, elements } from './state.js?v=40';
+import { switchTab } from './nav.js?v=40';
 
 const HOME = 'newreleases';
 let _seq = 0;

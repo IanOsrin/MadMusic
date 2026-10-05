@@ -182,6 +182,19 @@ describe('mobile invariant: album playback keeps skips inside the album (2026-07
     expect(mobileHtml).toMatch(/id="mini-progress-fill"/);
   });
 
+  // The album / artist / playlist sheets covered the mini player, so it "disappeared" whenever an
+  // album was opened (e.g. from search) — 2026-10-05. It must sit above the sheet layer and
+  // below Now Playing.
+  it('the mini player sits above the sheets and below Now Playing', () => {
+    const css = readFileSync(join(root, 'public', 'css', 'mobile.css'), 'utf8');
+    const z = (sel) => {
+      const m = new RegExp(`^\\s*${sel.replace(/[.#]/g, '\\$&')}\\s*\\{[^}]*?z-index:\\s*(\\d+)`, 'm').exec(css);
+      return m ? Number(m[1]) : NaN;
+    };
+    expect(z('#floating-player')).toBeGreaterThan(z('.modal-overlay'));
+    expect(z('#floating-player')).toBeLessThan(z('#player-modal'));
+  });
+
   // Every rail adapts its API rows into playTrack's {recordId, fields} shape.
   // Omitting recordId is silent for a subscriber (the S3_URL branch still
   // plays) and fatal for a guest (playTrack refuses without one), so it hides
