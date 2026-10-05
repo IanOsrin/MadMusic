@@ -1,12 +1,12 @@
 // Album/track card builders + their modals for the mobile app.
 
-import { elements, state } from './state.js?v=40';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=40';
-import { switchTab } from './nav.js?v=40';
-import { search } from './search.js?v=40';
-import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=40';
-import { pushOverlay, replaceOverlay } from './router.js?v=40';
-import { showToast } from './util.js?v=40';
+import { elements, state } from './state.js?v=41';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=41';
+import { switchTab } from './nav.js?v=41';
+import { search } from './search.js?v=41';
+import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=41';
+import { pushOverlay, replaceOverlay } from './router.js?v=41';
+import { showToast } from './util.js?v=41';
 
 // ── Shared album tile (the New Releases / G100 look) ─────────────────────────
 // One square-cover tile: first tap reveals the title/artist overlay, second tap
@@ -116,6 +116,21 @@ export async function openFullAlbum(album) {
       if (stillOpen && full.tracks.length > album.tracks.length) showAlbumTracksModal(full, { refresh: true });
     }
 
+// Open an album whose songs still have to be fetched (Suggested for You, You might also like):
+// the page opens on the tap with its cover and title, then the songs fill in — before, nothing
+// happened until /api/album answered, which felt dead on a slow lookup (Ian, 2026-10-05).
+// `load()` resolves the tracks ([] = couldn't load).
+export async function openAlbumAsync(album, load) {
+      showAlbumTracksModal({ ...album, tracks: [], loading: true });
+      let tracks = [];
+      try { tracks = (await load()) || []; } catch (err) { console.warn('[album] load failed:', err); }
+      const stillOpen = elements.modalOverlay.classList.contains('show') &&
+        elements.bottomSheet.dataset.albumKey === `${album.title}|||${album.artist}`;
+      if (!stillOpen) return tracks;
+      showAlbumTracksModal({ ...album, tracks, failed: !tracks.length }, { refresh: true });
+      return tracks;
+    }
+
 export async function upgradeQueueToFullAlbum(album, playingTrack) {
       const full = await fetchFullAlbum(album);
       // Only swap if the user is still on the track this play started
@@ -161,12 +176,14 @@ export function showAlbumTracksModal(album, { refresh = false } = {}) {
               <div class="alb-kind">${escapeHtml(kind)}</div>
               <div class="bottom-sheet-header alb-title">${escapeHtml(album.title)}</div>
               <div class="alb-artist${kind === 'ALBUM' && album.artist ? ' alb-artist-link' : ''}">${escapeHtml(album.artist)}</div>
-              <div class="alb-count">${count} ${count === 1 ? 'song' : 'songs'}</div>
+              <div class="alb-count">${album.loading || album.failed ? '' : `${count} ${count === 1 ? 'song' : 'songs'}`}</div>
             </div>
           </div>
         </div>
         ${count ? `<button type="button" class="alb-play" data-play-all>
           <svg width="13" height="14" viewBox="0 0 13 14" fill="currentColor" aria-hidden="true"><path d="M2 1.6 12 7 2 12.4z"/></svg>Play</button>` : ''}
+        ${album.loading ? '<div class="alb-loading" aria-live="polite"><span class="alb-spinner" aria-hidden="true"></span>Loading songs…</div>' : ''}
+        ${album.failed ? '<div class="alb-loading">This album couldn’t be loaded — please try again.</div>' : ''}
         <div class="alb-tracks">
         ${album.tracks.map((track, index) => {
           const fields = track.fields || {};
@@ -223,7 +240,7 @@ export function showAlbumTracksModal(album, { refresh = false } = {}) {
       });
 
       // Append suggestions rail asynchronously — doesn't block the modal opening.
-      if (window.__SUGGESTIONS !== false && kind === 'ALBUM') {
+      if (window.__SUGGESTIONS !== false && kind === 'ALBUM' && !album.loading) {
         appendMobileSuggestions(elements.bottomSheet, album);
       }
     }
@@ -270,18 +287,14 @@ async function appendMobileSuggestions(sheet, album) {
         const cached = state.discoverAlbumCache.get(cacheKey);
         if (cached) { showAlbumTracksModal(cached); return; }
 
-        btn.disabled = true;
-        try {
+        // The page opens at once; the songs fill in.
+        const sugAlbum = { title, artist, artwork: btn.querySelector('img').src };
+        const tracks = await openAlbumAsync(sugAlbum, async () => {
           const r = await fetch(`/api/album?${new URLSearchParams({ title, artist })}`);
           const d = await r.json();
-          if (d.ok && d.items?.length) {
-            const sugAlbum = { title, artist, artwork: btn.querySelector('img').src, tracks: d.items };
-            state.discoverAlbumCache.set(cacheKey, sugAlbum);
-            showAlbumTracksModal(sugAlbum);
-          }
-        } finally {
-          btn.disabled = false;
-        }
+          return d.ok ? d.items || [] : [];
+        });
+        if (tracks.length) state.discoverAlbumCache.set(cacheKey, { ...sugAlbum, tracks });
       });
     });
   } catch {

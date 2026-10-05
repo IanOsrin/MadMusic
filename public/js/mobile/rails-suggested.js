@@ -6,8 +6,8 @@
 // server answers eligible:false until the listener has 100 different songs,
 // and the shelf, heading included, stays hidden until there are cards to show.
 
-import { escapeHtml } from './fields.js?v=40';
-import { showAlbumTracksModal } from './cards.js?v=40';
+import { escapeHtml } from './fields.js?v=41';
+import { openAlbumAsync } from './cards.js?v=41';
 
 export async function loadSuggestedForYou() {
   const header = document.getElementById('home-sfy-header');
@@ -28,22 +28,14 @@ export async function loadSuggestedForYou() {
       </button>`).join('');
 
     container.querySelectorAll('.mob-sug-card').forEach((btn) => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', () => {
         const { cat, title, artist } = btn.dataset;
-        btn.disabled = true;
-        try {
-          // Catalogue first: it returns the album's exact tracks.
-          const params = cat ? { cat } : { title, artist };
-          const r = await fetch(`/api/album?${new URLSearchParams(params)}`);
+        // The page opens at once; the songs fill in. Catalogue first: it returns the album's exact tracks.
+        openAlbumAsync({ title, artist, artwork: btn.querySelector('img')?.src || '/img/placeholder.png' }, async () => {
+          const r = await fetch(`/api/album?${new URLSearchParams(cat ? { cat } : { title, artist })}`);
           const d = await r.json();
-          if (d.ok && d.items?.length) {
-            showAlbumTracksModal({ title, artist, artwork: btn.querySelector('img')?.src || '/img/placeholder.png', tracks: d.items });
-          }
-        } catch (err) {
-          console.warn('[SuggestedForYou] open failed:', err);
-        } finally {
-          btn.disabled = false;
-        }
+          return d.ok ? d.items || [] : [];
+        });
       });
     });
     header.hidden = false;

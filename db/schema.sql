@@ -59,6 +59,14 @@ CREATE INDEX IF NOT EXISTS tracks_album_idx
 CREATE INDEX IF NOT EXISTS tracks_album_exact_idx
   ON tracks (lower(raw->>'Album Title'), lower(raw->>'Album Artist'));
 
+-- Albums by catalogue number (/api/album?cat=) match EXACTLY since 2026-09-30 (cat=BL 30 used to
+-- catch BL 300…): lower(raw->>'Reference Catalogue Number') = … The trigram index below can't
+-- serve an equality on lower(), so every lookup read the whole table — 7-9 s per album for
+-- Suggested for You and the YouTube song links (Ian, 2026-10-05), and the same pool-exhaustion
+-- risk as 2026-09-17. On a live database use CREATE INDEX CONCURRENTLY.
+CREATE INDEX IF NOT EXISTS tracks_ref_cat_exact_idx
+  ON tracks (lower(raw->>'Reference Catalogue Number'));
+
 -- Flag rails (featured / G100 / singles / global favorites) — partial indexes.
 CREATE INDEX IF NOT EXISTS tracks_featured_idx   ON tracks (is_featured)   WHERE is_featured;
 CREATE INDEX IF NOT EXISTS tracks_g100_idx       ON tracks (is_g100)       WHERE is_g100;
