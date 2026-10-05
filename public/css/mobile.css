@@ -659,7 +659,10 @@
       background: var(--bg-card);
       border: 1px solid var(--border);
       box-shadow: 0 6px 20px var(--shadow);
-      z-index: 1000;
+      /* Above the album / artist / playlist sheets (1500) — they used to cover it, so the bar
+         "disappeared" whenever an album was opened, e.g. from search (Ian, 2026-10-05).
+         Still below Now Playing (2000), Maddie (2100), toasts and the paywall (3000). */
+      z-index: 1600;
       cursor: pointer;
       overflow: hidden;
       display: none;
@@ -670,6 +673,15 @@
 
     #floating-player.visible {
       display: flex;
+    }
+
+    /* A sheet is open: the tab bar is dimmed out under it, so the bar drops to the bottom edge,
+       and the sheet's last rows (and its Close button) scroll clear of it. */
+    body:has(.modal-overlay.show) #floating-player {
+      bottom: calc(10px + env(safe-area-inset-bottom));
+    }
+    body:has(#floating-player.visible) .modal-overlay .bottom-sheet {
+      padding-bottom: calc(62px + 20px + env(safe-area-inset-bottom));
     }
 
     #floating-player.playing {
