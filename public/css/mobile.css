@@ -1060,6 +1060,11 @@
       opacity: 1;
     }
 
+    /* "Add to Playlist" from Now Playing: above Now Playing (2000), below Maddie (2100) and toasts */
+    .modal-overlay.over-player {
+      z-index: 2050;
+    }
+
     .bottom-sheet {
       position: absolute;
       bottom: 0;
