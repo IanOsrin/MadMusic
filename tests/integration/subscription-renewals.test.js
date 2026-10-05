@@ -11,13 +11,13 @@ import { join } from 'node:path';
 // through to the one-time path (a fresh 7-day code). These tests pin the new behaviour against
 // FileMaker (faked in memory), with Paystack-shaped, correctly signed events.
 
-const fm = { rows: [] };
+const fm = { rows: [], delayMs: 0 };
 vi.mock('../../fm-client.js', async (importOriginal) => {
   const mod = await importOriginal();
   const want = (v) => String(v).replace(/^==/, '').replace(/\\(.)/g, '$1');   // undo FM find escaping (\@ etc.)
   return {
     ...mod,
-    fmCreateRecord: vi.fn(async (_l, fieldData) => { fm.rows.push({ recordId: String(fm.rows.length + 1), fieldData: { Issued_Date: '9/1/2026 10:00:00', ...fieldData } }); return {}; }),
+    fmCreateRecord: vi.fn(async (_l, fieldData) => { if (fm.delayMs) await new Promise((r) => setTimeout(r, fm.delayMs)); fm.rows.push({ recordId: String(fm.rows.length + 1), fieldData: { Issued_Date: '9/1/2026 10:00:00', ...fieldData } }); return {}; }),
     fmFindRecords: vi.fn(async (_l, queries) => {
       const data = fm.rows.filter((r) => queries.some((q) => Object.entries(q).every(([k, v]) => String(r.fieldData[k] ?? '').toLowerCase() === want(v).toLowerCase())));
       return data.length ? { ok: true, data, total: data.length } : { ok: false, code: '401', data: [], total: 0 };
@@ -58,6 +58,7 @@ beforeEach(() => {
   caches.pendingPaymentsCache.clear();
   caches.processedWebhookEventsCache.clear();
   fm.rows.length = 0;
+  fm.delayMs = 0;
   welcome.length = 0;
   mixerWelcome.length = 0;
 });
@@ -204,5 +205,41 @@ describe('Mad Mixer subscriptions', () => {
     const res = await request(app).get('/api/payments/callback?source=mobile&type=subscription&reference=T-MAD-CB');
     expect(fm.rows[0].fieldData.Token_Type).toBe('subscription');
     expect(res.headers.location).toBe(`/mobile.html?payment=success&token=${encodeURIComponent(fm.rows[0].fieldData.Token_Code)}`);
+  });
+});
+
+// 2026-10-05: one real test payment made THREE codes — the payment webhook, subscription.create
+// and the listener's return all arrived in the same second while FileMaker was still saving.
+describe('one payment, one code', () => {
+  const MIXER = { plan_code: MIXER_PLAN, interval: 'monthly', name: 'Mad Mixer' };
+
+  it('payment webhook + subscription.create + the return, all at once (slow FileMaker): one code, linked', async () => {
+    fm.delayMs = 150;
+    verify.data = { status: 'success', reference: 'T-RACE', plan: MIXER_PLAN, plan_object: { interval: 'monthly' },
+      customer, metadata: { payment_type: 'subscription', plan_code: MIXER_PLAN, source: 'mixer' } };
+    const create = { event: 'subscription.create', data: { subscription_code: 'SUB_race', plan: MIXER, customer } };
+    const [charge, sub, back] = await Promise.all([
+      post({ event: 'charge.success', data: { reference: 'T-RACE', status: 'success', paid_at: iso(0), plan: MIXER, customer } }),
+      post(create),
+      request(app).get('/api/payments/callback?source=mixer&type=subscription&reference=T-RACE'),
+    ]);
+    expect(charge.status).toBe(200);
+    expect(fm.rows).toHaveLength(1);
+    const code = fm.rows[0].fieldData.Token_Code;
+    expect(back.headers.location).toBe(`${MIXER_URL}/?payment=success#code=${encodeURIComponent(code)}`);
+    expect(mixerWelcome).toHaveLength(1);
+    // subscription.create either linked it at once, or asked Paystack to retry — whose retry links it
+    if (sub.status !== 200) {
+      expect(sub.status).toBe(503);
+      expect((await post(create)).status).toBe(200);
+    }
+    expect(fm.rows[0].fieldData.Notes).toMatch(/SUB_race/);
+    expect(fm.rows).toHaveLength(1);
+  });
+
+  it('subscription.create before any code exists makes none — it asks Paystack to retry', async () => {
+    const res = await post({ event: 'subscription.create', data: { subscription_code: 'SUB_early', plan: MIXER, customer } });
+    expect(res.status).toBe(503);
+    expect(fm.rows).toHaveLength(0);
   });
 });
