@@ -1856,7 +1856,9 @@
     .account-modal-close:hover { color: var(--fg, #fff); }
     .account-modal-body { padding: 20px 24px 24px; }
     /* Help panel */
-    .help-modal { max-height: 86vh; display: flex; flex-direction: column; }
+    /* display:flex only when it's open — a plain display rule beat the [hidden] attribute, so the Help
+       panel came up with every My Account action (Ian, 2026-10-07). Help opens only from its own menu item. */
+    .help-modal:not([hidden]) { max-height: 86vh; display: flex; flex-direction: column; }
     .help-modal .account-modal-body { overflow-y: auto; }
     .help-intro { margin: 0 0 14px; color: var(--muted, #aaa); line-height: 1.5; }
     .help-item { border: 1px solid var(--border, rgba(255,255,255,0.1)); border-radius: 10px; margin: 0 0 8px; padding: 0 14px; }
