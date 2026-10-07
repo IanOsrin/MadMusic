@@ -1848,6 +1848,8 @@ body.audio-buffering #player-title::after {
     .help-page .help-intro { margin: 0 0 14px; color: var(--text-muted, #999); font-size: 14px; line-height: 1.5; }
     .help-page .help-item { border: 1px solid var(--border, rgba(255,255,255,0.1)); border-radius: 12px; margin: 0 0 8px; padding: 0 14px; background: var(--card-bg, transparent); }
     .help-page .help-item summary { cursor: pointer; padding: 13px 0; font-weight: 600; font-size: 15px; list-style: none; }
+    .help-page .help-item summary .help-ic { width: 20px; height: 20px; vertical-align: -4px; margin-right: 10px; color: #a78bfa; }
+    #help-contact-btn .help-ic-btn { width: 20px; height: 20px; vertical-align: -4px; margin-right: 8px; }
     .help-page .help-item summary::-webkit-details-marker { display: none; }
     .help-page .help-item summary::after { content: '+'; float: right; opacity: 0.6; }
     .help-page .help-item[open] summary::after { content: '–'; }
