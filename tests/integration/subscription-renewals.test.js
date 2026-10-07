@@ -11,13 +11,13 @@ import { join } from 'node:path';
 // through to the one-time path (a fresh 7-day code). These tests pin the new behaviour against
 // FileMaker (faked in memory), with Paystack-shaped, correctly signed events.
 
-const fm = { rows: [] };
+const fm = { rows: [], delayMs: 0 };
 vi.mock('../../fm-client.js', async (importOriginal) => {
   const mod = await importOriginal();
   const want = (v) => String(v).replace(/^==/, '').replace(/\\(.)/g, '$1');   // undo FM find escaping (\@ etc.)
   return {
     ...mod,
-    fmCreateRecord: vi.fn(async (_l, fieldData) => { fm.rows.push({ recordId: String(fm.rows.length + 1), fieldData: { Issued_Date: '9/1/2026 10:00:00', ...fieldData } }); return {}; }),
+    fmCreateRecord: vi.fn(async (_l, fieldData) => { if (fm.delayMs) await new Promise((r) => setTimeout(r, fm.delayMs)); fm.rows.push({ recordId: String(fm.rows.length + 1), fieldData: { Issued_Date: '9/1/2026 10:00:00', ...fieldData } }); return {}; }),
     fmFindRecords: vi.fn(async (_l, queries) => {
       const data = fm.rows.filter((r) => queries.some((q) => Object.entries(q).every(([k, v]) => String(r.fieldData[k] ?? '').toLowerCase() === want(v).toLowerCase())));
       return data.length ? { ok: true, data, total: data.length } : { ok: false, code: '401', data: [], total: 0 };
@@ -29,6 +29,16 @@ const welcome = [];
 vi.mock('../../lib/email.js', async (importOriginal) => {
   const mod = await importOriginal();
   return { ...mod, sendSubscriptionWelcomeEmail: vi.fn(async (...a) => { welcome.push(a); }), sendTokenEmail: vi.fn(async () => {}) };
+});
+// The payment callback verifies with Paystack — answered here from `verify` (the webhook tests
+// never call Paystack; their signature check stays real).
+const verify = { data: null };
+vi.mock('../../lib/paystack.js', async (importOriginal) => {
+  const mod = await importOriginal();
+  return { ...mod, paystackRequest: vi.fn(async (method, endpoint) => {
+    if (method === 'GET' && endpoint.startsWith('/transaction/verify/')) return { status: true, data: verify.data };
+    throw new Error(`unexpected Paystack call ${method} ${endpoint}`);
+  }) };
 });
 
 let app, caches;
@@ -42,6 +52,7 @@ beforeEach(() => {
   caches.pendingPaymentsCache.clear();
   caches.processedWebhookEventsCache.clear();
   fm.rows.length = 0;
+  fm.delayMs = 0;
   welcome.length = 0;
 });
 
@@ -128,5 +139,40 @@ describe('Paystack subscription renewals', () => {
     await post({ event: 'charge.success', data: { reference: 'T-PASS', paid_at: iso(0), customer, metadata: { plan_id: '7-day', days: 7 } } });
     expect(fm.rows).toHaveLength(1);
     expect(fm.rows[0].fieldData.Token_Type).not.toBe('subscription');
+  });
+});
+
+// 2026-10-05: one real test payment made THREE codes — the payment webhook, subscription.create
+// and the listener's return all arrived in the same second while FileMaker was still saving.
+// (Ported to live 2026-10-07 for the MAD monthly plan.)
+describe('one payment, one code', () => {
+  it('payment webhook + subscription.create + the return, all at once (slow FileMaker): one code, linked', async () => {
+    fm.delayMs = 150;
+    verify.data = { status: 'success', reference: 'T-RACE', plan: 'PLN_monthly', plan_object: { interval: 'monthly' },
+      customer, metadata: { payment_type: 'subscription' } };
+    const create = { event: 'subscription.create', data: { subscription_code: 'SUB_race', plan: PLAN, customer } };
+    const [charge, sub, back] = await Promise.all([
+      post({ event: 'charge.success', data: { reference: 'T-RACE', status: 'success', paid_at: iso(0), plan: PLAN, customer } }),
+      post(create),
+      request(app).get('/api/payments/callback?type=subscription&reference=T-RACE'),
+    ]);
+    expect(charge.status).toBe(200);
+    expect(fm.rows).toHaveLength(1);
+    const code = fm.rows[0].fieldData.Token_Code;
+    expect(back.headers.location).toBe(`/?payment=success&token=${encodeURIComponent(code)}`);
+    expect(welcome).toHaveLength(1);
+    // subscription.create either linked it at once, or asked Paystack to retry — whose retry links it
+    if (sub.status !== 200) {
+      expect(sub.status).toBe(503);
+      expect((await post(create)).status).toBe(200);
+    }
+    expect(fm.rows[0].fieldData.Notes).toMatch(/SUB_race/);
+    expect(fm.rows).toHaveLength(1);
+  });
+
+  it('subscription.create before any code exists makes none — it asks Paystack to retry', async () => {
+    const res = await post({ event: 'subscription.create', data: { subscription_code: 'SUB_early', plan: PLAN, customer } });
+    expect(res.status).toBe(503);
+    expect(fm.rows).toHaveLength(0);
   });
 });

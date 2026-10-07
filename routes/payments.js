@@ -328,6 +328,22 @@ router.post('/subscribe', async (req, res) => {
   }
 });
 
+// One subscription code per customer (2026-10-07, ported from main 9152d36). Paystack's first-payment
+// webhook (charge.success), its subscription.create and the listener's own return (the callback)
+// arrive in the same second; each looked in FileMaker, found nothing saved yet, and could make a code —
+// one test payment made THREE codes, only one of them linked for renewals. They now take turns per
+// customer email, so whoever comes second finds the first one's record. (One process — cluster.js
+// MAX_WORKERS defaults to 1; more workers would need a shared lock.)
+const subscriptionLocks = new Map();
+function withSubscriptionLock(email, fn) {
+  const key = String(email || '').trim().toLowerCase();
+  const run = (subscriptionLocks.get(key) || Promise.resolve()).then(fn);
+  const tail = run.catch(() => {});
+  subscriptionLocks.set(key, tail);
+  tail.then(() => { if (subscriptionLocks.get(key) === tail) subscriptionLocks.delete(key); });
+  return run;
+}
+
 router.get('/callback', async (req, res) => {
   const { reference } = req.query;
 
@@ -386,24 +402,26 @@ router.get('/callback', async (req, res) => {
 
       // If Paystack's webhook already made the code for THIS payment (same reference, found in
       // FileMaker — the JSON copy doesn't survive deploys), reuse it rather than make a second.
-      let existing = null;
-      try {
-        const rec = await findSubscriptionRecord({ email, subscriptionCode });
-        if (rec && String(rec.fieldData?.Notes || '').includes(`[ref ${reference}]`)) existing = { code: rec.fieldData.Token_Code };
-      } catch (err) { console.warn('[MASS] Subscription callback: FM lookup failed:', err?.message || err); }
-      if (existing) {
-        token = existing;
-        console.log(`[MASS] Subscription callback: token already exists for ${reference}`);
-      } else {
-        token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays, reference);
+      token = await withSubscriptionLock(email, async () => {
+        let existing = null;
+        try {
+          const rec = await findSubscriptionRecord({ email, subscriptionCode });
+          if (rec && String(rec.fieldData?.Notes || '').includes(`[ref ${reference}]`)) existing = { code: rec.fieldData.Token_Code };
+        } catch (err) { console.warn('[MASS] Subscription callback: FM lookup failed:', err?.message || err); }
+        if (existing) {
+          console.log(`[MASS] Subscription callback: token already exists for ${reference}`);
+          return existing;
+        }
+        const made = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays, reference);
         // Fire-and-forget: never block the post-payment redirect on email.
         if (email) {
-          Promise.resolve(sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label)).catch((err) =>
-            console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. ref=${reference} token=${token.code} email=${email} error=${err?.message || err}`));
+          Promise.resolve(sendSubscriptionWelcomeEmail(email, made.code, PAYSTACK_SUBSCRIPTION_PLAN.label)).catch((err) =>
+            console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. ref=${reference} token=${made.code} email=${email} error=${err?.message || err}`));
         } else {
-          warnUndeliverable('subscription', token.code, reference);
+          warnUndeliverable('subscription', made.code, reference);
         }
-      }
+        return made;
+      });
       console.log(`[MASS] Subscription checkout complete: ${reference} → token ${token.code}`);
     } else {
       // ── One-time purchase ─────────────────────────────────────────────────
@@ -494,27 +512,20 @@ router.post('/webhook', async (req, res) => {
       const interval         = sub.plan?.interval  || 'monthly';
       const billingDays      = SUBSCRIPTION_INTERVAL_DAYS[interval] || 31;
 
-      // The first payment (callback or charge.success) normally made the code already — with
-      // "sub: null", because the subscription didn't exist yet. Link it; don't make a second.
-      const rec = await findSubscriptionRecord({ email, subscriptionCode });
+      // The first payment (callback or charge.success) makes the code — with "sub: null", because
+      // the subscription didn't exist yet. This only LINKS it (so renewals find it). It never makes a
+      // code of its own any more: it arrives in the same second as the payment, and making one when
+      // the payment's code wasn't saved yet is how one payment got three codes. No code yet → not
+      // acked, so Paystack sends it again a few minutes later, when the code exists.
+      void planCode; void billingDays;
+      const rec = await withSubscriptionLock(email, () => findSubscriptionRecord({ email, subscriptionCode }));
       if (rec) {
         await linkSubscription(rec, subscriptionCode);
         console.log(`[MASS] Webhook subscription.create: linked sub ${subscriptionCode} to ${rec.fieldData.Token_Code}`);
         return ack();
       }
-
-      const token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays);
-      if (email) {
-        try {
-          await sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label);
-        } catch (err) {
-          console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. sub=${subscriptionCode} token=${token.code} email=${email} error=${err?.message || err}`);
-        }
-      } else {
-        warnUndeliverable('subscription', token.code, subscriptionCode);
-      }
-      console.log(`[MASS] Webhook subscription.create: token ${token.code} created for sub ${subscriptionCode}`);
-      return ack();
+      console.log(`[MASS] Webhook subscription.create: no code yet for sub ${subscriptionCode} — asking Paystack to retry`);
+      return res.status(503).json({ error: 'The payment’s code is not saved yet — retry later' });
     }
 
     // ── subscription.disable (cancelled or all retries exhausted) ─────────────
@@ -565,33 +576,37 @@ router.post('/webhook', async (req, res) => {
     const subInfo = readEvent(event);
     if (isSubscriptionCharge(subInfo)) {
       const billingDays = SUBSCRIPTION_INTERVAL_DAYS[subInfo.interval] || 31;
-      const rec = await findSubscriptionRecord(subInfo);
-      const firstPayment = rec && String(rec.fieldData?.Notes || '').includes(`[ref ${reference}]`);
-      if (rec && !firstPayment) {
-        // Renewal — extend the customer's own code (idempotent: a duplicate event changes nothing)
-        await linkSubscription(rec, subInfo.subscriptionCode);
-        await extendSubscription(rec, { billingDays, paidAt: subInfo.paidAt, reference });
-        pendingPayments.set(reference, { tokenCode: rec.fieldData.Token_Code, timestamp: Date.now() });
-        console.log(`[MASS] Webhook charge.success (renewal): ${rec.fieldData.Token_Code} extended`);
-      } else if (!rec) {
-        // First payment and the customer never came back to the site — make their code here.
-        const planCode    = subInfo.planCode || PAYSTACK_SUBSCRIPTION_PLAN.code;
-        const email       = customerEmail(subInfo.email);
-        if (!pendingPayments.has(reference)) {
-          const token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays, reference);
-          if (email) {
-            try {
-              await sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label);
-            } catch (err) {
-              console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. sub=${subscriptionCode} token=${token.code} error=${err?.message || err}`);
+      // Takes its turn with the callback and subscription.create for this customer (see
+      // withSubscriptionLock) — otherwise they could each make a code for the same payment.
+      await withSubscriptionLock(subInfo.email, async () => {
+        const rec = await findSubscriptionRecord(subInfo);
+        const firstPayment = rec && String(rec.fieldData?.Notes || '').includes(`[ref ${reference}]`);
+        if (rec && !firstPayment) {
+          // Renewal — extend the customer's own code (idempotent: a duplicate event changes nothing)
+          await linkSubscription(rec, subInfo.subscriptionCode);
+          await extendSubscription(rec, { billingDays, paidAt: subInfo.paidAt, reference });
+          pendingPayments.set(reference, { tokenCode: rec.fieldData.Token_Code, timestamp: Date.now() });
+          console.log(`[MASS] Webhook charge.success (renewal): ${rec.fieldData.Token_Code} extended`);
+        } else if (!rec) {
+          // First payment and the customer never came back to the site — make their code here.
+          const planCode    = subInfo.planCode || PAYSTACK_SUBSCRIPTION_PLAN.code;
+          const email       = customerEmail(subInfo.email);
+          if (!pendingPayments.has(reference)) {
+            const token = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays, reference);
+            if (email) {
+              try {
+                await sendSubscriptionWelcomeEmail(email, token.code, PAYSTACK_SUBSCRIPTION_PLAN.label);
+              } catch (err) {
+                console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. sub=${subscriptionCode} token=${token.code} error=${err?.message || err}`);
+              }
+            } else {
+              warnUndeliverable('subscription', token.code, subscriptionCode);
             }
-          } else {
-            warnUndeliverable('subscription', token.code, subscriptionCode);
+            pendingPayments.set(reference, { tokenCode: token.code, timestamp: Date.now() });
+            console.log(`[MASS] Webhook charge.success (new sub): token ${token.code} for sub ${subscriptionCode}`);
           }
-          pendingPayments.set(reference, { tokenCode: token.code, timestamp: Date.now() });
-          console.log(`[MASS] Webhook charge.success (new sub): token ${token.code} for sub ${subscriptionCode}`);
         }
-      }
+      });
       return ack();
     }
 
