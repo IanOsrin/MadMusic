@@ -60,6 +60,12 @@ vi.mock('../../fm-client.js', async (importOriginal) => {
 const vision = { reads: [] };
 vi.mock('../../lib/vision-read.js', () => ({
   visionConfigured: () => true,
+  visionListAll: vi.fn(async () => [
+    { path: '/gallo-music-files-wavs/Samples/Kick/808 Deep.wav', bytes: 1000 },
+    { path: '/gallo-music-files-wavs/Samples/Kick/Huge.wav', bytes: 9 * 1024 * 1024 },
+    { path: '/gallo-music-files-wavs/Samples/Snare/Tight.wav', bytes: 1000 },
+    { path: '/gallo-music-files-wavs/Samples/Snare/notes.txt', bytes: 10 },
+  ]),
   visionGet: vi.fn(async (path, range) => {
     vision.reads.push({ path, range });
     const all = Buffer.alloc(1000, 7);
@@ -431,6 +437,27 @@ describe('Mad Mixer on its own home, through server.js', () => {
     ] });
     expect(JSON.stringify(res.body)).not.toMatch(/gallo-masters|Vision_Path|visionPath/);
     expect((await request(app).get('/internal/mixer/hq')).status).toBe(401);
+  });
+
+  describe('the drum-trigger sample library', () => {
+    let kick;
+    it('GET /internal/mixer/samples: kinds from the Vision folder, WAVs ≤ 8 MB only, no paths', async () => {
+      const res = await signed(app, 'GET', '/internal/mixer/samples');
+      expect(res.status).toBe(200);
+      expect(res.body.kinds.map((k) => `${k.kind}: ${k.samples.map((x) => x.name).join(', ')}`)).toEqual(['Kick: 808 Deep', 'Snare: Tight']);
+      expect(JSON.stringify(res.body)).not.toMatch(/gallo-music-files-wavs/);
+      kick = res.body.kinds[0].samples[0].id;
+      expect(kick).toMatch(/^[0-9a-f]{16}$/);
+    });
+    it('GET /mixer-hq/sample/:id on a signed link streams it; a stem link can’t open a sample', async () => {
+      const exp = Math.floor(Date.now() / 1000) + 3600;
+      const ok = await request(app).get(`/mixer-hq/sample/${kick}?exp=${exp}&sig=${encodeURIComponent(hqAudioSig(`s-${kick}`, exp, SECRET))}`);
+      expect(ok.status).toBe(200);
+      expect(ok.headers['content-type']).toMatch(/audio\/wav/);
+      expect(vision.reads.at(-1).path).toBe('/gallo-music-files-wavs/Samples/Kick/808 Deep.wav');
+      expect((await request(app).get(`/mixer-hq/sample/${kick}?exp=${exp}&sig=${encodeURIComponent(hqAudioSig(kick, exp, SECRET))}`)).status).toBe(403);
+      expect((await request(app).get(`/mixer-hq/sample/ffffffffffffffff?exp=${exp}&sig=${encodeURIComponent(hqAudioSig('s-ffffffffffffffff', exp, SECRET))}`)).status).toBe(404);
+    });
   });
 
   describe('GET /mixer-hq/:stemId — the stem streamed from Vision on a signed link', () => {

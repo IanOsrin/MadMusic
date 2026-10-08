@@ -8,6 +8,7 @@
  *   POST /entitlement    {code}       → { ok, valid, definitive, source, entitled, plan, trial, confirmed, email, expiresAt }
  *   GET  /songs                       → { ok, builtAt, count, songs: [{ id, title, …, playable, hasMaster, audioUrl }] }
  *   GET  /packs                       → { ok, builtAt, count, packs: [{ id, title, song, bpm, bars, loops: [{ label, file, url, bytes, seconds }] }] }
+ *   GET  /samples                     → { ok, builtAt, kinds: [{ kind, samples: [{ id, name, bytes }] }] } — the drum-trigger library
  *   GET  /hq                          → { ok, builtAt, count, sets: [{ setId, title, stems: [{ stemId, label, file, bytes, seconds }] }] }
  *                                        (the audio streams from Vision through MAD — routes/mixer-hq-audio.js)
  *   POST /trial          {email, ip}  → { ok, code } · 400 · 409 · 429 · 502 (email failed, code revoked) · 503
@@ -37,6 +38,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { verifyRequest, mixerSharedSecret, mixerPublicUrl } from '../lib/mixer-bridge.js';
 import { mixerEntitled, isMixerTrial, planOf } from '../lib/mixer-plans.js';
 import { songsWithAudio, mixerPacks, mixerHqStems } from '../lib/mixer-catalogue.js';
+import { mixerSamples } from '../lib/mixer-samples.js';
 import { trialConfirmedCached, startTrial, confirmTrial, mixerTrialLinks } from '../lib/mixer-trial.js';
 import { paystackRequest, PAYSTACK_MIXER_PLAN } from '../lib/paystack.js';
 import { isStrictEmail } from '../lib/validators.js';
@@ -169,6 +171,17 @@ export function createMixerInternalRouter({ resolveToken, secret = mixerSharedSe
     } catch (err) {
       console.warn('[mixer-internal] pack list failed:', err?.message || err);
       res.status(502).json({ ok: false, error: 'Could not load the Mad Mixer packs.' });
+    }
+  });
+
+  // The drum-trigger sample library (2026-10-08): one-shots in a Vision folder; paths stay in MAD.
+  router.get('/samples', async (_req, res) => {
+    try {
+      const { builtAt, kinds } = await mixerSamples();
+      res.json({ ok: true, builtAt, kinds: kinds.map((k) => ({ kind: k.kind, samples: k.samples.map(({ path, ...s }) => s) })) });
+    } catch (err) {
+      console.warn('[mixer-internal] sample list failed:', err?.message || err);
+      res.status(502).json({ ok: false, error: 'Could not load the samples.' });
     }
   });
 
