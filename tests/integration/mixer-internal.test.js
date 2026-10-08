@@ -79,6 +79,12 @@ const PACK_ROWS = [
   { recordId: '4', fieldData: { Pack_ID: 'Bad Id!', Loop_Label: 'x', Audio_S3_URL: S3 + 'x.wav' } },
   { recordId: '5', fieldData: { Pack_ID: 'no-audio', Loop_Label: 'x', Audio_S3_URL: 'http://elsewhere/x.wav' } },
 ];
+const HQ_ROWS = [
+  { recordId: '1', fieldData: { Song_ID: '282', Song_Title: 'After the Storm', Stem_Label: 'Drums', File_Name: 'Drums.wav', Audio_S3_URL: S3 + 'hqstems/282/d.wav', Bytes: 5000000, Seconds: 205, Sort: 2, Visible: 1 } },
+  { recordId: '2', fieldData: { Song_ID: '282', Song_Title: 'After the Storm', Stem_Label: 'Vocals', File_Name: 'Vocals.wav', Audio_S3_URL: S3 + 'hqstems/282/v.wav', Bytes: '5000001', Seconds: 205, Sort: 1, Visible: '' } },
+  { recordId: '3', fieldData: { Song_ID: '282', Stem_Label: 'Hidden', Audio_S3_URL: S3 + 'hqstems/282/h.wav', Sort: 3, Visible: 0 } },
+  { recordId: '4', fieldData: { Song_ID: 'abc', Stem_Label: 'x', Audio_S3_URL: S3 + 'x.wav' } },
+];
 
 // Every token the tests mint goes to a temp folder, never the repo's data/; no real MVSEP key
 // (a fake one also keeps routes/mixer.js away from the macOS Keychain).
@@ -308,6 +314,7 @@ describe('Mad Mixer on its own home, through server.js', () => {
       const json = (o) => new Response(JSON.stringify(o), { status: 200, headers: { 'Content-Type': 'application/json' } });
       if (u.includes('mm.test') && u.endsWith('/sessions')) return json({ response: { token: 't' }, messages: [{ code: '0' }] });
       if (u.includes('mm.test') && u.includes('/layouts/Packs/')) return json({ response: { data: PACK_ROWS }, messages: [{ code: '0' }] });
+      if (u.includes('mm.test') && u.includes('/layouts/HQ_Stems/')) return json({ response: { data: HQ_ROWS }, messages: [{ code: '0' }] });
       if (u.includes('mm.test')) return json({ response: { data: SONGS }, messages: [{ code: '0' }] });
       if (u.includes('mvsep.com')) throw new Error('MVSEP must not be called here');
       return realFetch(url, init);
@@ -396,6 +403,16 @@ describe('Mad Mixer on its own home, through server.js', () => {
         { label: 'Bass', file: 'Jerry Ndebele - Bass - 66.6bpm - bars 1-4.wav', url: 'https://media.musicafricadirect.com/packs/jerry-ndebele/b.wav', bytes: 3800000, seconds: 14.413 },
       ],
     }]);
+  });
+
+  it('GET /internal/mixer/hq: a song’s studio stems in Sort order, hidden and bad rows dropped, WAVs on the CDN', async () => {
+    const res = await signed(app, 'GET', '/internal/mixer/hq');
+    expect(res.status).toBe(200);
+    expect(res.body.songs).toEqual([{ songId: '282', title: 'After the Storm', stems: [
+      { label: 'Vocals', file: 'Vocals.wav', url: 'https://media.musicafricadirect.com/hqstems/282/v.wav', bytes: 5000001, seconds: 205 },
+      { label: 'Drums', file: 'Drums.wav', url: 'https://media.musicafricadirect.com/hqstems/282/d.wav', bytes: 5000000, seconds: 205 },
+    ] }]);
+    expect((await request(app).get('/internal/mixer/hq')).status).toBe(401);
   });
 
   it('GET /internal/mixer/packs needs the signature', async () => {
