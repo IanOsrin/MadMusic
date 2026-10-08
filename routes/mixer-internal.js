@@ -8,7 +8,7 @@
  *   POST /entitlement    {code}       → { ok, valid, definitive, source, entitled, plan, trial, confirmed, email, expiresAt }
  *   GET  /songs                       → { ok, builtAt, count, songs: [{ id, title, …, playable, hasMaster, audioUrl }] }
  *   GET  /packs                       → { ok, builtAt, count, packs: [{ id, title, song, bpm, bars, loops: [{ label, file, url, bytes, seconds }] }] }
- *   GET  /hq                          → { ok, builtAt, count, songs: [{ songId, title, stems: [{ stemId, label, file, bytes, seconds }] }] }
+ *   GET  /hq                          → { ok, builtAt, count, sets: [{ setId, title, stems: [{ stemId, label, file, bytes, seconds }] }] }
  *                                        (the audio streams from Vision through MAD — routes/mixer-hq-audio.js)
  *   POST /trial          {email, ip}  → { ok, code } · 400 · 409 · 429 · 502 (email failed, code revoked) · 503
  *   POST /trial/confirm  {code, sig}  → { ok, confirmed: true } · 400 { reason: 'bad-link' | 'ended' } · 503
@@ -172,12 +172,12 @@ export function createMixerInternalRouter({ resolveToken, secret = mixerSharedSe
     }
   });
 
-  // HQ stems (2026-10-08): the studio stems of catalogue songs; who may load them is the Mixer's call.
+  // HQ stems (2026-10-08): sets of studio stems (not tied to the song list); who may load them is the Mixer's call.
   router.get('/hq', async (_req, res) => {
     try {
-      const { builtAt, songs } = await mixerHqStems();
-      const out = songs.map((s) => ({ ...s, stems: s.stems.map(({ visionPath, ...t }) => t) }));   // Vision paths stay in MAD
-      res.json({ ok: true, builtAt, count: out.length, songs: out });
+      const { builtAt, sets } = await mixerHqStems();
+      const out = sets.map((s) => ({ ...s, stems: s.stems.map(({ visionPath, ...t }) => t) }));   // Vision paths stay in MAD
+      res.json({ ok: true, builtAt, count: out.length, sets: out });
     } catch (err) {
       console.warn('[mixer-internal] HQ stem list failed:', err?.message || err);
       res.status(502).json({ ok: false, error: 'Could not load the HQ stems.' });

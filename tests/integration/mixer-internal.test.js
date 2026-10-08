@@ -95,11 +95,11 @@ const PACK_ROWS = [
   { recordId: '5', fieldData: { Pack_ID: 'no-audio', Loop_Label: 'x', Audio_S3_URL: 'http://elsewhere/x.wav' } },
 ];
 const HQ_ROWS = [
-  { recordId: '11', fieldData: { Song_ID: '282', Song_Title: 'After the Storm', Stem_Label: 'Drums', File_Name: 'Drums.wav', Vision_Path: '/gallo-masters/HQ Stems/After the Storm/Drums.wav', Bytes: 1000, Seconds: 205, Sort: 2, Visible: 1 } },
-  { recordId: '12', fieldData: { Song_ID: '282', Song_Title: 'After the Storm', Stem_Label: 'Vocals', File_Name: 'Vocals.wav', Vision_Path: '/gallo-masters/HQ Stems/After the Storm/Vocals.wav', Bytes: '1000', Seconds: 205, Sort: 1, Visible: '' } },
-  { recordId: '13', fieldData: { Song_ID: '282', Stem_Label: 'Hidden', Vision_Path: '/gallo-masters/HQ Stems/After the Storm/Hidden.wav', Sort: 3, Visible: 0 } },
-  { recordId: '14', fieldData: { Song_ID: 'abc', Stem_Label: 'x', Vision_Path: '/gallo-masters/HQ Stems/x.wav' } },
-  { recordId: '15', fieldData: { Song_ID: '283', Song_Title: 'Elsewhere', Stem_Label: 'Bass', File_Name: 'Bass.wav', Vision_Path: '/gallo-masters/Owned WAVs/secret master.wav', Bytes: 1000, Seconds: 9, Sort: 1, Visible: 1 } },
+  { recordId: '11', fieldData: { Song_ID: 'after-the-storm', Song_Title: 'After the Storm', Stem_Label: 'Drums', File_Name: 'Drums.wav', Vision_Path: '/gallo-masters/HQ Stems/After the Storm/Drums.wav', Bytes: 1000, Seconds: 205, Sort: 2, Visible: 1 } },
+  { recordId: '12', fieldData: { Song_ID: 'after-the-storm', Song_Title: 'After the Storm', Stem_Label: 'Vocals', File_Name: 'Vocals.wav', Vision_Path: '/gallo-masters/HQ Stems/After the Storm/Vocals.wav', Bytes: '1000', Seconds: 205, Sort: 1, Visible: '' } },
+  { recordId: '13', fieldData: { Song_ID: 'after-the-storm', Stem_Label: 'Hidden', Vision_Path: '/gallo-masters/HQ Stems/After the Storm/Hidden.wav', Sort: 3, Visible: 0 } },
+  { recordId: '14', fieldData: { Song_ID: 'Bad Id!', Stem_Label: 'x', Vision_Path: '/gallo-masters/HQ Stems/x.wav' } },
+  { recordId: '15', fieldData: { Song_ID: 'elsewhere', Song_Title: 'Elsewhere', Stem_Label: 'Bass', File_Name: 'Bass.wav', Vision_Path: '/gallo-masters/Owned WAVs/secret master.wav', Bytes: 1000, Seconds: 9, Sort: 1, Visible: 1 } },
 ];
 
 // Every token the tests mint goes to a temp folder, never the repo's data/; no real MVSEP key
@@ -421,10 +421,11 @@ describe('Mad Mixer on its own home, through server.js', () => {
     }]);
   });
 
-  it('GET /internal/mixer/hq: a song’s studio stems in Sort order, hidden and bad rows dropped; Vision paths never leave MAD', async () => {
+  it('GET /internal/mixer/hq: stem sets (not tied to songs) with their stems in Sort order, hidden and bad rows dropped; Vision paths never leave MAD', async () => {
     const res = await signed(app, 'GET', '/internal/mixer/hq');
     expect(res.status).toBe(200);
-    expect(res.body.songs[0]).toEqual({ songId: '282', title: 'After the Storm', stems: [
+    expect(res.body.sets.map((x) => x.setId)).toEqual(['after-the-storm', 'elsewhere']);
+    expect(res.body.sets[0]).toEqual({ setId: 'after-the-storm', title: 'After the Storm', stems: [
       { stemId: '12', label: 'Vocals', file: 'Vocals.wav', bytes: 1000, seconds: 205 },
       { stemId: '11', label: 'Drums', file: 'Drums.wav', bytes: 1000, seconds: 205 },
     ] });
