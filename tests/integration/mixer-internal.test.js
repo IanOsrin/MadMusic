@@ -70,6 +70,15 @@ const SONGS = [
   { recordId: '282', fieldData: { 'Track Name': 'After the Storm', 'Track Artist': 'A', Duration: '0:03:25', ISRC: 'X1', Audio_S3_URL: 'https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/a.mp3' } },
   { recordId: '283', fieldData: { 'Track Name': 'No Audio Yet', 'Track Artist': 'B', ISRC: 'X2' } },
 ];
+// Loop packs: one record per loop on the MADMixer "Packs" layout.
+const S3 = 'https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/';
+const PACK_ROWS = [
+  { recordId: '1', fieldData: { Pack_ID: 'jerry-ndebele', Pack_Title: 'Jerry Ndebele', Pack_Song: 'Jerry Ndebele', Loop_Label: 'Bass', File_Name: 'Jerry Ndebele - Bass - 66.6bpm - bars 1-4.wav', BPM: 66.6, Bars: 4, Seconds: 14.413, Bytes: 3800000, Audio_S3_URL: S3 + 'packs/jerry-ndebele/b.wav', Sort: 2, Visible: 1 } },
+  { recordId: '2', fieldData: { Pack_ID: 'jerry-ndebele', Pack_Title: 'Jerry Ndebele', Pack_Song: 'Jerry Ndebele', Loop_Label: 'Drums', File_Name: 'Jerry Ndebele - Drums - 66.6bpm - bars 1-4.wav', BPM: 66.6, Bars: 4, Seconds: 14.413, Bytes: 3800000, Audio_S3_URL: S3 + 'packs/jerry-ndebele/d.wav', Sort: 1, Visible: '' } },
+  { recordId: '3', fieldData: { Pack_ID: 'jerry-ndebele', Loop_Label: 'Hidden', Audio_S3_URL: S3 + 'packs/jerry-ndebele/h.wav', Sort: 3, Visible: 0 } },
+  { recordId: '4', fieldData: { Pack_ID: 'Bad Id!', Loop_Label: 'x', Audio_S3_URL: S3 + 'x.wav' } },
+  { recordId: '5', fieldData: { Pack_ID: 'no-audio', Loop_Label: 'x', Audio_S3_URL: 'http://elsewhere/x.wav' } },
+];
 
 // Every token the tests mint goes to a temp folder, never the repo's data/; no real MVSEP key
 // (a fake one also keeps routes/mixer.js away from the macOS Keychain).
@@ -298,6 +307,7 @@ describe('Mad Mixer on its own home, through server.js', () => {
       const u = String(url);
       const json = (o) => new Response(JSON.stringify(o), { status: 200, headers: { 'Content-Type': 'application/json' } });
       if (u.includes('mm.test') && u.endsWith('/sessions')) return json({ response: { token: 't' }, messages: [{ code: '0' }] });
+      if (u.includes('mm.test') && u.includes('/layouts/Packs/')) return json({ response: { data: PACK_ROWS }, messages: [{ code: '0' }] });
       if (u.includes('mm.test')) return json({ response: { data: SONGS }, messages: [{ code: '0' }] });
       if (u.includes('mvsep.com')) throw new Error('MVSEP must not be called here');
       return realFetch(url, init);
@@ -372,6 +382,24 @@ describe('Mad Mixer on its own home, through server.js', () => {
       id: '282', title: 'After the Storm', artist: 'A', album: '', duration: '0:03:25', genre: '', isrc: 'X1',
       playable: true, hasMaster: false, audioUrl: 'https://media.musicafricadirect.com/a.mp3',
     }]);
+  });
+
+  it('GET /internal/mixer/packs: packs grouped from the Packs layout, in Sort order, hidden and bad rows dropped, WAVs on the CDN', async () => {
+    const res = await signed(app, 'GET', '/internal/mixer/packs');
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toMatch(/no-store/);
+    expect(res.body.count).toBe(1);
+    expect(res.body.packs).toEqual([{
+      id: 'jerry-ndebele', title: 'Jerry Ndebele', song: 'Jerry Ndebele', bpm: 66.6, bars: 4,
+      loops: [
+        { label: 'Drums', file: 'Jerry Ndebele - Drums - 66.6bpm - bars 1-4.wav', url: 'https://media.musicafricadirect.com/packs/jerry-ndebele/d.wav', bytes: 3800000, seconds: 14.413 },
+        { label: 'Bass', file: 'Jerry Ndebele - Bass - 66.6bpm - bars 1-4.wav', url: 'https://media.musicafricadirect.com/packs/jerry-ndebele/b.wav', bytes: 3800000, seconds: 14.413 },
+      ],
+    }]);
+  });
+
+  it('GET /internal/mixer/packs needs the signature', async () => {
+    expect((await request(app).get('/internal/mixer/packs')).status).toBe(401);
   });
 
   describe('free split via the Mixer', () => {

@@ -7,6 +7,7 @@
  *
  *   POST /entitlement    {code}       → { ok, valid, definitive, source, entitled, plan, trial, confirmed, email, expiresAt }
  *   GET  /songs                       → { ok, builtAt, count, songs: [{ id, title, …, playable, hasMaster, audioUrl }] }
+ *   GET  /packs                       → { ok, builtAt, count, packs: [{ id, title, song, bpm, bars, loops: [{ label, file, url, bytes, seconds }] }] }
  *   POST /trial          {email, ip}  → { ok, code } · 400 · 409 · 429 · 502 (email failed, code revoked) · 503
  *   POST /trial/confirm  {code, sig}  → { ok, confirmed: true } · 400 { reason: 'bad-link' | 'ended' } · 503
  *   POST /subscribe      {email}      → { ok, url } — a Paystack checkout for the Mad Mixer plan · 400 · 503
@@ -33,7 +34,7 @@ import net from 'node:net';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { verifyRequest, mixerSharedSecret, mixerPublicUrl } from '../lib/mixer-bridge.js';
 import { mixerEntitled, isMixerTrial, planOf } from '../lib/mixer-plans.js';
-import { songsWithAudio } from '../lib/mixer-catalogue.js';
+import { songsWithAudio, mixerPacks } from '../lib/mixer-catalogue.js';
 import { trialConfirmedCached, startTrial, confirmTrial, mixerTrialLinks } from '../lib/mixer-trial.js';
 import { paystackRequest, PAYSTACK_MIXER_PLAN } from '../lib/paystack.js';
 import { isStrictEmail } from '../lib/validators.js';
@@ -155,6 +156,17 @@ export function createMixerInternalRouter({ resolveToken, secret = mixerSharedSe
     } catch (err) {
       console.warn('[mixer-internal] song list failed:', err?.message || err);
       res.status(502).json({ ok: false, error: 'Could not load the Mad Mixer song list.' });
+    }
+  });
+
+  // Loop packs (2026-10-08): who may have them is the Mixer's call (subscribers, not free splits).
+  router.get('/packs', async (_req, res) => {
+    try {
+      const { builtAt, packs } = await mixerPacks();
+      res.json({ ok: true, builtAt, count: packs.length, packs });
+    } catch (err) {
+      console.warn('[mixer-internal] pack list failed:', err?.message || err);
+      res.status(502).json({ ok: false, error: 'Could not load the Mad Mixer packs.' });
     }
   });
 
