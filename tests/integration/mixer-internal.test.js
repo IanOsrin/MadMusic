@@ -5,7 +5,8 @@ import crypto from 'node:crypto';
 import { readFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deriveKeys, signRequest, verifyRequest, mixerPublicUrl } from '../../lib/mixer-bridge.js';
+import { deriveKeys, signRequest, verifyRequest, mixerPublicUrl, hqAudioSig } from '../../lib/mixer-bridge.js';
+import { Readable } from 'node:stream';
 // NB: nothing that loads lib/token-store.js is imported statically — it fixes its data folder at
 // import time, so it is imported only after DATA_DIR points at a temp folder (below).
 
@@ -55,6 +56,20 @@ vi.mock('../../fm-client.js', async (importOriginal) => {
   };
 });
 
+// Vision, faked: one 1000-byte "WAV" per path; Range honoured; reads recorded.
+const vision = { reads: [] };
+vi.mock('../../lib/vision-read.js', () => ({
+  visionConfigured: () => true,
+  visionGet: vi.fn(async (path, range) => {
+    vision.reads.push({ path, range });
+    const all = Buffer.alloc(1000, 7);
+    const m = /^bytes=(\d*)-(\d*)$/.exec(range || '');
+    const a = m ? Number(m[1] || 0) : 0, b = m && m[2] ? Number(m[2]) : 999;
+    const part = all.subarray(a, b + 1);
+    return { Body: Readable.from([part]), ContentLength: part.length, ContentRange: m ? `bytes ${a}-${b}/1000` : undefined };
+  }),
+}));
+
 const sent = [];
 let emailFails = false;
 vi.mock('../../lib/email.js', async (importOriginal) => {
@@ -80,10 +95,11 @@ const PACK_ROWS = [
   { recordId: '5', fieldData: { Pack_ID: 'no-audio', Loop_Label: 'x', Audio_S3_URL: 'http://elsewhere/x.wav' } },
 ];
 const HQ_ROWS = [
-  { recordId: '1', fieldData: { Song_ID: '282', Song_Title: 'After the Storm', Stem_Label: 'Drums', File_Name: 'Drums.wav', Audio_S3_URL: S3 + 'hqstems/282/d.wav', Bytes: 5000000, Seconds: 205, Sort: 2, Visible: 1 } },
-  { recordId: '2', fieldData: { Song_ID: '282', Song_Title: 'After the Storm', Stem_Label: 'Vocals', File_Name: 'Vocals.wav', Audio_S3_URL: S3 + 'hqstems/282/v.wav', Bytes: '5000001', Seconds: 205, Sort: 1, Visible: '' } },
-  { recordId: '3', fieldData: { Song_ID: '282', Stem_Label: 'Hidden', Audio_S3_URL: S3 + 'hqstems/282/h.wav', Sort: 3, Visible: 0 } },
-  { recordId: '4', fieldData: { Song_ID: 'abc', Stem_Label: 'x', Audio_S3_URL: S3 + 'x.wav' } },
+  { recordId: '11', fieldData: { Song_ID: '282', Song_Title: 'After the Storm', Stem_Label: 'Drums', File_Name: 'Drums.wav', Vision_Path: '/gallo-masters/HQ Stems/After the Storm/Drums.wav', Bytes: 1000, Seconds: 205, Sort: 2, Visible: 1 } },
+  { recordId: '12', fieldData: { Song_ID: '282', Song_Title: 'After the Storm', Stem_Label: 'Vocals', File_Name: 'Vocals.wav', Vision_Path: '/gallo-masters/HQ Stems/After the Storm/Vocals.wav', Bytes: '1000', Seconds: 205, Sort: 1, Visible: '' } },
+  { recordId: '13', fieldData: { Song_ID: '282', Stem_Label: 'Hidden', Vision_Path: '/gallo-masters/HQ Stems/After the Storm/Hidden.wav', Sort: 3, Visible: 0 } },
+  { recordId: '14', fieldData: { Song_ID: 'abc', Stem_Label: 'x', Vision_Path: '/gallo-masters/HQ Stems/x.wav' } },
+  { recordId: '15', fieldData: { Song_ID: '283', Song_Title: 'Elsewhere', Stem_Label: 'Bass', File_Name: 'Bass.wav', Vision_Path: '/gallo-masters/Owned WAVs/secret master.wav', Bytes: 1000, Seconds: 9, Sort: 1, Visible: 1 } },
 ];
 
 // Every token the tests mint goes to a temp folder, never the repo's data/; no real MVSEP key
@@ -405,14 +421,52 @@ describe('Mad Mixer on its own home, through server.js', () => {
     }]);
   });
 
-  it('GET /internal/mixer/hq: a song’s studio stems in Sort order, hidden and bad rows dropped, WAVs on the CDN', async () => {
+  it('GET /internal/mixer/hq: a song’s studio stems in Sort order, hidden and bad rows dropped; Vision paths never leave MAD', async () => {
     const res = await signed(app, 'GET', '/internal/mixer/hq');
     expect(res.status).toBe(200);
-    expect(res.body.songs).toEqual([{ songId: '282', title: 'After the Storm', stems: [
-      { label: 'Vocals', file: 'Vocals.wav', url: 'https://media.musicafricadirect.com/hqstems/282/v.wav', bytes: 5000001, seconds: 205 },
-      { label: 'Drums', file: 'Drums.wav', url: 'https://media.musicafricadirect.com/hqstems/282/d.wav', bytes: 5000000, seconds: 205 },
-    ] }]);
+    expect(res.body.songs[0]).toEqual({ songId: '282', title: 'After the Storm', stems: [
+      { stemId: '12', label: 'Vocals', file: 'Vocals.wav', bytes: 1000, seconds: 205 },
+      { stemId: '11', label: 'Drums', file: 'Drums.wav', bytes: 1000, seconds: 205 },
+    ] });
+    expect(JSON.stringify(res.body)).not.toMatch(/gallo-masters|Vision_Path|visionPath/);
     expect((await request(app).get('/internal/mixer/hq')).status).toBe(401);
+  });
+
+  describe('GET /mixer-hq/:stemId — the stem streamed from Vision on a signed link', () => {
+    const link = (id, exp = Math.floor(Date.now() / 1000) + 3600, sig) => `/mixer-hq/${id}?exp=${exp}&sig=${encodeURIComponent(sig ?? hqAudioSig(id, exp, SECRET))}`;
+    it('a good link streams the WAV, readable by the Mixer’s origin, never compressed', async () => {
+      vi.stubEnv('MIXER_HQ_VISION_PREFIX', '/gallo-masters/HQ Stems');
+      const res = await request(app).get(link('12')).set('Accept-Encoding', 'gzip').buffer(true).parse((r, cb) => { const c = []; r.on('data', (d) => c.push(d)); r.on('end', () => cb(null, Buffer.concat(c))); });
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/audio\/wav/);
+      expect(res.headers['access-control-allow-origin']).toBe(MIXER_URL);
+      expect(res.headers['content-encoding']).toBeUndefined();
+      expect(res.body.length).toBe(1000);
+      expect(vision.reads.at(-1).path).toBe('/gallo-masters/HQ Stems/After the Storm/Vocals.wav');
+    });
+    it('Range → 206 with Content-Range', async () => {
+      const res = await request(app).get(link('11')).set('Range', 'bytes=100-199');
+      expect(res.status).toBe(206);
+      expect(res.headers['content-range']).toBe('bytes 100-199/1000');
+    });
+    it('expired, too long, tampered, malformed → refused before Vision is touched', async () => {
+      const before = vision.reads.length, nowS = Math.floor(Date.now() / 1000);
+      expect((await request(app).get(link('12', nowS - 5))).status).toBe(403);
+      expect((await request(app).get(link('12', nowS + 7 * 3600))).status).toBe(403);
+      expect((await request(app).get(link('12', undefined, 'x'.repeat(43)))).status).toBe(403);
+      expect((await request(app).get(link('11').replace('/11?', '/12?'))).status).toBe(403);   // a link is for one stem
+      expect((await request(app).get('/mixer-hq/12')).status).toBe(400);
+      expect(vision.reads.length).toBe(before);
+    });
+    it('a record pointing outside the HQ folder is refused; unknown stems 404; no folder set → 503', async () => {
+      const before = vision.reads.length;
+      expect((await request(app).get(link('15'))).status).toBe(403);
+      expect((await request(app).get(link('99'))).status).toBe(404);
+      vi.stubEnv('MIXER_HQ_VISION_PREFIX', '');
+      expect((await request(app).get(link('12'))).status).toBe(503);
+      vi.stubEnv('MIXER_HQ_VISION_PREFIX', '/gallo-masters/HQ Stems');
+      expect(vision.reads.length).toBe(before);
+    });
   });
 
   it('GET /internal/mixer/packs needs the signature', async () => {

@@ -32,6 +32,7 @@ import previewRouter from './routes/preview.js';
 import maddieRouter from './routes/maddie.js';
 import mixerRouter from './routes/mixer.js';
 import { createMixerInternalRouter } from './routes/mixer-internal.js';
+import { createMixerHqAudioRouter } from './routes/mixer-hq-audio.js';
 import { mixerSharedSecret, mixerPublicUrl } from './lib/mixer-bridge.js';
 import { initSemanticIndex, semanticIndexStatus } from './lib/semantic-index.js';
 import { initNameIndex, nameIndexStatus } from './lib/name-index.js';
@@ -497,6 +498,8 @@ const contactLimiter = rateLimit({
 if (MIXER_SHARED_SECRET_SET) {
   app.use('/internal/mixer', createMixerInternalRouter({ resolveToken: resolveTokenForMixer }));
   console.log('[MASS] Mad Mixer internal API on /internal/mixer');
+  // HQ stems: the Mixer's signed links stream each stem from Vision (routes/mixer-hq-audio.js)
+  app.use('/mixer-hq', createMixerHqAudioRouter());
 }
 
 // Apply general rate limiting to all API routes
