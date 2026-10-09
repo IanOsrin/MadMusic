@@ -1734,6 +1734,15 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    /* Album rows: a song by another artist than the album's shows that artist under its title */
+    .album-track-titles {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+      max-width: 40%;
+      line-height: 1.25;
+    }
     .playlist-track-duration {
       font-size: 15px;
       color: #8a8a8a;

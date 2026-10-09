@@ -5082,11 +5082,15 @@
 
         // Populate track list
         if (trackList && album.tracks && album.tracks.length > 0) {
+          // A song by someone other than the album artist (compilations, features) shows its own
+          // artist under the title (Ian, 2026-10-09). Mobile's album sheet already shows it on every row.
+          const sameArtist = (a, b) => String(a || '').trim().toLowerCase().replace(/\s+/g, ' ') === String(b || '').trim().toLowerCase().replace(/\s+/g, ' ');
+          const ownArtist = (track) => { const ta = String(track.trackArtist || '').trim(); return ta && !sameArtist(ta, album.artist) ? ta : ''; };
           trackList.innerHTML = album.tracks.map((track, index) => `
             <div class="playlist-track-item album-track-item" data-track-index="${index}" data-audio-url="${track.S3_URL || track.resolvedSrc || track.audioUrl || ''}" data-record-id="${track.recordId || ''}" data-download-price="${track.Download_Price || track.downloadPrice || ''}">
               <span class="playlist-track-number">${Number.isFinite(track.seq) && track.seq > 0 ? track.seq : index + 1}.</span>
               <button class="track-play-btn" data-track-index="${index}" title="Play ${(track.name || 'track').replace(/"/g, '&quot;')}" aria-label="Play ${(track.name || 'track').replace(/"/g, '&quot;')}">▶</button>
-              <span class="playlist-track-name">${track.name || 'Unknown Track'}</span>
+              ${ownArtist(track) ? `<span class="album-track-titles"><span class="playlist-track-name">${track.name || 'Unknown Track'}</span><span class="playlist-track-artist">${window.MADHelpers.escapeHtml(ownArtist(track))}</span></span>` : `<span class="playlist-track-name">${track.name || 'Unknown Track'}</span>`}
               <span class="playlist-track-duration">${track.duration || ''}</span>
               <div class="playlist-track-actions">
                 <button class="track-action-btn track-add-playlist" data-track-index="${index}">+ Playlist</button>
