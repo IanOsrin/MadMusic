@@ -2,10 +2,10 @@
 // 2026-09-28). Same feed as the desktop rail (GET /api/global-favorites, public, SWR-cached):
 // tracks flagged Global_Favorites in the catalogue. Every value shown comes from the record —
 // rank is just the order the feed returns; the right-hand time is the track's own Duration.
-import { state } from './state.js?v=42';
-import { getArtworkUrl, getTitleField, getArtistField, getAlbumField, escapeHtml } from './fields.js?v=42';
-import { playTrack } from './player.js?v=42';
-import { openAlbumForTrack, showArtistTracks } from './cards.js?v=42';
+import { state } from './state.js?v=43';
+import { getArtworkUrl, getTitleField, getArtistField, getAlbumField, escapeHtml } from './fields.js?v=43';
+import { playTrack } from './player.js?v=43';
+import { openAlbumForTrack, showArtistTracks } from './cards.js?v=43';
 
 const LIMIT = 10;
 

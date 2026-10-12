@@ -48,8 +48,8 @@
        the page must never flash white-with-purple-links. Inline floor styles keep
        a failed render dark, and the onerror retries the sheet once it recovers. -->
   <style>html{background:#0b0b10;color:#e8e8ee}body{background:#0b0b10}a{color:inherit}</style>
-  <link rel="stylesheet" href="/css/app.css?v=13"
-        onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/app.css?v=13&r='+Date.now();},1500)">
+  <link rel="stylesheet" href="/css/app.css?v=15"
+        onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/app.css?v=15&r='+Date.now();},1500)">
 </head>
 <body>
   <!-- Crawlable page heading (visually hidden — the app shell has no static H1) -->
@@ -1670,6 +1670,8 @@
           <div class="account-row"><span class="account-label">Token</span><span class="account-value account-mono" id="acctToken">—</span></div>
           <div class="account-row"><span class="account-label">Expires</span><span class="account-value" id="acctExpiry">—</span></div>
           <div class="account-row"><span class="account-label">Status</span><span class="account-value" id="acctStatus">—</span></div>
+          <div class="account-row"><span class="account-label">Comment name</span><span class="account-value"><button type="button" class="link-btn" id="acctCommentNameBtn" style="background:none;border:0;color:var(--accent,#8b5cf6);cursor:pointer;font:inherit;padding:0">Set or change</button></span></div>
+          <div id="acctCommentName" style="margin:6px 0 4px"></div>
         </div>
 
         <!-- Signed out: the way back in. Without this, logging out left this
@@ -2147,6 +2149,11 @@
     }
   </style>
 
+  <!-- Timed comments panel (js/track-comments.js draws its content) -->
+  <div id="upCommentsPanel" hidden role="dialog" aria-label="Comments">
+    <div class="upc-head"><strong>Comments</strong><span id="upCommentsTitle"></span><button type="button" class="upc-close" id="upCommentsClose" aria-label="Close">&times;</button></div>
+    <div id="upCommentsHost"></div>
+  </div>
   <div id="unifiedPlayer">
     <!-- hidden elements kept for JS compatibility -->
     <div id="upArtwork" style="display:none"></div>
@@ -2204,6 +2211,10 @@
       </svg>
       <span class="up-ringtone-label">Ringtone</span>
     </a>
+    <!-- Timed comments (2026-10-12) — shown when a track with a recordId is playing -->
+    <button id="upCommentsBtn" type="button" title="Comments on this track" aria-label="Comments on this track">
+      <span aria-hidden="true">💬</span><span id="upCommentsCount" class="up-ringtone-label">Comments</span>
+    </button>
     <!-- Share button — shown when a track with a recordId is playing -->
     <button id="upShareBtn" type="button" title="Share this track" aria-label="Share this track">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -6873,8 +6884,40 @@
   </script>
 
   <script src="/js/helpers.js?v=1"></script>
-  <script src="/js/auth.js?v=2"></script>
+  <script src="/js/auth.js?v=3"></script>
   <script src="/js/player.js?v=6"></script>
+  <script src="/js/track-comments.js?v=1"></script>
+  <script>
+    // Timed comments on the desktop player bar (2026-10-12). The track is whatever _PLAYER.playTrack
+    // stashed in window.__nowPlayingShare; guests are sent to the subscribe overlay to post or react.
+    document.addEventListener('DOMContentLoaded', function () {
+      var audio = document.getElementById('player'), btn = document.getElementById('upCommentsBtn'),
+          panel = document.getElementById('upCommentsPanel'), count = document.getElementById('upCommentsCount');
+      if (!audio || !btn || !panel || !window.MADComments) return;
+      var np = function () { return window.__nowPlayingShare || null; };
+      var toggle = function (show) {
+        panel.hidden = !show; btn.classList.toggle('open', show); document.body.classList.toggle('mc-open', show);
+        var t = np(); document.getElementById('upCommentsTitle').textContent = t ? (t.title || '') + (t.artist ? ' — ' + t.artist : '') : '';
+      };
+      btn.addEventListener('click', function () { toggle(panel.hidden); });
+      document.getElementById('upCommentsClose').addEventListener('click', function () { toggle(false); });
+      // My Account → the name shown on your comments
+      document.getElementById('acctCommentNameBtn').addEventListener('click', function () { MADComments.changeName(document.getElementById('acctCommentName')); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) toggle(false); });
+      audio.addEventListener('play', function () {
+        btn.classList.toggle('visible', !!(np() && np().recordId));
+        if (!panel.hidden) toggle(true);
+      });
+      MADComments.attach(Object.assign(MADComments.forAudio(audio), {
+        name: 'desktop',
+        progressEl: function () { return document.getElementById('upProgress'); },
+        panelHost: function () { return document.getElementById('upCommentsHost'); },
+        getTrackId: function () { var t = np(); return t && t.recordId ? String(t.recordId) : null; },
+        onNeedSignIn: function () { toggle(false); var o = document.getElementById('paymentOverlay'); if (o) o.classList.remove('hidden'); },
+        onCount: function (n) { count.textContent = n ? String(n) : 'Comments'; }
+      }));
+    });
+  </script>
   <script src="/js/playlists.js?v=1"></script>
   <script src="/js/catalog.js?v=3"></script>
   <script src="/js/currency.js?v=2"></script>

@@ -1,8 +1,8 @@
 // Playback engine + now-playing modal for the mobile app.
 
-import { elements, state } from './state.js?v=42';
-import { formatTime, generateSessionId, showToast } from './util.js?v=42';
-import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getGenreField, getTitleField, getYearField } from './fields.js?v=42';
+import { elements, state } from './state.js?v=43';
+import { formatTime, generateSessionId, showToast } from './util.js?v=43';
+import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getGenreField, getTitleField, getYearField } from './fields.js?v=43';
 
 export function closeModal() {
       elements.modalOverlay.classList.remove('show');
@@ -38,6 +38,7 @@ export function trackPlayedOk() { failuresInARow = 0; }
 export async function playTrack(track) {
       const seq = ++playSeq;
       state.currentTrack = track;
+      window.__mcTrackId = track.recordId ? String(track.recordId) : null;   // timed comments (js/track-comments.js)
       const fields = track.fields || {};
 
       // Get audio URL

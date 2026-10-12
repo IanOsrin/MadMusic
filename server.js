@@ -18,6 +18,7 @@ import playlistsRouter from './routes/playlists.js';
 import catalogRouter from './routes/catalog.js';
 import libraryRouter from './routes/library.js';
 import accountRouter from './routes/account.js';
+import { publicCommentsRouter, commentsRouter } from './routes/comments.js';
 import streamRouter, { isContainerRedirectRequest } from './routes/stream.js';
 import adminRouter, { requireAdminKey } from './routes/admin.js';
 import editorialRouter from './routes/featured-editorial.js';
@@ -502,6 +503,15 @@ if (MIXER_SHARED_SECRET_SET) {
   app.use('/mixer-hq', createMixerHqAudioRouter());
 }
 
+// Timed comments: writing (comments, names, reactions, reports) — on top of the per-person cap in the route.
+const commentLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 40,
+  message: { ok: false, error: 'Slow down a little — try again in a few minutes.' },
+  keyGenerator: clientIpKey,
+  skip: (req, res) => req.method === 'GET' || skipInTest(req, res)
+});
+
 // Apply general rate limiting to all API routes
 app.use('/api/', apiLimiter);
 
@@ -510,6 +520,7 @@ app.use(['/api/explore', '/api/trending', '/api/featured-albums', '/api/missing-
 app.use(['/api/payments/initialize', '/api/payments/subscribe', '/api/ringtone/initiate'], paymentLimiter);
 app.use('/api/payments/trial', trialLimiter);
 app.use('/api/contact', contactLimiter);
+app.use('/api/comments', commentLimiter);
 
 // Add Cache-Control headers
 app.use((req, res, next) => {
@@ -662,6 +673,9 @@ app.use('/api/', async (req, res, next) => {
     '/taster/event',
     '/taster/report',
     '/catalog/',
+    // Timed comments are READ by everyone (guests too — Ian, 2026-10-12); a token, when sent, only
+    // personalises the list. Writing is /api/comments/*, which stays behind this middleware.
+    '/track-comments/',
     // An old free-split email's Confirm link (sent before Mad Mixer moved) — it carries no access
     // token; it is forwarded to MIXER_URL below.
     ...(MIXER_LINKS ? ['/mixer/trial/confirm'] : [])
@@ -970,6 +984,8 @@ app.use('/api/library', libraryRouter);
 // Deliberately NOT in the auth skip-list above: you may only delete the account
 // whose valid access token you are holding.
 app.use('/api/account', accountRouter);
+app.use('/api/track-comments', publicCommentsRouter);   // timed comments: read (public)
+app.use('/api/comments', commentsRouter);              // timed comments: write (subscribers)
 app.use('/api', catalogRouter);
 app.use('/api', streamRouter);
 app.use('/api', adminRouter);
