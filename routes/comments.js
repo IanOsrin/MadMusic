@@ -34,8 +34,9 @@ export function commentsEnabled() {
   return process.env.COMMENTS_ENABLED !== 'false' && store.commentsAvailable();
 }
 
-// One SWR entry per song: 20 s fresh, then served stale while it refreshes. Writes delete the entry.
-const listSwr = createSwrCache({ ttlMs: 20_000, max: 500, label: 'comments', name: 'comments', loader: (trackId) => store.trackComments(trackId) });
+// One SWR entry per song, 3 s fresh (dedupes bursts of listeners on one song). Short on purpose: MAD runs
+// several server copies (cluster.js) and a write only clears THIS copy's entry — the others catch up in seconds.
+const listSwr = createSwrCache({ ttlMs: 3_000, max: 500, label: 'comments', name: 'comments', loader: (trackId) => store.trackComments(trackId) });
 const forget = (trackId) => listSwr.cache.delete(String(trackId));
 
 /** The email of a token-bearing request on a PUBLIC path (no validation — personalising only). */

@@ -13,7 +13,8 @@
   'use strict';
   var EMOJI = { fire: '🔥', clap: '👏', tear: '🥲' };
   var cfg = null, trackId = null, data = null, loadSeq = 0, prevT = -1, queue = [], bubbleTimer = null,
-      lastDur = 0, composerAt = null, busy = false, pendingBody = null, open = false;
+      lastDur = 0, composerAt = null, busy = false, pendingBody = null, open = false,
+      posted = {};   // trackId → [comment]: your own fresh posts, kept until the server lists them (MAD runs several server copies)
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function mmss(ms) { var s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
@@ -70,6 +71,10 @@
     api('/api/track-comments/' + encodeURIComponent(id)).then(function (j) {
       if (seq !== loadSeq) return;
       if (!j.ok) { data = { comments: [], reactions: { fire: 0, clap: 0, tear: 0 }, myReactions: [], me: null, off: j.__status === 404 }; render(); return; }
+      var mine = posted[id] || [], have = {};
+      j.comments.forEach(function (c) { have[c.id] = true; });
+      posted[id] = mine.filter(function (c) { return !have[c.id]; });
+      if (posted[id].length) { j.comments = j.comments.concat(posted[id]).sort(function (a, b) { return a.atMs - b.atMs; }); }
       data = j; render();
     }).catch(function () { if (seq === loadSeq) { data = { comments: [], reactions: { fire: 0, clap: 0, tear: 0 }, myReactions: [], me: null, failed: true }; render(); } });
   }
@@ -176,13 +181,17 @@
       if (j.ok) {
         pendingBody = null; composerAt = null;
         if (id !== trackId || !data) return;
+        (posted[id] = posted[id] || []).push(j.comment);
         data.comments.push(j.comment);
         data.comments.sort(function (a, b) { return a.atMs - b.atMs; });
         drawMarkers(); render(); showBubble(j.comment, true);
         return;
       }
       if (j.needsName) { pendingBody = body; askName(host, function () { post(host, body, atMs); }); return; }
-      if (j.requiresAccessToken) { needSub(); msg(host, ''); return; }
+      if (j.requiresAccessToken) {
+        if (!localStorage.getItem('mass_access_token')) { needSub(); msg(host, ''); return; }
+        msg(host, 'Your code isn\u2019t working \u2014 it may have expired. Sign in again (My Account) and try once more.'); return;
+      }
       if (j.requiresEmail) { msg(host, 'Add an email address to your code (My Account) to comment.'); return; }
       msg(host, j.error || 'Your comment couldn’t be posted — try again.');
     }).catch(function () { busy = false; msg(host, 'No connection — try again.'); });
@@ -216,7 +225,7 @@
   function react(host, emoji) {
     var id = trackId;
     api('/api/comments/' + encodeURIComponent(id) + '/react', 'POST', { emoji: emoji }).then(function (j) {
-      if (!j.ok) { if (j.requiresAccessToken) needSub(); else msg(host, j.error || 'Try again.'); return; }
+      if (!j.ok) { if (j.requiresAccessToken && !localStorage.getItem('mass_access_token')) needSub(); else msg(host, j.requiresAccessToken ? 'Your code isn\u2019t working \u2014 sign in again (My Account).' : (j.error || 'Try again.')); return; }
       if (id !== trackId || !data) return;
       data.reactions = j.reactions;
       var mine = (data.myReactions || []).filter(function (k) { return k !== emoji; });
@@ -232,7 +241,9 @@
       if (!confirm('Delete your comment?')) return;
       api('/api/comments/c/' + encodeURIComponent(id), 'DELETE').then(function (j) {
         if (!j.ok) { msg(host, j.error || 'Try again.'); return; }
-        data.comments = data.comments.filter(function (x) { return x.id !== id; }); drawMarkers(); render();
+        data.comments = data.comments.filter(function (x) { return x.id !== id; });
+        if (posted[trackId]) posted[trackId] = posted[trackId].filter(function (x) { return x.id !== id; });
+        drawMarkers(); render();
       });
       return;
     }
