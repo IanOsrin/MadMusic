@@ -408,7 +408,7 @@ describe('Mad Mixer on its own home, through server.js', () => {
     expect(res.body.builtAt).toEqual(expect.any(String));
     expect(res.body.count).toBe(1);
     expect(res.body.songs).toEqual([{
-      id: '282', title: 'After the Storm', artist: 'A', album: '', duration: '0:03:25', genre: '', isrc: 'X1',
+      id: '282', title: 'After the Storm', artist: 'A', album: '', duration: '0:03:25', genre: '', isrc: 'X1', key: '', bpm: null,
       playable: true, hasMaster: false, audioUrl: 'https://media.musicafricadirect.com/a.mp3',
     }]);
   });

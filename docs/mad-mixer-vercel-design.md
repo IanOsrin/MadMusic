@@ -285,7 +285,7 @@ Switches: `MIXER_SHARED_SECRET` mounts `/internal/mixer/*` (independent of `MAD_
 | Endpoint | Body | 200 answer | Other answers |
 |---|---|---|---|
 | `POST /internal/mixer/entitlement` | `{code}` | valid: `{ok:true, valid:true, definitive, source:'fm'\|'cache'\|'stale'\|'json', entitled, plan, trial, confirmed, email, expiresAt}`; not valid: `{ok:true, valid:false, definitive, reason, source, entitled:false, plan:null, trial:false, confirmed:false, email:null, expiresAt:null}` | 400 no code; 503 the check failed |
-| `GET /internal/mixer/songs` | — | `{ok:true, builtAt, count, songs:[{id, title, artist, album, duration, genre, isrc, playable:true, hasMaster, audioUrl}]}` (playable songs only; `audioUrl` on the media CDN) | 502 MADMixer unreachable |
+| `GET /internal/mixer/songs` | — | `{ok:true, builtAt, count, songs:[{id, title, artist, album, duration, genre, isrc, key, bpm, playable:true, hasMaster, audioUrl}]}` (playable songs only; `audioUrl` on the media CDN) | 502 MADMixer unreachable |
 | `POST /internal/mixer/trial` | `{email, ip}` (`ip` = the listener's address as Vercel saw it) | `{ok:true, code}` — a `mixer-trial` code, emailed with `MIXER_URL/#confirm=CODE.SIG` and `MIXER_URL/#code=CODE` | 400 bad email / no ip; 409 email already had one; 429 5 sign-ups an hour per ip; 502 email failed (code revoked); 503 `MIXER_URL` unset, no email service, or an internal error |
 | `POST /internal/mixer/trial/confirm` | `{code, sig}` (the two halves of `#confirm=`) | `{ok:true, confirmed:true}` (idempotent) | 400 `{ok:false, reason:'bad-link'\|'ended'}`; 503 `{ok:false, reason:'error', error}` |
 
