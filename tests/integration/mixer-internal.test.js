@@ -37,6 +37,8 @@ row('MASS-CMB-CAP', { Token_Type: 'Combined', Email: 'typed@example.com' });   /
 row('MASS-MIX-SPC', { Token_Type: ' Mixer ', Email: 'spaces@example.com' });
 row('MASS-MAD-ONL', { Token_Type: 'valid', Email: 'listener@example.com', Audio_Lab_Enabled: 0 });
 row('MASS-MAD-LAB', { Token_Type: 'valid', Email: 'lab@example.com', Audio_Lab_Enabled: 1 });
+// The MadStreamer track behind MADMixer song 282 (same ISRC + title): its AI_BPM is the song's tempo.
+fm.rows.push({ recordId: '9001', fieldData: { ISRC: 'X1', 'Track Name': 'After the Storm', AI_BPM: '101,5' } });
 row('MASS-OFF-001', { Token_Type: 'mixer', Active: 0 });
 row('MASS-END-001', { Token_Type: 'mixer-trial', Active: 0 });
 
@@ -408,7 +410,7 @@ describe('Mad Mixer on its own home, through server.js', () => {
     expect(res.body.builtAt).toEqual(expect.any(String));
     expect(res.body.count).toBe(1);
     expect(res.body.songs).toEqual([{
-      id: '282', title: 'After the Storm', artist: 'A', album: '', duration: '0:03:25', genre: '', isrc: 'X1', key: '', bpm: null,
+      id: '282', title: 'After the Storm', artist: 'A', album: '', duration: '0:03:25', genre: '', isrc: 'X1', key: '', bpm: 101.5,
       playable: true, hasMaster: false, audioUrl: 'https://media.musicafricadirect.com/a.mp3',
     }]);
   });

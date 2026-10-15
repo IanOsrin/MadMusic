@@ -6,7 +6,8 @@
  * for this path ahead of express.json, so the signature is checked over the exact bytes received.
  *
  *   POST /entitlement    {code}       → { ok, valid, definitive, source, entitled, plan, trial, confirmed, email, expiresAt }
- *   GET  /songs                       → { ok, builtAt, count, songs: [{ id, title, …, playable, hasMaster, audioUrl }] }
+ *   GET  /songs                       → { ok, builtAt, count, songs: [{ id, title, …, key, bpm, playable, hasMaster, audioUrl }] }
+ *                                       (bpm from MadStreamer AI_BPM via lib/mixer-streamer.js; null until its first build)
  *   GET  /packs                       → { ok, builtAt, count, packs: [{ id, title, song, bpm, bars, loops: [{ label, file, url, bytes, seconds }] }] }
  *   GET  /samples                     → { ok, builtAt, kinds: [{ kind, samples: [{ id, name, bytes }] }] } — the drum-trigger library
  *   GET  /hq                          → { ok, builtAt, count, sets: [{ setId, title, stems: [{ stemId, label, file, bytes, seconds }] }] }
@@ -38,6 +39,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { verifyRequest, mixerSharedSecret, mixerPublicUrl } from '../lib/mixer-bridge.js';
 import { mixerEntitled, isMixerTrial, planOf } from '../lib/mixer-plans.js';
 import { songsWithAudio, mixerPacks, mixerHqStems } from '../lib/mixer-catalogue.js';
+import { bpmBySong } from '../lib/mixer-streamer.js';
 import { mixerSamples } from '../lib/mixer-samples.js';
 import { trialConfirmedCached, startTrial, confirmTrial, mixerTrialLinks } from '../lib/mixer-trial.js';
 import { paystackRequest, PAYSTACK_MIXER_PLAN } from '../lib/paystack.js';
@@ -155,8 +157,10 @@ export function createMixerInternalRouter({ resolveToken, secret = mixerSharedSe
 
   router.get('/songs', async (_req, res) => {
     try {
-      const { builtAt, songs } = await songsWithAudio();
-      res.json({ ok: true, builtAt, count: songs.length, songs });
+      const [{ builtAt, songs }, bpm] = await Promise.all([songsWithAudio(), bpmBySong()]);
+      // Tempo: MADMixer's own AI_BPM if it ever gets one, else MadStreamer's for the same song.
+      const withBpm = songs.map((s) => (s.bpm || !bpm[s.id] ? s : { ...s, bpm: bpm[s.id] }));
+      res.json({ ok: true, builtAt, count: songs.length, songs: withBpm });
     } catch (err) {
       console.warn('[mixer-internal] song list failed:', err?.message || err);
       res.status(502).json({ ok: false, error: 'Could not load the Mad Mixer song list.' });

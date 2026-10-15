@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { titlesAgree, buildMixableMap } from '../../lib/mixer-match.js';
+import { titlesAgree, buildMixableMap, buildBpmMap } from '../../lib/mixer-match.js';
 
 // Cases from the 2026-09-25 MADMixer ↔ MadStreamer ISRC check.
 describe('titlesAgree', () => {
@@ -48,5 +48,23 @@ describe('buildMixableMap', () => {
   });
   it('leaves out songs Mad Mixer cannot open yet', () => {
     expect(map[9]).toBeUndefined();
+  });
+});
+
+describe('buildBpmMap — MADMixer song tempo from MadStreamer AI_BPM', () => {
+  const songs = [
+    { id: '1', title: 'Afro Funky', album: 'A', isrc: 'za1' },
+    { id: '2', title: 'Nightingale', album: 'B', isrc: 'ZA2' },
+    { id: '3', title: 'Split', album: 'Elsewhere', isrc: 'ZA3' },
+    { id: '4', title: 'Comp', album: 'Own Album', isrc: 'ZA4' },
+  ];
+  const streamer = {
+    ZA1: [{ title: 'Afro Funky', album: 'A', bpm: 120.2 }, { title: 'Afro Funky (Live)', album: 'X', bpm: 121 }],
+    ZA2: [{ title: 'Afro Funky', album: 'B', bpm: 99 }],                           // same ISRC, another song → refused
+    ZA3: [{ title: 'Split', album: 'C', bpm: 85.7 }, { title: 'Split', album: 'D', bpm: 165.4 }],   // half/double → none
+    ZA4: [{ title: 'Comp', album: 'Own Album', bpm: 100 }, { title: 'Comp', album: 'Hits', bpm: 140 }],  // own album wins
+  };
+  it('keeps agreeing titles, takes the middle of close values, drops disagreement', () => {
+    expect(buildBpmMap(songs, streamer)).toEqual({ 1: 120.2, 4: 100 });
   });
 });
