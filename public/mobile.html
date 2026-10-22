@@ -40,13 +40,13 @@
   </script>
   <style>html.native-app #buy-access-btn,html.native-app #guest-paywall-buy,
          html.native-app #mobileRingtoneBtn,html.native-app .web-only{display:none!important}</style>
-  <link rel="stylesheet" href="/css/mobile.css?v=44"
+  <link rel="stylesheet" href="/css/mobile.css?v=45"
         onerror="var l=this;setTimeout(function(){l.onerror=null;l.href='/css/mobile.css?v=4&r='+Date.now();},1500)">
   <!-- MAD Streamer look (2026-09-28, step 1 of the Streamer App design) — re-skin only. -->
   <link rel="stylesheet" href="/css/mobile-streamer.css?v=12">
   <!-- Shared field/format helpers (window.MADHelpers); loaded before body scripts
        so mobile's utilities can delegate to the single canonical source. -->
-  <script src="/js/helpers.js?v=43"></script>
+  <script src="/js/helpers.js?v=44"></script>
 </head>
 <body>
   <!-- Crawlable page heading (visually hidden — the app shell has no static H1) -->
@@ -463,9 +463,6 @@
           <button class="btn btn-primary" style="width: 100%; margin-bottom: 8px;" id="change-token-btn">Enter Access Token</button>
           <button class="btn btn-secondary" style="width: 100%; margin-bottom: 8px;" id="buy-access-btn">Buy Access</button>
           <button class="btn btn-secondary" style="width: 100%; margin-bottom: 8px;" id="contact-btn">💬 Contact us</button>
-          <!-- The name other listeners see on your comments (timed comments, 2026-10-12) — signed in only. -->
-          <button class="btn btn-secondary" style="width: 100%; margin-bottom: 8px;" id="comment-name-btn" hidden>✏️ My comment name</button>
-          <div id="comment-name-host" style="margin-bottom: 8px;"></div>
           <!-- Shown by main.js on Android browsers only — never inside the app itself. -->
           <a class="btn btn-secondary" id="get-app-btn" href="https://play.google.com/store/apps/details?id=com.musicafricadirect.app" target="_blank" rel="noopener"
              style="display: none; width: 100%; margin-bottom: 8px; text-align: center; text-decoration: none; box-sizing: border-box;">📱 Get the MAD app on Google Play</a>
@@ -649,9 +646,6 @@
         <button class="player-control-btn play-pause" id="play-pause-btn" aria-label="Play or pause"><svg class="ic-play" width="22" height="24" viewBox="0 0 13 14" fill="currentColor" aria-hidden="true"><path d="M2.4 1.4 12 7 2.4 12.6z"/></svg></button>
         <button class="player-control-btn" id="next-btn" aria-label="Next track"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5.4 4.4v15.2L15.6 12z"/><rect x="17" y="4.4" width="2.6" height="15.2" rx="1.1"/></svg></button>
       </div>
-      <!-- Timed comments (2026-10-12): reactions, "Comment at 1:23", the list — drawn by js/track-comments.js;
-           the dots and pop-ups sit on #progress-bar above. -->
-      <div class="mc-mobile" id="mcMobile"></div>
       <!-- Queue: the album/playlist being played, current track highlighted.
            Filled by renderPlayerQueue() in js/mobile/player.js. -->
       <div class="player-queue" id="player-queue"></div>
@@ -841,29 +835,7 @@
   </script>
 
   <!-- Access-token fetch patch: classic script, MUST run before the module graph. -->
-  <script src="/js/mobile/fetch-interceptor.js?v=43"></script>
-  <script src="/js/track-comments.js?v=2"></script>
-  <script>
-    // Timed comments in Now Playing (2026-10-12). js/mobile/player.js stashes the song in
-    // window.__mcTrackId; guests get the subscribe sheet when they try to post or react.
-    document.addEventListener('DOMContentLoaded', function () {
-      var audio = document.getElementById('audio');
-      if (!audio || !window.MADComments) return;
-      var player = MADComments.forAudio(audio);
-      MADComments.attach(Object.assign(player, {
-        name: 'mobile',
-        progressEl: function () { return document.getElementById('progress-bar'); },
-        panelHost: function () { return document.getElementById('mcMobile'); },
-        getTrackId: function () { return window.__mcTrackId || null; },
-        onNeedSignIn: function () { var el = document.getElementById('guest-paywall'); if (el) el.classList.add('show'); }
-      }));
-      var nameBtn = document.getElementById('comment-name-btn');
-      if (nameBtn) {
-        nameBtn.addEventListener('click', function () { MADComments.changeName(document.getElementById('comment-name-host')); });
-        setInterval(function () { nameBtn.hidden = !!window.__GUEST || !localStorage.getItem('mass_access_token'); }, 1500);
-      }
-    });
-  </script>
+  <script src="/js/mobile/fetch-interceptor.js?v=44"></script>
   <!-- Download basket: several tracks, one payment. Self-wiring off
        [data-basket-add], and hides itself inside the native shell. -->
   <script src="/js/basket.js?v=1"></script>
@@ -908,6 +880,6 @@
   })();
   </script>
 
-  <script type="module" src="/js/mobile/main.js?v=43"></script>
+  <script type="module" src="/js/mobile/main.js?v=44"></script>
 </body>
 </html>

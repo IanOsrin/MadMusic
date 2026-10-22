@@ -1869,8 +1869,3 @@ body.audio-buffering #player-title::after {
     .np-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; color: var(--text-muted); }
     .np-ctx { font-size: 13px; font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .np-spacer { width: var(--touch-target-min); height: var(--touch-target-min); flex: none; }
-
-    /* Timed comments in Now Playing (2026-10-12) — content drawn by js/track-comments.js */
-    .mc-mobile { width: 100%; max-width: 320px; margin: 4px auto 14px; --mc-list-h: 260px; }
-    .mc-mobile:empty { display: none; }
-    .mc-mobile .mc-panel { font-size: 13px; }
