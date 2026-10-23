@@ -15,6 +15,7 @@ Generated 2026-06-03 from static analysis of both codebases. FM database: `MADSt
 | `API_Ringtone_Purchases` | `FM_RINGTONE_LAYOUT` (literal default) | routes/ringtone.js | READ/WRITE |
 | `Stream_Events` | `FM_STREAM_EVENTS_LAYOUT` | lib/stream-events.js, routes/access.js | READ/WRITE |
 | `API_Hero_Featured` | `FM_HERO_LAYOUT` | **v3.1 only** — routes/featured-editorial.js (hero CMS) | READ |
+| `Registrations` (**MADMixer** db, `MADMIXER_FM_*`) | `MADMIXER_FM_REG_LAYOUT` | lib/mixer-registrations.js — Mad Mixer song registrations (2026-10-23); list = SWR 30 s per account, create never cached | READ/WRITE |
 
 ## Key fields per layout
 

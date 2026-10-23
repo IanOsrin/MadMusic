@@ -14,6 +14,11 @@
  *                                        (the audio streams from Vision through MAD — routes/mixer-hq-audio.js)
  *   POST /trial          {email, ip}  → { ok, code } · 400 · 409 · 429 · 502 (email failed, code revoked) · 503
  *   POST /trial/confirm  {code, sig}  → { ok, confirmed: true } · 400 { reason: 'bad-link' | 'ended' } · 503
+ *   POST /registrations/upload {regId, file, bytes} → { ok, url, key, expiresAt } — a 1-hour PUT link to the private
+ *                                       registrations bucket · 400 · 503 (storage not set up)
+ *   POST /registrations  {regId, acct, …song details, fileKey, fileName, fileBytes} → { ok, registration } — saved in
+ *                                       MADMixer "Registrations" once the upload is there at that size · 400 · 503
+ *   POST /registrations/list {acct}   → { ok, ready, registrations: [{ regId, status, newTitle, … }] } newest first
  *   POST /subscribe      {email}      → { ok, url } — a Paystack checkout for the Mad Mixer plan · 400 · 503
  *                                        (MAD takes the payment and makes the code; Paystack returns the
  *                                        listener to MAD's /api/payments/callback?source=mixer, which sends
@@ -44,6 +49,8 @@ import { mixerSamples } from '../lib/mixer-samples.js';
 import { trialConfirmedCached, startTrial, confirmTrial, mixerTrialLinks } from '../lib/mixer-trial.js';
 import { paystackRequest, PAYSTACK_MIXER_PLAN } from '../lib/paystack.js';
 import { isStrictEmail } from '../lib/validators.js';
+import { regStorageConfigured, uploadLink, uploadedBytes, uploadKey, createRegistration, findRegistration, registrationsFor,
+  REG_ID_RE, ACCT_RE, AUDIO_FILE_RE, MAX_UPLOAD_BYTES } from '../lib/mixer-registrations.js';
 
 // A Paystack checkout for the Mad Mixer plan (2026-10-05). Same shape as MAD's own subscription
 // checkout (routes/payments.js /subscribe), with the Mixer plan and source=mixer on the callback.
@@ -246,6 +253,86 @@ export function createMixerInternalRouter({ resolveToken, secret = mixerSharedSe
     }
   });
 
+  // Song registrations (Ian, 2026-10-23): who may register (subscribers, not free splits) and whether the
+  // page is switched on are the Mixer's call; MAD keeps the records (MADMixer "Registrations") and signs
+  // the upload links for the full-quality copy (a private S3 bucket). lib/mixer-registrations.js.
+  const regOff = (res) => res.status(503).json({ ok: false, error: 'Song registration is not set up yet.' });
+  router.post('/registrations/upload', jsonBody, (req, res) => {
+    if (!regStorageConfigured()) return regOff(res);
+    const { regId, file, bytes } = req.mm;
+    if (typeof regId !== 'string' || !REG_ID_RE.test(regId)) return res.status(400).json({ ok: false, error: 'Bad registration id.' });
+    if (typeof file !== 'string' || !AUDIO_FILE_RE.test(file) || file.length > 300) return res.status(400).json({ ok: false, error: 'Please choose a WAV, AIFF or FLAC file.' });
+    if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > MAX_UPLOAD_BYTES) return res.status(400).json({ ok: false, error: 'The file must be under 1 GB.' });
+    res.json({ ok: true, ...uploadLink({ regId, file, bytes }) });
+  });
+
+  router.post('/registrations', jsonBody, async (req, res) => {
+    if (!regStorageConfigured()) return regOff(res);
+    const v = validateRegistration(req.mm);
+    if (!v.ok) return res.status(400).json({ ok: false, error: v.error });
+    const f = v.fields;
+    try {
+      const existing = await findRegistration(f.regId);
+      if (existing) return res.json({ ok: true, registration: existing, again: true });   // a retry after a lost answer
+      const size = await uploadedBytes(f.fileKey);
+      if (size == null) return res.status(400).json({ ok: false, error: 'We couldn’t find your uploaded song. Please upload it again.' });
+      if (size !== f.fileBytes) return res.status(400).json({ ok: false, error: 'Your upload didn’t finish. Please upload the song again.' });
+      const registration = await createRegistration(f);
+      console.log(`[mixer-internal] song registration ${f.regId} saved`);
+      res.json({ ok: true, registration });
+    } catch (err) {
+      console.error('[mixer-internal] song registration failed:', err?.message || err);
+      res.status(503).json({ ok: false, error: 'We couldn’t save your registration just now. Please try again in a minute.' });
+    }
+  });
+
+  router.post('/registrations/list', jsonBody, async (req, res) => {
+    const acct = typeof req.mm.acct === 'string' ? req.mm.acct : '';
+    if (!ACCT_RE.test(acct)) return res.status(400).json({ ok: false, error: 'Bad account.' });
+    try {
+      res.json({ ok: true, ready: regStorageConfigured(), registrations: await registrationsFor(acct) });
+    } catch (err) {
+      console.warn('[mixer-internal] registration list failed:', err?.message || err);
+      res.status(502).json({ ok: false, error: 'Could not load your registrations.' });
+    }
+  });
+
   router.use((_req, res) => res.status(404).json({ ok: false, error: 'Not found.' }));
   return router;
+}
+
+// The Mixer has already checked all of this with friendlier words; MAD re-checks the shape it stores.
+const MATERIALS = ['AI-split stems', 'Loop pack', 'HQ stems', 'Drum samples'];
+const ISRC_RE = /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/;
+const DCX_RE = /^DCX-\d{8}-[A-Z2-9]{6}$/;
+export function validateRegistration(b) {
+  const str = (k, max, req = true) => {
+    const v = typeof b[k] === 'string' ? b[k].trim().replace(/\s+/g, ' ') : '';
+    if (req && !v) throw new Error(`${k} is required.`);
+    if (v.length > max) throw new Error(`${k} is too long.`);
+    return v;
+  };
+  try {
+    const regId = str('regId', 40), acct = str('acct', 64);
+    if (!REG_ID_RE.test(regId) || !ACCT_RE.test(acct)) throw new Error('Bad registration id or account.');
+    const fields = {
+      regId, acct, email: str('email', 254, false), plan: str('plan', 40, false),
+      originalSongId: str('originalSongId', 20, false), originalTitle: str('originalTitle', 200), originalArtist: str('originalArtist', 200, false), originalIsrc: str('originalIsrc', 20, false),
+      newTitle: str('newTitle', 200), newArtist: str('newArtist', 200), newIsrc: str('newIsrc', 15).replace(/-/g, '').toUpperCase(),
+      distributor: str('distributor', 200), releaseDate: str('releaseDate', 10), writers: str('writers', 1000, false), notes: str('notes', 2000, false),
+      fileKey: str('fileKey', 200), fileName: str('fileName', 300), licenceVersion: str('licenceVersion', 40),
+      material: Array.isArray(b.material) ? b.material.filter((m) => MATERIALS.includes(m)) : [],
+      dcxIds: Array.isArray(b.dcxIds) ? [...new Set(b.dcxIds.filter((d) => typeof d === 'string' && DCX_RE.test(d)))].slice(0, 100) : [],
+      secondsUsed: Number(b.secondsUsed), fileBytes: Number(b.fileBytes),
+    };
+    if (!ISRC_RE.test(fields.newIsrc)) throw new Error('newIsrc is not an ISRC.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fields.releaseDate)) throw new Error('releaseDate must be YYYY-MM-DD.');
+    if (!fields.material.length) throw new Error('material is required.');
+    if (!(fields.secondsUsed > 0 && fields.secondsUsed <= 30)) throw new Error('secondsUsed must be more than 0 and at most 30.');
+    if (!Number.isSafeInteger(fields.fileBytes) || fields.fileBytes < 1) throw new Error('fileBytes is required.');
+    if (fields.fileKey !== uploadKey(regId, fields.fileName)) throw new Error('fileKey does not belong to this registration.');
+    return { ok: true, fields };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 }
