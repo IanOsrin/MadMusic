@@ -33,8 +33,18 @@ const hqPrefix = () => {
 
 export function createMixerHqAudioRouter({ now = () => Date.now() } = {}) {
   const router = Router();
-  const origin = (() => { try { return new URL(mixerPublicUrl()).origin; } catch { return ''; } })();
-  const cors = (res) => { if (origin) { res.set('Access-Control-Allow-Origin', origin); res.set('Vary', 'Origin'); res.set('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges'); } };
+  // The Mixer answers on its own domain AND its vercel.app address (2026-10-28: MIXER_URL was the vercel.app one,
+  // so on madmixerafrica.com every HQ stem was refused by the browser — "The HQ stems couldn't be loaded"). Both are
+  // let in, plus any listed in MIXER_ALSO_ORIGINS (comma-separated); the matching one is echoed back.
+  const origins = new Set([mixerPublicUrl(), 'https://madmixerafrica.com', 'https://mad-mixer.vercel.app',
+    ...String(process.env.MIXER_ALSO_ORIGINS || '').split(',')]
+    .map((u) => { try { return new URL(String(u).trim()).origin; } catch { return ''; } }).filter(Boolean));
+  const fallback = (() => { try { return new URL(mixerPublicUrl()).origin; } catch { return ''; } })();
+  const cors = (res) => {
+    const asked = res.req && res.req.get('Origin');
+    const origin = asked && origins.has(asked) ? asked : fallback;
+    if (origin) { res.set('Access-Control-Allow-Origin', origin); res.set('Vary', 'Origin'); res.set('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges'); }
+  };
 
   router.options('/:stemId', (_req, res) => {
     cors(res); res.set('Access-Control-Allow-Methods', 'GET'); res.set('Access-Control-Allow-Headers', 'Range'); res.set('Access-Control-Max-Age', '600');
