@@ -17,7 +17,7 @@ import {
   G100_FIELD_CANDIDATES, G100_VALUE, G100_VALUE_LC
 } from '../../lib/fm-fields.js';
 import { parsePositiveInt } from '../../lib/format.js';
-import { dedupRecordsByAlbum } from '../../lib/album-dedup.js';
+import { dedupRecordsByAlbum, sortNewestFirst } from '../../lib/album-dedup.js';
 import { createSwrCache } from '../../lib/swr-cache.js';
 import { createLogger } from '../../lib/logger.js';
 import { usePostgresMetadata } from '../../lib/metadata-source.js';
@@ -363,7 +363,8 @@ const newReleasesSwr = createSwrCache({
     const records = await fetchNewReleaseRecords(1000);
     // One row per album, with album-first artist + Various Artists folding
     // (see lib/album-dedup.js) so a stray Various row can't split an album.
-    const deduped = dedupRecordsByAlbum(records);
+    // Newest first, so a page's limit never cuts the albums just added.
+    const deduped = dedupRecordsByAlbum(sortNewestFirst(records));
     log.debug(`New releases: ${deduped.length} unique albums from ${records.length} tracks`);
     return deduped.map(r => ({ recordId: r.recordId, modId: r.modId, fields: r.fieldData || {} }));
   }
