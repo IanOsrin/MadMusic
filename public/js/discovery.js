@@ -1130,7 +1130,7 @@
       return loadAlbumRail({
         sectionId:   'newReleasesSection',
         containerId: 'newReleasesContainer',
-        url:         `${API.newReleases}?limit=20&_t=${Date.now()}`,
+        url:         `${API.newReleases}?limit=60&_t=${Date.now()}`,
         badgeHtml:   '<span class="nr-new-badge">New</span>',
         logLabel:    'NewReleases'
       });

@@ -2,12 +2,39 @@
 // folding rules. The "Victims" fixtures mirror real catalogue rows that split
 // one album into two cards before this helper existed.
 import { describe, it, expect } from 'vitest';
-import { dedupRecordsByAlbum, isVariousArtists } from '../../lib/album-dedup.js';
+import { dedupRecordsByAlbum, isVariousArtists, sortNewestFirst } from '../../lib/album-dedup.js';
 
 let nextId = 1;
 function row(fields) {
   return { recordId: String(nextId++), modId: '0', fieldData: fields };
 }
+
+describe('sortNewestFirst', () => {
+  const rec = (recordId, album) => ({ recordId, modId: '0', fieldData: { 'Album Title': album, 'Album Artist': 'A' } });
+
+  it('compares ids as numbers, not text', () => {
+    const ids = sortNewestFirst([rec('99', 'x'), rec('128975', 'y'), rec('1000', 'z')]).map((r) => r.recordId);
+    expect(ids).toEqual(['128975', '1000', '99']);
+  });
+
+  it('puts an album where its newest song falls, once grouped', () => {
+    const out = dedupRecordsByAlbum(sortNewestFirst([rec('10', 'Old'), rec('50', 'New'), rec('20', 'Old'), rec('40', 'New')]));
+    expect(out.map((r) => r.fieldData['Album Title'])).toEqual(['New', 'Old']);
+  });
+
+  it('keeps a page limit from cutting the albums just added', () => {
+    const all = Array.from({ length: 22 }, (_, i) => rec(String(i + 1), `Album ${i + 1}`));
+    const first20 = dedupRecordsByAlbum(sortNewestFirst(all)).slice(0, 20).map((r) => r.fieldData['Album Title']);
+    expect(first20).toContain('Album 22');
+    expect(first20).not.toContain('Album 1');
+  });
+
+  it('does not change the list it is given, and sinks an unreadable id', () => {
+    const input = [rec('abc', 'x'), rec('5', 'y')];
+    expect(sortNewestFirst(input).map((r) => r.recordId)).toEqual(['5', 'abc']);
+    expect(input[0].recordId).toBe('abc');
+  });
+});
 
 describe('isVariousArtists', () => {
   it('matches the common Various spellings', () => {
