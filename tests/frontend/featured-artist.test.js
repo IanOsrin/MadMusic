@@ -52,6 +52,38 @@ describe('withFeaturedArtist', () => {
   });
 });
 
+describe('stripFeaturedArtist (the line comes from the Featured Artist field, not Track Artist)', () => {
+  // Real test-site records, 2026-11-06.
+  it('takes "Feat X" off the end', () => {
+    expect(H.stripFeaturedArtist('Philisiwe Ntintili Feat Novexbeats', 'Novexbeats')).toBe('Philisiwe Ntintili');
+    expect(H.stripFeaturedArtist('The Parlotones feat. Zolani Mahola', 'Zolani Mahola')).toBe('The Parlotones');
+  });
+  it('takes "And X" / ", X" / "& X" off', () => {
+    expect(H.stripFeaturedArtist('D F W N E And Novex', 'Novex')).toBe('D F W N E');
+    expect(H.stripFeaturedArtist('Tee, Facazile', 'Facazile')).toBe('Tee');
+    expect(H.stripFeaturedArtist('Steve Group, Tiro & Spirit', 'Tiro')).toBe('Steve Group & Spirit');
+  });
+  it('handles several guests in the field', () => {
+    expect(H.stripFeaturedArtist('uSingil feat. DJ Dansanie, Shakes Ngema', 'DJ Dansanie, Shakes Ngema')).toBe('uSingil');
+  });
+  it('does not cut a name that only contains the guest', () => {
+    expect(H.stripFeaturedArtist('Novexbeats Crew', 'Novex')).toBe('Novexbeats Crew');
+    expect(H.stripFeaturedArtist('Novex', 'Novex')).toBe('Novex');
+  });
+  it('leaves Track Artist alone without a featured artist', () => {
+    expect(H.stripFeaturedArtist('Tee, Facazile', '')).toBe('Tee, Facazile');
+  });
+  it('end to end: the desktop line for the Novex songs', () => {
+    const line = (ta, aa, feat, title) => {
+      const s = H.stripFeaturedArtist(ta, feat);
+      return H.withFeaturedArtist(s.toLowerCase() === aa.toLowerCase() ? '' : s, feat, title);
+    };
+    expect(line('Philisiwe Ntintili Feat Novexbeats', 'Philisiwe Ntintili', 'Novexbeats', 'Buya Ekhaya Bakulindile')).toBe('feat. Novexbeats');
+    expect(line('D F W N E And Novex', 'D F W N E', 'Novex', 'Fettered')).toBe('feat. Novex');
+    expect(line('Tee, Facazile', 'Various Artists', 'Facazile', 'Crazy')).toBe('Tee · feat. Facazile');
+  });
+});
+
 describe('album pages use it', () => {
   it('desktop: every album-page track builder carries featuredArtist', () => {
     const n = (html.match(/featuredArtist:\s*window\.MADHelpers\.getFeaturedArtist\(f\)/g) || []).length;

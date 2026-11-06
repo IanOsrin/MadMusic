@@ -132,6 +132,28 @@ function getFeaturedArtist(fields) {
   return String(v || '').replace(/^\s*(feat\.?|ft\.?|featuring)\s+/i, '').trim();
 }
 
+// Track Artist often already carries the guest ("Philisiwe Ntintili Feat Novexbeats",
+// "D F W N E And Novex"). When the Featured Artist field names them, take the guest
+// (and the "feat"/"and"/"&"/"," joining them) out of the artist line, so the line
+// under the title comes from the Featured Artist field, not from Track Artist.
+const _FEAT_JOIN = '(?:\\s*(?:,|&|\\+|/)\\s*|\\s+(?:feat\\.?|ft\\.?|featuring|and|with|x)\\s+)';
+function _featNames(featured) {
+  const whole = String(featured || '').trim();
+  if (!whole) return [];
+  const parts = whole.split(/\s*(?:,|&|\s(?:and|feat\.?|ft\.?)\s)\s*/i).map(s => s.trim()).filter(Boolean);
+  return [whole, ...parts.filter(p => p.toLowerCase() !== whole.toLowerCase())];
+}
+function stripFeaturedArtist(trackArtist, featured) {
+  const orig = String(trackArtist || '').trim();
+  let out = orig;
+  for (const name of _featNames(featured)) {
+    const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+    out = out.replace(new RegExp(`${_FEAT_JOIN}${esc}(?=$|${_FEAT_JOIN})`, 'gi'), '');
+  }
+  out = out.replace(/(?:\s*(?:,|&|\+|\/)\s*|\s+(?:feat\.?|ft\.?|featuring|and|with))+\s*$/i, '').trim();
+  return out || orig;
+}
+
 // The small line under a song's title on an album page: the song's own artist
 // line (may be '') plus "feat. X" — unless X is already in that line or in the
 // title ("Nomathemba (Feat. Juma)"), so a guest is never named twice.
@@ -140,7 +162,9 @@ function withFeaturedArtist(artistLine, featured, title) {
   const feat = String(featured || '').trim();
   if (!feat) return line;
   const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ');
-  if (norm(line).includes(norm(feat)) || norm(title).includes(norm(feat))) return line;
+  const names = _featNames(feat);
+  const named = (hay) => norm(hay).includes(norm(feat)) || (names.length > 1 && names.slice(1).every(n => norm(hay).includes(norm(n))));
+  if (named(line) || named(title)) return line;
   return line ? `${line} · feat. ${feat}` : `feat. ${feat}`;
 }
 
@@ -367,6 +391,7 @@ window.MADHelpers.getArtistField = getArtistField;
 window.MADHelpers.getAlbumArtist = getAlbumArtist;
 window.MADHelpers.getFeaturedArtist = getFeaturedArtist;
 window.MADHelpers.withFeaturedArtist = withFeaturedArtist;
+window.MADHelpers.stripFeaturedArtist = stripFeaturedArtist;
 window.MADHelpers.getAlbumField = getAlbumField;
 window.MADHelpers.getTrackSeq = getTrackSeq;
 window.MADHelpers.sortTracksBySeq = sortTracksBySeq;
