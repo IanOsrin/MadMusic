@@ -1,12 +1,12 @@
 // Tab navigation + genre/decade filters for the mobile app.
 
-import { DECADES, GENRES } from './data.js?v=46';
-import { state } from './state.js?v=46';
-import { loadPlaylists } from './playlists.js?v=46';
-import { loadDiscover } from './rails-discover.js?v=46';
-import { loadG100, loadG100Playlists, loadScenes } from './rails-g100.js?v=46';
-import { loadNewReleases } from './rails-newreleases.js?v=46';
-import { pushTab, isRestoring } from './router.js?v=46';
+import { DECADES, GENRES } from './data.js?v=47';
+import { state } from './state.js?v=47';
+import { loadPlaylists } from './playlists.js?v=47';
+import { loadDiscover } from './rails-discover.js?v=47';
+import { loadG100, loadG100Playlists, loadScenes } from './rails-g100.js?v=47';
+import { loadNewReleases } from './rails-newreleases.js?v=47';
+import { pushTab, isRestoring } from './router.js?v=47';
 
 // Tabs reached through the Browse hub rather than the bottom bar. They keep
 // the bar at four thumb-reachable items — a new rail gets a Browse card, not a

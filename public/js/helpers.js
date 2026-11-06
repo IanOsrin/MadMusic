@@ -132,40 +132,62 @@ function getFeaturedArtist(fields) {
   return String(v || '').replace(/^\s*(feat\.?|ft\.?|featuring)\s+/i, '').trim();
 }
 
-// Track Artist often already carries the guest ("Philisiwe Ntintili Feat Novexbeats",
-// "D F W N E And Novex"). When the Featured Artist field names them, take the guest
-// (and the "feat"/"and"/"&"/"," joining them) out of the artist line, so the line
-// under the title comes from the Featured Artist field, not from Track Artist.
-const _FEAT_JOIN = '(?:\\s*(?:,|&|\\+|/)\\s*|\\s+(?:feat\\.?|ft\\.?|featuring|and|with|x)\\s+)';
-function _featNames(featured) {
-  const whole = String(featured || '').trim();
-  if (!whole) return [];
-  const parts = whole.split(/\s*(?:,|&|\s(?:and|feat\.?|ft\.?)\s)\s*/i).map(s => s.trim()).filter(Boolean);
-  return [whole, ...parts.filter(p => p.toLowerCase() !== whole.toLowerCase())];
+// The small line under a song's title on an album page (Ian, 2026-11-06).
+//
+// Real data, test site: the Featured Artist field is a ";" list, and it often
+// also names the album's own artists ("Lelowhatsgood" on a Lelowhatsgood And Dee
+// Traits album). Track Artist usually spells the guests out as well
+// ("Lelowhatsgood And DJ Emotic And Kiing Bhutie"). So:
+//   1. guests = the field's names, minus anyone in the album artist or the title;
+//   2. take those guests (and the "and"/"feat"/"&"/"," before them) out of Track Artist;
+//   3. line = what's left of Track Artist (desktop: only if it isn't just the album
+//      artist) · "feat. A, B & C".
+// "HypnoSIS" on a Lelowhatsgood album → "feat. DJ Emotic & Kiing Bhutie".
+const _FEAT_JOIN = '(?:\\s*(?:,|;|&|\\+|/)\\s*|\\s+(?:feat\\.?|ft\\.?|featuring|and|with|x)\\s+)';
+const _esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+const _hasName = (hay, name) => new RegExp(`(?:^|[^\\p{L}\\p{N}])${_esc(name)}(?:$|[^\\p{L}\\p{N}])`, 'iu').test(String(hay || ''));
+
+function featuredNames(featured, albumArtist, title) {
+  const seen = new Set();
+  return String(featured || '').split(/\s*[;,]\s*/)
+    .map(s => s.replace(/^\s*(feat\.?|ft\.?|featuring)\s+/i, '').trim())
+    .filter(n => {
+      const k = n.toLowerCase();
+      if (!n || seen.has(k)) return false;
+      seen.add(k);
+      return !_hasName(albumArtist, n) && !_hasName(title, n);
+    });
 }
-function stripFeaturedArtist(trackArtist, featured) {
+
+function stripFeaturedArtist(trackArtist, names) {
   const orig = String(trackArtist || '').trim();
   let out = orig;
-  for (const name of _featNames(featured)) {
-    const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
-    out = out.replace(new RegExp(`${_FEAT_JOIN}${esc}(?=$|${_FEAT_JOIN})`, 'gi'), '');
+  for (const name of names || []) {
+    out = out.replace(new RegExp(`${_FEAT_JOIN}${_esc(name)}(?=$|${_FEAT_JOIN})`, 'giu'), '');
   }
-  out = out.replace(/(?:\s*(?:,|&|\+|\/)\s*|\s+(?:feat\.?|ft\.?|featuring|and|with))+\s*$/i, '').trim();
+  out = out.replace(/(?:\s*(?:,|;|&|\+|\/)\s*|\s+(?:feat\.?|ft\.?|featuring|and|with))+\s*$/i, '').trim();
   return out || orig;
 }
 
-// The small line under a song's title on an album page: the song's own artist
-// line (may be '') plus "feat. X" — unless X is already in that line or in the
-// title ("Nomathemba (Feat. Juma)"), so a guest is never named twice.
-function withFeaturedArtist(artistLine, featured, title) {
-  const line = String(artistLine || '').trim();
-  const feat = String(featured || '').trim();
-  if (!feat) return line;
-  const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ');
-  const names = _featNames(feat);
-  const named = (hay) => norm(hay).includes(norm(feat)) || (names.length > 1 && names.slice(1).every(n => norm(hay).includes(norm(n))));
-  if (named(line) || named(title)) return line;
-  return line ? `${line} · feat. ${feat}` : `feat. ${feat}`;
+const _joinNames = (names) => names.length < 2 ? (names[0] || '') : `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
+
+// opts: { trackArtist, albumArtist, featured, title, alwaysArtist, line }
+//   alwaysArtist — phone rows show the song's artist even when it is the album artist.
+//   line         — use this as the artist part as-is (phone artist page: the album name).
+function albumTrackLine(opts) {
+  const o = opts || {};
+  const names = featuredNames(o.featured, o.albumArtist, o.title);
+  const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  let own;
+  if (o.line != null) {
+    own = String(o.line).trim();
+  } else {
+    const ta = stripFeaturedArtist(o.trackArtist, names);
+    own = (o.alwaysArtist || norm(ta) !== norm(o.albumArtist)) ? ta : '';
+  }
+  // A guest the remaining artist line still names (couldn't be cut cleanly) isn't repeated.
+  const guests = names.filter(n => !_hasName(own, n));
+  return [own, guests.length ? `feat. ${_joinNames(guests)}` : ''].filter(Boolean).join(' · ');
 }
 
 /**
@@ -390,8 +412,9 @@ window.MADHelpers.getTitleField = getTitleField;
 window.MADHelpers.getArtistField = getArtistField;
 window.MADHelpers.getAlbumArtist = getAlbumArtist;
 window.MADHelpers.getFeaturedArtist = getFeaturedArtist;
-window.MADHelpers.withFeaturedArtist = withFeaturedArtist;
+window.MADHelpers.featuredNames = featuredNames;
 window.MADHelpers.stripFeaturedArtist = stripFeaturedArtist;
+window.MADHelpers.albumTrackLine = albumTrackLine;
 window.MADHelpers.getAlbumField = getAlbumField;
 window.MADHelpers.getTrackSeq = getTrackSeq;
 window.MADHelpers.sortTracksBySeq = sortTracksBySeq;
