@@ -5086,13 +5086,12 @@
         if (trackList && album.tracks && album.tracks.length > 0) {
           // A song by someone other than the album artist (compilations, features) shows its own
           // artist under the title (Ian, 2026-10-09). Mobile's album sheet already shows it on every row.
-          const sameArtist = (a, b) => String(a || '').trim().toLowerCase().replace(/\s+/g, ' ') === String(b || '').trim().toLowerCase().replace(/\s+/g, ' ');
-          // Plus the song's guests from FileMaker "Featured Artist" as "feat. X" (Ian, 2026-11-06).
-          const ownArtist = (track) => {
-            const ta = window.MADHelpers.stripFeaturedArtist(track.trackArtist, track.featuredArtist);
-            const line = ta && !sameArtist(ta, album.artist) ? ta : '';
-            return window.MADHelpers.withFeaturedArtist(line, track.featuredArtist, track.name);
-          };
+          // Plus the song's guests from FileMaker "Featured Artist" as "feat. A & B" (Ian, 2026-11-06);
+          // the guests are cut out of Track Artist so they're named once (see MADHelpers.albumTrackLine).
+          const ownArtist = (track) => window.MADHelpers.albumTrackLine({
+            trackArtist: track.trackArtist, albumArtist: album.artist,
+            featured: track.featuredArtist, title: track.name
+          });
           trackList.innerHTML = album.tracks.map((track, index) => `
             <div class="playlist-track-item album-track-item" data-track-index="${index}" data-audio-url="${track.S3_URL || track.resolvedSrc || track.audioUrl || ''}" data-record-id="${track.recordId || ''}" data-download-price="${track.Download_Price || track.downloadPrice || ''}">
               <span class="playlist-track-number">${Number.isFinite(track.seq) && track.seq > 0 ? track.seq : index + 1}.</span>
@@ -6879,7 +6878,7 @@
   })();
   </script>
 
-  <script src="/js/helpers.js?v=3"></script>
+  <script src="/js/helpers.js?v=4"></script>
   <script src="/js/auth.js?v=2"></script>
   <script src="/js/player.js?v=6"></script>
   <script src="/js/playlists.js?v=1"></script>
