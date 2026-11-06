@@ -124,6 +124,26 @@ function getAlbumArtist(fields) {
   return getFieldValue(fields, albumArtistFields) || 'Unknown Artist';
 }
 
+// Guest artists on a song — FileMaker field "Featured Artist" on API_Album_Songs
+// (Ian, 2026-11-06). '' when empty. A leading "feat."/"ft."/"featuring" typed into
+// the field is dropped, so the album page never reads "feat. feat. X".
+function getFeaturedArtist(fields) {
+  const v = getFieldValue(fields || {}, ['Featured Artist', 'Featured_Artist', 'Tape Files::Featured Artist']);
+  return String(v || '').replace(/^\s*(feat\.?|ft\.?|featuring)\s+/i, '').trim();
+}
+
+// The small line under a song's title on an album page: the song's own artist
+// line (may be '') plus "feat. X" — unless X is already in that line or in the
+// title ("Nomathemba (Feat. Juma)"), so a guest is never named twice.
+function withFeaturedArtist(artistLine, featured, title) {
+  const line = String(artistLine || '').trim();
+  const feat = String(featured || '').trim();
+  if (!feat) return line;
+  const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ');
+  if (norm(line).includes(norm(feat)) || norm(title).includes(norm(feat))) return line;
+  return line ? `${line} · feat. ${feat}` : `feat. ${feat}`;
+}
+
 /**
  * Get the album from a record's fields
  * @param {Object} fields - The record fields object
@@ -345,6 +365,8 @@ window.MADHelpers.getAudioUrl = getAudioUrl;
 window.MADHelpers.getTitleField = getTitleField;
 window.MADHelpers.getArtistField = getArtistField;
 window.MADHelpers.getAlbumArtist = getAlbumArtist;
+window.MADHelpers.getFeaturedArtist = getFeaturedArtist;
+window.MADHelpers.withFeaturedArtist = withFeaturedArtist;
 window.MADHelpers.getAlbumField = getAlbumField;
 window.MADHelpers.getTrackSeq = getTrackSeq;
 window.MADHelpers.sortTracksBySeq = sortTracksBySeq;

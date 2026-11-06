@@ -1,12 +1,12 @@
 // Album/track card builders + their modals for the mobile app.
 
-import { elements, state } from './state.js?v=44';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=44';
-import { switchTab } from './nav.js?v=44';
-import { search } from './search.js?v=44';
-import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=44';
-import { pushOverlay, replaceOverlay } from './router.js?v=44';
-import { showToast } from './util.js?v=44';
+import { elements, state } from './state.js?v=45';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=45';
+import { switchTab } from './nav.js?v=45';
+import { search } from './search.js?v=45';
+import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=45';
+import { pushOverlay, replaceOverlay } from './router.js?v=45';
+import { showToast } from './util.js?v=45';
 
 // ── Shared album tile (the New Releases / G100 look) ─────────────────────────
 // One square-cover tile: first tap reveals the title/artist overlay, second tap
@@ -189,7 +189,10 @@ export function showAlbumTracksModal(album, { refresh = false } = {}) {
           const fields = track.fields || {};
           const trackTitle = getTitleField(fields);
           // On an artist page every row is the same artist — show which album each song is from.
-          const trackArtist = kind === 'ARTIST' ? getAlbumField(fields) : getArtistField(fields);
+          // Guests from FileMaker "Featured Artist" follow as "feat. X" (Ian, 2026-11-06).
+          const trackArtist = window.MADHelpers.withFeaturedArtist(
+            kind === 'ARTIST' ? getAlbumField(fields) : getArtistField(fields),
+            window.MADHelpers.getFeaturedArtist(fields), trackTitle);
           // Downloads are sold per track; the basket pays for several at once.
           // Never inside the native shell — store rules forbid it (see
           // native-purchase-guards.test.js).
