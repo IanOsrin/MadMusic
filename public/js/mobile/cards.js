@@ -1,12 +1,12 @@
 // Album/track card builders + their modals for the mobile app.
 
-import { elements, state } from './state.js?v=47';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=47';
-import { switchTab } from './nav.js?v=47';
-import { search } from './search.js?v=47';
-import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=47';
-import { pushOverlay, replaceOverlay } from './router.js?v=47';
-import { showToast } from './util.js?v=47';
+import { elements, state } from './state.js?v=48';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=48';
+import { switchTab } from './nav.js?v=48';
+import { search } from './search.js?v=48';
+import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=48';
+import { pushOverlay, replaceOverlay } from './router.js?v=48';
+import { showToast } from './util.js?v=48';
 
 // ── Shared album tile (the New Releases / G100 look) ─────────────────────────
 // One square-cover tile: first tap reveals the title/artist overlay, second tap
@@ -129,6 +129,13 @@ export async function openAlbumAsync(album, load) {
       if (!stillOpen) return tracks;
       showAlbumTracksModal({ ...album, tracks, failed: !tracks.length }, { refresh: true });
       return tracks;
+    }
+
+// New Releases tiles and the banner slides built from them: that feed carries one song per
+// album, so opening what it gave us showed a one-song album until that song was played and its
+// album opened from the player (Ian, 2026-11-09). Always open the whole album, in running order.
+export function openWholeAlbum(album) {
+      return openAlbumAsync(album, async () => window.MADHelpers.sortTracksBySeq((await fetchFullAlbum(album)).tracks));
     }
 
 export async function upgradeQueueToFullAlbum(album, playingTrack) {

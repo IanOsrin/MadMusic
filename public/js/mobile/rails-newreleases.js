@@ -1,8 +1,8 @@
 // Home rail: New Releases (mobile).
 
-import { elements, state } from './state.js?v=47';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField, hasValidArtwork, hasValidAudio } from './fields.js?v=47';
-import { renderAlbumTileGrid } from './cards.js?v=47';
+import { elements, state } from './state.js?v=48';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField, hasValidArtwork, hasValidAudio } from './fields.js?v=48';
+import { openWholeAlbum, renderAlbumTileGrid } from './cards.js?v=48';
 
 export async function loadNewReleases(forceRefresh = false) {
       const container = elements.newReleasesContent;
@@ -74,5 +74,5 @@ export function renderNewReleases() {
 
       const albums = [...albumMap.values()];
       container.innerHTML = '';
-      renderAlbumTileGrid(container, albums, () => ({ badge: 'NEW' }));
+      renderAlbumTileGrid(container, albums, () => ({ badge: 'NEW', onOpen: openWholeAlbum }));
     }
