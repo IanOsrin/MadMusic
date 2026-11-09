@@ -92,6 +92,11 @@ vi.mock('../../lib/email.js', async (importOriginal) => {
 const SONGS = [
   { recordId: '282', fieldData: { 'Track Name': 'After the Storm', 'Track Artist': 'A', Duration: '0:03:25', ISRC: 'X1', Audio_S3_URL: 'https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/a.mp3' } },
   { recordId: '283', fieldData: { 'Track Name': 'No Audio Yet', 'Track Artist': 'B', ISRC: 'X2' } },
+  { recordId: '284', fieldData: { 'Track Name': 'Stored', 'Track Artist': 'C', Duration: '0:02:00', ISRC: 'X3', Audio_S3_URL: 'https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/c.mp3',
+    Stems_Status: 'done', Stems_Vision_Path: '/gallo-music-files-wavs/MadMixer-Stems/X3/',
+    Stems_Manifest: JSON.stringify({ v: 1, stems: [{ name: 'vocals', label: 'Vocals', core: true }, { name: 'piano', label: 'Piano', core: true, empty: true }, { name: 'kick', label: 'Kick', core: false }] }) } },
+  { recordId: '285', fieldData: { 'Track Name': 'Outside', 'Track Artist': 'D', ISRC: 'X4', Audio_S3_URL: 'https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/d.mp3',
+    Stems_Status: 'done', Stems_Vision_Path: '/gallo-masters/Secret/', Stems_Manifest: JSON.stringify({ stems: [{ name: 'vocals', label: 'Vocals', core: true }] }) } },
 ];
 // Loop packs: one record per loop on the MADMixer "Packs" layout.
 const S3 = 'https://mass-music-audio-files.s3.eu-north-1.amazonaws.com/';
@@ -408,11 +413,56 @@ describe('Mad Mixer on its own home, through server.js', () => {
     const res = await signed(app, 'GET', '/internal/mixer/songs');
     expect(res.status).toBe(200);
     expect(res.body.builtAt).toEqual(expect.any(String));
-    expect(res.body.count).toBe(1);
-    expect(res.body.songs).toEqual([{
+    expect(res.body.count).toBe(3);
+    expect(res.body.songs[0]).toEqual({
       id: '282', title: 'After the Storm', artist: 'A', album: '', duration: '0:03:25', genre: '', isrc: 'X1', key: '', bpm: 101.5,
       playable: true, hasMaster: false, audioUrl: 'https://media.musicafricadirect.com/a.mp3',
-    }]);
+    });
+  });
+
+  it('GET /internal/mixer/songs: a pre-split song lists its main stems, without empty ones, kit parts or any Vision path', async () => {
+    const res = await signed(app, 'GET', '/internal/mixer/songs');
+    expect(res.body.songs.find((s) => s.id === '284').stems).toEqual([{ name: 'vocals', label: 'Vocals' }]);
+    expect(JSON.stringify(res.body)).not.toMatch(/MadMixer-Stems|gallo-masters/);
+  });
+
+  describe('GET /mixer-hq/stem/:songId/:name — a stored stem on a signed link', () => {
+    const link = (song, name, exp = Math.floor(Date.now() / 1000) + 3600, sig) => `/mixer-hq/stem/${song}/${name}?exp=${exp}&sig=${encodeURIComponent(sig ?? hqAudioSig(`st-${song}-${name}`, exp, SECRET))}`;
+    const PREFIX = '/gallo-music-files-wavs/MadMixer-Stems';
+    it('a good link streams the FLAC listening copy, readable by the Mixer, cached privately, never compressed', async () => {
+      vi.stubEnv('MIXER_STEMS_VISION_PREFIX', PREFIX);
+      const res = await request(app).get(link('284', 'vocals')).set('Accept-Encoding', 'gzip').buffer(true).parse((r, cb) => { const c = []; r.on('data', (d) => c.push(d)); r.on('end', () => cb(null, Buffer.concat(c))); });
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/audio\/flac/);
+      expect(res.headers['access-control-allow-origin']).toBe(MIXER_URL);
+      expect(res.headers['cache-control']).toMatch(/private, max-age=\d+, no-transform/);
+      expect(res.headers['content-encoding']).toBeUndefined();
+      expect(vision.reads.at(-1).path).toBe(`${PREFIX}/X3/play/vocals.flac`);
+    });
+    it('a kit part not loaded by default can still be fetched; an empty stem cannot', async () => {
+      vi.stubEnv('MIXER_STEMS_VISION_PREFIX', PREFIX);
+      expect((await request(app).get(link('284', 'kick'))).status).toBe(200);
+      expect((await request(app).get(link('284', 'piano'))).status).toBe(404);
+    });
+    it('expired, tampered, or another stem’s link → refused before Vision is touched', async () => {
+      vi.stubEnv('MIXER_STEMS_VISION_PREFIX', PREFIX);
+      const before = vision.reads.length, nowS = Math.floor(Date.now() / 1000);
+      expect((await request(app).get(link('284', 'vocals', nowS - 5))).status).toBe(403);
+      expect((await request(app).get(link('284', 'vocals', nowS + 7 * 3600))).status).toBe(403);
+      expect((await request(app).get(link('284', 'vocals', undefined, 'x'.repeat(43)))).status).toBe(403);
+      expect((await request(app).get(link('284', 'vocals').replace('/vocals?', '/kick?'))).status).toBe(403);
+      expect((await request(app).get('/mixer-hq/stem/284/vocals')).status).toBe(400);
+      expect(vision.reads.length).toBe(before);
+    });
+    it('a record pointing outside the stems folder is refused; no stems yet → 404; no folder set → 503', async () => {
+      vi.stubEnv('MIXER_STEMS_VISION_PREFIX', PREFIX);
+      const before = vision.reads.length;
+      expect((await request(app).get(link('285', 'vocals'))).status).toBe(403);
+      expect((await request(app).get(link('282', 'vocals'))).status).toBe(404);
+      vi.stubEnv('MIXER_STEMS_VISION_PREFIX', '');
+      expect((await request(app).get(link('284', 'vocals'))).status).toBe(503);
+      expect(vision.reads.length).toBe(before);
+    });
   });
 
   it('GET /internal/mixer/packs: packs grouped from the Packs layout, in Sort order, hidden and bad rows dropped, WAVs on the CDN', async () => {

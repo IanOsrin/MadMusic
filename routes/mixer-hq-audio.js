@@ -20,7 +20,7 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { hqAudioSig, mixerPublicUrl } from '../lib/mixer-bridge.js';
-import { hqStemById } from '../lib/mixer-catalogue.js';
+import { hqStemById, storedStemPath } from '../lib/mixer-catalogue.js';
 import { visionConfigured, visionGet } from '../lib/vision-read.js';
 import { sampleById, samplesPrefix, MAX_SAMPLE_BYTES } from '../lib/mixer-samples.js';
 
@@ -28,6 +28,10 @@ const MAX_LIFE_S = 6 * 3600;
 const same = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
 const hqPrefix = () => {
   const p = String(process.env.MIXER_HQ_VISION_PREFIX || '').trim();
+  return p ? (p.startsWith('/') ? p : '/' + p).replace(/\/*$/, '/') : '';
+};
+const storedPrefix = () => {
+  const p = String(process.env.MIXER_STEMS_VISION_PREFIX || '').trim();
   return p ? (p.startsWith('/') ? p : '/' + p).replace(/\/*$/, '/') : '';
 };
 
@@ -115,5 +119,51 @@ export function createMixerHqAudioRouter({ now = () => Date.now() } = {}) {
       }
     });
   router.options('/sample/:id', (_req, res) => { cors(res); res.set('Access-Control-Allow-Methods', 'GET'); res.status(204).end(); });
+
+  // Pre-split stems (Ian, 2026-11-09): GET /stem/:songId/:name?exp=&sig= → a song's stored stem (16-bit FLAC listening copy).
+  // Signed over "st-<songId>-<name>"; the file must sit inside MIXER_STEMS_VISION_PREFIX. Links are stable for an hour, so the browser's
+  // own cache saves a second trip through MAD when a song is reopened.
+  router.options('/stem/:songId/:name', (_req, res) => {
+    cors(res); res.set('Access-Control-Allow-Methods', 'GET'); res.set('Access-Control-Allow-Headers', 'Range'); res.set('Access-Control-Max-Age', '600');
+    res.status(204).end();
+  });
+  router.get('/stem/:songId/:name', rateLimit({ windowMs: 60_000, limit: 120, keyGenerator: (req) => `stem:${ipKeyGenerator(req.ip)}`, standardHeaders: true, legacyHeaders: false, validate: false }),
+    async (req, res) => {
+      cors(res);
+      const songId = String(req.params.songId || ''), name = String(req.params.name || ''), exp = Number(req.query.exp), sig = String(req.query.sig || '');
+      const nowS = Math.floor(now() / 1000);
+      res.set('Cache-Control', 'private, no-store, no-transform');
+      if (!/^\d{1,12}$/.test(songId) || !/^[a-z0-9-]{1,40}$/.test(name) || !Number.isInteger(exp) || !sig) return res.status(400).json({ ok: false, error: 'Bad link' });
+      if (exp < nowS) return res.status(403).json({ ok: false, error: 'This link has expired — split the song again in Mad Mixer.' });
+      if (exp > nowS + MAX_LIFE_S || !same(sig, hqAudioSig(`st-${songId}-${name}`, exp))) return res.status(403).json({ ok: false, error: 'Bad link' });
+      const prefix = storedPrefix();
+      if (!prefix || !visionConfigured()) return res.status(503).json({ ok: false, error: 'Stored stems aren’t set up on this server yet.' });
+      let file;
+      try { file = await storedStemPath(songId, name); } catch (err) { console.warn('[mixer-stem] list failed:', err?.message); return res.status(502).json({ ok: false, error: 'Could not look the stem up.' }); }
+      if (!file) return res.status(404).json({ ok: false, error: 'No such stem.' });
+      if (!file.startsWith(prefix) || file.split('/').includes('..')) {
+        console.warn(`[mixer-stem] refused ${songId}/${name}: its Vision path is outside ${prefix}`);
+        return res.status(403).json({ ok: false, error: 'That stem is outside the stems folder.' });
+      }
+      const range = /^bytes=\d*-\d*$/.test(String(req.headers.range || '')) ? req.headers.range : undefined;
+      const ac = new AbortController();
+      req.on('close', () => { if (!res.writableEnded) ac.abort(); });
+      try {
+        const obj = await visionGet(file, range, ac.signal);
+        res.status(range && obj.ContentRange ? 206 : 200);
+        res.set('Content-Type', 'audio/flac');
+        res.set('Cache-Control', `private, max-age=${exp - nowS}, no-transform`);   // no-transform: never gzip the audio
+        res.set('Accept-Ranges', 'bytes');
+        if (obj.ContentLength != null) res.set('Content-Length', String(obj.ContentLength));
+        if (range && obj.ContentRange) res.set('Content-Range', obj.ContentRange);
+        obj.Body.on('error', (err) => { console.warn(`[mixer-stem] stream ${songId}/${name} broke:`, err?.message); res.destroy(err); });
+        obj.Body.pipe(res);
+      } catch (err) {
+        if (ac.signal.aborted) return;
+        const status = err?.$metadata?.httpStatusCode;
+        console.warn(`[mixer-stem] Vision read failed for ${songId}/${name}:`, err?.name || err?.message);
+        if (!res.headersSent) res.status(status === 404 || err?.name === 'NoSuchKey' ? 404 : status === 416 ? 416 : 502).json({ ok: false, error: 'The stem couldn’t be read from Vision.' });
+      }
+    });
   return router;
 }
