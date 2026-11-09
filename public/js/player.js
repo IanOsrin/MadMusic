@@ -601,7 +601,15 @@
       async function _randomSongsRefill(lastId) {
         const last = itemsStore.get(lastId);
         const f = (last && last.fields) || {};
-        const genre = f['Local Genre'] || f['Genre'] || '';
+        let genre = f['Local Genre'] || f['Genre'] || '';
+        // A banner or album-page song has no card on screen, so its genre comes from the
+        // server. Guests can't ask (token-gated) and get songs from any genre.
+        if (!last && !window.__GUEST) {
+          try {
+            const r = await fetch('/api/track/' + encodeURIComponent(lastId) + '/container');
+            if (r.ok) genre = (await r.json()).genre || '';
+          } catch (e) { /* any genre will do */ }
+        }
         const fetchIds = async (g) => {
           const r = await fetch('/api/random-songs?count=20' + (g ? '&genre=' + encodeURIComponent(g) : '') + '&_t=' + Date.now());
           if (!r.ok) return [];
@@ -851,7 +859,9 @@
     // Player-bar ⏭/⏮: shuffle/radio queue if active, else advance the grid.
     // Return true when handled so app.html can fall through to the list player.
     next: _barNext,
-    prev: _barPrev
+    prev: _barPrev,
+    // More songs to play after this one (app.html's carry-on, when nothing else is queued).
+    moreSongsAfter: _randomSongsRefill
   };
 
   // Keep direct window assignments for HTML onclick compatibility

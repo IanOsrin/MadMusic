@@ -187,7 +187,7 @@ export async function resolveTrackAudio(recordId, layout = FM_LAYOUT, { requeste
   const cacheKey = `${layout}::${recordId}`;
   const cached = containerUrlCache.get(cacheKey);
   if (cached) {
-    return { ok: true, url: cached.url, field: cached.field, artworkUrl: cached.artworkUrl || '', _cached: true };
+    return { ok: true, url: cached.url, field: cached.field, artworkUrl: cached.artworkUrl || '', genre: cached.genre || '', _cached: true };
   }
 
   // Read-through fallback (May-17): featured/trending/g100 pre-warm already
@@ -269,9 +269,12 @@ export async function resolveTrackAudio(recordId, layout = FM_LAYOUT, { requeste
   }
 
   // Cache the resolved URLs so repeat plays skip the FileMaker lookup
-  containerUrlCache.set(cacheKey, { url: containerUrl, field: chosenField || requestedField || '', artworkUrl });
+  // The genre tells "carry on playing" what to queue after a song with no list behind it.
+  const genre = getFieldValue('Local Genre') || getFieldValue('Song Files::Local Genre');
 
-  return { ok: true, url: containerUrl, field: chosenField || requestedField || '', artworkUrl };
+  containerUrlCache.set(cacheKey, { url: containerUrl, field: chosenField || requestedField || '', artworkUrl, genre });
+
+  return { ok: true, url: containerUrl, field: chosenField || requestedField || '', artworkUrl, genre };
 }
 
 router.get('/track/:recordId/container', async (req, res) => {
@@ -309,10 +312,10 @@ router.get('/track/:recordId/container', async (req, res) => {
       return;
     }
 
-    const { url, field, artworkUrl, _cached } = resolved;
+    const { url, field, artworkUrl, genre, _cached } = resolved;
     res.json(_cached
-      ? { ok: true, url, field, artworkUrl, _cached: true }
-      : { ok: true, url, field, artworkUrl });
+      ? { ok: true, url, field, artworkUrl, genre, _cached: true }
+      : { ok: true, url, field, artworkUrl, genre });
   } catch (err) {
     console.error('[MASS] Container refresh failed:', err);
     res.status(500).json({ ok: false, error: 'Failed to refresh container' });

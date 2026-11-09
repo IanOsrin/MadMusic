@@ -1,8 +1,8 @@
 // Playback engine + now-playing modal for the mobile app.
 
-import { elements, state } from './state.js?v=48';
-import { formatTime, generateSessionId, showToast } from './util.js?v=48';
-import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getGenreField, getTitleField, getYearField } from './fields.js?v=48';
+import { elements, state } from './state.js?v=49';
+import { formatTime, generateSessionId, showToast } from './util.js?v=49';
+import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getGenreField, getTitleField, getYearField } from './fields.js?v=49';
 
 export function closeModal() {
       elements.modalOverlay.classList.remove('show');
@@ -259,7 +259,14 @@ async function continueWithMore(ctx) {
   refilling = true;
   try {
     const last = ctx.tracks[ctx.tracks.length - 1] || {};
-    const genre = getGenreField(last.fields || {}) || '';
+    let genre = getGenreField(last.fields || {}) || '';
+    // A banner song arrives without its genre. Guests can't ask (token-gated): any genre.
+    if (!genre && last.recordId && !window.__GUEST) {
+      try {
+        const r = await fetch(`/api/track/${encodeURIComponent(last.recordId)}/container`);
+        if (r.ok) genre = (await r.json()).genre || '';
+      } catch (e) { /* any genre will do */ }
+    }
     const have = new Set(ctx.tracks.map((t) => String(t.recordId || t.trackRecordId || '')));
     const fetchSongs = async (g) => {
       const r = await fetch(`/api/random-songs?count=25${g ? `&genre=${encodeURIComponent(g)}` : ''}`);
