@@ -1559,7 +1559,7 @@
 
         // ── Consecutive play: advance to the next track when one ends ─────────
         function playTrackAtIndex(idx) {
-          if (idx < 0 || idx >= tracks.length) return;
+          if (idx < 0 || idx >= tracks.length) return false;
           const nextTrack = tracks[idx];
           if (!nextTrack) return;
           let src = nextTrack.audioUrl || '';
@@ -1592,6 +1592,8 @@
         }
 
         window._playlistEndedHandler = function() {
+          // Listener outlives the page: once something else is playing, this playlist is done.
+          if (!window.MADQueue || window.MADQueue.playAt !== playTrackAtIndex) return;
           playTrackAtIndex(currentTrackIdx + 1);
         };
         if (audioEl) audioEl.addEventListener('ended', window._playlistEndedHandler);
@@ -2496,7 +2498,6 @@
 
       // Cross-album advance — only in user-playlist mode (not album detail view)
       if (pv.dataset.playlistMode !== 'user') return;
-      e.stopImmediatePropagation();
 
       const albumsList = document.getElementById('playlistAlbumsList');
       if (!albumsList) return;
@@ -2504,7 +2505,8 @@
       const selectedAlbum = albumsList.querySelector('.playlist-album-item.selected');
       const albumIdx = allAlbums.indexOf(selectedAlbum);
       const nextAlbum = allAlbums[albumIdx + 1];
-      if (!nextAlbum) return; // End of playlist
+      if (!nextAlbum) return; // End of playlist — the player bar carries on from here
+      e.stopImmediatePropagation();
 
       nextAlbum.click(); // Load next album's tracks into #playlistTrackList
       // After DOM renders the new track list, click the first track
@@ -3853,6 +3855,15 @@
           _audioEl.removeEventListener('ended', window._publicPlaylistEndedHandler);
         }
 
+        const publicQueue = {
+          idx: 0,
+          playAt: (i) => {
+            const row = listEl.querySelector(`.playlist-track-item[data-track-index="${i}"]`);
+            if (!row) return false;
+            row.click();
+          }
+        };
+
         tracks.forEach((track, index) => {
           const li = document.createElement('li');
           li.className = 'playlist-track-item';
@@ -3891,6 +3902,8 @@
                 recordId: track.trackRecordId || track.recordId || li.dataset.recordId || '',
                 leadSilence
               });
+              publicQueue.idx = index;
+              window.MADQueue = publicQueue;
             }
 
             listEl.querySelectorAll('.playlist-track-item').forEach(el => el.classList.remove('playing'));
@@ -3903,6 +3916,7 @@
 
         // Consecutive play: advance to next track when one ends
         window._publicPlaylistEndedHandler = function() {
+          if (window.MADQueue !== publicQueue) return;   // something else is playing now
           const nextIdx = currentIdx + 1;
           if (nextIdx >= tracks.length) return;
           const nextLi = listEl.querySelector(`.playlist-track-item[data-track-index="${nextIdx}"]`);
@@ -4348,6 +4362,7 @@
           if (typeof window.__guestPreviewEnded === 'function') window.__guestPreviewEnded();
           // In a shuffle, a guest moves on to the next 30-second preview instead of stopping.
           if (window.MADPlayer && window.MADPlayer.isShuffleActive && window.MADPlayer.isShuffleActive() && window.MADPlayer.next) window.MADPlayer.next();
+          else if (!_advanceQueue()) setTimeout(function () { _carryOn(true); }, 300);
         }
         if (seeking) return;
         var pct = effDuration() ? (player.currentTime / effDuration() * 100) : 0;
@@ -4399,9 +4414,81 @@
         if (!q) return false;
         if (dir > 0 && typeof q.next === 'function') { q.next(); return true; }
         if (dir < 0 && typeof q.prev === 'function') { q.prev(); return true; }
-        if (typeof q.playAt === 'function') { q.playAt(q.idx + dir); return true; }
+        if (typeof q.playAt === 'function') return q.playAt(q.idx + dir) !== false;   // false = nothing there
         return false;
       }
+
+      function _shuffling() {
+        var MP = window.MADPlayer;
+        return !!(MP && MP.isShuffleActive && MP.isShuffleActive());
+      }
+
+      // A surface that starts a track on its own terms. Also drops the old list's row, or
+      // app.min.js's ended chain would resume that list after this song.
+      window.MADClaimQueue = function (q) {
+        window.MADQueue = q || null;
+        if (typeof window.madClearListContext === 'function') window.madClearListContext();
+      };
+
+      // A queue of recordIds that playSong can resolve (cards on screen, carry-on songs).
+      function _songQueue(ids, idx) {
+        var q = { ids: ids, idx: idx, autoEnded: true };
+        q.playAt = function (i) {
+          if (i < 0 || i >= ids.length) return false;
+          var before = player.src;
+          q.idx = i;
+          window.playSong(ids[i]);
+          return player.src !== before;
+        };
+        return q;
+      }
+
+      // Step the queue, unless it no longer describes the song that just played (a click
+      // on a card claims the queue even when the song playing came from somewhere else).
+      function _advanceQueue() {
+        var q = window.MADQueue;
+        if (q && q.ids && q.ids[q.idx] !== _meta.recordId) return false;
+        return _queueAdvance(1);
+      }
+
+      // ── Keep the music going ─────────────────────────────────────────────
+      // Ian, 2026-11-09: "it plays then stops, we actually want it to carry on with other
+      // songs" — worst from a banner, which has no list behind it. When nothing else has
+      // a next song, queue more in the same genre, as the phone does (stepQueue). Songs
+      // with no recordId (podcasts) just end.
+      var _carryBusy = false, _heard = [];
+      function _carryOn(force) {
+        var lastId = _meta && _meta.recordId;
+        var MP = window.MADPlayer;
+        if (!lastId || _carryBusy || !MP || !MP.moreSongsAfter) return;
+        var src = player.src;
+        function stillOurs() { return player.src === src && (force || player.ended) && !_shuffling(); }
+        if (!stillOurs()) return;
+        _carryBusy = true;
+        MP.moreSongsAfter(lastId).then(function (found) {
+          if (!stillOurs()) return;
+          var others = found.filter(function (id) { return id !== lastId; });
+          var fresh = others.filter(function (id) { return _heard.indexOf(id) === -1; });
+          if (!fresh.length) fresh = others;
+          if (!fresh.length) return;
+          _heard = _heard.concat(fresh).slice(-200);
+          var q = _songQueue(fresh, 0);
+          window.MADClaimQueue(q);
+          q.playAt(0);
+        }).catch(function (err) {
+          console.warn('[_PLAYER] could not carry on:', err);
+        }).then(function () { _carryBusy = false; });
+      }
+
+      // A file that won't play mustn't end the music: skip it, three in a row stops.
+      var _failsInARow = 0;
+      player.addEventListener('playing', function () { _failsInARow = 0; });
+      player.addEventListener('error', function () {
+        var q = window.MADQueue;
+        if (!q || !q.ids || q.ids[q.idx] !== _meta.recordId || _shuffling() || _failsInARow >= 3) return;
+        _failsInARow += 1;
+        setTimeout(function () { if (!_advanceQueue()) _carryOn(true); }, 400);
+      });
 
       // ── Central claim for CARD surfaces (grid, rails, hero) ──────────────
       // Cards play via window.playSong(recordId) from many containers with
@@ -4427,6 +4514,8 @@
           if (e.target.closest('[data-album-view],[data-album-search],.card-album-btn,.card-playlist-btn,.card-library-btn,.track-action-btn,#upSkipNext,#upSkipPrev')) return;
           // Row surfaces (.playlist-track-item etc.) claim for themselves.
           if (e.target.closest('.playlist-track-item, li.playlist-track, li.track')) return;
+          // A Discover cover opens its album; only its ▶ plays.
+          if (e.target.closest('.random-artwork') && !e.target.closest('.play-icon')) return;
           var card = e.target.closest('[data-record-id], [onclick*="playSong"]');
           if (!card) return;
           var id = _cardId(card);
@@ -4439,13 +4528,7 @@
           ids = ids.filter(function (v, i) { return ids.indexOf(v) === i; });
           var idx = ids.indexOf(id);
           if (!ids.length || idx === -1) return;
-          var q = { idx: idx, autoEnded: false };
-          q.playAt = function (i) {
-            if (i < 0 || i >= ids.length) return;
-            q.idx = i;
-            if (typeof window.playSong === 'function') window.playSong(ids[i]);
-          };
-          window.MADQueue = q;
+          window.MADClaimQueue(_songQueue(ids, idx));
         } catch (err) { /* never break a click */ }
       }, true);
 
@@ -4464,18 +4547,20 @@
         skipNext.addEventListener('click', function () {
           var MP = window.MADPlayer;
           if (MP && MP.isShuffleActive && MP.isShuffleActive()) { if (MP.next) MP.next(); return; }
-          _queueAdvance(1);
+          if (!_queueAdvance(1)) _carryOn(true);
         });
       }
 
       // ── End-of-track auto-advance for queues that opt in (autoEnded) ─────
       // Surfaces with their own ended chains (album modal, playlist pages,
-      // shuffle) don't set autoEnded, so this never double-advances.
+      // shuffle) don't set autoEnded, so this never double-advances. Those chains
+      // start their next song straight away; the pause lets them, and _carryOn
+      // stands down if they did.
       player.addEventListener('ended', function () {
-        var MP = window.MADPlayer;
-        if (MP && MP.isShuffleActive && MP.isShuffleActive()) return;
+        if (_shuffling()) return;
         var q = window.MADQueue;
-        if (q && q.autoEnded) _queueAdvance(1);
+        if (q && q.autoEnded && _advanceQueue()) return;
+        setTimeout(function () { _carryOn(false); }, 1000);
       });
 
       // Toggle play / pause
@@ -5161,7 +5246,8 @@
                 autoEnded: true,
                 playAt: (i) => {
                   const rows = trackList.querySelectorAll('.playlist-track-item');
-                  if (rows[i]) rows[i].click();
+                  if (!rows[i]) return false;
+                  rows[i].click();
                 }
               };
             });
@@ -5980,6 +6066,7 @@
       var artUrl = art && art.includes('://') ? art :
                    (art ? '/api/container?u=' + encodeURIComponent(art) : '');
 
+      window.MADClaimQueue(null);
       window._PLAYER.playTrack(audioUrl, {
         title:    song.name || 'Unknown Track',
         artist:   song.trackArtist || song.albumArtist || '',
@@ -7235,6 +7322,8 @@
             } catch (e) { /* guests and failures fall through to the preview */ }
           }
           if (window._PLAYER && window._PLAYER.playTrack) {
+            // Nothing queued behind a banner song: the player bar carries on after it.
+            window.MADClaimQueue(null);
             // In guest mode playTrack rewrites ANY url to /api/preview/<recordId>.
             return window._PLAYER.playTrack(url || '/api/preview/' + encodeURIComponent(id), meta);
           }
@@ -8219,7 +8308,8 @@
       + (t.album ? '<div class="al" role="link" tabindex="0" title="Open this album">' + esc(t.album) + ' ↗</div>' : '')
       + '</div>'
       + '<button type="button" title="Play">▶</button>';
-    div.querySelector('button').addEventListener('click', function () { playRec(t); });
+    div.__pick = t;
+    div.querySelector('button').addEventListener('click', function () { playPick(t); });
     var albumLink = div.querySelector('.al');
     if (albumLink) {
       albumLink.addEventListener('click', function () {
@@ -8234,6 +8324,19 @@
     }
     log.appendChild(div);
     log.scrollTop = log.scrollHeight;
+  }
+
+  // From the pick clicked, on through the rest of Maddie's picks.
+  function playPick(t) {
+    var picks = Array.prototype.map.call(log.querySelectorAll('.maddie-card'), function (c) { return c.__pick; });
+    var q = { idx: picks.indexOf(t), autoEnded: true };
+    q.playAt = function (i) {
+      if (!picks[i]) return false;
+      q.idx = i;
+      playRec(picks[i]);
+    };
+    window.MADClaimQueue(q);
+    playRec(t);
   }
 
   async function playRec(t) {

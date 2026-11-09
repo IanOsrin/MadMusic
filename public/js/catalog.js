@@ -263,7 +263,7 @@
               window.MADQueue = {
                 idx: trackIndex,
                 autoEnded: true,
-                playAt: (i) => { const r = trackList.querySelectorAll('.playlist-track-item')[i]; if (r) r.click(); }
+                playAt: (i) => { const r = trackList.querySelectorAll('.playlist-track-item')[i]; if (!r) return false; r.click(); }
               };
             }
           }
@@ -353,7 +353,7 @@
                 window.MADQueue = {
                   idx: trackIndex,
                   autoEnded: true,
-                  playAt: (i) => { const r = trackList.querySelectorAll('.playlist-track-item')[i]; if (r) r.click(); }
+                  playAt: (i) => { const r = trackList.querySelectorAll('.playlist-track-item')[i]; if (!r) return false; r.click(); }
                 };
               }
             }
