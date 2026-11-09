@@ -4,10 +4,10 @@
 // blur behind, contain in front; never stretched, per docs/banners.md).
 // Swipe-driven scroll-snap with dots; auto-advance 6.5s that pauses on touch,
 // when the tab is hidden, and entirely under prefers-reduced-motion.
-import { state } from './state.js?v=47';
-import { getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField } from './fields.js?v=47';
-import { showAlbumTracksModal } from './cards.js?v=47';
-import { playTrack } from './player.js?v=47';
+import { state } from './state.js?v=48';
+import { getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField } from './fields.js?v=48';
+import { openWholeAlbum, showAlbumTracksModal } from './cards.js?v=48';
+import { playTrack } from './player.js?v=48';
 
 const DWELL_MS = 6500, MAX_SLIDES = 6;
 const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -84,7 +84,7 @@ function albumSlides(tracks) {
   albums.forEach(a => window.MADHelpers.sortTracksBySeq(a.tracks));
   return albums.slice(0, MAX_SLIDES).map(a => ({
     image: heroRes(a.artwork), title: a.title, subtitle: a.artist,
-    editorial: false, playable: true, onTap: () => showAlbumTracksModal(a),
+    editorial: false, playable: true, onTap: () => openWholeAlbum(a),
   }));
 }
 

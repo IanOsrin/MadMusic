@@ -217,3 +217,19 @@ describe('mobile invariant: album playback keeps skips inside the album (2026-07
     expect(offenders).toEqual([]);
   });
 });
+
+// The New Releases feed carries one song per album: opening the feed's album as it stands
+// shows a one-song album (Ian, 2026-11-09).
+describe('New Releases opens the whole album', () => {
+  const read = (f) => readFileSync(join(mobileDir, f), 'utf8');
+  it('tiles open through openWholeAlbum', () => {
+    expect(read('rails-newreleases.js')).toMatch(/renderAlbumTileGrid\([^\n]*onOpen:\s*openWholeAlbum/);
+  });
+  it('banner slides built from the feed do too', () => {
+    const fn = extractFn(read('hero.js'), 'albumSlides');
+    expect(fn).toMatch(/onTap:\s*\(\)\s*=>\s*openWholeAlbum\(a\)/);
+  });
+  it('openWholeAlbum loads the full album, not the songs it was handed', () => {
+    expect(read('cards.js')).toMatch(/function openWholeAlbum[\s\S]{0,160}fetchFullAlbum\(album\)/);
+  });
+});
