@@ -12,6 +12,7 @@
  *
  *   GET /mixer-sample/:id?exp=&sig=   → a one-shot from the drum-trigger sample library (lib/mixer-samples.js) —
  *                                       the same signing (id "s-<id>"), only inside MIXER_SAMPLES_VISION_PREFIX, ≤ 8 MB
+ *   GET /mixer-hq/loop/:id?exp=&sig=  → one of Mad Mixer's own loops ("l-<id>"), only inside MIXER_LOOPS_VISION_PREFIX, ≤ 60 MB
  *
  * CORS: the Mixer's own origin (MIXER_URL) may read it. Mounted outside /api/ (no token middleware, no
  * apiLimiter) when MIXER_SHARED_SECRET is set; its own limiter caps a burst from one address.
@@ -22,7 +23,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { hqAudioSig, mixerPublicUrl } from '../lib/mixer-bridge.js';
 import { hqStemById, storedStemPath } from '../lib/mixer-catalogue.js';
 import { visionConfigured, visionGet } from '../lib/vision-read.js';
-import { sampleById, samplesPrefix, MAX_SAMPLE_BYTES } from '../lib/mixer-samples.js';
+import { sampleById, samplesPrefix, MAX_SAMPLE_BYTES, loopById, loopsPrefix, MAX_LOOP_BYTES } from '../lib/mixer-samples.js';
 
 const MAX_LIFE_S = 6 * 3600;
 const same = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
@@ -119,6 +120,37 @@ export function createMixerHqAudioRouter({ now = () => Date.now() } = {}) {
       }
     });
   router.options('/sample/:id', (_req, res) => { cors(res); res.set('Access-Control-Allow-Methods', 'GET'); res.status(204).end(); });
+
+  // Mad Mixer's own loops (Ian, 2026-11-13): signed over "l-<id>", only inside MIXER_LOOPS_VISION_PREFIX, ≤ 60 MB.
+  router.get('/loop/:id', rateLimit({ windowMs: 60_000, limit: 120, keyGenerator: (req) => `loop:${ipKeyGenerator(req.ip)}`, standardHeaders: true, legacyHeaders: false, validate: false }),
+    async (req, res) => {
+      cors(res);
+      res.set('Cache-Control', 'private, max-age=3600, no-transform');
+      const id = String(req.params.id || ''), exp = Number(req.query.exp), sig = String(req.query.sig || '');
+      const nowS = Math.floor(now() / 1000);
+      if (!/^[0-9a-f]{16}$/.test(id) || !Number.isInteger(exp) || !sig) return res.status(400).json({ ok: false, error: 'Bad link' });
+      if (exp < nowS) return res.status(403).json({ ok: false, error: 'This link has expired.' });
+      if (exp > nowS + MAX_LIFE_S || !same(sig, hqAudioSig(`l-${id}`, exp))) return res.status(403).json({ ok: false, error: 'Bad link' });
+      if (!visionConfigured()) return res.status(503).json({ ok: false, error: 'Loops aren’t set up on this server yet.' });
+      let l;
+      try { l = await loopById(id); } catch (err) { console.warn('[mixer-loop] list failed:', err?.message); return res.status(502).json({ ok: false, error: 'Could not look the loop up.' }); }
+      if (!l) return res.status(404).json({ ok: false, error: 'No such loop.' });
+      if (!l.path.startsWith(loopsPrefix()) || l.bytes > MAX_LOOP_BYTES) return res.status(403).json({ ok: false, error: 'Not a library loop.' });
+      const ac = new AbortController();
+      req.on('close', () => { if (!res.writableEnded) ac.abort(); });
+      try {
+        const obj = await visionGet(l.path, undefined, ac.signal);
+        res.set('Content-Type', 'audio/wav');
+        if (obj.ContentLength != null) res.set('Content-Length', String(obj.ContentLength));
+        obj.Body.on('error', (err) => res.destroy(err));
+        obj.Body.pipe(res);
+      } catch (err) {
+        if (ac.signal.aborted) return;
+        console.warn(`[mixer-loop] Vision read failed for ${id}:`, err?.name || err?.message);
+        if (!res.headersSent) res.status(502).json({ ok: false, error: 'The loop couldn’t be read from Vision.' });
+      }
+    });
+  router.options('/loop/:id', (_req, res) => { cors(res); res.set('Access-Control-Allow-Methods', 'GET'); res.status(204).end(); });
 
   // Pre-split stems (Ian, 2026-11-09): GET /stem/:songId/:name?exp=&sig= → a song's stored stem (16-bit FLAC listening copy).
   // Signed over "st-<songId>-<name>"; the file must sit inside MIXER_STEMS_VISION_PREFIX. Links are stable for an hour, so the browser's

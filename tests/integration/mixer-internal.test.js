@@ -67,6 +67,10 @@ vi.mock('../../lib/vision-read.js', () => ({
     { path: '/gallo-music-files-wavs/Samples/Kick/Huge.wav', bytes: 9 * 1024 * 1024 },
     { path: '/gallo-music-files-wavs/Samples/Snare/Tight.wav', bytes: 1000 },
     { path: '/gallo-music-files-wavs/Samples/Snare/notes.txt', bytes: 10 },
+    { path: '/gallo-music-files-wavs/Loops/Drums/Amapiano 112.wav', bytes: 1000 },
+    { path: '/gallo-music-files-wavs/Loops/Keys/Pad.wav', bytes: 20 * 1024 * 1024 },
+    { path: '/gallo-music-files-wavs/Loops/Keys/Too Long.wav', bytes: 70 * 1024 * 1024 },
+    { path: '/gallo-music-files-wavs/Loops/Loose One.wav', bytes: 1000 },
   ]),
   visionGet: vi.fn(async (path, range) => {
     vision.reads.push({ path, range });
@@ -509,6 +513,28 @@ describe('Mad Mixer on its own home, through server.js', () => {
       expect(vision.reads.at(-1).path).toBe('/gallo-music-files-wavs/Samples/Kick/808 Deep.wav');
       expect((await request(app).get(`/mixer-hq/sample/${kick}?exp=${exp}&sig=${encodeURIComponent(hqAudioSig(kick, exp, SECRET))}`)).status).toBe(403);
       expect((await request(app).get(`/mixer-hq/sample/ffffffffffffffff?exp=${exp}&sig=${encodeURIComponent(hqAudioSig('s-ffffffffffffffff', exp, SECRET))}`)).status).toBe(404);
+    });
+  });
+
+  describe('Mad Mixer’s own loops (Ian, 2026-11-13)', () => {
+    let drums;
+    it('GET /internal/mixer/loops: kinds from the Loops folder, WAVs ≤ 60 MB only, no paths, never the samples', async () => {
+      const res = await signed(app, 'GET', '/internal/mixer/loops');
+      expect(res.status).toBe(200);
+      expect(res.body.kinds.map((k) => `${k.kind}: ${k.samples.map((x) => x.name).join(', ')}`)).toEqual(['Drums: Amapiano 112', 'Keys: Pad', 'Loops: Loose One']);
+      expect(JSON.stringify(res.body)).not.toMatch(/gallo-music-files-wavs|808 Deep/);
+      drums = res.body.kinds[0].samples[0].id;
+      expect(drums).toMatch(/^[0-9a-f]{16}$/);
+    });
+    it('GET /mixer-hq/loop/:id on a signed link streams it; a sample link can’t open a loop, nor a loop link a sample', async () => {
+      const exp = Math.floor(Date.now() / 1000) + 3600;
+      const ok = await request(app).get(`/mixer-hq/loop/${drums}?exp=${exp}&sig=${encodeURIComponent(hqAudioSig(`l-${drums}`, exp, SECRET))}`);
+      expect(ok.status).toBe(200);
+      expect(ok.headers['content-type']).toMatch(/audio\/wav/);
+      expect(vision.reads.at(-1).path).toBe('/gallo-music-files-wavs/Loops/Drums/Amapiano 112.wav');
+      expect((await request(app).get(`/mixer-hq/loop/${drums}?exp=${exp}&sig=${encodeURIComponent(hqAudioSig(`s-${drums}`, exp, SECRET))}`)).status).toBe(403);
+      const samples = await signed(app, 'GET', '/internal/mixer/samples'), kick = samples.body.kinds[0].samples[0].id;
+      expect((await request(app).get(`/mixer-hq/loop/${kick}?exp=${exp}&sig=${encodeURIComponent(hqAudioSig(`l-${kick}`, exp, SECRET))}`)).status).toBe(404);
     });
   });
 
