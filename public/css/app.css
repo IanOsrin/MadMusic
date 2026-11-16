@@ -1004,6 +1004,7 @@
       margin-left: auto;
     }
     .playlist-view-actions[hidden] { display: none; }
+    .playlist-view-action-btn[hidden] { display: none; }
     .playlist-view-action-btn {
       display: flex;
       align-items: center;
@@ -1156,8 +1157,18 @@
       cursor: pointer;
       transition: background 0.15s ease;
     }
-    .playlist-page-album-item:hover,
-    .playlist-page-album-item.selected { background: #F5F8FF; }
+    /* A tint, not a fixed near-white: white song titles stay readable in dark mode. */
+    .playlist-page-album-item:hover { background: rgba(127,127,127,0.12); }
+    .playlist-page-album-item.selected { background: rgba(127,127,127,0.18); box-shadow: inset 3px 0 0 var(--accent); }
+    /* A play symbol on the song's picture says "click to play". */
+    .playlist-page-album-thumb::after {
+      content: ''; position: absolute; inset: 0; border-radius: 8px; pointer-events: none;
+      background: rgba(0,0,0,0.45) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M8 5v14l11-7z'/%3E%3C/svg%3E") center / 30px no-repeat;
+      opacity: 0; transition: opacity 0.15s;
+    }
+    .playlist-page-album-item:hover .playlist-page-album-thumb::after { opacity: 1; }
+    .playlist-page-play-btn { background: var(--accent); color: #fff; }
+    .playlist-page-play-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
     .playlist-page-remove-btn {
       position: absolute;
       top: 4px;
@@ -1261,7 +1272,7 @@
       transition: background 0.15s ease;
     }
     .playlist-page-track-item:not(:last-child) { border-bottom: 1px solid var(--border); }
-    .playlist-page-track-item:hover { background: #F5F8FF; }
+    .playlist-page-track-item:hover { background: rgba(127,127,127,0.12); }
     .playlist-page-track-item.playing .playlist-page-track-number,
     .playlist-page-track-item.playing .playlist-page-track-name { color: var(--accent); }
     .playlist-page-track-number {

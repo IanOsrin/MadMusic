@@ -1,11 +1,11 @@
 // Home rail: G100 albums + curated playlists (mobile).
 
-import { elements, state } from './state.js?v=49';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, hasValidAudio } from './fields.js?v=49';
-import { showAlbumTracksModal, renderAlbumTileGrid } from './cards.js?v=49';
-import { closeModal, playTrack } from './player.js?v=49';
-import { pushOverlay } from './router.js?v=49';
-import { loadArtistBioMobile } from './search.js?v=49';
+import { elements, state } from './state.js?v=50';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, hasValidAudio } from './fields.js?v=50';
+import { showAlbumTracksModal, renderAlbumTileGrid } from './cards.js?v=50';
+import { closeModal, playTrack } from './player.js?v=50';
+import { pushOverlay } from './router.js?v=50';
+import { loadArtistBioMobile } from './search.js?v=50';
 
 // "MAD-About-Oliver-Mtukudzi" → "Oliver Mtukudzi"; '' for non-MAD-About names.
 function artistFromMadAbout(name) {
@@ -146,14 +146,14 @@ async function loadPlaylistRail(category, container, opts = {}) {
         }
 
         if (category === 'Artist') state.g100Playlists = playlists;
-        renderG100Playlists(playlists, container);
+        renderG100Playlists(playlists, container, category);
       } catch (err) {
         console.error(`[G100 Playlists:${category}] Failed to load`, err);
         container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>Failed to load playlists</p></div>`;
       }
     }
 
-export function renderG100Playlists(playlists, target) {
+export function renderG100Playlists(playlists, target, category) {
       const container = target || elements.g100PlaylistsContent;
       const grid = document.createElement('div');
       grid.className = 'g100-playlist-grid';
@@ -181,7 +181,11 @@ export function renderG100Playlists(playlists, target) {
           </div>
         `;
 
-        card.addEventListener('click', () => showG100PlaylistTracks(pl.name));
+        card.addEventListener('click', () => {
+          // The last Themes playlist opened is a fallback for what plays next (js/next-music.js).
+          if (category === 'Theme' && window.MADNextMusic) window.MADNextMusic.noteTheme(pl.name);
+          showG100PlaylistTracks(pl.name);
+        });
         grid.appendChild(card);
       });
 

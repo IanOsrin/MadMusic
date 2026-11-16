@@ -1,8 +1,8 @@
 // Playback engine + now-playing modal for the mobile app.
 
-import { elements, state } from './state.js?v=49';
-import { formatTime, generateSessionId, showToast } from './util.js?v=49';
-import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getGenreField, getTitleField, getYearField } from './fields.js?v=49';
+import { elements, state } from './state.js?v=50';
+import { formatTime, generateSessionId, showToast } from './util.js?v=50';
+import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getGenreField, getTitleField, getYearField } from './fields.js?v=50';
 
 export function closeModal() {
       elements.modalOverlay.classList.remove('show');
@@ -267,6 +267,14 @@ async function continueWithMore(ctx) {
         if (r.ok) genre = (await r.json()).genre || '';
       } catch (e) { /* any genre will do */ }
     }
+    // What's next (Ian, 2026-11-16), shared with desktop in js/next-music.js: the next
+    // Suggested for You album, then the Themes playlist for the genre, then the last Themes
+    // playlist. An album or playlist plays whole; random songs skip ones already queued.
+    const lastId = String(last.recordId || last.trackRecordId || '');
+    const pick = window.MADNextMusic
+      ? await window.MADNextMusic.pick({ lastId, genre }).catch(() => null)
+      : null;
+    let more = pick && pick.items ? pick.items.filter((t) => String(t.recordId) !== lastId) : [];
     const have = new Set(ctx.tracks.map((t) => String(t.recordId || t.trackRecordId || '')));
     const fetchSongs = async (g) => {
       const r = await fetch(`/api/random-songs?count=25${g ? `&genre=${encodeURIComponent(g)}` : ''}`);
@@ -274,8 +282,8 @@ async function continueWithMore(ctx) {
       const d = await r.json();
       return ((d && d.items) || []).filter((t) => t.recordId && !have.has(String(t.recordId)));
     };
-    let more = genre ? await fetchSongs(genre) : [];
-    if (more.length < 3) more = more.concat(await fetchSongs(''));
+    if (!more.length && genre) more = await fetchSongs(genre);
+    if (more.length < 3 && !(pick && more.length)) more = more.concat(await fetchSongs(''));
     if (!more.length || state.playlistContext !== ctx) return;   // nothing found, or the listener started something else
     // Refilled songs are catalogue records: they play through playTrack even when the queue
     // itself is a saved playlist (whose own tracks need playPlaylistTrack).

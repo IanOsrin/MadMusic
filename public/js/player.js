@@ -598,18 +598,23 @@
         playSong(shuffleQueue[0]);
       }
 
-      async function _randomSongsRefill(lastId) {
+      async function _genreOf(lastId) {
         const last = itemsStore.get(lastId);
         const f = (last && last.fields) || {};
         let genre = f['Local Genre'] || f['Genre'] || '';
         // A banner or album-page song has no card on screen, so its genre comes from the
         // server. Guests can't ask (token-gated) and get songs from any genre.
-        if (!last && !window.__GUEST) {
+        if (!genre && !window.__GUEST) {
           try {
             const r = await fetch('/api/track/' + encodeURIComponent(lastId) + '/container');
             if (r.ok) genre = (await r.json()).genre || '';
           } catch (e) { /* any genre will do */ }
         }
+        return genre;
+      }
+
+      async function _randomSongsRefill(lastId, knownGenre) {
+        const genre = knownGenre !== undefined ? knownGenre : await _genreOf(lastId);
         const fetchIds = async (g) => {
           const r = await fetch('/api/random-songs?count=20' + (g ? '&genre=' + encodeURIComponent(g) : '') + '&_t=' + Date.now());
           if (!r.ok) return [];
@@ -622,6 +627,20 @@
         let ids = genre ? await fetchIds(genre) : [];
         if (ids.length < 3) ids = ids.concat(await fetchIds(''));
         return ids;
+      }
+
+      // What plays when the music runs out (Ian, 2026-11-16): the next Suggested for You album,
+      // then the Themes playlist for the genre, then the last Themes playlist, then random songs
+      // (js/next-music.js has the order). Resolves to { ids, source }.
+      async function _musicAfter(lastId) {
+        const genre = await _genreOf(lastId);
+        const NM = window.MADNextMusic;
+        const pick = NM ? await NM.pick({ lastId, genre }).catch(() => null) : null;
+        if (pick && pick.items && pick.items.length) {
+          const ids = pick.items.map((it) => { itemsStore.set(it.recordId, it); return it.recordId; });
+          return { ids, source: pick.source, name: pick.name };
+        }
+        return { ids: await _randomSongsRefill(lastId, genre), source: 'random' };
       }
 
       // A song that fails during shuffle is skipped, not left silent; three in a row stops it.
@@ -861,7 +880,8 @@
     next: _barNext,
     prev: _barPrev,
     // More songs to play after this one (app.html's carry-on, when nothing else is queued).
-    moreSongsAfter: _randomSongsRefill
+    moreSongsAfter: _randomSongsRefill,
+    musicAfter: _musicAfter
   };
 
   // Keep direct window assignments for HTML onclick compatibility

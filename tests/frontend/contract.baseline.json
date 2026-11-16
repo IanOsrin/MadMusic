@@ -34,6 +34,7 @@
         "inline",
         "inline",
         "/js/helpers.js",
+        "/js/next-music.js",
         "/js/auth.js",
         "/js/player.js",
         "/js/playlists.js",
@@ -57,6 +58,7 @@
       "externalScripts": [
         "/app.min.js",
         "/js/helpers.js",
+        "/js/next-music.js",
         "/js/auth.js",
         "/js/player.js",
         "/js/playlists.js",
@@ -69,9 +71,11 @@
       ],
       "windowGlobals": [
         "MADAuth",
+        "MADClaimQueue",
         "MADHelpers",
         "MADImageQuality",
         "MADNav",
+        "MADNextMusic",
         "MADOpenShareEmailModal",
         "MADPlayer",
         "MADQueue",
@@ -118,6 +122,7 @@
         "loadLibraryRecent",
         "loadLibrarySongs",
         "loadMyPlaylists",
+        "madClearListContext",
         "massAccessReady",
         "massAccessToken",
         "massAudioLabEnabled",
@@ -476,6 +481,7 @@
       "scriptOrder": [
         "inline",
         "/js/helpers.js",
+        "/js/next-music.js",
         "inline",
         "inline",
         "/js/mobile/fetch-interceptor.js",
@@ -485,6 +491,7 @@
       ],
       "externalScripts": [
         "/js/helpers.js",
+        "/js/next-music.js",
         "/js/mobile/fetch-interceptor.js",
         "/js/basket.js",
         "/js/mobile/main.js"
@@ -650,6 +657,7 @@
     "MADAuth",
     "MADCurrency",
     "MADHelpers",
+    "MADNextMusic",
     "MADOpenShareEmailModal",
     "MADPlayer",
     "MADQueue",
@@ -679,6 +687,7 @@
     "loadArtistBio",
     "loadFeaturedAlbums",
     "loadMyPlaylists",
+    "madClearListContext",
     "massAccessReady",
     "massAccessToken",
     "massAudioLabEnabled",
