@@ -1,8 +1,8 @@
 // Playback engine + now-playing modal for the mobile app.
 
-import { elements, state } from './state.js?v=50';
-import { formatTime, generateSessionId, showToast } from './util.js?v=50';
-import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getGenreField, getTitleField, getYearField } from './fields.js?v=50';
+import { elements, state } from './state.js?v=51';
+import { formatTime, generateSessionId, showToast } from './util.js?v=51';
+import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getGenreField, getTitleField, getYearField } from './fields.js?v=51';
 
 export function closeModal() {
       elements.modalOverlay.classList.remove('show');
@@ -275,6 +275,7 @@ async function continueWithMore(ctx) {
       ? await window.MADNextMusic.pick({ lastId, genre }).catch(() => null)
       : null;
     let more = pick && pick.items ? pick.items.filter((t) => String(t.recordId) !== lastId) : [];
+    const fromPick = more.length > 0;
     const have = new Set(ctx.tracks.map((t) => String(t.recordId || t.trackRecordId || '')));
     const fetchSongs = async (g) => {
       const r = await fetch(`/api/random-songs?count=25${g ? `&genre=${encodeURIComponent(g)}` : ''}`);
@@ -285,14 +286,14 @@ async function continueWithMore(ctx) {
     if (!more.length && genre) more = await fetchSongs(genre);
     if (more.length < 3 && !(pick && more.length)) more = more.concat(await fetchSongs(''));
     if (!more.length || state.playlistContext !== ctx) return;   // nothing found, or the listener started something else
-    // Refilled songs are catalogue records: they play through playTrack even when the queue
-    // itself is a saved playlist (whose own tracks need playPlaylistTrack).
-    const base = ctx.playFn || playTrack;
-    ctx.playFn = (t) => (t && t.__more ? playTrack(t) : base(t));
-    more.forEach((t) => { t.__more = true; });
-    ctx.tracks.push(...more);
-    ctx.currentIndex += 1;
-    ctx.playFn(ctx.tracks[ctx.currentIndex]);
+    // The screen follows the music (Ian, 2026-11-16: "whatever is playing in the play bar must
+    // be displayed"): what carries on is its own queue, named for what it is, so the Now Playing
+    // screen reads "Playing from <album / playlist / More Afro House>" and lists its songs.
+    // Catalogue records, so playTrack plays them even after a saved playlist.
+    const label = window.MADHelpers && window.MADHelpers.cleanGenreLabel ? window.MADHelpers.cleanGenreLabel(genre) : genre;
+    const name = fromPick ? pick.name : (label ? `More ${label}` : 'More music for you');
+    state.playlistContext = { tracks: more, currentIndex: 0, name, playFn: playTrack };
+    playTrack(more[0]);
   } catch (err) {
     console.warn('[Mobile] Could not continue the queue:', err);
   } finally {

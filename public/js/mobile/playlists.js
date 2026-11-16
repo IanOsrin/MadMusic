@@ -1,12 +1,12 @@
 // User playlists (load/render/play/create/add-to) for the mobile app.
 
-import { elements, state } from './state.js?v=50';
-import { showToast } from './util.js?v=50';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, getTitleField } from './fields.js?v=50';
-import { switchTab } from './nav.js?v=50';
-import { closeModal, playTrack } from './player.js?v=50';
-import { pushOverlay } from './router.js?v=50';
-import { createAlbumTile } from './cards.js?v=50';
+import { elements, state } from './state.js?v=51';
+import { showToast } from './util.js?v=51';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtworkUrl, getAudioUrl, getTitleField } from './fields.js?v=51';
+import { switchTab } from './nav.js?v=51';
+import { closeModal, playTrack } from './player.js?v=51';
+import { pushOverlay } from './router.js?v=51';
+import { createAlbumTile } from './cards.js?v=51';
 
 // ── Playlist icons ───────────────────────────────────────────────────────────
 // Choices come from /data/playlist-icons.json (served no-cache) so adding one

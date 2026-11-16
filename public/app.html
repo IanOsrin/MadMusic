@@ -1634,6 +1634,8 @@
 
         // Hide destructive controls for read-only (public/curated) playlists
         if (deleteBtn) deleteBtn.hidden = readOnly;
+        // A made-up list (the random "More <genre>" songs) has nothing to share.
+        if (shareBtn) shareBtn.hidden = !!(options && options.noShare);
 
         // ▶ Play (Ian, 2026-11-16: "not intuitive making the theme playlist play"): plays the
         // playlist from the selected song (the first, on opening); while this playlist is
@@ -4539,12 +4541,70 @@
           if (!fresh.length) fresh = others;
           if (!fresh.length) return;
           _heard = _heard.concat(fresh).slice(-200);
-          var q = _songQueue(fresh, 0);
-          window.MADClaimQueue(q);
-          q.playAt(0);
+          return _playOnPage(found, fresh, stillOurs).then(function (shown) {
+            if (shown || !stillOurs()) return;
+            var q = _songQueue(fresh, 0);       // no page to show it on: play it anyway
+            window.MADClaimQueue(q);
+            q.playAt(0);
+          });
         }).catch(function (err) {
           console.warn('[_PLAYER] could not carry on:', err);
         }).then(function () { _carryBusy = false; });
+      }
+
+      // The screen follows the music (Ian, 2026-11-16: "whenever there is a change whatever is
+      // playing in the play bar must be displayed"). What carries on is opened on its own page
+      // and played from there, so the page, its highlighted song and its Play/Pause button
+      // always match the bar: a Suggested for You album on its album page; a Themes playlist,
+      // or the random songs as "More <genre>", on the playlist page. Resolves true when shown.
+      function _pageTrack(it) {
+        var H = window.MADHelpers, f = (it && it.fields) || {};
+        var art = H.getArtworkUrl(f);
+        return {
+          name:   H.getTitleField(f),
+          artist: H.getArtistField(f),
+          album:  H.getAlbumField(f),
+          audioUrl: H.getFieldValue(f, ['S3_URL', 'Tape Files::S3_URL', 'mp3', 'MP3', 'Tape Files::mp3', 'Tape Files::MP3', 'Audio File', 'Audio::mp3', 'Stream URL', 'Audio URL']) || '',
+          artwork: art, artworkUrl: art,
+          trackRecordId: it.recordId,
+          leadSilence: parseFloat(f['AI_LeadSilence']) || 0
+        };
+      }
+      function _playOnPage(found, ids, stillOurs) {
+        var MP = window.MADPlayer;
+        if (found.source === 'suggested' && found.album && found.album.catalogue && typeof window.openAlbumByCatalogue === 'function') {
+          var a = found.album;
+          return Promise.resolve(window.openAlbumByCatalogue(a.catalogue, a.album, a.artist)).then(function (ok) {
+            if (!ok) return false;
+            // The album page fills its songs in a moment later; wait for this album's rows.
+            return new Promise(function (resolve) {
+              var tries = 0;
+              (function look() {
+                var rows = Array.prototype.slice.call(document.querySelectorAll('#playlistTrackList .playlist-track-item'));
+                var row = rows.filter(function (r) { return r.dataset.recordId === String(ids[0]); })[0];
+                if (row) {
+                  if (!stillOurs()) return resolve(true);    // the listener started something else meanwhile
+                  row.click();
+                  return resolve(true);
+                }
+                if (++tries > 80) return resolve(false);     // ~8 s: give up and just play it
+                setTimeout(look, 100);
+              })();
+            });
+          }).catch(function () { return false; });
+        }
+        if (typeof window.showUserPlaylistPage !== 'function' || !MP || !MP.itemsStore) return Promise.resolve(false);
+        var tracks = ids.map(function (id) { return MP.itemsStore.get(id); }).filter(Boolean).map(_pageTrack)
+          .filter(function (t) { return t.audioUrl && t.trackRecordId; });
+        if (!tracks.length) return Promise.resolve(false);
+        var theme = found.source === 'theme';
+        var genre = window.MADHelpers.cleanGenreLabel ? window.MADHelpers.cleanGenreLabel(found.genre || '') : (found.genre || '');
+        var title = theme ? found.name : (genre ? 'More ' + genre : 'More music for you');
+        window.showUserPlaylistPage(title, tracks, theme ? found.name : '', { readOnly: true, noShare: !theme });
+        var btn = document.getElementById('userPlaylistPlayBtn');
+        if (!btn) return Promise.resolve(false);
+        btn.click();
+        return Promise.resolve(true);
       }
 
       // A file that won't play mustn't end the music: skip it, three in a row stops.

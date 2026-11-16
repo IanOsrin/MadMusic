@@ -638,9 +638,9 @@
         const pick = NM ? await NM.pick({ lastId, genre }).catch(() => null) : null;
         if (pick && pick.items && pick.items.length) {
           const ids = pick.items.map((it) => { itemsStore.set(it.recordId, it); return it.recordId; });
-          return { ids, source: pick.source, name: pick.name };
+          return { ids, source: pick.source, name: pick.name, album: pick.album, genre };
         }
-        return { ids: await _randomSongsRefill(lastId, genre), source: 'random' };
+        return { ids: await _randomSongsRefill(lastId, genre), source: 'random', genre };
       }
 
       // A song that fails during shuffle is skipped, not left silent; three in a row stops it.

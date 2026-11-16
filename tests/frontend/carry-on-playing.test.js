@@ -162,3 +162,22 @@ describe('what plays when the music runs out', () => {
     expect(read('public/js/mobile/rails-suggested.js')).toMatch(/window\.MADNextMusic\.noteSuggested\(index\)/);
   });
 });
+
+// Ian, 2026-11-16: "whenever there is a change whatever is playing in the play bar must be
+// displayed". What carries on plays through a page, so the screen matches the bar.
+describe('the screen follows the music', () => {
+  it('desktop opens what carries on on its own page and plays it from there', () => {
+    expect(app).toMatch(/return _playOnPage\(found, fresh, stillOurs\)\.then/);
+    // a rail album on its album page, started from its own row
+    expect(app).toMatch(/window\.openAlbumByCatalogue\(a\.catalogue, a\.album, a\.artist\)/);
+    expect(app).toMatch(/#playlistTrackList \.playlist-track-item/);
+    // a Themes playlist, or the random songs as "More <genre>", on the playlist page
+    expect(app).toMatch(/var title = theme \? found\.name : \(genre \? 'More ' \+ genre : 'More music for you'\);/);
+    expect(app).toMatch(/document\.getElementById\('userPlaylistPlayBtn'\);[\s\S]{0,80}btn\.click\(\);/);
+  });
+
+  it('the phone starts a new, named queue, so Now Playing says where the music is from', () => {
+    expect(phone).toMatch(/state\.playlistContext = \{ tracks: more, currentIndex: 0, name, playFn: playTrack \};/);
+    expect(phone).not.toMatch(/ctx\.tracks\.push\(\.\.\.more\)/);
+  });
+});
