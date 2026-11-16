@@ -6,8 +6,8 @@
 // server answers eligible:false until the listener has 100 different songs,
 // and the shelf, heading included, stays hidden until there are cards to show.
 
-import { escapeHtml } from './fields.js?v=49';
-import { openAlbumAsync } from './cards.js?v=49';
+import { escapeHtml } from './fields.js?v=50';
+import { openAlbumAsync } from './cards.js?v=50';
 
 export async function loadSuggestedForYou() {
   const header = document.getElementById('home-sfy-header');
@@ -27,9 +27,11 @@ export async function loadSuggestedForYou() {
         <div class="mob-sug-artist">${escapeHtml(it.artist)}</div>
       </button>`).join('');
 
-    container.querySelectorAll('.mob-sug-card').forEach((btn) => {
+    container.querySelectorAll('.mob-sug-card').forEach((btn, index) => {
       btn.addEventListener('click', () => {
         const { cat, title, artist } = btn.dataset;
+        // When this album ends, the music carries on with the next one on the rail.
+        if (window.MADNextMusic) window.MADNextMusic.noteSuggested(index);
         // The page opens at once; the songs fill in. Catalogue first: it returns the album's exact tracks.
         openAlbumAsync({ title, artist, artwork: btn.querySelector('img')?.src || '/img/placeholder.png' }, async () => {
           const r = await fetch(`/api/album?${new URLSearchParams(cat ? { cat } : { title, artist })}`);

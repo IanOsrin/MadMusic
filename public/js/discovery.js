@@ -1111,9 +1111,11 @@
             </div>`;
         }).join('');
 
-        container.querySelectorAll('.suggested-card').forEach((card) => {
+        container.querySelectorAll('.suggested-card').forEach((card, index) => {
           card.addEventListener('click', async () => {
             const { cat, album, artist } = card.dataset;
+            // When this album ends, the music carries on with the next one on the rail.
+            if (window.MADNextMusic) window.MADNextMusic.noteSuggested(index);
             // Catalogue first: it returns the album's exact tracks.
             if (cat && typeof window.openAlbumByCatalogue === 'function'
                 && await window.openAlbumByCatalogue(cat, album, artist)) return;

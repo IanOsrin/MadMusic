@@ -471,6 +471,7 @@
 
         <!-- Playlist View (Two-Column Layout) -->
         <style id="artist-bio-styles">
+          .artist-bio[hidden] { display:none; }
           .artist-bio { display:flex; flex:0 0 auto; gap:16px; align-items:flex-start; margin:0 0 12px; padding:12px 16px; border-radius:12px; background:var(--bg-card, rgba(255,255,255,.04)); border:1px solid var(--border, rgba(255,255,255,.08)); }
           .artist-bio-photo { width:96px; height:96px; border-radius:10px; object-fit:cover; flex:0 0 auto; background:rgba(255,255,255,.06); }
           .artist-bio-body { flex:1 1 auto; min-width:0; }
@@ -759,6 +760,8 @@
                   container.querySelectorAll('.g100-playlist-card').forEach(card => {
                     card.addEventListener('click', async () => {
                       const name = decodeURIComponent(card.dataset.name);
+                      // The last Themes playlist opened is a fallback for what plays next (js/next-music.js).
+                      if (category === 'Theme' && window.MADNextMusic) window.MADNextMusic.noteTheme(name);
                       try {
                         const r = await fetch(`/api/public-playlists?name=${encodeURIComponent(name)}`);
                         const d = await r.json();
@@ -1308,6 +1311,11 @@
             <h1 class="playlist-page-title" id="userPlaylistTitle">Playlist Name</h1>
           </div>
           <div class="playlist-page-actions" id="userPlaylistActions">
+            <button class="playlist-view-action-btn playlist-page-play-btn" id="userPlaylistPlayBtn" title="Play this playlist">
+              <svg class="pl-icon-play" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>
+              <svg class="pl-icon-pause" viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+              <span>Play</span>
+            </button>
             <button class="playlist-view-action-btn" id="userPlaylistShareBtn" title="Share playlist">
               <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
               Share
@@ -1329,7 +1337,7 @@
           <!-- Right Column - Tracks from Selected Album -->
           <div class="playlist-page-detail" id="userPlaylistDetail">
             <div class="playlist-page-detail-header">
-              <div class="playlist-page-artwork" style="position:relative;">
+              <div class="playlist-page-artwork" id="userPlaylistArtworkBox" style="position:relative;cursor:pointer;" title="Play">
                 <img id="userPlaylistArtwork" src="/img/placeholder.jpg" alt="Album artwork">
                 <div id="userPlaylistNowPlayingBadge" hidden
                      style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.72);color:#fff;font-size:10px;font-weight:700;letter-spacing:0.08em;padding:4px 8px;border-radius:4px;display:none;align-items:center;gap:5px;">
@@ -1606,6 +1614,40 @@
 
         // Hide destructive controls for read-only (public/curated) playlists
         if (deleteBtn) deleteBtn.hidden = readOnly;
+
+        // ▶ Play (Ian, 2026-11-16: "not intuitive making the theme playlist play"): plays the
+        // playlist from the selected song (the first, on opening); while this playlist is
+        // playing it becomes Pause. The big artwork does the same.
+        const playBtn = document.getElementById('userPlaylistPlayBtn');
+        const artBox  = document.getElementById('userPlaylistArtworkBox');
+        const ownsPlayer = () => !!(window.MADQueue && window.MADQueue.playAt === playTrackAtIndex);
+        function playOrPause() {
+          const p = document.getElementById('player');
+          if (ownsPlayer() && p && p.src) {
+            if (p.paused) p.play().catch(() => {}); else p.pause();
+            return;
+          }
+          if (window.MADPlayer && window.MADPlayer.isShuffleActive && window.MADPlayer.isShuffleActive() && window.MADPlayer.stopShufflePlay) window.MADPlayer.stopShufflePlay();
+          playTrackAtIndex(Math.max(0, currentTrackIdx));
+        }
+        if (playBtn) playBtn.onclick = playOrPause;
+        if (artBox) artBox.onclick = playOrPause;
+        if (_plPlayer && window._playlistPlayBtnSync) {
+          ['play', 'pause', 'ended'].forEach((ev) => _plPlayer.removeEventListener(ev, window._playlistPlayBtnSync));
+        }
+        window._playlistPlayBtnSync = function () {
+          const btn = document.getElementById('userPlaylistPlayBtn');
+          const p = document.getElementById('player');
+          if (!btn || !p) return;
+          const on = ownsPlayer() && !p.paused && !p.ended;
+          // style.display, not [hidden]: the button's svg styling would override hidden.
+          btn.querySelector('.pl-icon-play').style.display = on ? 'none' : '';
+          btn.querySelector('.pl-icon-pause').style.display = on ? '' : 'none';
+          btn.querySelector('span').textContent = on ? 'Pause' : 'Play';
+          btn.title = on ? 'Pause' : 'Play this playlist';
+        };
+        if (_plPlayer) ['play', 'pause', 'ended'].forEach((ev) => _plPlayer.addEventListener(ev, window._playlistPlayBtnSync));
+        window._playlistPlayBtnSync();
 
         if (shareBtn) {
           shareBtn.onclick = () => {
@@ -4455,21 +4497,25 @@
       // ── Keep the music going ─────────────────────────────────────────────
       // Ian, 2026-11-09: "it plays then stops, we actually want it to carry on with other
       // songs" — worst from a banner, which has no list behind it. When nothing else has
-      // a next song, queue more in the same genre, as the phone does (stepQueue). Songs
-      // with no recordId (podcasts) just end.
+      // a next song, MADPlayer.musicAfter picks what's next (Ian, 2026-11-16): the next
+      // Suggested for You album, then the Themes playlist for the genre, then the last
+      // Themes playlist, then random songs in the genre. Songs with no recordId
+      // (podcasts) just end.
       var _carryBusy = false, _heard = [];
       function _carryOn(force) {
         var lastId = _meta && _meta.recordId;
         var MP = window.MADPlayer;
-        if (!lastId || _carryBusy || !MP || !MP.moreSongsAfter) return;
+        if (!lastId || _carryBusy || !MP || !MP.musicAfter) return;
         var src = player.src;
         function stillOurs() { return player.src === src && (force || player.ended) && !_shuffling(); }
         if (!stillOurs()) return;
         _carryBusy = true;
-        MP.moreSongsAfter(lastId).then(function (found) {
+        MP.musicAfter(lastId).then(function (found) {
           if (!stillOurs()) return;
-          var others = found.filter(function (id) { return id !== lastId; });
-          var fresh = others.filter(function (id) { return _heard.indexOf(id) === -1; });
+          var others = found.ids.filter(function (id) { return id !== lastId; });
+          // An album or playlist plays whole; only random songs skip ones already heard.
+          var fresh = found.source !== 'random' ? others
+            : others.filter(function (id) { return _heard.indexOf(id) === -1; });
           if (!fresh.length) fresh = others;
           if (!fresh.length) return;
           _heard = _heard.concat(fresh).slice(-200);
@@ -6967,6 +7013,7 @@
   </script>
 
   <script src="/js/helpers.js?v=4"></script>
+  <script src="/js/next-music.js?v=1"></script>
   <script src="/js/auth.js?v=2"></script>
   <script src="/js/player.js?v=6"></script>
   <script src="/js/playlists.js?v=1"></script>
