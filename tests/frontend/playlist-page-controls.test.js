@@ -20,6 +20,23 @@ describe('playlist page (Themes, MAD About, shared and own playlists)', () => {
     expect(app).toMatch(/playTrackAtIndex\(Math\.max\(0, currentTrackIdx\)\);/);
   });
 
+  it('Play playlist sits under the now-playing card, not in the header', () => {
+    const header = app.slice(app.indexOf('id="userPlaylistActions"'), app.indexOf('<!-- Two Column Layout -->'));
+    expect(header).not.toMatch(/userPlaylistPlayBtn/);
+    expect(app).toMatch(/<div class="playlist-page-playbar">[\s\S]{0,200}id="userPlaylistPlayBtn"/);
+    expect(app).toMatch(/textContent = on \? 'Pause' : 'Play playlist'/);
+  });
+
+  // Ian: "any other play command must also launch the playlist". The bar's play, a media key or a
+  // headset button started the preloaded first song bare: no playlist after it, and for a guest
+  // the whole song instead of the preview.
+  it('starting the preloaded first song any other way starts the playlist', () => {
+    expect(app).toMatch(/window\._playlistPendingStart = \{ src: audioEl\.src, start: \(\) => playTrackAtIndex\(0\) \};/);
+    expect(app).toMatch(/if \(ps && audioEl\.src === ps\.src\) \{ audioEl\.pause\(\); ps\.start\(\); \}/);
+    // a song clicked on the left, or the playlist moving on, cancels it
+    expect(app.match(/window\._playlistPendingStart = null;/g).length).toBeGreaterThanOrEqual(3);
+  });
+
   it('the selected song stays readable in dark mode (no fixed near-white background)', () => {
     expect(css).not.toMatch(/\.playlist-page-album-item\.selected \{ background: #F5F8FF; \}/);
   });

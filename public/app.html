@@ -1310,11 +1310,6 @@
             <h1 class="playlist-page-title" id="userPlaylistTitle">Playlist Name</h1>
           </div>
           <div class="playlist-page-actions" id="userPlaylistActions">
-            <button class="playlist-view-action-btn playlist-page-play-btn" id="userPlaylistPlayBtn" title="Play this playlist">
-              <svg class="pl-icon-play" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>
-              <svg class="pl-icon-pause" viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-              <span>Play</span>
-            </button>
             <button class="playlist-view-action-btn" id="userPlaylistShareBtn" title="Share playlist">
               <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
               Share
@@ -1349,6 +1344,14 @@
                 <p id="userPlaylistAlbumArtist">Playlist</p>
                 <span id="userPlaylistTrackCount"></span>
               </div>
+            </div>
+            <!-- Play playlist (Ian, 2026-11-16): in the space under the now-playing card. -->
+            <div class="playlist-page-playbar">
+              <button class="playlist-view-action-btn playlist-page-play-btn" id="userPlaylistPlayBtn" title="Play this playlist">
+                <svg class="pl-icon-play" viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M8 5v14l11-7z"/></svg>
+                <svg class="pl-icon-pause" viewBox="0 0 24 24" fill="currentColor" width="18" height="18" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                <span>Play playlist</span>
+              </button>
             </div>
             <!-- Artist biography — below the now-playing card, for MAD-About-<artist>
                  pages when a bio matches (loadArtistBio hides it otherwise). -->
@@ -1507,6 +1510,7 @@
               const idx = parseInt(item.dataset.trackIndex);
               const track = tracks[idx];
               if (!track) return;
+              window._playlistPendingStart = null;
               let src = track.audioUrl || '';
               if (src && /^https?:\/\//i.test(src) && !/\.s3[.-]/.test(src) && !(window.__MEDIA_CDN && src.includes('//' + window.__MEDIA_CDN + '/')) && !src.includes('/api/container?')) {
                 src = `/api/container?u=${encodeURIComponent(src)}`;
@@ -1555,7 +1559,22 @@
           // setting player.src here would interrupt it — and the user must be
           // able to browse G100 / open playlists while the music keeps going
           // (Spotify-style). Pressing play on a track still starts it normally.
-          if (audioEl && audioEl.paused) { audioEl.src = src; audioEl.load(); }
+          if (audioEl && audioEl.paused) {
+            audioEl.src = src; audioEl.load();
+            // The player bar's ▶, a media key or a headset button would start this bare file:
+            // no playlist behind it, and for a guest the whole song instead of the preview.
+            // Whatever starts it, start it as the playlist (first song, then on).
+            window._playlistPendingStart = { src: audioEl.src, start: () => playTrackAtIndex(0) };
+            if (!window._playlistPendingWired) {
+              window._playlistPendingWired = true;
+              audioEl.addEventListener('play', () => {
+                const ps = window._playlistPendingStart;
+                window._playlistPendingStart = null;
+                // Pause first: the restart fires 'play' again, so the bar shows this song's title.
+                if (ps && audioEl.src === ps.src) { audioEl.pause(); ps.start(); }
+              });
+            }
+          }
         })();
 
         // ── Consecutive play: advance to the next track when one ends ──────────
@@ -1568,6 +1587,7 @@
         // ── Consecutive play: advance to the next track when one ends ─────────
         function playTrackAtIndex(idx) {
           if (idx < 0 || idx >= tracks.length) return false;
+          window._playlistPendingStart = null;
           const nextTrack = tracks[idx];
           if (!nextTrack) return;
           let src = nextTrack.audioUrl || '';
@@ -1642,7 +1662,7 @@
           // style.display, not [hidden]: the button's svg styling would override hidden.
           btn.querySelector('.pl-icon-play').style.display = on ? 'none' : '';
           btn.querySelector('.pl-icon-pause').style.display = on ? '' : 'none';
-          btn.querySelector('span').textContent = on ? 'Pause' : 'Play';
+          btn.querySelector('span').textContent = on ? 'Pause' : 'Play playlist';
           btn.title = on ? 'Pause' : 'Play this playlist';
         };
         if (_plPlayer) ['play', 'pause', 'ended'].forEach((ev) => _plPlayer.addEventListener(ev, window._playlistPlayBtnSync));
