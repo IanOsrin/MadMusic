@@ -121,7 +121,7 @@
       sfyAt = i;
       // The album that just ended (opened some other way than the rail): go on to the next one.
       if (lastId && songs.some(function (s) { return String(s.recordId) === lastId; })) continue;
-      return { source: 'suggested', name: rail[i].album, items: songs };
+      return { source: 'suggested', name: rail[i].album, album: rail[i], items: songs };
     }
 
     var byGenre = themeForGenre(opts.genre, await themePlaylists());
