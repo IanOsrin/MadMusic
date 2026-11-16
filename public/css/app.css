@@ -1168,6 +1168,8 @@
     }
     .playlist-page-album-item:hover .playlist-page-album-thumb::after { opacity: 1; }
     .playlist-page-play-btn { background: var(--accent); color: #fff; }
+    .playlist-page-playbar { margin: 0 0 16px; }
+    .playlist-page-playbar .playlist-page-play-btn { padding: 11px 22px; font-size: 15px; border-radius: 24px; }
     .playlist-page-play-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
     .playlist-page-remove-btn {
       position: absolute;
