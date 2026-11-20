@@ -28,6 +28,17 @@ export const albumCache = new LRUCache({
   updateAgeOnHas: true
 });
 
+// An album lookup that found NOTHING is remembered for 2 minutes only, and never extended by
+// further asks (2026-11-20): kept in albumCache it lived an hour past the last ask, so a banner
+// for songs added that day kept playing alone long after the nightly catalogue copy had them.
+// The short memory still spares FileMaker repeated finds for an album that isn't there.
+export const albumMissCache = new LRUCache({
+  max: 1000,
+  ttl: 2 * MINUTE_MS,
+  updateAgeOnGet: false,
+  updateAgeOnHas: false
+});
+
 // NOTE: publicPlaylistsCache, trendingCache, genreCache and genreListCache were
 // removed once those endpoints moved to the SWR wrapper (lib/swr-cache.js).
 // Each SWR-wrapped route now owns its own LRU instance and self-registers
