@@ -1,12 +1,12 @@
 // Album/track card builders + their modals for the mobile app.
 
-import { elements, state } from './state.js?v=54';
-import { escapeHtml, getAlbumArtist, getAlbumField, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=54';
-import { switchTab } from './nav.js?v=54';
-import { search } from './search.js?v=54';
-import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=54';
-import { pushOverlay, replaceOverlay } from './router.js?v=54';
-import { showToast } from './util.js?v=54';
+import { elements, state } from './state.js?v=55';
+import { escapeHtml, getAlbumArtist, getAlbumField, getArtistField, getArtworkUrl, getGenreField, getTitleField } from './fields.js?v=55';
+import { switchTab } from './nav.js?v=55';
+import { search } from './search.js?v=55';
+import { closeModal, playTrack, renderPlayerQueue } from './player.js?v=55';
+import { pushOverlay, replaceOverlay } from './router.js?v=55';
+import { showToast } from './util.js?v=55';
 
 // ── Shared album tile (the New Releases / G100 look) ─────────────────────────
 // One square-cover tile: first tap reveals the title/artist overlay, second tap
@@ -345,6 +345,59 @@ export async function showArtistTracks(name) {
         console.warn('[Mobile] Artist page failed:', err);
         showToast('Could not load this artist just now', 'error');
       }
+    }
+
+// A song started from the home screen or a banner (Ian, 2026-11-20: "when I click to start a song
+// from the front page it must follow the rule that what is playing must be displayed"): it plays
+// at once and Now Playing opens on it; its whole album then becomes the queue, so "Playing from
+// <album>" lists that album with the song lit, and the album (then the artist's next album)
+// carries on after it. Without an album to find, the song plays on its own as before.
+export function playSongInAlbum(track, name = '') {
+      const f = (track && track.fields) || {};
+      state.playlistContext = { tracks: [track], currentIndex: 0, name: name || rawAlbumTitle(f) || 'Now playing', playFn: playTrack };
+      playTrack(track);
+      // Open Now Playing exactly as a tap on the mini player does.
+      if (!elements.playerModal.classList.contains('show')) elements.floatingPlayer.click();
+      queueTrackAlbum(track);
+    }
+
+// The album title as the record has it — getAlbumField says "Unknown Album" when there is none,
+// and a lookup by that name would find the wrong album.
+function rawAlbumTitle(f) {
+      return String(f['Album Title'] || f['Tape Files::Album Title'] || f['Album'] || '').trim();
+    }
+
+async function albumByCat(cat) {
+      if (!cat) return [];
+      for (const c of [cat, cat.replace(/\s+/g, '')]) {
+        try {
+          const r = await fetch('/api/album?' + new URLSearchParams({ cat: c, limit: '200' }));
+          const d = r.ok ? await r.json() : null;
+          if (d && d.items && d.items.length) return d.items;
+        } catch (_) { /* try the other spelling */ }
+      }
+      return [];
+    }
+
+async function queueTrackAlbum(track) {
+      try {
+        const f = track.fields || {};
+        let title = rawAlbumTitle(f);
+        let items = await albumByCat(f['Reference Catalogue Number'] || f['Tape Files::Reference Catalogue Number'] || '');
+        if (!items.length && title) items = (await fetchFullAlbum({ title, artist: getAlbumArtist(f), tracks: [] })).tracks || [];
+        // A banner song carries no album details: its own record names the album (subscribers only).
+        if (!items.length && track.recordId && !window.__GUEST) {
+          const r = await fetch('/api/track/' + encodeURIComponent(track.recordId) + '/container');
+          const d = r.ok ? await r.json() : null;
+          if (d && d.catalogue) { items = await albumByCat(d.catalogue); title = d.albumTitle || title; }
+        }
+        items = window.MADHelpers.sortTracksBySeq(items.slice());
+        const idx = items.findIndex((t) => String(t.recordId) === String(track.recordId));
+        // Only if the listener is still on this song, and it is on its album.
+        if (idx < 0 || items.length < 2 || state.currentTrack !== track) return;
+        state.playlistContext = { tracks: items, currentIndex: idx, name: title || rawAlbumTitle(items[idx].fields || {}) || 'Album', playFn: playTrack };
+        renderPlayerQueue();
+      } catch (_) { /* keep the one-song queue */ }
     }
 
 // The album a single track belongs to (Now Playing, Global Favourites, "Pick up where you left

@@ -2,10 +2,8 @@
 // 2026-09-28). Same feed as the desktop rail (GET /api/global-favorites, public, SWR-cached):
 // tracks flagged Global_Favorites in the catalogue. Every value shown comes from the record —
 // rank is just the order the feed returns; the right-hand time is the track's own Duration.
-import { state } from './state.js?v=54';
-import { getArtworkUrl, getTitleField, getArtistField, getAlbumField, escapeHtml } from './fields.js?v=54';
-import { playTrack } from './player.js?v=54';
-import { openAlbumForTrack, showArtistTracks } from './cards.js?v=54';
+import { getArtworkUrl, getTitleField, getArtistField, getAlbumField, escapeHtml } from './fields.js?v=55';
+import { openAlbumForTrack, playSongInAlbum, showArtistTracks } from './cards.js?v=55';
 
 const LIMIT = 10;
 
@@ -51,8 +49,9 @@ export async function loadGlobalFavourites() {
       const go = e.target.closest('.gf-art') ? 'album' : e.target.closest('[data-go]')?.dataset.go;
       if (go === 'album') { openAlbumForTrack(items[i]); return; }
       if (go === 'artist') { showArtistTracks(getArtistField(items[i].fields || {})); return; }
-      state.playlistContext = { tracks: items, currentIndex: i, name: 'Global Favourites', playFn: playTrack };
-      playTrack(items[i]);
+      // The song plays inside its album and Now Playing shows it (Ian, 2026-11-20: "what is
+      // playing must be displayed").
+      playSongInAlbum(items[i]);
     };
     wrap.hidden = false;
   } catch (err) {

@@ -5,10 +5,9 @@
 // The design's rule applies: nothing invented. A row shows the track's own title and artist and a
 // progress bar — never a "time left" guess (per-track position and duration are real here, but the
 // bar is what the design specifies). Guests hear 30-second previews, so they always start at 0.
-import { elements, state } from './state.js?v=54';
-import { getArtworkUrl, getTitleField, getArtistField, escapeHtml } from './fields.js?v=54';
-import { playTrack } from './player.js?v=54';
-import { openAlbumForTrack } from './cards.js?v=54';
+import { elements, state } from './state.js?v=55';
+import { getArtworkUrl, getTitleField, getArtistField, escapeHtml } from './fields.js?v=55';
+import { openAlbumForTrack, playSongInAlbum } from './cards.js?v=55';
 
 const KEY = 'mad_continue_v1';
 const MAX = 12;
@@ -92,8 +91,9 @@ export function initContinue() {
       const track = { recordId: row.recordId, fields: { ...row.fields } };
       // The cover opens the song's album; the rest of the card resumes the song.
       if (e.target.closest('.cont-art')) { openAlbumForTrack(track); return; }
-      state.playlistContext = { tracks: [track], currentIndex: 0, name: 'Pick up where you left off', playFn: playTrack };
-      playTrack(track);
+      // The song plays inside its album and Now Playing shows it (Ian, 2026-11-20: "what is
+      // playing must be displayed").
+      playSongInAlbum(track);
       resumeAt(row);
     });
   }
