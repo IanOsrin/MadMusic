@@ -632,10 +632,11 @@
       // What plays when the music runs out (Ian, 2026-11-16): the next Suggested for You album,
       // then the Themes playlist for the genre, then the last Themes playlist, then random songs
       // (js/next-music.js has the order). Resolves to { ids, source }.
-      async function _musicAfter(lastId) {
+      // opts.album: what ended was an album or a single, so the same artist's next album comes first.
+      async function _musicAfter(lastId, opts) {
         const genre = await _genreOf(lastId);
         const NM = window.MADNextMusic;
-        const pick = NM ? await NM.pick({ lastId, genre }).catch(() => null) : null;
+        const pick = NM ? await NM.pick({ lastId, genre, album: !!(opts && opts.album) }).catch(() => null) : null;
         if (pick && pick.items && pick.items.length) {
           const ids = pick.items.map((it) => { itemsStore.set(it.recordId, it); return it.recordId; });
           return { ids, source: pick.source, name: pick.name, album: pick.album, genre };

@@ -233,3 +233,28 @@ describe('New Releases opens the whole album', () => {
     expect(read('cards.js')).toMatch(/function openWholeAlbum[\s\S]{0,160}fetchFullAlbum\(album\)/);
   });
 });
+
+// Banner → song plays → the rest of ITS album plays in order, not other music (Ian,
+// 2026-11-20). The song lookup names the album; both apps queue that album.
+describe('a banner song plays on through its own album', () => {
+  const read = (f) => readFileSync(join(mobileDir, f), 'utf8');
+  const appHtml = readFileSync(join(root, 'public', 'app.html'), 'utf8');
+  const stream = readFileSync(join(root, 'routes', 'stream.js'), 'utf8');
+  it('the song lookup returns its catalogue number (fresh and cached)', () => {
+    expect(stream).toMatch(/const catalogue\s*=\s*getFieldValue\('Reference Catalogue Number'\)/);
+    expect(stream).toMatch(/catalogue: cached\.catalogue/);
+    expect(stream).toMatch(/res\.json\([\s\S]{0,200}catalogue, albumTitle, albumArtist/);
+  });
+  it('phone: the track banner swaps its one-song queue for the album', () => {
+    const fn = extractFn(read('hero.js'), 'editorialAction');
+    expect(fn).toMatch(/playTrack\(track\);\s*[\s\S]{0,400}queueBannerAlbum\(track\)/);
+    const q = extractFn(read('hero.js'), 'queueBannerAlbum');
+    expect(q).toMatch(/\/api\/album\?cat=/);
+    expect(q).toMatch(/currentIndex: idx/);
+    expect(q).toMatch(/state\.currentTrack !== track/);   // never hijack a song the listener moved on to
+  });
+  it('desktop: the track banner plays from its row on the album page', () => {
+    expect(appHtml).toMatch(/d\.catalogue && await playOnAlbumPage\(d\.catalogue, d\.albumTitle, d\.albumArtist, id\)/);
+    expect(extractFn(appHtml, 'playOnAlbumPage')).toMatch(/openAlbumByCatalogue[\s\S]*row\.click\(\)/);
+  });
+});

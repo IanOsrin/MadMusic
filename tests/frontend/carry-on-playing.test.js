@@ -23,7 +23,7 @@ describe('music carries on when a song ends', () => {
 
   it('a banner song drops any earlier queue, so an old album cannot resume after it', () => {
     const hero = app.slice(app.indexOf('function editorialAction(it)'));
-    expect(hero.slice(0, 2000)).toMatch(/window\.MADClaimQueue\(null\);\s*\n\s*\/\/ In guest mode/);
+    expect(hero.slice(0, 3000)).toMatch(/window\.MADClaimQueue\(null\);\s*\n\s*\/\/ In guest mode/);
   });
 
   it('a card play runs on through its rail', () => {
@@ -41,7 +41,7 @@ describe('music carries on when a song ends', () => {
   });
 
   it('a banner song supplies its genre, on both desktop and phone', () => {
-    expect(stream).toMatch(/const \{ url, field, artworkUrl, genre, _cached \} = resolved;/);
+    expect(stream).toMatch(/const \{ url, field, artworkUrl, genre, catalogue, albumTitle, albumArtist, _cached \} = resolved;/);
     expect(player).toMatch(/\/container'\);\s*\n\s*if \(r\.ok\) genre = /);
     expect(phone).toMatch(/\/container`\);\s*\n\s*if \(r\.ok\) genre = /);
   });
@@ -57,7 +57,7 @@ const THEMES = [{ name: 'Maskandi' }, { name: 'House' }, { name: 'Gospel Spirit 
 const song = (id) => ({ recordId: String(id), fields: { 'Track Name': 't' + id, S3_URL: 'https://media.example/' + id + '.mp3' } });
 const themeTrack = (id) => ({ recordId: String(id), name: 't' + id, resolvedSrc: 'https://media.example/' + id + '.mp3' });
 
-function loadPicker({ rail = [], albums = {}, playlists = {}, guest = false, store = {} } = {}) {
+function loadPicker({ rail = [], albums = {}, playlists = {}, guest = false, store = {}, tracks = {}, artists = {} } = {}) {
   const calls = [];
   const win = {
     __PERSONAL_RAIL: true,
@@ -70,6 +70,9 @@ function loadPicker({ rail = [], albums = {}, playlists = {}, guest = false, sto
     const u = new URL(url, 'http://x');
     if (u.pathname === '/api/suggested-for-you') return json({ eligible: rail.length > 0, items: rail });
     if (u.pathname === '/api/album') return json({ ok: true, items: albums[u.searchParams.get('cat')] || [] });
+    const tm = u.pathname.match(/^\/api\/track\/([^/]+)\/container$/);
+    if (tm) return tracks[tm[1]] ? json({ ok: true, ...tracks[tm[1]] }) : Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
+    if (u.pathname === '/api/search') return json({ items: artists[u.searchParams.get('artist')] || [] });
     if (u.searchParams.get('category') === 'Theme') return json({ playlists: THEMES });
     const name = u.searchParams.get('name');
     return json({ ok: true, tracks: playlists[name] || [] });
@@ -86,9 +89,9 @@ const RAIL = [
 
 describe('what plays when the music runs out', () => {
   it('both sites ask the shared picker before random songs', () => {
-    expect(app).toMatch(/MP\.musicAfter\(lastId\)/);
+    expect(app).toMatch(/MP\.musicAfter\(lastId, \{ album: albumEnded \}\)/);
     expect(player).toMatch(/musicAfter:\s*_musicAfter/);
-    expect(phone).toMatch(/window\.MADNextMusic\.pick\(\{ lastId, genre \}\)/);
+    expect(phone).toMatch(/window\.MADNextMusic\.pick\(\{ lastId, genre, album: queueIsOneAlbum\(ctx\) \}\)/);
     expect(app).toMatch(/<script src="\/js\/next-music\.js\?v=\d+"><\/script>/);
     expect(read('public/mobile.html')).toMatch(/<script src="\/js\/next-music\.js\?v=\d+"><\/script>/);
   });
@@ -179,5 +182,86 @@ describe('the screen follows the music', () => {
   it('the phone starts a new, named queue, so Now Playing says where the music is from', () => {
     expect(phone).toMatch(/state\.playlistContext = \{ tracks: more, currentIndex: 0, name, playFn: playTrack \};/);
     expect(phone).not.toMatch(/ctx\.tracks\.push\(\.\.\.more\)/);
+  });
+});
+
+// Ian, 2026-11-20: "at the end of any album no matter the origin play the next album from the
+// same artist if available otherwise the rules remain ... do not repeat an album when we complete
+// the catalogue we use the rules of suggested etc".
+describe('when an album ends: the same artist next, never an album twice', () => {
+  // One song per album is enough for the artist listing; each album's songs come from /api/album.
+  const listed = (cat, album, year, artist = 'Mambazo') => ({ recordId: 'L' + cat, fields: {
+    'Reference Catalogue Number': cat, 'Album Title': album, 'Album Artist': artist, 'Year of Release': String(year) } });
+  const ARTIST = {
+    Mambazo: [listed('M3', 'Third', 1990), listed('M1', 'First', 1973), listed('M2', 'Second', 1985),
+      listed('X9', 'Guest spot', 1988, 'Someone Else')],
+  };
+  const ALBUMS = { M1: [song(11), song(12)], M2: [song(21)], M3: [song(31)], X9: [song(91)], C1: [song(1)], C2: [song(3)] };
+  const TRACKS = {
+    12: { catalogue: 'M1', albumTitle: 'First', albumArtist: 'Mambazo' },
+    21: { catalogue: 'M2', albumTitle: 'Second', albumArtist: 'Mambazo' },
+    31: { catalogue: 'M3', albumTitle: 'Third', albumArtist: 'Mambazo' },
+    1:  { catalogue: 'C1', albumTitle: 'A', albumArtist: 'x' },
+    5:  { catalogue: 'V1', albumTitle: 'Hits', albumArtist: 'Various Artists' },
+  };
+
+  it('plays the artist\'s next album by release year, then round to the earlier ones', async () => {
+    const { NM } = loadPicker({ tracks: TRACKS, artists: ARTIST, albums: ALBUMS });
+    const a = await NM.pick({ lastId: '21', album: true });       // Second (1985) ended
+    expect(a.source).toBe('artist');
+    expect(a.name).toBe('Third');                                  // 1990
+    const b = await NM.pick({ lastId: '31', album: true });       // Third ended
+    expect(b.name).toBe('First');                                  // round to 1973
+    expect(a.album.catalogue).toBe('M3');
+  });
+
+  it('only the album artist\'s own albums — not a song of theirs on someone else\'s album', async () => {
+    const { NM } = loadPicker({ tracks: TRACKS, artists: ARTIST, albums: ALBUMS });
+    const names = [];
+    for (const id of ['12', '21', '31']) { const r = await NM.pick({ lastId: id, album: true }); if (r) names.push(r.name); }
+    expect(names).not.toContain('Guest spot');
+  });
+
+  it('when the artist\'s catalogue is done, the Suggested rules take over — and skip albums already played', async () => {
+    const rail = [{ album: 'Third', artist: 'Mambazo', catalogue: 'M3', artworkSrc: 'x.jpg' }, ...RAIL];
+    const { NM } = loadPicker({ tracks: TRACKS, artists: ARTIST, albums: ALBUMS, rail });
+    expect((await NM.pick({ lastId: '12', album: true })).name).toBe('Second');
+    expect((await NM.pick({ lastId: '21', album: true })).name).toBe('Third');
+    const r = await NM.pick({ lastId: '31', album: true });        // every Mambazo album played
+    expect(r.source).toBe('suggested');
+    expect(r.name).toBe('A');                                      // Third, on the rail too, is not repeated
+  });
+
+  it('a playlist that ends keeps the rules (no same-artist step)', async () => {
+    const { NM, calls } = loadPicker({ tracks: TRACKS, artists: ARTIST, albums: ALBUMS, rail: RAIL });
+    expect((await NM.pick({ lastId: '21' })).source).toBe('suggested');
+    expect(calls.some((u) => u.includes('/api/search'))).toBe(false);
+  });
+
+  it('a compilation goes straight to the rules', async () => {
+    const { NM, calls } = loadPicker({ tracks: TRACKS, artists: ARTIST, albums: ALBUMS, rail: RAIL });
+    expect((await NM.pick({ lastId: '5', album: true })).source).toBe('suggested');
+    expect(calls.some((u) => u.includes('/api/search'))).toBe(false);
+  });
+
+  it('a Suggested album that has ended is followed by its artist\'s next album', async () => {
+    const rail = [{ album: 'First', artist: 'Mambazo', catalogue: 'M1', artworkSrc: 'x.jpg' }];
+    const { NM } = loadPicker({ tracks: TRACKS, artists: ARTIST, albums: ALBUMS, rail });
+    expect((await NM.pick({ lastId: '99' })).name).toBe('First');  // from the rail
+    expect((await NM.pick({ lastId: '12', album: true })).name).toBe('Second');
+  });
+
+  it('guests skip the artist step (the song lookup is subscriber-only)', async () => {
+    const { NM, calls } = loadPicker({ guest: true, tracks: TRACKS, artists: ARTIST, albums: ALBUMS });
+    await NM.pick({ lastId: '21', album: true });
+    expect(calls.some((u) => u.includes('/container'))).toBe(false);
+  });
+
+  it('both sites say when an album ended', () => {
+    expect(app).toMatch(/var albumEnded = !endedQ \|\| !!endedQ\.album;/);
+    expect(app).toMatch(/autoEnded: true,\s*\n\s*album: true,/);         // the album page's queue
+    expect(app).toMatch(/found\.source === 'suggested' \|\| found\.source === 'artist'\) && found\.album/);
+    expect(player).toMatch(/NM\.pick\(\{ lastId, genre, album: !!\(opts && opts\.album\) \}\)/);
+    expect(phone).toMatch(/export function queueIsOneAlbum\(ctx\)/);
   });
 });

@@ -187,7 +187,8 @@ export async function resolveTrackAudio(recordId, layout = FM_LAYOUT, { requeste
   const cacheKey = `${layout}::${recordId}`;
   const cached = containerUrlCache.get(cacheKey);
   if (cached) {
-    return { ok: true, url: cached.url, field: cached.field, artworkUrl: cached.artworkUrl || '', genre: cached.genre || '', _cached: true };
+    return { ok: true, url: cached.url, field: cached.field, artworkUrl: cached.artworkUrl || '', genre: cached.genre || '',
+      catalogue: cached.catalogue || '', albumTitle: cached.albumTitle || '', albumArtist: cached.albumArtist || '', _cached: true };
   }
 
   // Read-through fallback (May-17): featured/trending/g100 pre-warm already
@@ -271,10 +272,15 @@ export async function resolveTrackAudio(recordId, layout = FM_LAYOUT, { requeste
   // Cache the resolved URLs so repeat plays skip the FileMaker lookup
   // The genre tells "carry on playing" what to queue after a song with no list behind it.
   const genre = getFieldValue('Local Genre') || getFieldValue('Song Files::Local Genre');
+  // The album the song is on, so a banner song can play on inside its own album (Ian,
+  // 2026-11-20: "if there are more songs on the album it must play those songs").
+  const catalogue   = getFieldValue('Reference Catalogue Number') || getFieldValue('Tape Files::Reference Catalogue Number');
+  const albumTitle  = getFieldValue('Album Title') || getFieldValue('Tape Files::Album Title');
+  const albumArtist = getFieldValue('Album Artist') || getFieldValue('Tape Files::Album Artist');
 
-  containerUrlCache.set(cacheKey, { url: containerUrl, field: chosenField || requestedField || '', artworkUrl, genre });
+  containerUrlCache.set(cacheKey, { url: containerUrl, field: chosenField || requestedField || '', artworkUrl, genre, catalogue, albumTitle, albumArtist });
 
-  return { ok: true, url: containerUrl, field: chosenField || requestedField || '', artworkUrl, genre };
+  return { ok: true, url: containerUrl, field: chosenField || requestedField || '', artworkUrl, genre, catalogue, albumTitle, albumArtist };
 }
 
 router.get('/track/:recordId/container', async (req, res) => {
@@ -312,10 +318,10 @@ router.get('/track/:recordId/container', async (req, res) => {
       return;
     }
 
-    const { url, field, artworkUrl, genre, _cached } = resolved;
+    const { url, field, artworkUrl, genre, catalogue, albumTitle, albumArtist, _cached } = resolved;
     res.json(_cached
-      ? { ok: true, url, field, artworkUrl, genre, _cached: true }
-      : { ok: true, url, field, artworkUrl, genre });
+      ? { ok: true, url, field, artworkUrl, genre, catalogue, albumTitle, albumArtist, _cached: true }
+      : { ok: true, url, field, artworkUrl, genre, catalogue, albumTitle, albumArtist });
   } catch (err) {
     console.error('[MASS] Container refresh failed:', err);
     res.status(500).json({ ok: false, error: 'Failed to refresh container' });

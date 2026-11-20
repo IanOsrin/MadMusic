@@ -1,8 +1,8 @@
 // Playback engine + now-playing modal for the mobile app.
 
-import { elements, state } from './state.js?v=51';
-import { formatTime, generateSessionId, showToast } from './util.js?v=51';
-import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getGenreField, getTitleField, getYearField } from './fields.js?v=51';
+import { elements, state } from './state.js?v=54';
+import { formatTime, generateSessionId, showToast } from './util.js?v=54';
+import { escapeHtml, getAlbumField, getArtistField, getArtworkUrl, getAudioUrl, getGenreField, getTitleField, getYearField } from './fields.js?v=54';
 
 export function closeModal() {
       elements.modalOverlay.classList.remove('show');
@@ -253,6 +253,20 @@ export function stepQueue(dir) {
       }
     }
 
+// True when every song in the queue is from one album (catalogue number, else title + album
+// artist). Saved-playlist songs carry no catalogue fields, so a saved playlist never counts.
+export function queueIsOneAlbum(ctx) {
+  const tracks = (ctx && ctx.tracks) || [];
+  if (!tracks.length || !tracks.every((t) => t && t.fields)) return false;
+  const keyOf = (t) => {
+    const f = t.fields;
+    const cat = String(f['Reference Catalogue Number'] || f['Tape Files::Reference Catalogue Number'] || '').replace(/\s+/g, '').toLowerCase();
+    return cat ? 'c:' + cat : 'a:' + String(getAlbumField(f) || '').trim().toLowerCase() + '|' + String(f['Album Artist'] || f['Tape Files::Album Artist'] || '').trim().toLowerCase();
+  };
+  const first = keyOf(tracks[0]);
+  return tracks.every((t) => keyOf(t) === first);
+}
+
 let refilling = false;
 async function continueWithMore(ctx) {
   if (refilling) return;
@@ -271,8 +285,10 @@ async function continueWithMore(ctx) {
     // Suggested for You album, then the Themes playlist for the genre, then the last Themes
     // playlist. An album or playlist plays whole; random songs skip ones already queued.
     const lastId = String(last.recordId || last.trackRecordId || '');
+    // An album (or a single) just ended — every song on one album — so the same artist's next
+    // album comes first (Ian, 2026-11-20). A playlist mixes albums and keeps the rules.
     const pick = window.MADNextMusic
-      ? await window.MADNextMusic.pick({ lastId, genre }).catch(() => null)
+      ? await window.MADNextMusic.pick({ lastId, genre, album: queueIsOneAlbum(ctx) }).catch(() => null)
       : null;
     let more = pick && pick.items ? pick.items.filter((t) => String(t.recordId) !== lastId) : [];
     const fromPick = more.length > 0;
