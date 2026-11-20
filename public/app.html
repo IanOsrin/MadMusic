@@ -4551,7 +4551,11 @@
         function stillOurs() { return player.src === src && (force || player.ended) && !_shuffling(); }
         if (!stillOurs()) return;
         _carryBusy = true;
-        MP.musicAfter(lastId).then(function (found) {
+        // An album page (or a song with no list behind it, like a banner single) → the same
+        // artist's next album comes first (Ian, 2026-11-20). Playlists and rails keep the rules.
+        var endedQ = window.MADQueue;
+        var albumEnded = !endedQ || !!endedQ.album;
+        MP.musicAfter(lastId, { album: albumEnded }).then(function (found) {
           if (!stillOurs()) return;
           var others = found.ids.filter(function (id) { return id !== lastId; });
           // An album or playlist plays whole; only random songs skip ones already heard.
@@ -4563,6 +4567,7 @@
           return _playOnPage(found, fresh, stillOurs).then(function (shown) {
             if (shown || !stillOurs()) return;
             var q = _songQueue(fresh, 0);       // no page to show it on: play it anyway
+            q.album = found.source === 'suggested' || found.source === 'artist';
             window.MADClaimQueue(q);
             q.playAt(0);
           });
@@ -4591,7 +4596,7 @@
       }
       function _playOnPage(found, ids, stillOurs) {
         var MP = window.MADPlayer;
-        if (found.source === 'suggested' && found.album && found.album.catalogue && typeof window.openAlbumByCatalogue === 'function') {
+        if ((found.source === 'suggested' || found.source === 'artist') && found.album && found.album.catalogue && typeof window.openAlbumByCatalogue === 'function') {
           var a = found.album;
           return Promise.resolve(window.openAlbumByCatalogue(a.catalogue, a.album, a.artist)).then(function (ok) {
             if (!ok) return false;
@@ -5390,6 +5395,7 @@
               window.MADQueue = {
                 idx: trackIndex,
                 autoEnded: true,
+                album: true,      // when it runs out, the same artist's next album plays
                 playAt: (i) => {
                   const rows = trackList.querySelectorAll('.playlist-track-item');
                   if (!rows[i]) return false;
@@ -7112,7 +7118,7 @@
   </script>
 
   <script src="/js/helpers.js?v=4"></script>
-  <script src="/js/next-music.js?v=1"></script>
+  <script src="/js/next-music.js?v=2"></script>
   <script src="/js/auth.js?v=2"></script>
   <script src="/js/player.js?v=6"></script>
   <script src="/js/playlists.js?v=1"></script>
@@ -7440,6 +7446,26 @@
     if (prevBtn) prevBtn.addEventListener('click', function (e) { e.stopPropagation(); goTo(idx - 1); });
     if (nextBtn) nextBtn.addEventListener('click', function (e) { e.stopPropagation(); goTo(idx + 1); });
 
+    // Open an album page by catalogue and click the row for recordId. Resolves true once
+    // the row was clicked; false when the album or that song isn't on the page (the
+    // caller then plays the song on its own).
+    function playOnAlbumPage(cat, title, artist, recordId) {
+      if (typeof window.openAlbumByCatalogue !== 'function') return Promise.resolve(false);
+      return Promise.resolve(window.openAlbumByCatalogue(cat, title, artist)).then(function (ok) {
+        if (!ok) return false;
+        return new Promise(function (resolve) {
+          var tries = 0;
+          (function look() {
+            var rows = Array.prototype.slice.call(document.querySelectorAll('#playlistTrackList .playlist-track-item'));
+            var row = rows.filter(function (r) { return r.dataset.recordId === String(recordId); })[0];
+            if (row) { row.click(); return resolve(true); }
+            if (++tries > 50) return resolve(false);   // ~5 s: the song isn't listed on its album page
+            setTimeout(look, 100);
+          })();
+        });
+      }).catch(function () { return false; });
+    }
+
     // Editorial target → action. album/playlist targets are Phase 2 (no
     // open-by-recordId path in v2.1 yet) — they fall through to no-op + warn.
     function editorialAction(it) {
@@ -7458,16 +7484,22 @@
         // use for exactly the same reason.
         if (t === 'track' && id) {
           var meta = { recordId: id, title: it.title || '', artist: it.eyebrow || '', artUrl: '' };
-          var url = '';
+          var url = '', d = null;
           if (!window.__GUEST) {
             try {
               var r = await fetch('/api/track/' + encodeURIComponent(id) + '/container');
-              var d = await r.json();
+              d = await r.json();
               if (d && d.url) url = '/api/container?u=' + encodeURIComponent(d.url) + '&proxy=1';
               if (d && d.artworkUrl) meta.artUrl = d.artworkUrl;
               if (d && d.leadSilence) meta.leadSilence = parseFloat(d.leadSilence) || 0;
             } catch (e) { /* guests and failures fall through to the preview */ }
           }
+          // Banner → song plays → the REST OF ITS ALBUM plays in order (Ian, 2026-11-20:
+          // "if there are more songs on the album it must play those songs not random other
+          // ones"). Open the song's album page and play it from its own row: the album page
+          // then owns Next/Previous and the end-of-song advance, exactly as when a listener
+          // clicks a song there. Only after the album's last song does the bar carry on.
+          if (d && d.catalogue && await playOnAlbumPage(d.catalogue, d.albumTitle, d.albumArtist, id)) return;
           if (window._PLAYER && window._PLAYER.playTrack) {
             // Nothing queued behind a banner song: the player bar carries on after it.
             window.MADClaimQueue(null);
