@@ -41,7 +41,7 @@ S3 location for editorial masters: `s3://mass-music-audio-files/editorial/<short
 
 ## 4. Data contract
 
-Primary: `GET /api/featured-editorial?limit=6` → `{ source: 'fm'|'fallback', items: [{ title, eyebrow, imageUrl, targetType: track|album|playlist|external, targetId, ctaLabel, sortOrder }] }`
+Primary: `GET /api/featured-editorial?limit=10` (up to 10 slides) → `{ source: 'fm'|'fallback', items: [{ title, eyebrow, imageUrl, targetType: track|album|playlist|external, targetId, ctaLabel, sortOrder }] }`
 - Served from FM layout `API_Hero_Featured` (fields: Title, Eyebrow, Image_S3_URL, Target_Type, Target_ID, CTA_Label, Sort_Order, Active, Start_Date, End_Date).
 - SWR-cached 60 s — editorial changes go live within a minute; FM outage serves last good value. **Never a direct FM call on the request path.**
 - Feature flag: `EDITORIAL_HERO_ENABLED` (default off until the FM layout exists). When off or empty → frontend falls back to `/api/new-releases` slides using the square-art treatment (rule 3).

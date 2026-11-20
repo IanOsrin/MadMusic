@@ -9,7 +9,7 @@
  * Feature flag: EDITORIAL_HERO_ENABLED=true  (default OFF — the FM layout may
  * not exist yet; see docs/banners.md §5).
  *
- * GET /api/featured-editorial?limit=6
+ * GET /api/featured-editorial?limit=10
  *   → { ok, source: 'live'|'fallback', items: [{ heroId, title, eyebrow,
  *        imageUrl, targetType, targetId, ctaLabel, textBaked, order }] }
  */
@@ -80,7 +80,7 @@ const heroSwr = createSwrCache({
 
 router.get('/featured-editorial', async (req, res) => {
   res.setHeader('Cache-Control', 'public, s-maxage=60, max-age=60, stale-while-revalidate=300');
-  const limit = Math.max(1, Math.min(10, Number.parseInt(req.query.limit, 10) || 6));
+  const limit = Math.max(1, Math.min(10, Number.parseInt(req.query.limit, 10) || 10));
   if (!ENABLED) return res.json({ ok: true, source: 'fallback', items: [] });
   try {
     const result = await heroSwr.get('default');
