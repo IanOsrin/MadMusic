@@ -53,8 +53,8 @@
       const tooSmall = amount < min;
       fx.disabled = tooSmall;
       fx.querySelector('[data-fx-sub]').textContent = tooSmall
-        ? `From R${(min / 100).toFixed(2)} — please use Pay in Rand for this pass`
-        : 'Dollars, pounds, euros & more · Stripe';
+        ? `From R${(min / 100).toFixed(2)} · use Pay in Rand for this one`
+        : 'Dollars, pounds, euros · Stripe';
     }
 
     function renderPaymentPlans(plans) {
@@ -67,11 +67,22 @@
         <div class="plan-option ${plan.id === selectedPlan ? 'selected' : ''}" data-plan="${plan.id}" data-plan-type="one-time">
           <div class="plan-info">
             <div class="plan-name">${plan.label}</div>
-            <div class="plan-duration">${plan.days} ${plan.days === 1 ? 'day' : 'days'} of unlimited streaming</div>
+            <div class="plan-duration">Pay once</div>
           </div>
           <div class="plan-price" data-zar-cents="${plan.amount}" data-zar-display="${plan.display}">${plan.display}</div>
         </div>
       `).join('');
+
+      // The monthly plan is the fourth tile in the same row (Ian, 2026-11-20: "tidy up the
+      // subscription block so everything fits without scrolling"). Moving the node keeps its
+      // click handler; its old full-width row (#subscriptionOption) is left empty and hidden.
+      const monthlyTile = document.getElementById('subscriptionPlanCard');
+      if (monthlyTile) {
+        plansContainer.appendChild(monthlyTile);
+        plansContainer.classList.add('with-monthly');
+        const oldRow = document.getElementById('subscriptionOption');
+        if (oldRow) oldRow.hidden = true;
+      }
 
       // Inject local-currency hints once geolocation + exchange rate are ready
       if (window.MADCurrency) {
@@ -84,7 +95,18 @@
         .then(data => {
           if (data.ok && data.plan) {
             const priceEl = document.getElementById('subscriptionPlanPrice');
-            if (priceEl) priceEl.textContent = data.plan.display || 'Monthly';
+            if (priceEl) {
+              // "R39.99/Month" → the amount large, "/month" small, so it fits a tile.
+              const display = String(data.plan.display || 'Monthly');
+              const m = display.match(/^(.*?)\s*\/\s*(\w+)$/);
+              priceEl.textContent = m ? m[1] : display;
+              if (m) {
+                const per = document.createElement('span');
+                per.className = 'plan-per';
+                per.textContent = `/${m[2].toLowerCase()}`;
+                priceEl.appendChild(per);
+              }
+            }
           }
         })
         .catch(() => {}); // non-fatal

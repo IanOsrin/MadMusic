@@ -197,14 +197,14 @@
       '<button type="button" class="pay-choice-btn pay-choice-rand" data-basket-pay="paystack">' +
         '<span class="pay-choice-glyph" aria-hidden="true">R</span>' +
         '<span class="pay-choice-text"><span class="pay-choice-title">Pay ' + rands(totalRands) + ' in Rand</span>' +
-        '<span class="pay-choice-sub">South African cards &amp; more &middot; Paystack</span></span>' +
+        '<span class="pay-choice-sub">SA cards &amp; more &middot; Paystack</span></span>' +
         '<span class="pay-choice-arrow" aria-hidden="true">&rarr;</span></button>' +
       '<button type="button" class="pay-choice-btn pay-choice-fx" data-basket-pay="stripe"' + (tooSmall ? ' disabled' : '') + '>' +
         '<span class="pay-choice-glyph" aria-hidden="true">$&thinsp;&euro;&thinsp;&pound;</span>' +
         '<span class="pay-choice-text"><span class="pay-choice-title">Pay in Your Choice of Currency</span>' +
         '<span class="pay-choice-sub">' + (tooSmall
           ? 'From ' + rands(min / 100) + ' — add a track or two, or pay in Rand'
-          : 'Dollars, pounds, euros &amp; more &middot; Stripe') + '</span></span>' +
+          : 'Dollars, pounds, euros &middot; Stripe') + '</span></span>' +
         '<span class="pay-choice-arrow" aria-hidden="true">&rarr;</span></button>' +
     '</div>';
   }

@@ -517,7 +517,7 @@ const PLAN_PAY_CHOICE_HTML = `
       <span class="pay-choice-glyph" aria-hidden="true">R</span>
       <span class="pay-choice-text">
         <span class="pay-choice-title">Pay in Rand</span>
-        <span class="pay-choice-sub">South African cards &amp; more &middot; Paystack</span>
+        <span class="pay-choice-sub">SA cards &amp; more &middot; Paystack</span>
       </span>
       <span class="pay-choice-arrow" aria-hidden="true">&rarr;</span>
     </button>
@@ -525,7 +525,7 @@ const PLAN_PAY_CHOICE_HTML = `
       <span class="pay-choice-glyph" aria-hidden="true">$&thinsp;&euro;&thinsp;&pound;</span>
       <span class="pay-choice-text">
         <span class="pay-choice-title">Pay in Your Choice of Currency</span>
-        <span class="pay-choice-sub" data-fx-sub>Dollars, pounds, euros &amp; more &middot; Stripe</span>
+        <span class="pay-choice-sub" data-fx-sub>Dollars, pounds, euros &middot; Stripe</span>
       </span>
       <span class="pay-choice-arrow" aria-hidden="true">&rarr;</span>
     </button>
@@ -586,8 +586,8 @@ function showPlanPicker(plans, monthly = null, pick = '') {
       rand.disabled = !current;
       fx.disabled = !current || amount < min;
       fx.querySelector('[data-fx-sub]').textContent = current && amount < min
-        ? `From R${(min / 100).toFixed(2)} — please use Pay in Rand for this pass`
-        : 'Dollars, pounds, euros & more · Stripe';
+        ? `From R${(min / 100).toFixed(2)} · use Pay in Rand for this one`
+        : 'Dollars, pounds, euros · Stripe';
     };
     window._updatePlanPayChoice = update;
     for (const row of overlay.querySelectorAll('.plan-row')) {

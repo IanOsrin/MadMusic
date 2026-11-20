@@ -4620,6 +4620,13 @@
     }
     .subscription-option .plan-info { order: 1; align-items: flex-start; }
     .subscription-option .plan-price { order: 2; align-items: flex-end; font-size: 15px; }
+    .subscription-option[hidden] { display: none; }
+    /* Monthly as the fourth tile beside the passes (discovery.js moves it in) */
+    .payment-plans.with-monthly { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 14px; }
+    .plan-per { font-size: 11px; font-weight: 500; color: rgba(255, 255, 255, 0.5); margin-left: 1px; }
+    #subscriptionPlanPrice { flex-direction: row; align-items: baseline; justify-content: center; }
+    /* Two pay buttons side by side need a little more width than the one button did */
+    .payment-modal:has(#payChoice:not([hidden])) { max-width: 640px; }
     .payment-email {
       width: 100%;
       padding: 13px 16px;
@@ -4678,15 +4685,16 @@
     /* ── Pay in Rand / Pay in Your Choice of Currency (PAYMENT_GATEWAY=choice) ── */
     .pay-choice {
       display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
     }
     .pay-choice[hidden] { display: none; }
     .pay-choice-btn {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 11px;
       width: 100%;
-      padding: 12px 16px 12px 12px;
+      padding: 10px 12px 10px 10px;
       border-radius: 14px;
       border: 1px solid rgba(127, 127, 127, 0.28);
       background: rgba(127, 127, 127, 0.08);
@@ -4708,10 +4716,10 @@
       flex: none;
       display: grid;
       place-items: center;
-      min-width: 40px;
-      height: 40px;
-      padding: 0 8px;
-      border-radius: 11px;
+      min-width: 36px;
+      height: 36px;
+      padding: 0 7px;
+      border-radius: 10px;
       background: linear-gradient(135deg, #8b5cf6, #6d28d9);
       font-size: 16px;
       font-weight: 800;
@@ -4730,8 +4738,8 @@
       flex-direction: column;
       gap: 2px;
     }
-    .pay-choice-title { font-size: 15px; font-weight: 700; line-height: 1.25; }
-    .pay-choice-sub { font-size: 12px; opacity: 0.6; line-height: 1.35; }
+    .pay-choice-title { font-size: 14px; font-weight: 700; line-height: 1.25; }
+    .pay-choice-sub { font-size: 11.5px; opacity: 0.6; line-height: 1.3; }
     .pay-choice-arrow {
       flex: none;
       opacity: 0.4;
@@ -4739,6 +4747,7 @@
       transition: transform 0.2s ease, opacity 0.2s ease;
     }
     .pay-choice-btn:hover:not(:disabled) .pay-choice-arrow { transform: translateX(3px); opacity: 1; }
+    .pay-choice .pay-choice-arrow { display: none; }   /* two columns: the whole card is the button */
     .payment-error {
       color: #fda4af;
       font-size: 13px;
@@ -4801,7 +4810,40 @@
     .toggle-link:hover {
       color: #fff;
     }
+    /* Shorter windows: tighten the gate so the plans AND the pay buttons fit without scrolling */
+    @media (max-height: 940px) {
+      .payment-overlay { padding-top: 24px; padding-bottom: 20px; }
+      .gate-brand { margin-bottom: 14px; }
+      .gate-brand img { height: 38px; }
+      .payment-modal h2 { margin-bottom: 6px; }
+      .payment-modal .gate-sub { margin-bottom: 16px; }
+      .gate-tabs { margin-bottom: 14px; }
+      .gate-card { padding: 18px 22px 14px; }
+      .gate-badge { margin-bottom: 12px; }
+      .gate-trust { margin-top: 10px; }
+      .gate-passes { margin-top: 18px; }
+      .gate-passes-label { margin-bottom: 10px; }
+      .plan-option { padding: 10px 6px; }
+      .gate-note { margin-top: 8px; }
+    }
+    /* Short laptop screens (≈720–800 px): tighter still */
+    @media (max-height: 800px) {
+      .payment-overlay { padding-top: 16px; }
+      .gate-brand { margin-bottom: 10px; }
+      .gate-brand img { height: 32px; }
+      .payment-modal h2 { font-size: 30px; }
+      .payment-modal .gate-sub { font-size: 13.5px; margin-bottom: 12px; }
+      .gate-tabs { margin-bottom: 12px; }
+      .gate-card { padding: 14px 20px 12px; }
+      .gate-badge { margin-bottom: 10px; padding: 5px 12px; }
+      .gate-passes { margin-top: 14px; }
+    }
+    /* Guests have the player bar along the bottom: leave room to scroll clear of it */
+    body.guest-mode .payment-overlay { padding-bottom: 84px; }
     @media (max-width: 560px) {
+      .payment-plans.with-monthly { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .pay-choice { grid-template-columns: 1fr; }
+      .pay-choice .pay-choice-arrow { display: inline; }
       .payment-overlay { padding-top: 28px; }
       .payment-plans { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
       .gate-card { padding: 20px 16px 16px; }
