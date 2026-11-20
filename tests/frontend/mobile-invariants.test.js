@@ -245,11 +245,10 @@ describe('a banner song plays on through its own album', () => {
     expect(stream).toMatch(/catalogue: cached\.catalogue/);
     expect(stream).toMatch(/res\.json\([\s\S]{0,200}catalogue, albumTitle, albumArtist/);
   });
-  it('phone: the track banner swaps its one-song queue for the album', () => {
-    const fn = extractFn(read('hero.js'), 'editorialAction');
-    expect(fn).toMatch(/playTrack\(track\);\s*[\s\S]{0,400}queueBannerAlbum\(track\)/);
-    const q = extractFn(read('hero.js'), 'queueBannerAlbum');
-    expect(q).toMatch(/\/api\/album\?cat=/);
+  it('phone: the track banner plays inside its album, with Now Playing open', () => {
+    expect(extractFn(read('hero.js'), 'editorialAction')).toMatch(/playSongInAlbum\(track, it\.title \|\| 'Featured'\)/);
+    const q = extractFn(read('cards.js'), 'queueTrackAlbum');
+    expect(q).toMatch(/\/api\/track\/' \+ encodeURIComponent\(track\.recordId\) \+ '\/container'/);
     expect(q).toMatch(/currentIndex: idx/);
     expect(q).toMatch(/state\.currentTrack !== track/);   // never hijack a song the listener moved on to
   });
@@ -265,5 +264,25 @@ describe('up to 10 hero banners', () => {
     expect(readFileSync(join(root, 'public', 'app.html'), 'utf8')).toMatch(/var DWELL_MS = 6500, MAX_SLIDES = 10;/);
     expect(readFileSync(join(mobileDir, 'hero.js'), 'utf8')).toMatch(/const DWELL_MS = 6500, MAX_SLIDES = 10;/);
     expect(readFileSync(join(root, 'routes', 'featured-editorial.js'), 'utf8')).toMatch(/Math\.min\(10, Number\.parseInt\(req\.query\.limit, 10\) \|\| 10\)/);
+  });
+});
+
+// Ian, 2026-11-20: "when I click to start a song from the front page it must follow the rule that
+// what is playing must be displayed". On the phone a home-screen song plays inside its album and
+// Now Playing opens on it.
+describe('phone: a song started from the home screen is shown in Now Playing, inside its album', () => {
+  const read = (f) => readFileSync(join(mobileDir, f), 'utf8');
+  it('playSongInAlbum plays, opens Now Playing and queues the album', () => {
+    const fn = extractFn(read('cards.js'), 'playSongInAlbum');
+    expect(fn).toMatch(/playTrack\(track\);/);
+    expect(fn).toMatch(/elements\.floatingPlayer\.click\(\)/);
+    expect(fn).toMatch(/queueTrackAlbum\(track\)/);
+  });
+  it('the album lookup never searches by the "Unknown Album" placeholder', () => {
+    expect(extractFn(read('cards.js'), 'queueTrackAlbum')).not.toMatch(/getAlbumField/);
+  });
+  it('Global Favourites and Pick up where you left off use it', () => {
+    expect(read('rails-globalfav.js')).toMatch(/playSongInAlbum\(items\[i\]\);/);
+    expect(read('continue.js')).toMatch(/playSongInAlbum\(track\);\s*\n\s*resumeAt\(row\);/);
   });
 });

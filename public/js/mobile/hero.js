@@ -4,10 +4,9 @@
 // blur behind, contain in front; never stretched, per docs/banners.md).
 // Swipe-driven scroll-snap with dots; auto-advance 6.5s that pauses on touch,
 // when the tab is hidden, and entirely under prefers-reduced-motion.
-import { state } from './state.js?v=54';
-import { getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField } from './fields.js?v=54';
-import { openWholeAlbum, showAlbumTracksModal } from './cards.js?v=54';
-import { playTrack, renderPlayerQueue } from './player.js?v=54';
+import { state } from './state.js?v=55';
+import { getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField } from './fields.js?v=55';
+import { openWholeAlbum, playSongInAlbum, showAlbumTracksModal } from './cards.js?v=55';
 
 const DWELL_MS = 6500, MAX_SLIDES = 10;   // Ian, 2026-11-20: up to 10 banners (was 6)
 const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -88,26 +87,6 @@ function albumSlides(tracks) {
   }));
 }
 
-// Swap a banner song's one-song queue for its whole album (catalogue from the song's own
-// record), keeping the banner song as the current one. Guests can't ask (token-gated).
-async function queueBannerAlbum(track) {
-  if (window.__GUEST) return;
-  try {
-    const r = await fetch('/api/track/' + encodeURIComponent(track.recordId) + '/container');
-    const d = r.ok ? await r.json() : null;
-    if (!d || !d.catalogue) return;
-    const ar = await fetch('/api/album?cat=' + encodeURIComponent(d.catalogue) + '&limit=200');
-    const ad = ar.ok ? await ar.json() : null;
-    const items = (ad && ad.items) || [];
-    window.MADHelpers.sortTracksBySeq(items);
-    const idx = items.findIndex((t) => String(t.recordId) === String(track.recordId));
-    // Only if the listener is still on the banner song, and it is on its album.
-    if (idx < 0 || items.length < 2 || state.currentTrack !== track) return;
-    state.playlistContext = { tracks: items, currentIndex: idx, name: d.albumTitle || getAlbumField(items[idx].fields || {}) || 'Album', playFn: playTrack };
-    renderPlayerQueue();
-  } catch (_) { /* keep the one-song queue */ }
-}
-
 // Editorial target → action, mirroring desktop's editorialAction():
 // external opens; track resolves by recordId and plays (a hero track is never
 // in the rails below, so lookups-by-card would no-op); album finds the
@@ -125,13 +104,10 @@ function editorialAction(it) {
         'Track Name': it.title || '', 'Track Artist': it.eyebrow || '',
         'Album Artist': it.eyebrow || '', 'Artwork_S3_URL': it.imageUrl || '',
       } };
-      state.playlistContext = { tracks: [track], currentIndex: 0, name: it.title || 'Featured', playFn: playTrack };
-      playTrack(track);
       // Banner → song plays → the REST OF ITS ALBUM plays in order (Ian, 2026-11-20: "if
-      // there are more songs on the album it must play those songs not random other ones").
-      // The song starts at once; its album then becomes the queue, so Next/Previous and the
-      // end-of-song advance step through that album before anything else plays.
-      queueBannerAlbum(track);
+      // there are more songs on the album it must play those songs not random other ones"),
+      // and Now Playing shows it ("what is playing must be displayed").
+      playSongInAlbum(track, it.title || 'Featured');
       return;
     }
     if (t === 'album' && id) {

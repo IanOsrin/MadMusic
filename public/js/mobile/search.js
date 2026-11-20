@@ -1,8 +1,8 @@
 // Catalogue search for the mobile app.
 
-import { elements, state } from './state.js?v=54';
-import { groupTracksByAlbum, hasValidArtwork, hasValidAudio, escapeHtml } from './fields.js?v=54';
-import { openFullAlbum, renderAlbumTileGrid } from './cards.js?v=54';
+import { elements, state } from './state.js?v=55';
+import { groupTracksByAlbum, hasValidArtwork, hasValidAudio, escapeHtml } from './fields.js?v=55';
+import { openFullAlbum, renderAlbumTileGrid } from './cards.js?v=55';
 
 export async function search(query) {
       // Needs one word of 3+ letters — the server answers shorter searches with nothing (they
