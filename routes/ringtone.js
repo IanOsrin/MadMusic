@@ -18,6 +18,7 @@
 import { Router } from 'express';
 import { fmCreateRecord, fmFindRecords } from '../fm-client.js';
 import { paystackRequest } from '../lib/paystack.js';
+import { stripeActive, isStripeReference, createOneOffCheckout, verifyCheckout } from '../lib/stripe.js';
 import { isStrictEmail, fmExactMatch } from '../lib/validators.js';
 
 const router = Router();
@@ -95,21 +96,34 @@ router.post('/initiate', async (req, res) => {
       ? `${APP_BASE}/api/ringtone/callback`
       : `${req.protocol}://${req.get('host')}/api/ringtone/callback`;
 
-    const data = await paystackRequest('POST', '/transaction/initialize', {
-      email:        email.trim().toLowerCase(),
-      amount:       RINGTONE_PRICE_CENTS,
-      currency:     'ZAR',
-      callback_url: callbackUrl,
-      metadata: {
-        payment_type: 'ringtone',
-        src,
-        name:        name    || '',
-        artist:      artist  || '',
-        artwork:     artwork || '',
-        startSec:    clampedStart,
-        durationSec: clampedDur
-      }
-    });
+    const metadata = {
+      payment_type: 'ringtone',
+      src,
+      name:        name    || '',
+      artist:      artist  || '',
+      artwork:     artwork || '',
+      startSec:    clampedStart,
+      durationSec: clampedDur
+    };
+    let data;
+    if (stripeActive()) {
+      // Stripe (PAYMENT_GATEWAY=stripe): same answer shape as Paystack's initialize.
+      const out = await createOneOffCheckout({
+        email: email.trim().toLowerCase(), amountCents: RINGTONE_PRICE_CENTS,
+        name: `Ringtone — ${name || 'MAD'}`, metadata,
+        successUrl: `${callbackUrl}?reference={CHECKOUT_SESSION_ID}`,
+        cancelUrl: callbackUrl.replace(/\/api\/ringtone\/callback$/, '/ringtone'),
+      });
+      data = { data: { authorization_url: out.url, reference: out.reference } };
+    } else {
+      data = await paystackRequest('POST', '/transaction/initialize', {
+        email:        email.trim().toLowerCase(),
+        amount:       RINGTONE_PRICE_CENTS,
+        currency:     'ZAR',
+        callback_url: callbackUrl,
+        metadata
+      });
+    }
 
     console.log(`[RINGTONE] Payment initiated: ${data.data.reference} — "${name}" for ${email}`);
     return res.json({
@@ -130,8 +144,14 @@ router.get('/callback', async (req, res) => {
   if (!reference) return res.redirect('/ringtone?error=missing_reference');
 
   try {
-    const data     = await paystackRequest('GET', `/transaction/verify/${encodeURIComponent(reference)}`);
-    const tx       = data.data;
+    let tx;
+    if (isStripeReference(reference)) {
+      const v = await verifyCheckout(reference);
+      tx = { status: v.status, metadata: v.metadata, customer: { email: v.email || '' } };
+    } else {
+      const data = await paystackRequest('GET', `/transaction/verify/${encodeURIComponent(reference)}`);
+      tx = data.data;
+    }
     const metadata = tx?.metadata || {};
 
     if (tx?.status !== 'success' || metadata.payment_type !== 'ringtone') {

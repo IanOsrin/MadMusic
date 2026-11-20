@@ -371,6 +371,8 @@ app.use((req, res, next) => {
 
 // Capture raw body for Paystack webhook (must be before express.json)
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
+// Same for Stripe's webhook (its signature is over the exact bytes; routes/payments.js /stripe-webhook).
+app.use('/api/payments/stripe-webhook', express.raw({ type: 'application/json' }));
 // Mad Mixer's internal calls are signed over the exact bytes sent — capture them raw before
 // express.json can parse them (any content type: the signature, not the header, decides).
 if (MIXER_SHARED_SECRET_SET) app.use('/internal/mixer', express.raw({ type: () => true, limit: '16kb' }));
@@ -634,7 +636,7 @@ app.use('/api/', async (req, res, next) => {
     // shown to guests since 2026-07-17 (lives on the G100 page).
     '/global-favorites',
     '/auth', '/payments/initialize', '/payments/subscribe', '/payments/trial', '/payments/callback',
-    '/payments/webhook', '/payments/plans', '/payments/subscription-plan',
+    '/payments/webhook', '/payments/stripe-webhook', '/payments/plans', '/payments/subscription-plan',
     '/contact',   // "Contact us" — must work for people who can't sign in (rate-limited above)
     '/access/stream-events', '/access/logout', '/access/email/', '/health',
     '/tokens/resync', '/tokens/unsynced', '/tokens/clear-trials', '/pg-mirror',

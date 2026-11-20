@@ -26,7 +26,7 @@ describe('Paystack payloads without a customer email', () => {
 
   it('routes every customer email through the validating helper', () => {
     const reads = (payments.match(/customer\?\.email/g) || []).length;
-    const viaHelper = (payments.match(/customerEmail\(\s*(?:data\.data|sub|paymentData)\.customer\?\.email\s*\)/g) || []).length;
+    const viaHelper = (payments.match(/customerEmail\(\s*(?:data\.data|d|sub|paymentData)\.customer\?\.email\s*\)/g) || []).length;
     expect(viaHelper).toBe(reads);
   });
 

@@ -21,6 +21,18 @@ import { pendingPaymentsCache, processedWebhookEventsCache } from '../cache.js';
 import { isStrictEmail } from '../lib/validators.js';
 import { bumpTaster } from '../lib/taster-stats.js';
 import { SUBSCRIPTION_DAYS_MIN, SUBSCRIPTION_DAYS_MAX } from '../lib/constants.js';
+import {
+  stripeActive, isStripeReference, createOneOffCheckout, createSubscriptionCheckout,
+  verifyCheckout, normaliseSession, constructStripeEvent, readInvoice, STRIPE_PLAN_MAD
+} from '../lib/stripe.js';
+
+/** Where this site lives (APP_URL, else the request's own host — trust-proxy aware). */
+function appBase(req) {
+  const APP_BASE = (process.env.APP_URL || process.env.APP_BASE_URL || '').replace(/\/$/, '');
+  return APP_BASE || `${req.protocol}://${req.get('host')}`;
+}
+/** Stripe fills {CHECKOUT_SESSION_ID} in on the way back; it arrives as ?reference=, like Paystack's. */
+const withStripeRef = (url) => `${url}${url.includes('?') ? '&' : '?'}reference={CHECKOUT_SESSION_ID}`;
 
 /**
  * The customer's email from a Paystack payload, or null.
@@ -108,6 +120,21 @@ router.post('/initialize', async (req, res) => {
     const selectedPlan = PAYSTACK_PLANS[plan];
     if (!selectedPlan) {
       return res.status(400).json({ ok: false, error: 'Invalid plan. Choose: 1-day, 7-day, or 30-day' });
+    }
+
+    // Stripe (PAYMENT_GATEWAY=stripe, test site first): same plans, same prices, same return trip.
+    if (stripeActive()) {
+      const isMobile = source === 'mobile';
+      const out = await createOneOffCheckout({
+        email: email.trim().toLowerCase(),
+        amountCents: selectedPlan.amount,
+        name: `MAD — ${selectedPlan.label}`,
+        metadata: { plan_id: plan, plan_label: selectedPlan.label, days: selectedPlan.days, source: isMobile ? 'mobile' : 'desktop' },
+        successUrl: withStripeRef(`${appBase(req)}/api/payments/callback${isMobile ? '?source=mobile' : ''}`),
+        cancelUrl: `${appBase(req)}${isMobile ? '/mobile.html' : '/'}`,
+      });
+      console.log(`[MASS] Stripe checkout opened: ${out.reference} (${plan})`);
+      return res.json({ ok: true, authorization_url: out.url, reference: out.reference });
     }
 
     const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || '';
@@ -304,6 +331,61 @@ function sendWelcomeFor(planCode, email, code) {
   return sendSubscriptionWelcomeEmail(email, code, PAYSTACK_SUBSCRIPTION_PLAN.label);
 }
 
+/**
+ * Paystack's verify answer in the shape lib/stripe.js normaliseSession() gives a Stripe return,
+ * so the callback reads one shape whichever gateway took the money.
+ */
+async function verifyPaystack(reference) {
+  const data = await paystackRequest('GET', `/transaction/verify/${encodeURIComponent(reference)}`);
+  const d = data.data || {};
+  const rawStatus = d.status;
+  const metadata = d.metadata || {};
+  return {
+    status: rawStatus === 'success' ? 'success' : (rawStatus === 'pending' || rawStatus === 'ongoing') ? 'pending' : 'failed',
+    rawStatus,
+    reference,
+    email: customerEmail(d.customer?.email),
+    metadata,
+    isSubscription: metadata.payment_type === 'subscription' || !!d.plan,
+    subscriptionCode: d.subscription_code || null,
+    planCode: d.plan || PAYSTACK_SUBSCRIPTION_PLAN.code,
+    interval: d.plan_object?.interval || 'monthly',
+  };
+}
+
+/**
+ * The code for a subscription's FIRST payment — exactly one per payment, whoever gets here first
+ * (the listener's return, or a webhook). If a code already carries "[ref <this payment>]" in
+ * FileMaker (the JSON copy doesn't survive deploys), that one is returned instead of a second.
+ * from='callback' sends the welcome email fire-and-forget (never block the redirect);
+ * from='webhook' waits for it.
+ */
+async function ensureSubscriptionCode({ reference, email, subscriptionCode, planCode, billingDays, from }) {
+  return withSubscriptionLock(email, planCode, async () => {
+    let existing = null;
+    try {
+      const rec = await findSubscriptionRecord({ email, subscriptionCode, planCode });
+      if (rec && String(rec.fieldData?.Notes || '').includes(`[ref ${reference}]`)) existing = { code: rec.fieldData.Token_Code, existed: true };
+    } catch (err) {
+      if (from !== 'callback') throw err;   // a webhook is retried; a callback must still answer
+      console.warn('[MASS] Subscription callback: FM lookup failed:', err?.message || err);
+    }
+    if (existing) {
+      console.log(`[MASS] Subscription ${from}: token already exists for ${reference}`);
+      return existing;
+    }
+    const made = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays, reference);
+    if (email) {
+      const sending = Promise.resolve(sendWelcomeFor(planCode, email, made.code)).catch((err) =>
+        console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. ref=${reference} token=${made.code} email=${email} error=${err?.message || err}`));
+      if (from !== 'callback') await sending;
+    } else {
+      warnUndeliverable('subscription', made.code, reference);
+    }
+    return made;
+  });
+}
+
 // ── Subscription checkout ─────────────────────────────────────────────────────
 // Initialises a Paystack subscription checkout (uses plan code, not amount).
 router.post('/subscribe', async (req, res) => {
@@ -312,6 +394,19 @@ router.post('/subscribe', async (req, res) => {
 
     if (!isStrictEmail(email)) {
       return res.status(400).json({ ok: false, error: 'Valid email is required' });
+    }
+
+    if (stripeActive()) {
+      const src = source === 'mobile' ? 'mobile' : 'desktop';
+      const out = await createSubscriptionCheckout({
+        email: email.trim().toLowerCase(),
+        planCode: STRIPE_PLAN_MAD,
+        metadata: { source: src },
+        successUrl: withStripeRef(`${appBase(req)}/api/payments/callback?source=${src}&type=subscription`),
+        cancelUrl: `${appBase(req)}${src === 'mobile' ? '/mobile.html' : '/'}`,
+      });
+      console.log(`[MASS] Stripe subscription checkout opened: ${out.reference}`);
+      return res.json({ ok: true, authorization_url: out.url, reference: out.reference });
     }
 
     const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || '';
@@ -392,64 +487,45 @@ router.get('/callback', async (req, res) => {
     // Mark as in-progress immediately to block concurrent requests for the same reference
     pendingPayments.set(reference, { processing: true, timestamp: Date.now() });
 
-    const data = await paystackRequest('GET', `/transaction/verify/${encodeURIComponent(reference)}`);
+    // Stripe returns carry a Checkout Session id (cs_…); everything else is a Paystack reference.
+    const stripeRef = isStripeReference(reference);
+    const gw = stripeRef ? 'Stripe' : 'Paystack';
+    const v = stripeRef ? await verifyCheckout(reference) : await verifyPaystack(reference);
 
-    const verifyStatus = data.data?.status;
-    if (verifyStatus !== 'success') {
+    if (v.status !== 'success') {
       pendingPayments.delete(reference);
       // Async bank authorization (e.g. FNB in-app approval) leaves the charge
       // 'pending'/'ongoing' when the browser returns — that is NOT a failure.
       // The webhook delivers the token once the bank confirms, so show "pending"
       // (and rely on the emailed token) rather than a false "failed".
-      if (verifyStatus === 'pending' || verifyStatus === 'ongoing') {
-        console.log(`[MASS] Payment ${reference} still ${verifyStatus} (awaiting bank auth) — webhook will finalise`);
+      if (v.status === 'pending') {
+        console.log(`[MASS] Payment ${reference} still ${v.rawStatus || 'pending'} (awaiting bank auth) — webhook will finalise`);
         return back(`payment=pending&reason=bank_auth`);
       }
-      console.warn(`[MASS] Payment verification failed for ${reference}: status=${verifyStatus}`);
+      console.warn(`[MASS] Payment verification failed for ${reference}: status=${v.rawStatus || v.status}`);
       return back(`payment=failed&reason=not_successful`);
     }
 
-    const metadata   = data.data.metadata || {};
-    const email      = customerEmail(data.data.customer?.email);
-    const isSubscription = metadata.payment_type === 'subscription' || !!data.data.plan;
+    const metadata   = v.metadata || {};
+    const email      = customerEmail(v.email);
 
     let token;
 
-    if (isSubscription) {
+    if (v.isSubscription) {
       // ── Subscription payment ──────────────────────────────────────────────
-      const subscriptionCode = data.data.subscription_code || null;
-      const planCode         = data.data.plan || PAYSTACK_SUBSCRIPTION_PLAN.code;
-      const interval         = data.data.plan_object?.interval || 'monthly';
-      const billingDays      = SUBSCRIPTION_INTERVAL_DAYS[interval] || 31;
-
-      // If Paystack's webhook already made the code for THIS payment (same reference, found in
-      // FileMaker — the JSON copy doesn't survive deploys), reuse it rather than make a second.
-      token = await withSubscriptionLock(email, planCode, async () => {
-        let existing = null;
-        try {
-          const rec = await findSubscriptionRecord({ email, subscriptionCode, planCode });
-          if (rec && String(rec.fieldData?.Notes || '').includes(`[ref ${reference}]`)) existing = { code: rec.fieldData.Token_Code };
-        } catch (err) { console.warn('[MASS] Subscription callback: FM lookup failed:', err?.message || err); }
-        if (existing) {
-          console.log(`[MASS] Subscription callback: token already exists for ${reference}`);
-          return existing;
-        }
-        const made = await createSubscriptionToken(subscriptionCode, planCode, email, billingDays, reference);
-        // Fire-and-forget: never block the post-payment redirect on email.
-        if (email) {
-          Promise.resolve(sendWelcomeFor(planCode, email, made.code)).catch((err) =>
-            console.error(`[MASS] ⚠️  SUBSCRIPTION EMAIL FAILED. ref=${reference} token=${made.code} email=${email} error=${err?.message || err}`));
-        } else {
-          warnUndeliverable('subscription', made.code, reference);
-        }
-        return made;
+      token = await ensureSubscriptionCode({
+        reference, email,
+        subscriptionCode: v.subscriptionCode,
+        planCode: v.planCode,
+        billingDays: SUBSCRIPTION_INTERVAL_DAYS[v.interval] || 31,
+        from: 'callback',
       });
       console.log(`[MASS] Subscription checkout complete: ${reference} → token ${token.code}`);
     } else {
       // ── One-time purchase ─────────────────────────────────────────────────
       const planId = metadata.plan_id;
       const days   = clampDays(metadata.days, 7);
-      token = await createAccessToken(days, `Paystack purchase: ${planId} (${emailLabel(email)}, ref: ${reference})`, email);
+      token = await createAccessToken(days, `${gw} purchase: ${planId} (${emailLabel(email)}, ref: ${reference})`, email);
       // Fire-and-forget: the token is already returned in the redirect URL, so a
       // slow/failing email must not delay or hang the user's return to the app.
       if (email) {
@@ -669,5 +745,127 @@ router.post('/webhook', async (req, res) => {
     res.sendStatus(500);
   }
 });
+
+// ── Stripe webhook ────────────────────────────────────────────────────────────
+// Stripe's counterpart of /webhook above (which stays — Paystack subscribers keep renewing there).
+// Raw body mounted in server.js. Answers 200 only once an event is fully handled; anything that
+// throws first gets a 500 and Stripe sends it again (for up to three days).
+//
+//   checkout.session.completed / async_payment_succeeded → the code, download or basket
+//       (the safety net for a listener who never came back to the site — same as charge.success)
+//   invoice.paid (billing_reason subscription_cycle)      → a renewal extends the customer's code
+//   customer.subscription.updated (cancel at period end) → noted on the code
+//   customer.subscription.deleted                        → noted; the code runs out at its expiry
+router.post('/stripe-webhook', async (req, res) => {
+  const rawBody = req.body;
+  if (!Buffer.isBuffer(rawBody) && typeof rawBody !== 'string') {
+    console.error('[MASS] Stripe webhook: rawBody is not Buffer/string — likely a middleware ordering bug');
+    return res.status(400).json({ error: 'Webhook body must be raw bytes' });
+  }
+  const event = constructStripeEvent(rawBody, req.headers['stripe-signature']);
+  if (!event) return res.status(400).json({ error: 'Invalid signature' });
+
+  const eventKey = `stripe:${event.id}`;
+  if (processedWebhookEvents.has(eventKey)) return res.sendStatus(200);
+  const ack = () => {
+    processedWebhookEvents.set(eventKey, { at: Date.now(), eventType: event.type });
+    return res.sendStatus(200);
+  };
+  const obj = event.data?.object || {};
+
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded': {
+        const v = normaliseSession(obj);
+        // A delayed payment method still clearing: async_payment_succeeded will follow.
+        if (v.status !== 'success') {
+          console.log(`[MASS] Stripe ${event.type}: ${v.reference} not paid yet (${obj.payment_status})`);
+          return ack();
+        }
+        await fulfilStripeSession(v);
+        return ack();
+      }
+
+      case 'invoice.paid': {
+        const info = readInvoice(obj);
+        if (!info.subscriptionCode) return ack();                        // not a subscription invoice
+        if (info.billingReason === 'subscription_create') return ack();  // month one: the checkout made the code
+        await withSubscriptionLock(info.email, info.planCode, async () => {
+          const rec = await findSubscriptionRecord(info);
+          if (!rec) {
+            console.warn(`[MASS] Stripe invoice.paid: paid, but no MAD code for ${info.email || info.subscriptionCode}`);
+            return;
+          }
+          await linkSubscription(rec, info.subscriptionCode);
+          await extendSubscription(rec, { billingDays: SUBSCRIPTION_INTERVAL_DAYS.monthly, paidAt: info.paidAt, reference: info.reference });
+        });
+        return ack();
+      }
+
+      case 'invoice.payment_failed': {
+        const info = readInvoice(obj);
+        console.warn(`[MASS] Stripe invoice.payment_failed: monthly charge not paid for ${info.email || info.subscriptionCode} (Stripe retries; the code runs out at its expiry if it never succeeds)`);
+        return ack();
+      }
+
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted': {
+        const md = obj.metadata || {};
+        const cancelling = event.type === 'customer.subscription.deleted'
+          || (obj.cancel_at_period_end === true && event.data?.previous_attributes?.cancel_at_period_end === false);
+        if (!cancelling) return ack();
+        const rec = await findSubscriptionRecord({ email: md.email || null, subscriptionCode: obj.id, planCode: md.plan_code || null });
+        if (rec) await noteCancelled(rec, event.type === 'customer.subscription.deleted' ? 'subscription ended' : 'cancelled by customer');
+        console.log(`[MASS] Stripe ${event.type}: ${obj.id}${rec ? ' → ' + rec.fieldData.Token_Code : ' (no code found)'}`);
+        return ack();
+      }
+
+      default:
+        return ack();   // not one we use — acknowledge so Stripe doesn't resend it
+    }
+  } catch (err) {
+    console.error(`[MASS] Stripe webhook error (${event.type} ${event.id}):`, err);
+    return res.sendStatus(500);
+  }
+});
+
+/** A paid Checkout Session, delivered by webhook: whatever the return trip would have made. */
+async function fulfilStripeSession(v) {
+  const { reference, metadata } = v;
+  const email = customerEmail(v.email);
+
+  if (v.isSubscription) {
+    const made = await ensureSubscriptionCode({
+      reference, email, subscriptionCode: v.subscriptionCode, planCode: v.planCode,
+      billingDays: SUBSCRIPTION_INTERVAL_DAYS.monthly, from: 'webhook',
+    });
+    pendingPayments.set(reference, { tokenCode: made.code, timestamp: Date.now() });
+    console.log(`[MASS] Stripe webhook (subscription): ${reference} → ${made.code}${made.existed ? ' (already made)' : ''}`);
+    return;
+  }
+
+  if (metadata.payment_type === 'download' || metadata.payment_type === 'download_basket') {
+    await handleDownloadWebhook({ metadata, customer: { email: v.email || '' } }, reference);
+    return;
+  }
+  // Ringtones are recorded by their own return trip (routes/ringtone.js) — nothing to make here.
+  if (metadata.payment_type === 'ringtone') return;
+
+  if (pendingPayments.has(reference)) {
+    console.log(`[MASS] Stripe webhook: payment ${reference} already processed via callback`);
+    return;
+  }
+  const days = clampDays(metadata.days, 7);
+  const token = await createAccessToken(days, `Stripe webhook: ${metadata.plan_id || 'unknown'} (${emailLabel(email)}, ref: ${reference})`, email);
+  if (email) {
+    try { await sendTokenEmail(email, token.code, days); }
+    catch (err) { console.error(`[MASS] ⚠️  TOKEN EMAIL FAILED. ref=${reference} token=${token.code} email=${email} error=${err?.message || err}`); }
+  } else {
+    warnUndeliverable('access', token.code, reference);
+  }
+  pendingPayments.set(reference, { tokenCode: token.code, timestamp: Date.now() });
+  console.log(`[MASS] Stripe webhook: payment ${reference} → token ${token.code} (${days} days)`);
+}
 
 export default router;

@@ -24,6 +24,7 @@ import {
   AUDIO_FIELD_CANDIDATES
 } from '../lib/fm-fields.js';
 import { paystackRequest } from '../lib/paystack.js';
+import { stripeActive, isStripeReference, createOneOffCheckout, verifyCheckout } from '../lib/stripe.js';
 import { isStrictEmail, fmExactMatch } from '../lib/validators.js';
 import { sendDownloadLinkEmail, sendBasketLinksEmail } from '../lib/email.js';
 import { requireAdminKey } from './admin.js';
@@ -123,6 +124,30 @@ function isPurchaseFresh(fieldData) {
   return ageHours <= DOWNLOAD_LINK_TTL_HOURS;
 }
 
+// ── Stripe (PAYMENT_GATEWAY=stripe) ──────────────────────────────────────────
+// Same answer as Paystack's initialize ({ data: { authorization_url, reference } }), so the routes
+// below and the browser don't change. The reference is the Checkout Session id (cs_…), which is
+// then the purchase's key in FM (Paystack_Reference) and the bearer for /file, exactly as before.
+async function stripeInit({ email, amountCents, name, metadata, callbackUrl }) {
+  const base = callbackUrl.replace(/\/api\/download\/callback$/, '');
+  const out = await createOneOffCheckout({
+    email: email.trim().toLowerCase(), amountCents, name, metadata,
+    successUrl: `${callbackUrl}?reference={CHECKOUT_SESSION_ID}`,
+    cancelUrl: `${base}/`,
+  });
+  return { data: { authorization_url: out.url, reference: out.reference } };
+}
+
+/** The transaction in Paystack's verify shape (status / metadata / customer.email), either gateway. */
+async function verifyDownloadPayment(reference) {
+  if (isStripeReference(reference)) {
+    const v = await verifyCheckout(reference);
+    return { status: v.status, metadata: v.metadata, customer: { email: v.email || '' } };
+  }
+  const data = await paystackRequest('GET', `/transaction/verify/${encodeURIComponent(reference)}`);
+  return data.data;
+}
+
 // ── POST /api/download/initiate ───────────────────────────────────────────────
 // Body: { trackId, trackRecordId, email }
 
@@ -152,19 +177,16 @@ router.post('/initiate', async (req, res) => {
       ? `${APP_BASE}/api/download/callback`
       : `${req.protocol}://${req.get('host')}/api/download/callback`;
 
-    const data = await paystackRequest('POST', '/transaction/initialize', {
-      email:        email.trim().toLowerCase(),
-      amount:       amountCents,
-      currency:     'ZAR',
-      callback_url: callbackUrl,
-      metadata: {
-        payment_type:   'download',
-        trackId,
-        trackRecordId,
-        trackName,
-        price
-      }
-    });
+    const metadata = { payment_type: 'download', trackId, trackRecordId, trackName, price };
+    const data = stripeActive()
+      ? await stripeInit({ email, amountCents, name: `Download — ${trackName}`, metadata, callbackUrl })
+      : await paystackRequest('POST', '/transaction/initialize', {
+        email:        email.trim().toLowerCase(),
+        amount:       amountCents,
+        currency:     'ZAR',
+        callback_url: callbackUrl,
+        metadata
+      });
 
     console.log(`[DOWNLOAD] Payment initialized: ${data.data.reference} — "${trackName}" for ${email}`);
     return res.json({
@@ -224,19 +246,22 @@ router.post('/basket/initiate', async (req, res) => {
       ? `${APP_BASE}/api/download/callback`
       : `${req.protocol}://${req.get('host')}/api/download/callback`;
 
-    const data = await paystackRequest('POST', '/transaction/initialize', {
-      email: email.trim().toLowerCase(),
-      amount: Math.round(total * 100),
-      currency: 'ZAR',
-      callback_url: callbackUrl,
-      metadata: {
-        payment_type: 'download_basket',
-        count: priced.length,
-        // Names ride along so the receipt and the email read properly even if a
-        // track record changes between paying and fulfilment.
-        items: priced.map(i => ({ id: i.trackRecordId, n: i.name.slice(0, 80), a: (i.artist || '').slice(0, 60), p: i.price })),
-      },
-    });
+    const metadata = {
+      payment_type: 'download_basket',
+      count: priced.length,
+      // Names ride along so the receipt and the email read properly even if a
+      // track record changes between paying and fulfilment.
+      items: priced.map(i => ({ id: i.trackRecordId, n: i.name.slice(0, 80), a: (i.artist || '').slice(0, 60), p: i.price })),
+    };
+    const data = stripeActive()
+      ? await stripeInit({ email, amountCents: Math.round(total * 100), name: `Downloads — ${priced.length} track${priced.length === 1 ? '' : 's'}`, metadata, callbackUrl })
+      : await paystackRequest('POST', '/transaction/initialize', {
+        email: email.trim().toLowerCase(),
+        amount: Math.round(total * 100),
+        currency: 'ZAR',
+        callback_url: callbackUrl,
+        metadata,
+      });
 
     console.log(`[DOWNLOAD] Basket initialized: ${data.data.reference} — ${priced.length} tracks, R${total.toFixed(2)} for ${email}`);
     return res.json({
@@ -293,8 +318,7 @@ router.get('/callback', async (req, res) => {
   if (!reference) return res.redirect('/?download=error&reason=missing_reference');
 
   try {
-    const data     = await paystackRequest('GET', `/transaction/verify/${encodeURIComponent(reference)}`);
-    const tx       = data.data;
+    const tx       = await verifyDownloadPayment(reference);
     const metadata = tx?.metadata || {};
 
     const isBasket = metadata.payment_type === 'download_basket';

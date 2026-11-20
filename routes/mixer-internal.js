@@ -49,6 +49,7 @@ import { bpmBySong } from '../lib/mixer-streamer.js';
 import { mixerSamples, mixerLoops } from '../lib/mixer-samples.js';
 import { trialConfirmedCached, startTrial, confirmTrial, mixerTrialLinks } from '../lib/mixer-trial.js';
 import { paystackRequest, PAYSTACK_MIXER_PLAN } from '../lib/paystack.js';
+import { stripeActive, createSubscriptionCheckout, STRIPE_PLAN_MIXER } from '../lib/stripe.js';
 import { isStrictEmail } from '../lib/validators.js';
 import { regStorageConfigured, uploadLink, uploadedBytes, uploadKey, createRegistration, findRegistration, registrationsFor,
   REG_ID_RE, ACCT_RE, AUDIO_FILE_RE, MAX_UPLOAD_BYTES } from '../lib/mixer-registrations.js';
@@ -56,6 +57,16 @@ import { regStorageConfigured, uploadLink, uploadedBytes, uploadKey, createRegis
 // A Paystack checkout for the Mad Mixer plan (2026-10-05). Same shape as MAD's own subscription
 // checkout (routes/payments.js /subscribe), with the Mixer plan and source=mixer on the callback.
 async function startMixerCheckout({ email, appBase }) {
+  if (stripeActive()) {
+    // Stripe (PAYMENT_GATEWAY=stripe): the R99/month plan priced in our code, no plan code needed.
+    const out = await createSubscriptionCheckout({
+      email, planCode: STRIPE_PLAN_MIXER, metadata: { product: 'mixer', source: 'mixer' },
+      successUrl: `${appBase}/api/payments/callback?source=mixer&type=subscription&reference={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${mixerPublicUrl() || appBase}/`,
+    });
+    console.log(`[mixer-internal] Mad Mixer Stripe checkout opened: ${out.reference}`);
+    return { ok: true, url: out.url };
+  }
   const plan = PAYSTACK_MIXER_PLAN.code();
   if (!plan || !process.env.PAYSTACK_SECRET_KEY) return { ok: false, status: 503, error: 'Mad Mixer subscriptions aren’t open yet.' };
   const data = await paystackRequest('POST', '/transaction/initialize', {
