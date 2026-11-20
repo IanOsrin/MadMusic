@@ -258,3 +258,12 @@ describe('a banner song plays on through its own album', () => {
     expect(extractFn(appHtml, 'playOnAlbumPage')).toMatch(/openAlbumByCatalogue[\s\S]*row\.click\(\)/);
   });
 });
+
+// Ian, 2026-11-20: "allow 10 hero banners up from the 6 now" — desktop, phone and the server cap.
+describe('up to 10 hero banners', () => {
+  it('desktop, phone and the server all allow 10', () => {
+    expect(readFileSync(join(root, 'public', 'app.html'), 'utf8')).toMatch(/var DWELL_MS = 6500, MAX_SLIDES = 10;/);
+    expect(readFileSync(join(mobileDir, 'hero.js'), 'utf8')).toMatch(/const DWELL_MS = 6500, MAX_SLIDES = 10;/);
+    expect(readFileSync(join(root, 'routes', 'featured-editorial.js'), 'utf8')).toMatch(/Math\.min\(10, Number\.parseInt\(req\.query\.limit, 10\) \|\| 10\)/);
+  });
+});

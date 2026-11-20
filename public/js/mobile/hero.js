@@ -9,7 +9,7 @@ import { getAlbumArtist, getAlbumField, getArtworkUrl, getTitleField } from './f
 import { openWholeAlbum, showAlbumTracksModal } from './cards.js?v=54';
 import { playTrack, renderPlayerQueue } from './player.js?v=54';
 
-const DWELL_MS = 6500, MAX_SLIDES = 6;
+const DWELL_MS = 6500, MAX_SLIDES = 10;   // Ian, 2026-11-20: up to 10 banners (was 6)
 const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let started = false;
 
