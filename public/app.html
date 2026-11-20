@@ -4679,9 +4679,47 @@
           ids = ids.filter(function (v, i) { return ids.indexOf(v) === i; });
           var idx = ids.indexOf(id);
           if (!ids.length || idx === -1) return;
+          if (!_cardBypass && _frontPageToAlbum(e, card, id)) return;
           window.MADClaimQueue(_songQueue(ids, idx));
         } catch (err) { /* never break a click */ }
       }, true);
+
+      // ── The front page shows what plays ──────────────────────────────────
+      // Ian, 2026-11-20: "when I click to start a song from the front page it must follow the
+      // rule that what is playing must be displayed". A song started from a front-page card
+      // opens on its album page and plays from its own row — as a banner song does — so the
+      // page shows it, and the album (then the artist's next album) carries on after it.
+      // When the album can't be shown, the click goes through as before (plays in its rail).
+      var _cardBypass = false, _frontPending = null;
+      function _frontPageToAlbum(e, card, id) {
+        if (!card.closest('#view-albums .layout-grid') || typeof window.MADPlayOnAlbumPage !== 'function') return false;
+        if (_meta && _meta.recordId === id && !player.paused) return false;   // a second click stops it, as before
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+        if (_frontPending === id) return true;      // already opening this one: a repeat click mustn't open it twice
+        _frontPending = id;
+        var target = e.target;
+        var MPx = window.MADPlayer, it = MPx && MPx.itemsStore && MPx.itemsStore.get(id);
+        var f = (it && it.fields) || {};
+        var album = {
+          cat:    f['Reference Catalogue Number'] || f['Tape Files::Reference Catalogue Number'] || '',
+          title:  f['Album Title'] || f['Tape Files::Album Title'] || '',
+          artist: f['Album Artist'] || f['Tape Files::Album Artist'] || ''
+        };
+        // A card with no record behind it yet (the singles rail): ask the song's own record.
+        var known = album.cat ? Promise.resolve(album) : (window.__GUEST ? Promise.resolve(album)
+          : fetch('/api/track/' + encodeURIComponent(id) + '/container').then(function (r) { return r.ok ? r.json() : {}; })
+              .then(function (d) { return { cat: d.catalogue || '', title: d.albumTitle || '', artist: d.albumArtist || '' }; })
+              .catch(function () { return album; }));
+        known.then(function (a) {
+          return a.cat ? window.MADPlayOnAlbumPage(a.cat, a.title, a.artist, id) : false;
+        }).then(function (shown) {
+          _frontPending = null;
+          if (shown) return;
+          _cardBypass = true;                       // play it where it was clicked, as before
+          try { target.click(); } finally { _cardBypass = false; }
+        });
+        return true;
+      }
 
       // ── The ONLY skip logic ──────────────────────────────────────────────
       if (skipPrev) {
@@ -7451,20 +7489,38 @@
     // caller then plays the song on its own).
     function playOnAlbumPage(cat, title, artist, recordId) {
       if (typeof window.openAlbumByCatalogue !== 'function') return Promise.resolve(false);
+      var audio = document.getElementById('player'), src0 = audio ? audio.src : '';
       return Promise.resolve(window.openAlbumByCatalogue(cat, title, artist)).then(function (ok) {
         if (!ok) return false;
         return new Promise(function (resolve) {
           var tries = 0;
           (function look() {
+            // The listener started something else while the page filled in: leave it playing.
+            if (audio && audio.src !== src0) return resolve(true);
             var rows = Array.prototype.slice.call(document.querySelectorAll('#playlistTrackList .playlist-track-item'));
             var row = rows.filter(function (r) { return r.dataset.recordId === String(recordId); })[0];
-            if (row) { row.click(); return resolve(true); }
-            if (++tries > 50) return resolve(false);   // ~5 s: the song isn't listed on its album page
+            if (row) {
+              row.click();
+              // Bring the playing row on screen — again once the page has settled its layout.
+              [0, 600, 1500].forEach(function (ms) {
+                setTimeout(function () {
+                  var playing = document.querySelector('#playlistTrackList .playlist-track-item.playing');
+                  if (playing && playing.dataset.recordId === String(recordId)) {
+                    try { playing.scrollIntoView({ block: 'center' }); } catch (e) { /* old browser */ }
+                  }
+                }, ms);
+              });
+              return resolve(true);
+            }
+            // The first album page after a page load can take several seconds to fill in.
+            if (++tries > 150) return resolve(false);  // ~15 s: the song isn't listed on its album page
             setTimeout(look, 100);
           })();
         });
       }).catch(function () { return false; });
     }
+
+    window.MADPlayOnAlbumPage = playOnAlbumPage;   // front-page song cards use it too
 
     // Editorial target → action. album/playlist targets are Phase 2 (no
     // open-by-recordId path in v2.1 yet) — they fall through to no-op + warn.

@@ -265,3 +265,22 @@ describe('when an album ends: the same artist next, never an album twice', () =>
     expect(phone).toMatch(/export function queueIsOneAlbum\(ctx\)/);
   });
 });
+
+// Ian, 2026-11-20: "when I click to start a song from the front page it must follow the rule that
+// what is playing must be displayed". Front-page song cards open the song's album page and play
+// from its row (as a banner does); when the album can't be shown, the click plays as before.
+describe('a song started from the front page shows on its album page', () => {
+  it('the card listener sends front-page plays to the album page first', () => {
+    expect(app).toMatch(/if \(!_cardBypass && _frontPageToAlbum\(e, card, id\)\) return;\s*\n\s*window\.MADClaimQueue\(_songQueue\(ids, idx\)\);/);
+    expect(app).toMatch(/card\.closest\('#view-albums \.layout-grid'\)/);
+    expect(app).toMatch(/window\.MADPlayOnAlbumPage\(a\.cat, a\.title, a\.artist, id\)/);
+    expect(app).toMatch(/window\.MADPlayOnAlbumPage = playOnAlbumPage;/);
+  });
+  it('a second click on the playing song still stops it, and a repeat click while opening is ignored', () => {
+    expect(app).toMatch(/_meta\.recordId === id && !player\.paused\) return false;/);
+    expect(app).toMatch(/if \(_frontPending === id\) return true;/);
+  });
+  it('when the album cannot be shown, the original click plays it where it was', () => {
+    expect(app).toMatch(/_cardBypass = true;[^\n]*\n\s*try \{ target\.click\(\); \} finally \{ _cardBypass = false; \}/);
+  });
+});
