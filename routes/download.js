@@ -24,7 +24,7 @@ import {
   AUDIO_FIELD_CANDIDATES
 } from '../lib/fm-fields.js';
 import { paystackRequest } from '../lib/paystack.js';
-import { stripeActive, isStripeReference, createOneOffCheckout, verifyCheckout } from '../lib/stripe.js';
+import { stripeActive, isStripeReference, createOneOffCheckout, verifyCheckout, stripeRefusal } from '../lib/stripe.js';
 import { isStrictEmail, fmExactMatch } from '../lib/validators.js';
 import { sendDownloadLinkEmail, sendBasketLinksEmail } from '../lib/email.js';
 import { requireAdminKey } from './admin.js';
@@ -196,6 +196,8 @@ router.post('/initiate', async (req, res) => {
     });
   } catch (err) {
     console.error('[DOWNLOAD] Initiate error:', err.message);
+    const refused = stripeRefusal(err);
+    if (refused) return res.status(refused.status).json({ ok: false, error: refused.error });
     return res.status(500).json({ ok: false, error: 'Failed to initialize payment' });
   }
 });
@@ -274,6 +276,8 @@ router.post('/basket/initiate', async (req, res) => {
     });
   } catch (err) {
     console.error('[DOWNLOAD] Basket initiate error:', err.message);
+    const refused = stripeRefusal(err);
+    if (refused) return res.status(refused.status).json({ ok: false, error: refused.error });
     return res.status(500).json({ ok: false, error: 'Failed to initialize payment' });
   }
 });

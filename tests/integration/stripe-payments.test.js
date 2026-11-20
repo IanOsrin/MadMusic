@@ -135,6 +135,30 @@ describe('Stripe one-off passes', () => {
     expect(paystackCalls).toHaveLength(0);
   });
 
+  it('a price Stripe refuses says why, instead of the bare "Failed to initialize payment"', async () => {
+    const refusing = { ...fakeClient, checkout: { sessions: { ...fakeClient.checkout.sessions, create: async () => {
+      throw new Stripe.errors.StripeInvalidRequestError({
+        type: 'invalid_request_error', code: 'amount_too_small',
+        message: 'The Checkout Session\'s total amount due must add up to at least $0.50 usd',
+      });
+    } } } };
+    stripeLib._setStripeClientForTests(refusing);
+    const res = await request(app).post('/api/payments/initialize').send({ email: 'fan@example.com', plan: '1-day' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/below the card payment minimum/);
+    expect(res.body.error).toMatch(/at least \$0\.50 usd/);   // test keys pass Stripe's own reason through
+
+    const other = { ...refusing, checkout: { sessions: { ...refusing.checkout.sessions, create: async () => {
+      throw new Stripe.errors.StripeInvalidRequestError({ type: 'invalid_request_error', message: 'Something else' });
+    } } } };
+    stripeLib._setStripeClientForTests(other);
+    const sub = await request(app).post('/api/payments/subscribe').send({ email: 'fan@example.com' });
+    expect(sub.status).toBe(502);
+    expect(sub.body.error).toBe('Stripe refused the payment: Something else');
+
+    expect(stripeLib.stripeRefusal(new Error('FileMaker down'))).toBeNull();   // not Stripe: generic answer stays
+  });
+
   it('the return trip makes one code; the webhook after it makes none', async () => {
     fake.sessions.set('cs_test_9abc', { id: 'cs_test_9abc', ...paidSession() });
     const res = await request(app).get('/api/payments/callback?reference=cs_test_9abc');

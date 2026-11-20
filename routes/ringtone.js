@@ -18,7 +18,7 @@
 import { Router } from 'express';
 import { fmCreateRecord, fmFindRecords } from '../fm-client.js';
 import { paystackRequest } from '../lib/paystack.js';
-import { stripeActive, isStripeReference, createOneOffCheckout, verifyCheckout } from '../lib/stripe.js';
+import { stripeActive, isStripeReference, createOneOffCheckout, verifyCheckout, stripeRefusal } from '../lib/stripe.js';
 import { isStrictEmail, fmExactMatch } from '../lib/validators.js';
 
 const router = Router();
@@ -133,6 +133,8 @@ router.post('/initiate', async (req, res) => {
     });
   } catch (err) {
     console.error('[RINGTONE] Initiate error:', err.message);
+    const refused = stripeRefusal(err);
+    if (refused) return res.status(refused.status).json({ ok: false, error: refused.error });
     return res.status(500).json({ ok: false, error: 'Failed to initialize payment' });
   }
 });

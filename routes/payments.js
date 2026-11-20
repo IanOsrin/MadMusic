@@ -23,7 +23,7 @@ import { bumpTaster } from '../lib/taster-stats.js';
 import { SUBSCRIPTION_DAYS_MIN, SUBSCRIPTION_DAYS_MAX } from '../lib/constants.js';
 import {
   stripeActive, isStripeReference, createOneOffCheckout, createSubscriptionCheckout,
-  verifyCheckout, normaliseSession, constructStripeEvent, readInvoice, STRIPE_PLAN_MAD
+  verifyCheckout, normaliseSession, constructStripeEvent, readInvoice, STRIPE_PLAN_MAD, stripeRefusal
 } from '../lib/stripe.js';
 
 /** Where this site lives (APP_URL, else the request's own host — trust-proxy aware). */
@@ -179,6 +179,8 @@ router.post('/initialize', async (req, res) => {
     });
   } catch (err) {
     console.error('[MASS] Payment initialization failed:', err);
+    const refused = stripeRefusal(err);
+    if (refused) return res.status(refused.status).json({ ok: false, error: refused.error });
     res.status(500).json({ ok: false, error: 'Failed to initialize payment' });
   }
 });
@@ -446,6 +448,8 @@ router.post('/subscribe', async (req, res) => {
     });
   } catch (err) {
     console.error('[MASS] Subscription initialization failed:', err);
+    const refused = stripeRefusal(err);
+    if (refused) return res.status(refused.status).json({ ok: false, error: refused.error });
     res.status(500).json({ ok: false, error: 'Failed to initialize subscription' });
   }
 });
