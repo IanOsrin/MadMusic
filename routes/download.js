@@ -24,7 +24,7 @@ import {
   AUDIO_FIELD_CANDIDATES
 } from '../lib/fm-fields.js';
 import { paystackRequest } from '../lib/paystack.js';
-import { stripeActive, isStripeReference, createOneOffCheckout, verifyCheckout, stripeRefusal } from '../lib/stripe.js';
+import { isStripeReference, createOneOffCheckout, verifyCheckout, stripeRefusal, useStripeFor, stripeTooSmall } from '../lib/stripe.js';
 import { isStrictEmail, fmExactMatch } from '../lib/validators.js';
 import { sendDownloadLinkEmail, sendBasketLinksEmail } from '../lib/email.js';
 import { requireAdminKey } from './admin.js';
@@ -178,7 +178,10 @@ router.post('/initiate', async (req, res) => {
       : `${req.protocol}://${req.get('host')}/api/download/callback`;
 
     const metadata = { payment_type: 'download', trackId, trackRecordId, trackName, price };
-    const data = stripeActive()
+    const viaStripe = useStripeFor(req.body.gateway);
+    const tooSmall = viaStripe && stripeTooSmall(amountCents);
+    if (tooSmall) return res.status(400).json({ ok: false, error: tooSmall });
+    const data = viaStripe
       ? await stripeInit({ email, amountCents, name: `Download — ${trackName}`, metadata, callbackUrl })
       : await paystackRequest('POST', '/transaction/initialize', {
         email:        email.trim().toLowerCase(),
@@ -255,7 +258,10 @@ router.post('/basket/initiate', async (req, res) => {
       // track record changes between paying and fulfilment.
       items: priced.map(i => ({ id: i.trackRecordId, n: i.name.slice(0, 80), a: (i.artist || '').slice(0, 60), p: i.price })),
     };
-    const data = stripeActive()
+    const viaStripe = useStripeFor(req.body?.gateway);
+    const tooSmall = viaStripe && stripeTooSmall(Math.round(total * 100));
+    if (tooSmall) return res.status(400).json({ ok: false, error: tooSmall });
+    const data = viaStripe
       ? await stripeInit({ email, amountCents: Math.round(total * 100), name: `Downloads — ${priced.length} track${priced.length === 1 ? '' : 's'}`, metadata, callbackUrl })
       : await paystackRequest('POST', '/transaction/initialize', {
         email: email.trim().toLowerCase(),

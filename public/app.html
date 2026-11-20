@@ -136,6 +136,25 @@
           <button class="payment-btn gate-ghost" id="paymentSubmit">
             Continue to Payment
           </button>
+          <!-- PAYMENT_GATEWAY=choice: discovery.js shows this in place of #paymentSubmit -->
+          <div class="pay-choice" id="payChoice" hidden role="group" aria-label="How would you like to pay?">
+            <button type="button" class="pay-choice-btn pay-choice-rand" data-gateway="paystack">
+              <span class="pay-choice-glyph" aria-hidden="true">R</span>
+              <span class="pay-choice-text">
+                <span class="pay-choice-title">Pay in Rand</span>
+                <span class="pay-choice-sub">South African cards &amp; more &middot; Paystack</span>
+              </span>
+              <span class="pay-choice-arrow" aria-hidden="true">&rarr;</span>
+            </button>
+            <button type="button" class="pay-choice-btn pay-choice-fx" data-gateway="stripe">
+              <span class="pay-choice-glyph" aria-hidden="true">$&thinsp;&euro;&thinsp;&pound;</span>
+              <span class="pay-choice-text">
+                <span class="pay-choice-title">Pay in Your Choice of Currency</span>
+                <span class="pay-choice-sub" data-fx-sub>Dollars, pounds, euros &amp; more &middot; Stripe</span>
+              </span>
+              <span class="pay-choice-arrow" aria-hidden="true">&rarr;</span>
+            </button>
+          </div>
           <div class="gate-note">Passes use the email above &middot; browsing stays free, always</div>
         </div>
       </div>

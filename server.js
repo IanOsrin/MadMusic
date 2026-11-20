@@ -48,6 +48,7 @@ import { METADATA_SOURCE } from './lib/metadata-source.js';
 import { loadAccessTokens } from './lib/token-store.js';
 import { loadPlaylistByShareId } from './lib/playlist-store.js';
 import { getTrackShareMeta, buildOgTags, inlineJson } from './lib/share-meta.js';
+import { payChoice } from './lib/stripe.js';
 import { bumpTaster, readTasterStats } from './lib/taster-stats.js';
 import { resolveRequestOrigin } from './lib/http.js';
 import { createPrecompressedStatic } from './lib/precompressed-static.js';
@@ -793,6 +794,9 @@ async function loadHtml(filename) {
     + `window.__ARTIST_BIO=${ARTIST_BIO_ENABLED ? 'true' : 'false'};`
     + `window.__GUEST_PREVIEW=${GUEST_PREVIEW_ENABLED ? 'true' : 'false'};`
     + `window.__MADDIE=${MADDIE_ENABLED ? 'true' : 'false'};`
+    //   __PAY_CHOICE — PAYMENT_GATEWAY=choice: { stripeMinCents } and the pay screens show
+    //     "Pay in Rand" (Paystack) beside "Pay in Your Choice of Currency" (Stripe); false = one button.
+    + `window.__PAY_CHOICE=${payChoice() ? inlineJson(payChoice()) : 'false'};`
     //   __MAD_MIXER / __MAD_MIXER_URL — the 🎚 buttons and the left-menu item, plain links to
     //     Mad Mixer's own home (MAD_MIXER_ENABLED + MIXER_URL; js/mad-mixer-links.js).
     + `window.__MAD_MIXER=${MIXER_LINKS ? 'true' : 'false'};`

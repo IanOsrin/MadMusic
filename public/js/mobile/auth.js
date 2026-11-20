@@ -489,7 +489,7 @@ export async function buyAccess({ pick = '' } = {}) {
 
   // Never block a sale on a failed lookup: offer the mid plan as before.
   if (!plans.length) {
-    plans = [{ id: '7-day', label: '7 Day Access', days: 7, display: 'R7.50' }];
+    plans = [{ id: '7-day', label: '7 Day Access', days: 7, display: 'R7.50', amount: 750 }];
   }
 
   // The monthly subscription (desktop had it; phones only offered passes until 2026-09-27).
@@ -508,8 +508,32 @@ function closePlanPicker() {
   document.getElementById('plan-picker')?.remove();
 }
 
+// PAYMENT_GATEWAY=choice (window.__PAY_CHOICE): tapping a plan only picks it, and two buttons pay —
+// "Pay in Rand" (Paystack) and "Pay in Your Choice of Currency" (Stripe). Stripe refuses tiny charges,
+// so its button rests for anything under __PAY_CHOICE.stripeMinCents.
+const PLAN_PAY_CHOICE_HTML = `
+  <div class="pay-choice" id="plan-pay-choice" role="group" aria-label="How would you like to pay?">
+    <button type="button" class="pay-choice-btn pay-choice-rand" data-gateway="paystack">
+      <span class="pay-choice-glyph" aria-hidden="true">R</span>
+      <span class="pay-choice-text">
+        <span class="pay-choice-title">Pay in Rand</span>
+        <span class="pay-choice-sub">South African cards &amp; more &middot; Paystack</span>
+      </span>
+      <span class="pay-choice-arrow" aria-hidden="true">&rarr;</span>
+    </button>
+    <button type="button" class="pay-choice-btn pay-choice-fx" data-gateway="stripe">
+      <span class="pay-choice-glyph" aria-hidden="true">$&thinsp;&euro;&thinsp;&pound;</span>
+      <span class="pay-choice-text">
+        <span class="pay-choice-title">Pay in Your Choice of Currency</span>
+        <span class="pay-choice-sub" data-fx-sub>Dollars, pounds, euros &amp; more &middot; Stripe</span>
+      </span>
+      <span class="pay-choice-arrow" aria-hidden="true">&rarr;</span>
+    </button>
+  </div>`;
+
 function showPlanPicker(plans, monthly = null, pick = '') {
   closePlanPicker();
+  const choice = window.__PAY_CHOICE || null;
   const picked = pick === 'sub' ? (monthly ? 'sub' : '') : (plans.some((p) => p.id === pick) ? pick : '');
   const overlay = document.createElement('div');
   overlay.id = 'plan-picker';
@@ -541,13 +565,49 @@ function showPlanPicker(plans, monthly = null, pick = '') {
       <label class="plan-email-label" for="plan-email">Where should we send your access code?</label>
       <input type="email" id="plan-email" class="plan-email" inputmode="email" autocomplete="email"
              autocapitalize="off" spellcheck="false" placeholder="you@example.com">
-      ${picked ? '<button type="button" class="plan-continue" id="plan-continue">Continue to payment</button>' : ''}
+      ${choice ? PLAN_PAY_CHOICE_HTML
+        : picked ? '<button type="button" class="plan-continue" id="plan-continue">Continue to payment</button>' : ''}
       <div class="plan-picker-status" id="plan-picker-status"></div>
     </div>`;
   document.body.appendChild(overlay);
 
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closePlanPicker(); });
   document.getElementById('plan-picker-close').addEventListener('click', closePlanPicker);
+  if (choice) {
+    let current = picked;   // 'sub', a plan id, or '' (nothing picked yet)
+    const min = Number(choice.stripeMinCents) || 0;
+    const update = () => {
+      for (const row of overlay.querySelectorAll('.plan-row')) {
+        row.classList.toggle('plan-row-picked', (row.dataset.sub === '1' ? 'sub' : row.dataset.plan) === current);
+      }
+      const amount = current === 'sub' ? Infinity : Number(plans.find((p) => p.id === current)?.amount ?? Infinity);
+      const rand = overlay.querySelector('.pay-choice-rand');
+      const fx = overlay.querySelector('.pay-choice-fx');
+      rand.disabled = !current;
+      fx.disabled = !current || amount < min;
+      fx.querySelector('[data-fx-sub]').textContent = current && amount < min
+        ? `From R${(min / 100).toFixed(2)} — please use Pay in Rand for this pass`
+        : 'Dollars, pounds, euros & more · Stripe';
+    };
+    window._updatePlanPayChoice = update;
+    for (const row of overlay.querySelectorAll('.plan-row')) {
+      row.addEventListener('click', () => {
+        current = row.dataset.sub === '1' ? 'sub' : row.dataset.plan;
+        const status = document.getElementById('plan-picker-status');
+        if (status) status.textContent = '';
+        update();
+      });
+    }
+    for (const btn of overlay.querySelectorAll('.pay-choice-btn')) {
+      btn.addEventListener('click', () => {
+        if (!current) return;
+        startCheckout(current === 'sub' ? '' : current, current === 'sub', btn.dataset.gateway);
+      });
+    }
+    update();
+    if (picked) setTimeout(() => document.getElementById('plan-email')?.focus(), 250);
+    return;
+  }
   for (const btn of overlay.querySelectorAll('.plan-row')) {
     btn.addEventListener('click', () => startCheckout(btn.dataset.plan, btn.dataset.sub === '1'));
   }
@@ -560,7 +620,7 @@ function showPlanPicker(plans, monthly = null, pick = '') {
 }
 
 /** Send the chosen plan (or the monthly subscription) to Paystack. */
-async function startCheckout(planId, isSubscription = false) {
+async function startCheckout(planId, isSubscription = false, gateway = '') {
   const input  = document.getElementById('plan-email');
   const status = document.getElementById('plan-picker-status');
   const email  = (input?.value || '').trim();
@@ -574,7 +634,12 @@ async function startCheckout(planId, isSubscription = false) {
   }
 
   if (status) status.textContent = 'Redirecting to payment…';
-  for (const b of document.querySelectorAll('#plan-picker .plan-row, #plan-continue')) b.disabled = true;
+  const lockable = '#plan-picker .plan-row, #plan-continue, #plan-picker .pay-choice-btn';
+  for (const b of document.querySelectorAll(lockable)) b.disabled = true;
+  const unlock = () => {
+    for (const b of document.querySelectorAll(lockable)) b.disabled = false;
+    window._updatePlanPayChoice?.();
+  };
 
   try {
     // Subscription → /subscribe (Paystack plan); passes → /initialize. Both come back to
@@ -582,18 +647,21 @@ async function startCheckout(planId, isSubscription = false) {
     const response = await fetch(isSubscription ? '/api/payments/subscribe' : '/api/payments/initialize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(isSubscription ? { email, source: 'mobile' } : { email, plan: planId, source: 'mobile' })
+      body: JSON.stringify({
+        ...(isSubscription ? { email, source: 'mobile' } : { email, plan: planId, source: 'mobile' }),
+        ...(gateway ? { gateway } : {}),
+      })
     });
     const data = await response.json();
     if (response.ok && data.authorization_url) {
       window.location.href = data.authorization_url;
     } else {
       if (status) status.textContent = data.error || 'Could not start payment. Please try again.';
-      for (const b of document.querySelectorAll('#plan-picker .plan-row, #plan-continue')) b.disabled = false;
+      unlock();
     }
   } catch (err) {
     console.error('[Mobile] Payment error:', err);
     if (status) status.textContent = 'Payment service unavailable. Please try again.';
-    for (const b of document.querySelectorAll('#plan-picker .plan-row, #plan-continue')) b.disabled = false;
+    unlock();
   }
 }

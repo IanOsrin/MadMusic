@@ -7,7 +7,7 @@ import { showToast } from './util.js?v=51';
 import { getArtistField, getArtworkUrl, getAudioUrl, getTitleField, getYearField, hasValidArtwork } from './fields.js?v=51';
 // auth.js is version-stamped: a fresh main.js importing a stale cached auth.js
 // (missing the startTrial export) would break the whole module graph.
-import { buyAccess, checkStoredCode, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=51';
+import { buyAccess, checkStoredCode, deleteAccountFlow, enterGuestMode, isNativeApp, logout, setAccessToken, showContactSheet, startTrial, updateAuthUI } from './auth.js?v=52';
 
 // Links from MAD emails: ?buy=1 opens the plans (not inside the store app — policy),
 // ?contact=1 opens "Contact us". The param is dropped from the address bar either way.
@@ -32,10 +32,10 @@ import { loadHomeShelves } from './rails-g100.js?v=51';
 import { closeModal, initMediaSession, playTrack, sendStreamEvent, stepQueue, trackFailed, trackPlayedOk, updateMediaSessionPosition, updatePlayerModal, updateProgress } from './player.js?v=51';
 import { openAlbumForTrack, showAlbumTracksModal, showArtistTracks } from './cards.js?v=51';
 import { initRouter, pushOverlay } from './router.js?v=51';
-import { initMaddie } from './maddie.js?v=51';
+import { initMaddie } from './maddie.js?v=52';
 import { initContinue } from './continue.js?v=51';
 import { loadGlobalFavourites } from './rails-globalfav.js?v=51';
-import { maybeShowWelcome, showWelcome } from './welcome.js?v=51';
+import { maybeShowWelcome, showWelcome } from './welcome.js?v=52';
 
 // ===== Tab Navigation =====
     document.querySelectorAll('.tab-button').forEach(btn => {

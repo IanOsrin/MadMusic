@@ -18,7 +18,7 @@
 import { Router } from 'express';
 import { fmCreateRecord, fmFindRecords } from '../fm-client.js';
 import { paystackRequest } from '../lib/paystack.js';
-import { stripeActive, isStripeReference, createOneOffCheckout, verifyCheckout, stripeRefusal } from '../lib/stripe.js';
+import { isStripeReference, createOneOffCheckout, verifyCheckout, stripeRefusal, useStripeFor, stripeTooSmall } from '../lib/stripe.js';
 import { isStrictEmail, fmExactMatch } from '../lib/validators.js';
 
 const router = Router();
@@ -106,8 +106,10 @@ router.post('/initiate', async (req, res) => {
       durationSec: clampedDur
     };
     let data;
-    if (stripeActive()) {
-      // Stripe (PAYMENT_GATEWAY=stripe): same answer shape as Paystack's initialize.
+    if (useStripeFor(req.body?.gateway)) {
+      // Stripe (PAYMENT_GATEWAY=stripe, or =choice and Stripe picked): same answer shape as Paystack's.
+      const tooSmall = stripeTooSmall(RINGTONE_PRICE_CENTS);
+      if (tooSmall) return res.status(400).json({ ok: false, error: tooSmall });
       const out = await createOneOffCheckout({
         email: email.trim().toLowerCase(), amountCents: RINGTONE_PRICE_CENTS,
         name: `Ringtone — ${name || 'MAD'}`, metadata,

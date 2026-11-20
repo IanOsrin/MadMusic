@@ -40,7 +40,26 @@
       }
     }
 
+    // PAYMENT_GATEWAY=choice (window.__PAY_CHOICE): #payChoice (app.html) replaces the one button —
+    // "Pay in Rand" (Paystack) and "Pay in Your Choice of Currency" (Stripe). Stripe refuses tiny
+    // charges, so its button rests for anything under __PAY_CHOICE.stripeMinCents.
+    const planAmounts = {};
+
+    function updatePayChoice() {
+      const fx = document.querySelector('#payChoice .pay-choice-fx');
+      if (!fx || !window.__PAY_CHOICE) return;
+      const min = Number(window.__PAY_CHOICE.stripeMinCents) || 0;
+      const amount = selectedPlanType === 'subscription' ? Infinity : (planAmounts[selectedPlan] ?? Infinity);
+      const tooSmall = amount < min;
+      fx.disabled = tooSmall;
+      fx.querySelector('[data-fx-sub]').textContent = tooSmall
+        ? `From R${(min / 100).toFixed(2)} — please use Pay in Rand for this pass`
+        : 'Dollars, pounds, euros & more · Stripe';
+    }
+
     function renderPaymentPlans(plans) {
+      plans.forEach((p) => { planAmounts[p.id] = Number(p.amount); });
+      updatePayChoice();
       const plansContainer = document.getElementById('paymentPlans');
       console.log('[Payment] Plans container:', plansContainer);
       console.log('[Payment] Plans to render:', plans);
@@ -79,6 +98,7 @@
           selectedPlanType = 'one-time';
           const btn = document.getElementById('paymentSubmit');
           if (btn) btn.textContent = 'Continue to Payment';
+          updatePayChoice();
         });
       });
 
@@ -91,6 +111,7 @@
           selectedPlanType = 'subscription';
           const btn = document.getElementById('paymentSubmit');
           if (btn) btn.textContent = 'Subscribe';
+          updatePayChoice();
         });
       }
 
@@ -134,51 +155,72 @@
       // Token submission is handled by the token overlay JS (uses /api/access/validate)
       // No duplicate handler needed here
 
-      // Handle payment submission (one-time and subscription only)
+      // Handle payment submission (one-time and subscription only).
+      // gateway: '' (the site's one gateway), 'paystack' or 'stripe' (choice mode's two buttons).
       const paymentSubmitBtn = document.getElementById('paymentSubmit');
+      async function startPayment(gateway, submitBtn) {
+        const email    = document.getElementById('paymentEmail').value.trim();
+        const errorEl  = document.getElementById('paymentError');
+        const label    = submitBtn.querySelector('.pay-choice-title') || submitBtn;
+        const restore  = label.textContent;
+
+        errorEl.textContent = '';
+
+        if (!email || !email.includes('@')) {
+          errorEl.textContent = 'Please enter a valid email address';
+          return;
+        }
+
+        const choiceBtns = document.querySelectorAll('#payChoice .pay-choice-btn');
+        choiceBtns.forEach((b) => { b.disabled = true; });
+        submitBtn.disabled = true;
+        label.textContent = 'Processing...';
+
+        const isSubscription = selectedPlanType === 'subscription';
+        const endpoint = isSubscription ? '/api/payments/subscribe' : '/api/payments/initialize';
+        const payload  = isSubscription  ? { email } : { email, plan: selectedPlan };
+        if (gateway) payload.gateway = gateway;
+        const btnLabel = submitBtn === paymentSubmitBtn
+          ? (isSubscription ? 'Subscribe' : 'Continue to Payment')
+          : restore;
+        const giveBack = () => {
+          submitBtn.disabled = false;
+          label.textContent = btnLabel;
+          choiceBtns.forEach((b) => { b.disabled = false; });
+          updatePayChoice();
+        };
+
+        try {
+          const res  = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+
+          if (data.ok && data.authorization_url) {
+            window.location.href = data.authorization_url;
+          } else {
+            errorEl.textContent = data.error || 'Failed to initialize payment';
+            giveBack();
+          }
+        } catch (err) {
+          console.error('Payment initialization error:', err);
+          errorEl.textContent   = 'Network error. Please try again.';
+          giveBack();
+        }
+      }
+
       if (paymentSubmitBtn) {
-        paymentSubmitBtn.addEventListener('click', async () => {
-          const email    = document.getElementById('paymentEmail').value.trim();
-          const errorEl  = document.getElementById('paymentError');
-          const submitBtn = document.getElementById('paymentSubmit');
-
-          errorEl.textContent = '';
-
-          if (!email || !email.includes('@')) {
-            errorEl.textContent = 'Please enter a valid email address';
-            return;
-          }
-
-          submitBtn.disabled = true;
-          submitBtn.textContent = 'Processing...';
-
-          const isSubscription = selectedPlanType === 'subscription';
-          const endpoint = isSubscription ? '/api/payments/subscribe' : '/api/payments/initialize';
-          const payload  = isSubscription  ? { email } : { email, plan: selectedPlan };
-          const btnLabel = isSubscription  ? 'Subscribe' : 'Continue to Payment';
-
-          try {
-            const res  = await fetch(endpoint, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-
-            if (data.ok && data.authorization_url) {
-              window.location.href = data.authorization_url;
-            } else {
-              errorEl.textContent = data.error || 'Failed to initialize payment';
-              submitBtn.disabled  = false;
-              submitBtn.textContent = btnLabel;
-            }
-          } catch (err) {
-            console.error('Payment initialization error:', err);
-            errorEl.textContent   = 'Network error. Please try again.';
-            submitBtn.disabled    = false;
-            submitBtn.textContent = btnLabel;
-          }
-        });
+        paymentSubmitBtn.addEventListener('click', () => startPayment('', paymentSubmitBtn));
+        if (window.__PAY_CHOICE) {
+          document.getElementById('payChoice').hidden = false;
+          paymentSubmitBtn.hidden = true;
+          document.querySelectorAll('#payChoice .pay-choice-btn').forEach((b) => {
+            b.addEventListener('click', () => startPayment(b.dataset.gateway, b));
+          });
+          updatePayChoice();
+        }
       }
 
       // Handle free trial submission — completely separate from payment flow

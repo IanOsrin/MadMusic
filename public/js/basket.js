@@ -164,8 +164,10 @@
               '<form id="madBasketForm" style="display:flex;gap:8px">' +
                 '<input id="madBasketEmail" type="email" required placeholder="you@example.com" autocomplete="email" value="' + esc(email) + '" ' +
                 'style="flex:1;background:rgba(127,127,127,.12);border:1px solid var(--border,rgba(255,255,255,.15));border-radius:8px;padding:10px 12px;color:inherit;font-size:14px;outline:none">' +
-                '<button type="submit" style="background:var(--accent,#8b5cf6);color:#fff;border:none;border-radius:8px;padding:0 18px;cursor:pointer;font-size:14px;font-weight:700">Pay ' + rands(total(items)) + '</button>' +
+                (window.__PAY_CHOICE ? '' :
+                '<button type="submit" style="background:var(--accent,#8b5cf6);color:#fff;border:none;border-radius:8px;padding:0 18px;cursor:pointer;font-size:14px;font-weight:700">Pay ' + rands(total(items)) + '</button>') +
               '</form>' +
+              (window.__PAY_CHOICE ? payChoiceHtml(total(items)) : '') +
               '<div id="madBasketMsg" style="font-size:12px;color:var(--muted,#999);margin-top:10px;min-height:15px">Your links are emailed too — each track downloads up to three times.</div>' +
               '<button type="button" data-basket-clear style="background:none;border:none;color:var(--muted,#999);font-size:12px;cursor:pointer;margin-top:6px;padding:0">Empty basket</button>'
             : '') +
@@ -179,23 +181,52 @@
       b.addEventListener('click', function () { remove(b.getAttribute('data-basket-remove')); });
     });
     var form = wrap.querySelector('#madBasketForm');
-    if (form) form.addEventListener('submit', function (e) { e.preventDefault(); checkout(wrap); });
+    // With two ways to pay, Enter in the email box picks neither — the buyer presses one.
+    if (form) form.addEventListener('submit', function (e) { e.preventDefault(); if (!window.__PAY_CHOICE) checkout(wrap); });
+    wrap.querySelectorAll('[data-basket-pay]').forEach(function (b) {
+      b.addEventListener('click', function () { checkout(wrap, b.getAttribute('data-basket-pay')); });
+    });
+  }
+
+  // PAYMENT_GATEWAY=choice (window.__PAY_CHOICE): "Pay in Rand" (Paystack) or "Pay in Your Choice
+  // of Currency" (Stripe). Stripe refuses tiny charges, so its button rests under stripeMinCents.
+  function payChoiceHtml(totalRands) {
+    var min = Number(window.__PAY_CHOICE && window.__PAY_CHOICE.stripeMinCents) || 0;
+    var tooSmall = Math.round(totalRands * 100) < min;
+    return '<div class="pay-choice" style="margin-top:12px" role="group" aria-label="How would you like to pay?">' +
+      '<button type="button" class="pay-choice-btn pay-choice-rand" data-basket-pay="paystack">' +
+        '<span class="pay-choice-glyph" aria-hidden="true">R</span>' +
+        '<span class="pay-choice-text"><span class="pay-choice-title">Pay ' + rands(totalRands) + ' in Rand</span>' +
+        '<span class="pay-choice-sub">South African cards &amp; more &middot; Paystack</span></span>' +
+        '<span class="pay-choice-arrow" aria-hidden="true">&rarr;</span></button>' +
+      '<button type="button" class="pay-choice-btn pay-choice-fx" data-basket-pay="stripe"' + (tooSmall ? ' disabled' : '') + '>' +
+        '<span class="pay-choice-glyph" aria-hidden="true">$&thinsp;&euro;&thinsp;&pound;</span>' +
+        '<span class="pay-choice-text"><span class="pay-choice-title">Pay in Your Choice of Currency</span>' +
+        '<span class="pay-choice-sub">' + (tooSmall
+          ? 'From ' + rands(min / 100) + ' — add a track or two, or pay in Rand'
+          : 'Dollars, pounds, euros &amp; more &middot; Stripe') + '</span></span>' +
+        '<span class="pay-choice-arrow" aria-hidden="true">&rarr;</span></button>' +
+    '</div>';
   }
 
   // ── checkout ──────────────────────────────────────────────────────────────
-  function checkout(wrap) {
+  function checkout(wrap, gateway) {
     var items = read();
     var msg = wrap.querySelector('#madBasketMsg');
     var email = (wrap.querySelector('#madBasketEmail').value || '').trim();
     if (!items.length || !email || email.indexOf('@') < 0) return;
     try { localStorage.setItem('mad_buyer_email', email); } catch (e) {}
     msg.textContent = 'Setting up your payment…';
-    wrap.querySelector('#madBasketForm button[type=submit]').disabled = true;
+    var payBtns = wrap.querySelectorAll('#madBasketForm button[type=submit], [data-basket-pay]');
+    var wasDisabled = [];
+    payBtns.forEach(function (b) { wasDisabled.push(b.disabled); b.disabled = true; });
 
     fetch('/api/download/basket/initiate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: items.map(function (i) { return i.recordId; }), email: email }),
+      body: JSON.stringify(Object.assign(
+        { items: items.map(function (i) { return i.recordId; }), email: email },
+        gateway ? { gateway: gateway } : {})),
     }).then(function (r) { return r.json(); }).then(function (data) {
       if (!data.ok || !data.authorization_url) throw new Error(data.error || 'Could not start the payment');
       // The callback deliberately keeps the reference out of the return URL (it
@@ -210,8 +241,7 @@
       window.location.href = data.authorization_url;
     }).catch(function (err) {
       msg.textContent = err.message;
-      var btn = wrap.querySelector('#madBasketForm button[type=submit]');
-      if (btn) btn.disabled = false;
+      payBtns.forEach(function (b, i) { b.disabled = wasDisabled[i]; });
     });
   }
 

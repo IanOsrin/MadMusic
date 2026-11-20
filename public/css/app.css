@@ -4673,6 +4673,72 @@
       background: rgba(255, 255, 255, 0.12);
       filter: none;
     }
+    .payment-btn[hidden] { display: none; }
+
+    /* ── Pay in Rand / Pay in Your Choice of Currency (PAYMENT_GATEWAY=choice) ── */
+    .pay-choice {
+      display: grid;
+      gap: 10px;
+    }
+    .pay-choice[hidden] { display: none; }
+    .pay-choice-btn {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      padding: 12px 16px 12px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(127, 127, 127, 0.28);
+      background: rgba(127, 127, 127, 0.08);
+      color: inherit;               /* white on the dark gate, dark in a light-mode basket */
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+    }
+    .pay-choice-btn:hover:not(:disabled) {
+      background: rgba(127, 127, 127, 0.14);
+      border-color: rgba(167, 139, 250, 0.55);
+      box-shadow: 0 6px 22px rgba(139, 92, 246, 0.18);
+    }
+    .pay-choice-btn:active:not(:disabled) { transform: scale(0.985); }
+    .pay-choice-btn:focus-visible { outline: 2px solid #a78bfa; outline-offset: 2px; }
+    .pay-choice-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .pay-choice-glyph {
+      flex: none;
+      display: grid;
+      place-items: center;
+      min-width: 40px;
+      height: 40px;
+      padding: 0 8px;
+      border-radius: 11px;
+      background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      color: #fff;
+    }
+    .pay-choice-fx .pay-choice-glyph {
+      background: linear-gradient(135deg, #22d3ee, #6366f1);
+      font-size: 13px;
+    }
+    .pay-choice-text {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .pay-choice-title { font-size: 15px; font-weight: 700; line-height: 1.25; }
+    .pay-choice-sub { font-size: 12px; opacity: 0.6; line-height: 1.35; }
+    .pay-choice-arrow {
+      flex: none;
+      opacity: 0.4;
+      font-size: 17px;
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+    .pay-choice-btn:hover:not(:disabled) .pay-choice-arrow { transform: translateX(3px); opacity: 1; }
     .payment-error {
       color: #fda4af;
       font-size: 13px;

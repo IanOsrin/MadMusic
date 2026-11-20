@@ -22,8 +22,9 @@ import { isStrictEmail } from '../lib/validators.js';
 import { bumpTaster } from '../lib/taster-stats.js';
 import { SUBSCRIPTION_DAYS_MIN, SUBSCRIPTION_DAYS_MAX } from '../lib/constants.js';
 import {
-  stripeActive, isStripeReference, createOneOffCheckout, createSubscriptionCheckout,
-  verifyCheckout, normaliseSession, constructStripeEvent, readInvoice, STRIPE_PLAN_MAD, stripeRefusal
+  isStripeReference, createOneOffCheckout, createSubscriptionCheckout,
+  verifyCheckout, normaliseSession, constructStripeEvent, readInvoice, STRIPE_PLAN_MAD, stripeRefusal,
+  useStripeFor, stripeTooSmall, madMonthlyAmount
 } from '../lib/stripe.js';
 
 /** Where this site lives (APP_URL, else the request's own host — trust-proxy aware). */
@@ -122,8 +123,11 @@ router.post('/initialize', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Invalid plan. Choose: 1-day, 7-day, or 30-day' });
     }
 
-    // Stripe (PAYMENT_GATEWAY=stripe, test site first): same plans, same prices, same return trip.
-    if (stripeActive()) {
+    // Stripe (PAYMENT_GATEWAY=stripe, or =choice and the customer pressed "Pay in Your Choice of
+    // Currency"): same plans, same prices, same return trip.
+    if (useStripeFor(req.body.gateway)) {
+      const tooSmall = stripeTooSmall(selectedPlan.amount);
+      if (tooSmall) return res.status(400).json({ ok: false, error: tooSmall });
       const isMobile = source === 'mobile';
       const out = await createOneOffCheckout({
         email: email.trim().toLowerCase(),
@@ -398,7 +402,9 @@ router.post('/subscribe', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Valid email is required' });
     }
 
-    if (stripeActive()) {
+    if (useStripeFor(req.body.gateway)) {
+      const tooSmall = stripeTooSmall(madMonthlyAmount());
+      if (tooSmall) return res.status(400).json({ ok: false, error: tooSmall });
       const src = source === 'mobile' ? 'mobile' : 'desktop';
       const out = await createSubscriptionCheckout({
         email: email.trim().toLowerCase(),

@@ -284,3 +284,66 @@ describe('Stripe metadata', () => {
     expect(back.count).toBe(50);
   });
 });
+
+// Ian, 2026-11-20: "Can we have a choice of payment platforms" → "Pay in Rand and Pay in Your
+// Choice of Currency". PAYMENT_GATEWAY=choice: the customer's button picks the gateway per payment.
+describe('choice mode (Pay in Rand / Pay in Your Choice of Currency)', () => {
+  beforeEach(() => { process.env.PAYMENT_GATEWAY = 'choice'; });
+
+  it('no button named (older pages, links in inboxes) → Paystack; the Rand button → Paystack', async () => {
+    for (const body of [{}, { gateway: 'paystack' }]) {
+      const res = await request(app).post('/api/payments/initialize').send({ email: 'fan@example.com', plan: '1-day', ...body });
+      expect(res.body.authorization_url).toBe('https://checkout.paystack.com/x');
+    }
+    expect(paystackCalls).toHaveLength(2);
+    expect(fake.created).toHaveLength(0);
+  });
+
+  it('the currency button → Stripe, with Adaptive Pricing so visitors see their own currency', async () => {
+    const res = await request(app).post('/api/payments/initialize').send({ email: 'fan@example.com', plan: '30-day', gateway: 'stripe' });
+    expect(res.body.authorization_url).toMatch(/^https:\/\/checkout\.stripe\.com\//);
+    expect(fake.created[0].adaptive_pricing).toEqual({ enabled: true });
+    expect(fake.created[0].line_items[0].price_data).toMatchObject({ currency: 'zar', unit_amount: 2999 });
+    const sub = await request(app).post('/api/payments/subscribe').send({ email: 'fan@example.com', gateway: 'stripe' });
+    expect(sub.body.reference).toMatch(/^cs_test_/);
+    expect(fake.created[1].mode).toBe('subscription');
+    expect(paystackCalls).toHaveLength(0);
+  });
+
+  it('a pass under the Stripe minimum is turned back before Stripe is asked, pointing to Pay in Rand', async () => {
+    const res = await request(app).post('/api/payments/initialize').send({ email: 'fan@example.com', plan: '7-day', gateway: 'stripe' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/starts at R10\.00.*Pay in Rand/);
+    expect(fake.created).toHaveLength(0);
+    expect(paystackCalls).toHaveLength(0);
+  });
+
+  it('Mad Mixer stays on Paystack in choice mode (its checkout lives on its own site)', () => {
+    expect(stripeLib.activeGateway()).toBe('paystack');
+    expect(stripeLib.paymentMode()).toBe('choice');
+  });
+
+  it('the pages are told there is a choice, and the minimum', async () => {
+    const res = await request(app).get('/mobile');
+    expect(res.text).toContain('window.__PAY_CHOICE={"stripeMinCents":1000};');
+    delete process.env.PAYMENT_GATEWAY;
+    const off = await request(app).get('/mobile');
+    expect(off.text).toContain('window.__PAY_CHOICE=false;');
+  });
+
+  it('an account Stripe will not do Adaptive Pricing for still gets a checkout (in rand)', async () => {
+    let calls = 0;
+    const picky = { ...fakeClient, checkout: { sessions: { ...fakeClient.checkout.sessions, create: async (params) => {
+      calls += 1;
+      if (params.adaptive_pricing) {
+        throw new Stripe.errors.StripeInvalidRequestError({ type: 'invalid_request_error', param: 'adaptive_pricing', message: 'Adaptive Pricing is not available for your account.' });
+      }
+      return fakeClient.checkout.sessions.create(params);
+    } } } };
+    stripeLib._setStripeClientForTests(picky);
+    const res = await request(app).post('/api/payments/initialize').send({ email: 'fan@example.com', plan: '30-day', gateway: 'stripe' });
+    expect(res.status).toBe(200);
+    expect(calls).toBe(2);
+    expect(fake.created[0].adaptive_pricing).toBeUndefined();
+  });
+});
