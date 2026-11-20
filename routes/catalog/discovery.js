@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { randomInt } from 'node:crypto';
 import { fmPost, fmFindRecords } from '../../fm-client.js';
-import { albumCache, randomSongsPoolCache } from '../../cache.js';
+import { albumCache, albumMissCache, randomSongsPoolCache } from '../../cache.js';
 import { hasValidAudio, hasValidArtwork, resolvePlayableSrc, resolveArtworkSrc, thumbArtworkUrl } from '../../lib/track.js';
 import {
   FM_LAYOUT, FM_PLAYLIST_ART_LAYOUT,
@@ -539,7 +539,7 @@ router.get('/album', async (req, res) => {
     const limit = Math.max(1, Math.min(1000, Number.parseInt(req.query.limit || '100', 10)));
 
     const cacheKey = `album:${cat}:${title}:${artist}:${limit}`;
-    const cached = albumCache.get(cacheKey);
+    const cached = albumCache.get(cacheKey) || albumMissCache.get(cacheKey);
     if (cached) {
       logAlbum.debug(`cache hit: ${cacheKey.slice(0, 50)}...`);
       res.setHeader('X-Cache-Hit', 'true');
@@ -596,7 +596,10 @@ router.get('/album', async (req, res) => {
       limit
     };
 
-    albumCache.set(cacheKey, response);
+    // Nothing found → the short, never-extended memory (cache.js albumMissCache), so an album
+    // added today shows up minutes after the catalogue copy has it, not an hour after the last ask.
+    if (response.items.length) albumCache.set(cacheKey, response);
+    else albumMissCache.set(cacheKey, response);
     return res.json(response);
   } catch (err) {
     const detail = err?.message || String(err);
